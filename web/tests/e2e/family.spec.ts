@@ -37,7 +37,7 @@ async function secondPhone(browser: Browser): Promise<Page> {
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
 /** One tab set, the same for everyone (docs/product-reset.md §6). */
-const TAB_SET = ["Today", "Medicines", "Papers", "Visits", "Family"];
+const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"];
 
 test("the nav (D1, the reset): one tab set, the same for the owner and for a key", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
@@ -106,7 +106,7 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   await todayReady(page);
 
   const priyaPhone = freshPhone("+659777");
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   const rolePresets = page.waitForResponse((res) => res.url().includes("/family/roles") && res.ok());
   await page.getByTestId("open-keys").click();
   await rolePresets; // the role's own preset parts and window, before a role is chosen
@@ -155,7 +155,7 @@ test("changing what a key would open while the words for it are still on the wir
   // late, after he has already moved to viewer, must never be shown as if they were viewer's.
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   const rolePresets = page.waitForResponse((res) => res.url().includes("/family/roles") && res.ok());
   await page.getByTestId("open-keys").click();
   await rolePresets;

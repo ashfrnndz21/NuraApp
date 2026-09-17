@@ -21,6 +21,7 @@ import {
   signInThroughTheApp,
   underTheTabBar,
   coveredByTheTabBar,
+  pastWelcome,
 } from "./helpers";
 
 /** E15-04 on the web (ADR 0001: VoiceOver and Dynamic Type become the page's roles, names and
@@ -137,7 +138,10 @@ for (const [look, banner] of [
     await expect(page.locator("html")).toHaveAttribute("data-density", look);
     if (banner) await expect(page.locator(".demo-banner")).toBeVisible();
 
-    // Signing in.
+    // The welcome, before this phone's first sign-in; then signing in.
+    await expect(page.getByTestId("welcome-screen")).toBeVisible();
+    await audit(page, where("welcome"));
+    await page.getByTestId("welcome-start").click();
     await expect(page.getByLabel("Your phone number")).toBeVisible();
     await audit(page, where("sign in"));
     await page.getByRole("button", { name: "Sign in with an email instead" }).click();
@@ -269,7 +273,7 @@ for (const [look, banner] of [
     // the next visit (D1) — the design gives her Home the State, not the prompt.
     if ((await page.getByTestId("write-reading").count()) > 0) await page.getByTestId("write-reading").click();
     else {
-      await page.getByTestId("tab-visits").click();
+      await page.getByTestId("tab-services").click();
       await page.getByTestId("plan-reading").click();
     }
     await audit(page, where("your blood pressure"));
@@ -286,7 +290,7 @@ for (const [look, banner] of [
     await expect(page.getByTestId("answer")).toBeVisible();
     await audit(page, where("ask: the answer"));
     await page.getByTestId("back-to-cards").click();
-    await page.getByRole("button", { name: "Today", exact: true }).click();
+    await page.getByRole("button", { name: "Home", exact: true }).click();
 
     await page.getByTestId("open-visit").click();
     await expect(page.getByTestId("logistics")).toBeVisible();
@@ -300,7 +304,7 @@ for (const [look, banner] of [
 
     // The Record (W5, #140): its first screen and every screen it opens, each once its reads
     // are in (a Record screen is aria-busy while they are in flight).
-    await page.getByTestId("tab-records").click();
+    await page.getByTestId("tab-health").click();
     await expect(page.getByTestId("record-hub")).toBeVisible();
     await recordSettled(page);
     await audit(page, where("the Record"));
@@ -388,7 +392,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   const pa = await seedOwner(request);
   await seedVisit(request, pa.token, pa.profileId);
   await page.goto("./");
-  await expect(page.getByLabel("Your phone number")).toBeVisible();
+  await pastWelcome(page);
   expect(await page.locator("main p").first().evaluate((el) => getComputedStyle(el).fontSize)).toBe("40px");
   // `bar` is false for a screen shown under a sheet: a sheet is modal, so the page beneath it
   // is covered on purpose and its tab bar is behind the scrim. The sheet's own lines are what
@@ -420,7 +424,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
   expect.soft(await feedFits(page), "the feed fits the phone").toEqual([]);
   await check("a feed card", page.locator("article.feed-card").first());
   // The Record (W5, #140) at twice the text: its first screen and every screen it opens.
-  await page.getByTestId("tab-records").click();
+  await page.getByTestId("tab-health").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
   await recordSettled(page);
   await check("the Record");

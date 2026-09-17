@@ -647,7 +647,7 @@ test("the post-visit card on the web: each line with where it was said, one left
   // merged in below the card on screen (`feed/store.ts`), and the test does not depend on when.
   const isFeedPage = (response: { request(): { method(): string }; url(): string }) => response.request().method() === "GET" && /\/profiles\/[^/]+\/feed$/.test(new URL(response.url()).pathname);
   const todays = page.waitForResponse(isFeedPage);
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByRole("button", { name: "Home", exact: true }).click();
   await todays;
   const fresh = page.waitForResponse(isFeedPage);
   await page.getByTestId("open-feed").click();
@@ -674,7 +674,7 @@ test("the post-visit card on the web: each line with where it was said, one left
     route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ refusal: "OnlyTheFamilyHears" }) }),
   );
   // Out of the feed and back: the feed opens with a player that has fetched nothing yet.
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByRole("button", { name: "Home", exact: true }).click();
   await page.getByTestId("open-feed").click();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
   // The pager may open on the backend's cached page, from before his yes; the fresh page takes

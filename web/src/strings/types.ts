@@ -38,6 +38,9 @@ export interface Strings {
     start: string;
     signIn: string;
   };
+  /** Conversation and waiting (docs/design-direction.md): the words every ask, search and
+   *  message composer uses while Nura works. The steps themselves are the backend's lines. */
+  talk: { you: string; nura: string; working: string; answered: string; lookedAt: string; slow: string; failed: string; tryAgain: string; loading: string };
   /** Home in the warm style: the question under the greeting, the daily check-in, the grid of
    *  places, adding a health report, and what is coming up. `…Other`: said about him by name. */
   hub: {

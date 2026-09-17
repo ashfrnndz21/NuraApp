@@ -4,7 +4,7 @@ import { batch } from "../capture/session";
 import { go, openTab, type SoonPlace } from "../flow";
 import { t } from "../strings";
 import { CheckInFace } from "../ui/illustrations";
-import { FeatureTile, Icon, IconBadge, PillButton, SectionHeader, TintCard, type IconName, type Tint } from "../ui/kit";
+import { FeatureTile, Icon, IconBadge, PillButton, SectionHeader, SkeletonCard, TintCard, type IconName, type Tint } from "../ui/kit";
 
 /** Home's warm parts (docs/design-direction.md, Reference B's Home): the daily check-in, "What
  *  would you like to do?", adding a health report, and what is coming up. Both densities draw the
@@ -116,5 +116,23 @@ export function Upcoming({ papers, children }: { papers: ProfileOut | null; chil
       />
       {children}
     </section>
+  );
+}
+
+/** Home while its page is on its way: the shapes of what is coming — a card, the grid, a card —
+ *  softly shimmering, never a spinner on a blank page. The screen reader hears the one line. */
+export function HomeSkeleton(): JSX.Element {
+  const s = t();
+  return (
+    <div class="home-skeleton" role="status" data-testid="home-skeleton">
+      <span class="sr-only">{s.talk.loading}</span>
+      <SkeletonCard lines={2} />
+      <div class="skeleton-grid">
+        {[0, 1, 2, 3, 4, 5].map((at) => (
+          <SkeletonCard key={at} shape="tile" lines={1} />
+        ))}
+      </div>
+      <SkeletonCard lines={3} />
+    </div>
   );
 }

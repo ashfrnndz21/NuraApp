@@ -34,7 +34,7 @@ import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
 import { ArrowButton, Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, IconBadge, PanelList, PillButton, SectionLabel, Sparkline, TintCard, toneOf } from "../ui/kit";
 import { CoupleIllustration } from "../ui/illustrations";
-import { AddReport, CheckInCard, DoGrid, Upcoming } from "./HomeParts";
+import { AddReport, CheckInCard, DoGrid, HomeSkeleton, Upcoming } from "./HomeParts";
 import { AskField, Shell } from "./Shell";
 import { ChiefPanels } from "./ChiefPanels";
 
@@ -74,6 +74,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       <Held v={v} />
+      {!page && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -192,6 +193,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
       <NotWellButton />
       <Notices v={v} saved={saved} />
       <Held v={v} />
+      {!page && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (

@@ -334,7 +334,7 @@ test("an account closing: nothing of its papers stays on the phone, and the door
   await expect.poll(async () => (await kept()).some((key) => key.startsWith("nfw."))).toBe(true);
   expect((await kept()).some((key) => key.startsWith("today."))).toBe(true);
 
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   await page.getByTestId("open-consents").click();
   await page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" }).getByTestId("close-account").click();
   await page.getByTestId("close-yes").click();

@@ -54,7 +54,7 @@ test("the emergency card, one tap from Today and from Me: the backend's lines on
 
   // No network, the next morning: nothing of the day on the phone, and the card still there,
   // dated, printable.
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByRole("button", { name: "Home", exact: true }).click();
   await todayReady(page);
   await waitForWorker(page);
   // The printable page is read just after the card: kept on the phone before the network goes.
@@ -107,7 +107,7 @@ test("a neighbour's key to the emergency card alone opens that card and nothing 
     await expect(page.getByTestId(none)).toHaveCount(0);
   }
   await expect(page.getByRole("button", { name: "Go back" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByRole("button", { name: "Home", exact: true }).click();
   await expect(page.getByTestId("emergency-card")).toBeVisible();
   await page.getByRole("button", { name: "Me", exact: true }).click();
   await expect(page.getByTestId("set-up")).toHaveCount(0);

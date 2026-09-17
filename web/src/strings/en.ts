@@ -82,6 +82,26 @@ export const en = {
     // @patient phrase
     signIn: "I already use Nura. Sign in",
   },
+  talk: {
+    // @patient phrase
+    you: "You asked",
+    // @patient phrase
+    nura: "Nura said",
+    // @patient
+    working: "Nura is looking.",
+    // @patient
+    answered: "Nura has an answer.",
+    // @patient headline
+    lookedAt: "What Nura looked at",
+    // @patient
+    slow: "This is taking longer than usual.",
+    // @patient
+    failed: "Nura could not answer just now.",
+    // @patient phrase
+    tryAgain: "Try again",
+    // @patient phrase
+    loading: "Getting your page ready",
+  },
   hub: {
     // @patient
     howFeeling: "How are you feeling today?",

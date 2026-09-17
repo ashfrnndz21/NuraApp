@@ -123,7 +123,7 @@ for (const look of LOOKS) {
     await letIn(request, seeded, "Mei", "chief", EVERY_PART);
     await signInAs(page, seeded, "Pa");
     await lookAs(page, look);
-    await page.getByTestId("tab-today").click();
+    await page.getByTestId("tab-home").click();
     await page.getByTestId("open-feed").click();
     const card = page.locator('article.feed-card[data-variant="reorder"]').first();
     await expect(card.getByTestId("ask-to-order")).toHaveText("Ask the family to order.");

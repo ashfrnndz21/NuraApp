@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { API, apiToken, captureSpeech, fixClock, freshPhone, keptKeys, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
+import { API, apiToken, captureSpeech, fixClock, freshPhone, keptKeys, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, pastWelcome, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -98,11 +98,12 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     // No feed cards (the quiet hours, or nothing new): the State and the medicines, in the
     // backend's words, each under its source line.
     await expect(page.getByTestId("state-card").getByTestId("boundary")).toContainText("This is not a doctor's advice.");
-    // The medicines, with their counts and sources, are on the Medicines tab (D1).
-    await page.getByTestId("tab-medicines").click();
+    // The medicines, with their counts and sources, are in Health (D1, the warm tabs).
+    await page.getByTestId("tab-health").click();
+    await page.getByTestId("record-medicines").click();
     await expect(page.getByTestId("medicine-line")).toContainText("You have 120 tablets of your blood pressure tablet left.");
     await expect(page.getByTestId("medicine-line")).toContainText("This comes from the label you kept on");
-    await page.getByTestId("tab-today").click();
+    await page.getByTestId("tab-home").click();
     await todayReady(page);
   }
   await shot(page, "today");
@@ -129,9 +130,10 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     await taken.click();
     await expect(page.getByText(/^You took it/)).toBeVisible();
     await expectProud(page, "1");
-    await page.getByTestId("tab-medicines").click();
+    await page.getByTestId("tab-health").click();
+    await page.getByTestId("record-medicines").click();
     await expect(page.getByTestId("medicine-line")).toContainText("You have 119 tablets of your blood pressure tablet left.");
-    await page.getByTestId("tab-today").click();
+    await page.getByTestId("tab-home").click();
     await todayReady(page);
     const after = await todaySlots(request, token, me.profile_id);
     expect(after.filter((slot) => slot.taken).map((slot) => slot.anchor)).toEqual([due.anchor]);
@@ -159,7 +161,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await expect(page.locator("[data-testid=me-proud], [data-testid=proud]").first()).toContainText("Nura counted the days you took your tablets.");
   await page.getByTestId("sheet-close").click();
   // One tab set, the same for everyone (D1, the reset): Family is a tab now, not a way in on Me.
-  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Medicines\s*Papers\s*Visits\s*Family\s*$/);
+  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Home\s*Health\s*Connect\s*Services\s*Profile\s*$/);
   const bar = await page.locator("nav.tabbar").boundingBox();
   const viewport = page.viewportSize()!;
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(viewport.height);
@@ -318,7 +320,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
     else await route.continue();
   });
   await page.reload();
-  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
   await todayReady(page);
   await expect(page.getByLabel("Your phone number")).toHaveCount(0);
   expect(failed).toBeGreaterThan(0);
@@ -327,6 +329,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
 test("a wrong code is one plain sentence, never the class name", async ({ page }) => {
   const phone = freshPhone();
   await page.goto("./");
+  await pastWelcome(page);
   await page.getByLabel("Your phone number").fill(phone);
   await page.getByTestId("send-code").click();
   await page.getByLabel("The code").fill("000000");

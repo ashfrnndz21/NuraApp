@@ -82,6 +82,26 @@ export const zh = {
     // @patient phrase
     signIn: "我已经在用 Nura。登录",
   },
+  talk: {
+    // @patient phrase
+    you: "您问了",
+    // @patient phrase
+    nura: "Nura 回答了",
+    // @patient
+    working: "Nura 正在找。",
+    // @patient
+    answered: "Nura 有答案了。",
+    // @patient headline
+    lookedAt: "Nura 看了什么",
+    // @patient
+    slow: "这次比平时久一点。",
+    // @patient
+    failed: "Nura 现在回答不了。",
+    // @patient phrase
+    tryAgain: "再试一次",
+    // @patient phrase
+    loading: "正在准备您的页面",
+  },
   hub: {
     // @patient
     howFeeling: "您今天感觉怎么样？",

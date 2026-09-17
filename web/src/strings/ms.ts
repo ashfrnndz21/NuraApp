@@ -82,6 +82,26 @@ export const ms = {
     // @patient phrase
     signIn: "Saya sudah guna Nura. Log masuk",
   },
+  talk: {
+    // @patient phrase
+    you: "Anda bertanya",
+    // @patient phrase
+    nura: "Nura menjawab",
+    // @patient
+    working: "Nura sedang mencari.",
+    // @patient
+    answered: "Nura ada jawapan.",
+    // @patient headline
+    lookedAt: "Apa yang Nura lihat",
+    // @patient
+    slow: "Ini mengambil masa lebih lama daripada biasa.",
+    // @patient
+    failed: "Nura tidak dapat menjawab sekarang.",
+    // @patient phrase
+    tryAgain: "Cuba lagi",
+    // @patient phrase
+    loading: "Menyediakan halaman anda",
+  },
   hub: {
     // @patient
     howFeeling: "Apa khabar anda hari ini?",
