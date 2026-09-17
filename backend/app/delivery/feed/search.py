@@ -51,14 +51,22 @@ from app.delivery.feed.sources import (
     require_usable_source,
     usable_sources,
 )
-from app.delivery.strings import YOUR_DOCTOR, Lines, language_for, learning_lines, season_name
+from app.delivery.strings import (
+    YOUR_DOCTOR,
+    Lines,
+    language_for,
+    learning_lines,
+    recall_action_lines,
+    season_name,
+)
 from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
-from app.drugs.registry import DrugRegistry
+from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
+from app.medicines.strings import PLAIN_NAME
 from app.reasoning.ranges import ReferenceRanges
 from app.state.models import Dimension
 from app.state.service import StateView
@@ -444,9 +452,9 @@ async def run_job(
                 and engine.clips.excerpts,
             }
         if job.kind is JobKind.SAFETY:
-            # A notice is checked against the batch on his pack. One that does not match is
-            # held for the caregiver and never sent to him (spec §9); one that does is a
-            # card for today, capped like any other.
+            # A safety notice is never his card (spec §0, resolved 2026-09-16): it is checked
+            # against the batch on his pack only to decide whether there is something *he*
+            # must do, and either way it is held for the caregiver, never sent to him.
             matches = found.batch is not None and found.batch.strip().lower() in _batches_on_record(
                 state
             )
@@ -474,7 +482,7 @@ async def run_job(
                         suppressed=None if matches else "batch_does_not_match_the_pack",
                     ),
                     scope=Scope.MEDICINES,
-                    deliver_to=DeliverTo.PATIENT if matches else DeliverTo.CAREGIVER,
+                    deliver_to=DeliverTo.CAREGIVER,
                     day=day.key,
                     dedupe_key=key,
                     expires_at=moment + LEARNING_LIFETIME,
@@ -490,6 +498,47 @@ async def run_job(
                 continue
             existing.add(key)
             made.append(notice)
+            if matches:
+                # His own pack is one of the recalled batches (#183): he gets his own card,
+                # in his own words, saying what he can do about the box in his hand today —
+                # never the notice's own words above, which stay his chief's to read.
+                action_key = f"{key}:recall_action"
+                action_lines = recall_action_lines(
+                    code,
+                    medicine=_plain_medicine_name(engine, job.terms[0], code),
+                    doctor=doctor or YOUR_DOCTOR[code],
+                )
+                try:
+                    action = await create_item(
+                        session,
+                        context=context,
+                        state=state,
+                        type=CardType.RECALL_ACTION,
+                        lines=action_lines,
+                        why=Why(
+                            kind="recall_action",
+                            plain=action_lines.why,
+                            source_id=str(source.id),
+                            gap=job.terms[0],
+                            fact_ids=tuple(_fact_ids_about(state, job.terms)),
+                        ),
+                        scope=Scope.MEDICINES,
+                        deliver_to=DeliverTo.PATIENT,
+                        day=day.key,
+                        dedupe_key=action_key,
+                        expires_at=moment + LEARNING_LIFETIME,
+                        format=around.format,
+                        source=source,
+                        cite={**cite, "batch": found.batch},
+                        search_job_id=job.id,
+                    )
+                except NotPlainWords as failed:
+                    rejected.append(
+                        {"url": found.url, "because": "not_plain_words", "detail": str(failed)}
+                    )
+                    continue
+                existing.add(action_key)
+                made.append(action)
             continue
         if changes_treatment([compressed.headline, *compressed.body]):
             # Not a card: a question for the doctor, held for the memo (E05 reads HELD).
@@ -704,6 +753,19 @@ def _batches_on_record(state: StateView) -> set[str]:
         if isinstance(batch, str):
             found.add(batch.strip().lower())
     return found
+
+
+def _plain_medicine_name(engine: Engine, generic: str, language: str) -> str:
+    """His word for the generic a safety job watches (#183) — "the water pill", never
+    "furosemide": the same catalogue `app.medicines.service` reads a reconciled line's name
+    from. A generic the licensed registry has no monograph for (reachable only if a batch
+    fact somehow outlived the line it was read from) falls back to the generic itself rather
+    than failing the whole day's safety run over one card."""
+    try:
+        plain_name_id = engine.registry.monograph(generic).plain_name_id
+    except UnknownDrug:
+        return generic
+    return PLAIN_NAME[language].get(plain_name_id, generic)
 
 
 def _fact_ids_about(state: StateView, terms: Sequence[str]) -> list[str]:

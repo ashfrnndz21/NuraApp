@@ -2,8 +2,10 @@
 
 A card names its State or is not written; a card with a failing line is not written and the
 refusal is on the trail; a learning card from outside the allowlist is not written; a
-medicine on the list starts an explainer and a daily safety job, and a notice that does not
-match the batch on his pack is held for the caregiver and never delivered to him.
+medicine on the list starts an explainer and a daily safety job, and a notice is never his
+card, whether or not it matches the batch on his pack (spec §0, #183) — it is held for the
+caregiver either way. Where the batch does match, he gets his own `RECALL_ACTION` card
+instead, in his own words, saying what he can do about the box in his hand today.
 """
 
 from __future__ import annotations
@@ -239,9 +241,9 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
     sg: AsyncSession,
 ) -> None:
     """E16-01 on the feed. A learning card is an inferring surface (`Surface.LEARNING_CARD`),
-    and so is a notice, the same compression of a regulator's page: the row carries the line
-    and the body and the voice end on it. Every other card shows the record back and
-    carries no line."""
+    and so is a notice, the same compression of a regulator's page, and the `RECALL_ACTION`
+    card built from one (#183): the row carries the line and the body and the voice end on
+    it. Every other card shows the record back and carries no line."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
@@ -252,7 +254,11 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
         "Ask your doctor.",
     ]
     inferring = [item for item in made if item.type in SURFACE_OF]
-    assert {item.type for item in inferring} == {CardType.LEARNING, CardType.NOTICE}
+    assert {item.type for item in inferring} == {
+        CardType.LEARNING,
+        CardType.NOTICE,
+        CardType.RECALL_ACTION,
+    }
     for item in inferring:
         assert item.boundary == line, item.type
         assert item.body[-3:] == line.splitlines() and item.voice[-3:] == line.splitlines()
@@ -377,11 +383,17 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     assert notice.deliver_to is DeliverTo.CAREGIVER
     assert notice.why["suppressed"] == "batch_does_not_match_the_pack"
     assert notice.cite is not None and notice.cite["batch"] == "240077"
+    # A recall matching nothing of his needs nothing of him: no RECALL_ACTION card at all.
+    assert CardType.RECALL_ACTION not in by_type
     question = by_type[CardType.QUESTION][0]
     assert question.deliver_to is DeliverTo.MEMO and question.supply is Supply.HELD
     # Nothing for the patient carries the notice or the question.
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert {item.type for item in page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
+    assert {item.type for item in page.items} & {
+        CardType.NOTICE,
+        CardType.QUESTION,
+        CardType.RECALL_ACTION,
+    } == set()
     assert [item.type for item in page.items][:4] == [
         CardType.NOW,
         CardType.GATE,
@@ -390,17 +402,42 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     ]
 
 
-async def test_a_notice_that_matches_the_batch_on_his_pack_is_a_card_for_today(
+async def test_a_notice_that_matches_the_batch_on_his_pack_gives_him_the_action_card_and_his_chief_the_notice(
     sg: AsyncSession,
 ) -> None:
+    """#183: a safety notice is never his card, matched batch or not (spec §0) — but where it
+    matches his own pack, he gets his own `RECALL_ACTION` card, in his own words, and his
+    chief still gets the notice. Neither the notice's own compressed words, nor the batch
+    number on it, ever reach him."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
     notice = next(item for item in made if item.type is CardType.NOTICE)
-    assert notice.deliver_to is DeliverTo.PATIENT and notice.supply is Supply.TODAY
+    assert notice.deliver_to is DeliverTo.CAREGIVER and notice.supply is Supply.TODAY
+    assert notice.why["suppressed"] is None
     assert notice.body[1] == "Look for the batch number 240077 on your box."
+    action = next(item for item in made if item.type is CardType.RECALL_ACTION)
+    assert action.deliver_to is DeliverTo.PATIENT and action.supply is Supply.TODAY
+    assert action.headline == "The blood thinner tablet was recalled"
+    assert action.body == [
+        "Take the blood thinner tablet to the pharmacist today.",
+        "The pharmacist will tell you what to do next.",
+        "Nura explains one thing in simple words.",
+        "This is not a doctor's advice.",
+        "Ask your doctor.",
+    ]
+    assert action.voice == action.body
+    assert action.boundary == boundary_line(Surface.LEARNING_CARD, "en")
+    # No batch number, and no word of the notice's own, reaches him.
+    assert "240077" not in " ".join(action.body) and "batch" not in " ".join(action.body)
+    assert action.action == "ask_the_pharmacist"
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert [item.type for item in page.items][:3] == [CardType.NOW, CardType.NOTICE, CardType.GATE]
+    assert [item.type for item in page.items][:3] == [
+        CardType.NOW,
+        CardType.RECALL_ACTION,
+        CardType.GATE,
+    ]
+    assert CardType.NOTICE not in {item.type for item in page.items}
 
 
 async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:

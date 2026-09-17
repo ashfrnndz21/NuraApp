@@ -41,6 +41,7 @@ Held items never reach the patient: doctor questions go to the memo; notices wit
 | Local alert | Environmental or outbreak bulletin matching address and conditions | What to do today | Text card |
 | Food and habit | Weekly, by conditions and season | One concrete choice | Text card |
 | Safety notice | Regulator or manufacturer notice matching a medicine | Checked against pack batch; **never a card in his feed** — held for the chief, and for the memo where it is a question for the doctor | Held |
+| Recall action | A safety notice whose batch matches his own pack (#183) | What he can do about the box in his hand today, in his own words, ending on the boundary line — never the notice's own words | Text card + voice |
 | Worth knowing | Guideline change, formulary addition, new option | Framed as a question for the doctor | Held → Doctor Memo |
 | Seasonal | Fasting month, festive food, travel | Timing and food adjustments | Text card |
 
@@ -55,12 +56,14 @@ every other card of his is made and read by the pharmacist's first fifty before 
 (`REVIEWED_TYPES`, `app/language/review.py`). "Your pack is one of the batches; bring it to the
 pharmacy" is his card, because it is his to act on. "This batch was recalled" is not.
 
-**The code does not do this yet.** `app/delivery/feed/search.py` still sends a `NOTICE` whose
-batch matches the pack to `DeliverTo.PATIENT`, and `tests/test_feed.py` asserts that it does.
-The rule above is the decision (2026-09-16); the change is filed separately, because taking his
-batch-match card away is only safe once the "something you must do" card that replaces it
-exists — otherwise a recall that matches his own box reaches nobody but his chief, and he is
-told nothing at all.
+**Built** (#183). `CardType.RECALL_ACTION` is that card: `app/delivery/feed/search.py`'s
+`JobKind.SAFETY` branch still writes the `NOTICE` — held for the chief either way, matched
+batch or not — and, only where the batch on his own pack matches, additionally writes a
+`RECALL_ACTION` card to `DeliverTo.PATIENT` (`app/delivery/strings.py:recall_action_lines`):
+in his own words, from the catalogue, ending on the boundary line, never a word of the
+notice's own. `tests/test_feed.py` asserts both halves — a matching recall gives him the
+action card and his chief the notice; a recall that needs nothing of him reaches only his
+chief.
 
 
 Every card carries: `headline`, `body` (plain words), `why` (one sentence, plain), `source` (name, URL, date), `profileRefs` (facts it was built from), `format`, `language`, `audioURL`, `mediaURL`, `expiresAt`, `deliverTo` (patient / caregiver / memo).

@@ -70,6 +70,7 @@ REVIEWED_TYPES: tuple[CardType, ...] = (
     CardType.MEMO,
     CardType.REORDER,
     CardType.NOTICE,
+    CardType.RECALL_ACTION,
     CardType.GATE,
     CardType.STORY,
     CardType.RECAP,
