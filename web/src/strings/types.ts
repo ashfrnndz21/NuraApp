@@ -88,6 +88,11 @@ export interface Strings {
     visitsNoneOther: string;
     planTitle: string;
     planLead: string;
+    careTitle: string;
+    careNoneOwn: string; careNoneOther: string;
+    nearYouOwn: string; nearYouOther: string;
+    nearYouArea: string; nearYouAreaOther: string;
+    guidesTitle: string;
   };
   signIn: {
     title: string;

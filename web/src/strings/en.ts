@@ -227,6 +227,22 @@ export const en = {
     planTitle: "Plan for the next visit",
     // @patient
     planLead: "Everything for the next visit is here.",
+    // @patient headline
+    careTitle: "Care services",
+    // @patient
+    careNoneOwn: "Nura has no local care service to show you yet.",
+    // @patient
+    careNoneOther: "Nura has no local care service to show for {name} yet.",
+    // @patient headline
+    nearYouOwn: "Near you",
+    // @patient headline
+    nearYouOther: "Near {name}",
+    // @patient
+    nearYouArea: "Nura knows your area is {area}.",
+    // @patient
+    nearYouAreaOther: "Nura knows {name}'s area is {area}.",
+    // @patient headline
+    guidesTitle: "Guides",
   },
   signIn: {
     // @patient headline

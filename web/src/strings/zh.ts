@@ -227,6 +227,22 @@ export const zh = {
     planTitle: "下次看诊的计划",
     // @patient
     planLead: "下次看诊需要的东西都在这里。",
+    // @patient headline
+    careTitle: "照护服务",
+    // @patient
+    careNoneOwn: "Nura暂时没有为您列出附近的照护服务。",
+    // @patient
+    careNoneOther: "Nura暂时没有为{name}列出附近的照护服务。",
+    // @patient headline
+    nearYouOwn: "您附近",
+    // @patient headline
+    nearYouOther: "{name}附近",
+    // @patient
+    nearYouArea: "Nura记下的您的地区是{area}。",
+    // @patient
+    nearYouAreaOther: "Nura记下的{name}的地区是{area}。",
+    // @patient headline
+    guidesTitle: "指南",
   },
   signIn: {
     // @patient headline
