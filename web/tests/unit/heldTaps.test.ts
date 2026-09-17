@@ -109,4 +109,33 @@ describe("held taps", () => {
     const tired: Tap = { id: "f2", kind: "feeling", word: "tired", language: "en", at: TEN_AM.toISOString() };
     expect(await hold(id, tired, OWNER, TEN_AM, SG)).toEqual([tired]);
   });
+
+  /** #171: a feeling tap without its own moment is refused, the same way a red word is —
+   *  there would be nothing truer than "whenever the replay happens to run" to write it
+   *  under, and that is exactly the wrong day a replay after midnight must never land on. */
+  it("never include a feeling tap with no moment of its own", async () => {
+    const id = profile();
+    const noTime = { id: "f3", kind: "feeling", word: "tired", language: "en", at: "" } as Tap;
+    expect(await hold(id, noTime, OWNER, TEN_AM, SG)).toBeNull();
+    expect(await waiting(id, OWNER, TEN_AM)).toEqual([]);
+  });
+
+  /** #171: a feeling tap held offline is replayed like any other, and — the same rule as every
+   *  tap in the queue — dropped rather than sent once it is past the midnight it was tapped
+   *  on, so it never lands written under the wrong day. */
+  it("a feeling tap, like Taken, is replayed with the word it carries, and dropped past its midnight rather than sent late", async () => {
+    const id = profile();
+    const felt: Tap = { id: "f4", kind: "feeling", word: "dizzy", language: "en", at: TEN_AM.toISOString() };
+    await hold(id, felt, OWNER, TEN_AM, SG);
+    const send = vi.fn(async (_tap: Tap) => ({}));
+    expect((await replay(id, OWNER, TEN_AM, send)).sent).toEqual([felt]);
+    expect(send).toHaveBeenCalledWith(felt);
+
+    const id2 = profile();
+    await hold(id2, { ...felt, id: "f5" }, OWNER, TEN_AM, SG);
+    const nextMorning = new Date("2026-09-14T16:00:01Z"); // one second past midnight in Singapore
+    const lateSend = vi.fn(async () => ({}));
+    expect(await replay(id2, OWNER, nextMorning, lateSend)).toMatchObject({ sent: [], refused: [] });
+    expect(lateSend).not.toHaveBeenCalled();
+  });
 });
