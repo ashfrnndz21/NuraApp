@@ -207,34 +207,52 @@ async def wipe(session: AsyncSession, object_root: Path | None = None) -> list[s
 
 
 async def wipe_if_due(
-    sessions: async_sessionmaker[Any], region: Region, object_root: Path | None = None
+    sessions: async_sessionmaker[Any],
+    region: Region,
+    object_root: Path | None = None,
+    *,
+    after_wipe: Callable[[], Awaitable[None]] | None = None,
 ) -> bool:
-    """Wipe the demo if the night's 03:00 has passed since anything in it was written."""
+    """Wipe the demo if the night's 03:00 has passed since anything in it was written.
+
+    `after_wipe`, when given, runs once the wipe has committed — `app.demo_seed.seed_demo`,
+    on a deployment seeded with NURA_DEMO_SEED=1, so Pa's profile and Mei as his chief are
+    there again the moment the tables are empty, not only at the process's own start."""
     async with sessions() as session:
         if not await wipe_due(session, region):
             return False
         wiped = await wipe(session, object_root)
         await session.commit()
     log.info("demo: the night's wipe emptied %d tables", len(wiped))
+    if after_wipe is not None:
+        await after_wipe()
     return True
 
 
 async def keep_wiping(
-    sessions: async_sessionmaker[Any], region: Region, object_root: Path | None = None
+    sessions: async_sessionmaker[Any],
+    region: Region,
+    object_root: Path | None = None,
+    *,
+    after_wipe: Callable[[], Awaitable[None]] | None = None,
 ) -> None:
     """The demo's night watch: every few minutes, for as long as it runs. The app's lifespan
     checks once before it serves; this is every check after that."""
     while True:
         await asyncio.sleep(WIPE_CHECK_SECONDS)
-        await wipe_quietly(sessions, region, object_root)
+        await wipe_quietly(sessions, region, object_root, after_wipe=after_wipe)
 
 
 async def wipe_quietly(
-    sessions: async_sessionmaker[Any], region: Region, object_root: Path | None = None
+    sessions: async_sessionmaker[Any],
+    region: Region,
+    object_root: Path | None = None,
+    *,
+    after_wipe: Callable[[], Awaitable[None]] | None = None,
 ) -> None:
     """`wipe_if_due`, where a failure is logged and tried again later: the demo keeps serving
     with its database away, and `/health/ready` is what says so."""
     try:
-        await wipe_if_due(sessions, region, object_root)
+        await wipe_if_due(sessions, region, object_root, after_wipe=after_wipe)
     except Exception:
         log.exception("demo: the wipe check failed; trying again shortly")
