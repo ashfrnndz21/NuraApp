@@ -14,7 +14,21 @@ from datetime import UTC, datetime
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from sqlalchemy import DateTime, Dialect, Enum, ForeignKey, TypeDecorator, Uuid, event, inspect
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    DateTime,
+    Dialect,
+    Enum,
+    ForeignKey,
+    String,
+    Table,
+    TypeDecorator,
+    Uuid,
+    event,
+    inspect,
+    text,
+)
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -147,6 +161,64 @@ class ProfileScoped:
         __tablename__: str
 
         def __init__(self, **values: Any) -> None: ...
+
+
+seq_counters = Table(
+    "seq_counters",
+    Base.metadata,
+    Column("name", String(64), primary_key=True),
+    Column("value", BigInteger(), nullable=False, default=0),
+)
+"""One row per `@monotonic` table, its running count. A plain Core table, not an ORM model:
+nothing ever maps a row of it to a Python object, `monotonic`'s upsert is the only thing
+that ever touches it. Declared on `Base.metadata` all the same — `tests/conftest.py` builds
+the test database from this metadata, not by running the migrations, so a table only a
+migration knows about would leave every `@monotonic` model insert failing in every test with
+"no such table" — and so `scripts.data_map` (docs/trust/pdpa-data-map.md, E16-05) can see it
+too: it holds no identifier and no health data, but "every real table" means this one too."""
+
+_NEXT_SEQ = text(
+    "INSERT INTO seq_counters (name, value) VALUES (:name, 1) "
+    "ON CONFLICT (name) DO UPDATE SET value = seq_counters.value + 1 "
+    "RETURNING value"
+)
+"""One counter per table, in `seq_counters` (0040_monotonic_tiebreak). The upsert is one
+statement, atomic on both dialects this app runs on: SQLite serialises it because every
+write already begins IMMEDIATE (`make_engine`, below); Postgres serialises it on the row
+lock the UPDATE takes. Neither depends on the wall clock or on how many processes are
+writing — which a clock-derived or per-process value cannot promise (#192, #218)."""
+
+
+def monotonic(model: type[Any]) -> type[Any]:
+    """A class decorator: every row of this table gets `seq`, a strictly increasing integer
+    the database hands out at insert time — the row's real position in write order.
+
+    #218 (the CI job that walks the product's own acceptance checkpoints end to end) found
+    ten of them failing only under a frozen clock — not flaky; deterministic every run — and
+    checkpoint 13's failure was word for word the false regression report on #190. The cause
+    generalises past that one table: sixteen reads across audit, delivery, safety, identity
+    and WhatsApp order "newest first" by a timestamp column alone. A timestamp is not unique:
+    two rows written in the same request (or, always, under a frozen clock — every
+    checkpoint, `make web-e2e`, and the demo run on one) can share an instant, and primary
+    keys are UUID4, which cannot break the tie either because they carry no order at all.
+
+    Not every one of the sixteen needs this. Sorted into two kinds (see the PR that added
+    this): a "latest wins" read, where the first row *is* a decision — which delivery
+    settings apply, which login challenge a code was sent for, which tablet a reply answers,
+    a reader's own last-looked baseline, the newest reading on the emergency card, the last
+    feed page cached for offline, which watched feeling note or family message a nudge is
+    built from — needs a real, monotonic tiebreaker: `Model.seq.desc()`, alongside the
+    timestamp, never instead of it. A table decorated with `@monotonic` gets one. A read that
+    only orders a listing for someone to browse (the trail, the family thread's page, a red
+    flag's card, the self-search queue) decides nothing on a tie; ordering it by its existing
+    `id` as well is enough, and does not need a migration.
+    """
+
+    @event.listens_for(model, "before_insert")
+    def _assign_seq(mapper: Any, connection: Any, target: Any) -> None:
+        target.seq = connection.execute(_NEXT_SEQ, {"name": model.__tablename__}).scalar_one()
+
+    return model
 
 
 Keeper = Callable[[AsyncSession], Awaitable[None]]

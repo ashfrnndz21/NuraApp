@@ -224,8 +224,14 @@ async def create_job(
 @audited(Action.READ, Scope.RECORDS, JOB_TARGET)
 async def list_jobs(session: AsyncSession, *, context: KeyContext) -> Sequence[SearchJob]:
     await require_manager(session, context=context, target=JOB_TARGET)
+    # `.id` breaks a tie in `created_at` (#192/#218): a management listing, every job shown
+    # regardless of order, so a stable-but-arbitrary tiebreaker is enough.
     return await audited_read(
-        session, SearchJob, context, Scope.RECORDS, order_by=(SearchJob.created_at.desc(),)
+        session,
+        SearchJob,
+        context,
+        Scope.RECORDS,
+        order_by=(SearchJob.created_at.desc(), SearchJob.id.asc()),
     )
 
 

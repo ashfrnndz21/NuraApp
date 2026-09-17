@@ -426,7 +426,10 @@ async def recent_notes(
         FeelingNote,
         context,
         Scope.RECORDS,
-        order_by=(FeelingNote.created_at.desc(),),
+        # `.seq` breaks a tie in `created_at` (#192/#218): this table also has a "first match
+        # wins" reader (the watch-note nudge, app.delivery.nudges.engine), so every read of
+        # it uses the real write-order tiebreaker, not just the one that decides.
+        order_by=(FeelingNote.created_at.desc(), FeelingNote.seq.desc()),
         limit=limit,
     )
     readable = [note for note in found if note_scopes(note) <= context.scopes]
