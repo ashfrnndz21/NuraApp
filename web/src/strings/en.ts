@@ -2051,6 +2051,10 @@ export const en = {
     NoSuchProvider: "That doctor is not in your list.",
     StaleState: ["Nura is still catching up.", "Please try again."],
     NotIdentified: "Nura could not find this medicine.",
+    StrengthNotRead: [
+      "Nura found the medicine but not how strong it is.",
+      "Take another photo showing how strong it is.",
+    ],
     DoseNotRead: "Please type how to take it, as the label says.",
     NotADose: "Nura did not understand how to take it.",
     WouldWiden: ["Nura cannot make this wider.", "The owner must agree to more first."],
