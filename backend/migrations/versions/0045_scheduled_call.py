@@ -17,9 +17,8 @@ Revises: 0044_consent_role_window
 Create Date: 2026-09-17
 
 Renumbered from 0040 at merge time (#235): main's chain moved to 0043_feeling_note_said
-while this branch sat behind it, and PR #225 has since claimed 0044_consent_role_window,
-which is not on main yet. This revision is pinned ahead of it; `tests/test_migration.py`
-fails locally until #225 merges — the operator merges #225 first.
+while this branch sat behind it, and this revision is pinned ahead of #225's
+0044_consent_role_window, now merged to main and main's actual head.
 """
 
 from __future__ import annotations
