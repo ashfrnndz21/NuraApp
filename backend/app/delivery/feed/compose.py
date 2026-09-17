@@ -1798,7 +1798,20 @@ async def _learning(
 
     A new job runs now; a daily or weekly one that has not run today or this week runs again;
     a paused one does not run."""
-    jobs = list(await audited_read(session, SearchJob, context, Scope.RECORDS))
+    # #236: ordered, and with `SearchJob.id` as a tie-break — two jobs created in the same
+    # transaction can share a `created_at` to the microsecond, and a job's own dedupe key is
+    # now scoped to it (`search._key_for`), but the order jobs run in still decides the order
+    # `rejected`/`made` come back in below, which a deployment may log or show; that order is
+    # never left to storage to decide.
+    jobs = list(
+        await audited_read(
+            session,
+            SearchJob,
+            context,
+            Scope.RECORDS,
+            order_by=(SearchJob.created_at.asc(), SearchJob.id.asc()),
+        )
+    )
     have = {(job.kind, tuple(job.terms)) for job in jobs}
     around = await around_for(
         session,

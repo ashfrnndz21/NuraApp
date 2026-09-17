@@ -398,10 +398,12 @@ export interface EmergencyCardOut {
     strength: string;
     form: string;
     plain_name: string;
+    has_plain_name: boolean;
     amount: string;
     when: string;
     high_risk: boolean;
     high_risk_class: string | null;
+    high_risk_label: string | null;
   }[];
   allergies: { code: string; words: string; fact_id: string }[];
   blood_type: string | null;
@@ -623,7 +625,8 @@ export type DocumentKind =
   | "insurance_letter"
   | "device_screen"
   | "not_health"
-  | "unknown";
+  | "unknown"
+  | "unsupported_file_type";
 
 /** Where an imported PDF came from, in the backend's words (E02-03). */
 export type DocumentSource = "portal" | "email" | "share";

@@ -116,6 +116,53 @@ test("a neighbour's key to the emergency card alone opens that card and nothing 
   await expect(page.getByTestId("emergency-card")).toBeVisible();
 });
 
+test("the medicine data: the register's chemical name and strength are visible on the phone screen for every medicine, even when the sentence cannot carry it, in English, Malay and Chinese, with the high-risk marker where it applies", async ({ page, request }) => {
+  // frusemide: glossary-safe, its sentence also carries it. paracetamol: a #202-era generic
+  // not in the glossary — its sentence says only "the pain tablet.", never "paracetamol"
+  // (#222). warfarin: high-risk. Walking the rendered screen, not the JSON (#229) — a JSON
+  // test is exactly how this got through the first time.
+  const pa = await seedOwner(request, "Pa", [
+    { generic: "frusemide", strength: "40 mg", dose_text: "1 tab OD morning", quantity: 30 },
+    { generic: "paracetamol", strength: "500 mg", dose_text: "1 tab TDS", quantity: 30 },
+    { generic: "warfarin", strength: "3 mg", dose_text: "1 tab ON", quantity: 30 },
+  ]);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  await page.getByTestId("open-emergency").click();
+  const shown = page.getByTestId("emergency-card");
+  const rows = shown.getByTestId("medicine-chemical-name");
+  await expect(rows).toHaveCount(3);
+  const texts = await rows.allTextContents();
+  expect(texts.some((one) => one.includes("frusemide") && one.includes("40 mg"))).toBe(true);
+  expect(texts.some((one) => one.includes("paracetamol") && one.includes("500 mg"))).toBe(true);
+  const warfarinRow = texts.find((one) => one.includes("warfarin"));
+  expect(warfarinRow).toBeDefined();
+  expect(warfarinRow).toContain("3 mg");
+  expect(warfarinRow).toContain("high-risk");
+  // The sentence itself never says "paracetamol" — proof the data row, not the sentence, is
+  // what carries it here.
+  const lines = await shown.getByTestId("emergency-lines").locator("p").allTextContents();
+  expect(lines.some((one) => one.includes("paracetamol"))).toBe(false);
+  expect(lines.some((one) => one.includes("frusemide"))).toBe(true);
+  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("sign-out").click();
+
+  // Malay and Chinese: the sentence never carries a chemical name in either language, but the
+  // data row does — the register's name and strength are the register's, not translated.
+  for (const language of ["ms", "zh"] as const) {
+    const person = await seedOwner(request, "Pa", [{ generic: "paracetamol", strength: "500 mg", dose_text: "1 tab TDS", quantity: 30 }], language);
+    await signInThroughTheApp(page, person.phone, "Pa");
+    await todayReady(page);
+    await page.getByTestId("open-emergency").click();
+    const dataRows = page.getByTestId("emergency-card").getByTestId("medicine-chemical-name");
+    await expect(dataRows).toHaveCount(1);
+    await expect(dataRows).toContainText("paracetamol");
+    await expect(dataRows).toContainText("500 mg");
+    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await page.getByTestId("sign-out").click();
+  }
+});
+
 test.describe("on an iPhone in Safari, before Nura is on the home screen", () => {
   test.use({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1" });
 

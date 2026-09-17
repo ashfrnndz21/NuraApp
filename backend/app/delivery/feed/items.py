@@ -1,12 +1,16 @@
 """The one way a feed item is written.
 
-Six things happen here and nowhere else. A safety notice is refused outright for the patient
-(`NoticeNotForPatient`, #181): it is held for the chief or rerouted to the memo, never a card
-he reads, whichever job asked for it and whatever a caller sets `deliver_to` to. The lines are
-checked against the plain-words standard in the profile's language — headline, body, voice
-and why, every one — and a card with a failing line is not made (`NotPlainWords`, written to
-the trail). A learning card is checked against the allowlist: no source, or one that is not
-usable, and it is not made (`SourceNotAllowlisted`). A card of an inferring surface
+Seven things happen here and nowhere else. A card whose words would start, stop or change a
+medicine is refused outright, whoever it is for (`TreatmentChangingCard`, #236): the one
+choke point every card passes through, so a caller cannot address a treatment-changing
+finding to anyone by building around the patient-only check below. A safety notice is refused
+outright for the patient (`NoticeNotForPatient`, #181): it is held for the chief or rerouted
+to the memo, never a card he reads, whichever job asked for it and whatever a caller sets
+`deliver_to` to. The lines are checked against the plain-words standard in the profile's
+language — headline, body, voice and why, every one — and a card with a failing line is not
+made (`NotPlainWords`, written to the trail). A learning card is checked against the
+allowlist: no source, or one that is not usable, and it is not made (`SourceNotAllowlisted`).
+A card of an inferring surface
 (`SURFACE_OF`: a learning card, a notice) ends on the boundary line it carries, or it is not
 made (`NoBoundaryLine`, E16-01). And the row is written through `render_from_state`, which
 stamps the State it was rendered from, refuses a State the record has moved past, and writes
@@ -30,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_guard
 from app.audit.models import Action
 from app.db import nested_unit_of_work
+from app.delivery.feed.compress import changes_treatment
 from app.delivery.feed.grammar import Action as CardAction
 from app.delivery.feed.grammar import (
     Direction,
@@ -133,6 +138,21 @@ class NoticeNotForPatient(Refusal):
     a later change to a search job. The card was not made."""
 
 
+class TreatmentChangingCard(Refusal):
+    """A card whose words would start, stop or change a medicine is never written, for any
+    audience (docs/health-feed-spec.md §7, `.claude/rules/safety.md`: "anything that would
+    change treatment is rerouted as a doctor question"). #236's review found the choke point
+    missing here: `search.run_job` addressed the compressed words themselves to the chief
+    instead of rerouting them, on the reasoning that `DeliverTo.CAREGIVER` "keeps her fuller
+    words" (docs/plain-words.md §3) — but §3 is about *wording*, not about whether advice to
+    change a medicine may appear at all. It may not, on any card, whoever it is held for. A
+    caller that finds a treatment-changing line builds the caregiver a card that says a
+    finding needs her doctor's look and points at the question filed for him
+    (`app.delivery.strings.needs_doctor_look_lines`) — never the finding's own words. This is
+    the one place every card is written, so it is the one place this is refused, whatever a
+    caller's `deliver_to` or `type`. The card was not made."""
+
+
 @dataclass(frozen=True, slots=True)
 class Why:
     """Why am I seeing this, by id: what the card was built from, and the plain sentence."""
@@ -204,6 +224,10 @@ async def create_item(
     card's own scope.
     """
     async with audited_guard(session, context, Action.WRITE, scope, FEED_TARGET):
+        if changes_treatment([lines.headline, *lines.body]):
+            raise TreatmentChangingCard(
+                f"a {type.value} card's words would start, stop or change a medicine"
+            )
         if type is CardType.NOTICE and deliver_to is DeliverTo.PATIENT:
             raise NoticeNotForPatient(f"a {type.value} card is never delivered to the patient")
         if deliver_to is DeliverTo.PATIENT:

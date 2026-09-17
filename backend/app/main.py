@@ -4,8 +4,10 @@ Settings are read once, here, and nowhere else. The code sender comes from
 `code_sender_for`: the logging fixture when the deployment is a declared dev run
 (`NURA_DEV_CODE_SENDER=1`, which `make dev` sets), and otherwise the process refuses to
 start, because there is no real provider yet and the fixture prints login codes. The object
-store is the local one under NURA_OBJECT_STORE, pinned to this region; the extractor is the
-fixture one over NURA_PAPER_FIXTURES until the real one exists (E02); the transcriber is the
+store is the local one under NURA_OBJECT_STORE, pinned to this region; the extractor is
+chosen by NURA_EXTRACTOR (`app.ingestion.extract_provider.extractor_for`) — the fixture one
+over NURA_PAPER_FIXTURES by default, or the Claude-backed one (E02), which only builds on a
+declared demo because Anthropic's API does not process in SG or MY; the transcriber is the
 fixture one over NURA_VOICE_FIXTURES, pinned to this region, until a speech provider exists
 (E02-06); the drug registry is the fixture one (`NURA_DRUG_REGISTRY=fixture`) until a licensed
 client exists (E04); the summariser is the fixture one over NURA_VISIT_FIXTURES until a model
@@ -33,7 +35,7 @@ from app.delivery.push import push_sender_for
 from app.delivery.voice import voice_for
 from app.drugs.client import drug_registry_for
 from app.identity.providers import code_sender_for
-from app.ingestion.extract import FixtureExtractor
+from app.ingestion.extract_provider import extractor_for
 from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
@@ -50,8 +52,6 @@ def providers_for(settings: Settings) -> Providers:
     bytes, or nothing to read them with, refuses to start rather than guess. Every provider
     here but the store's bucket is a fixture, and `create_app` refuses them all outside a
     declared dev run or demo (`app.fixtures`)."""
-    if settings.paper_fixtures is None:
-        raise MissingSetting("NURA_PAPER_FIXTURES is not set and there is no other extractor yet")
     if settings.visit_fixtures is None:
         raise MissingSetting("NURA_VISIT_FIXTURES is not set and there is no other summariser yet")
     if settings.voice_fixtures is None:
@@ -61,7 +61,7 @@ def providers_for(settings: Settings) -> Providers:
     return Providers(
         code_sender=code_sender_for(settings),
         object_store=object_store_for(settings),
-        extractor=FixtureExtractor(Path(settings.paper_fixtures)),
+        extractor=extractor_for(settings),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         searcher=FixtureSearcher(Path(settings.feed_fixtures)),
         compressor=FixtureCompressor(Path(settings.feed_fixtures)),

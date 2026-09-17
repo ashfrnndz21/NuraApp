@@ -54,6 +54,10 @@ class DocumentKind(StrEnum):
     NOT_HEALTH = "not_health"
     """Read, and not a health paper at all: a receipt, a menu. Nothing is taken off it."""
     UNKNOWN = "unknown"
+    UNSUPPORTED_FILE_TYPE = "unsupported_file_type"
+    """The route accepted this kind of file, but this reader cannot open it at all — never
+    looked, unlike UNKNOWN, which is the honest answer for a page that was looked at and
+    could not be made out (E02-02)."""
 
 
 HANDWRITTEN = frozenset({DocumentKind.CLINIC_SLIP, DocumentKind.HANDWRITTEN_PRESCRIPTION})
@@ -191,6 +195,13 @@ class Extraction:
         """The honest answer for a page that could not be read."""
         return cls(document_kind=DocumentKind.UNKNOWN, fields=())
 
+    @classmethod
+    def unsupported_file_type(cls) -> Extraction:
+        """The honest answer for a file this reader never looked at, because it is a kind
+        the route accepted but this reader cannot open — distinct from `nothing()`, which
+        is a page that was looked at and could not be made out."""
+        return cls(document_kind=DocumentKind.UNSUPPORTED_FILE_TYPE, fields=())
+
 
 @dataclass(frozen=True, slots=True)
 class Hints:
@@ -204,6 +215,13 @@ class Hints:
 
 
 class Extractor(Protocol):
+    external_processor: str | None
+    """None for a reader that never leaves the region (a fixture, or a real in-region
+    reader to come); a short name (e.g. "anthropic") for one whose bytes go to a
+    third-party model processor outside it, so the caller that holds the audit trail
+    (`app.ingestion.review.review_artifact`) can write that reach down without importing
+    the adapter itself."""
+
     async def extract(self, data: bytes, content_type: str, hints: Hints) -> Extraction: ...
 
 
@@ -255,6 +273,9 @@ class FixtureExtractor:
     The labelled answers beside the fixtures (`*.expected.json`) name no digest and are not
     read here; they are the accuracy harness's (`tests/paper_accuracy.py`).
     """
+
+    external_processor: str | None = None
+    """Answers from a file on disk; nothing ever leaves the region."""
 
     def __init__(self, directory: Path) -> None:
         self._directory = Path(directory)
