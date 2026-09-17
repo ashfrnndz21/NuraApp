@@ -14,6 +14,12 @@ CI job). With NURA_TEST_DATABASE_URL set to a Postgres URL (`postgresql+asyncpg:
 that Postgres, created for the test and dropped after it, so the whole suite runs on the
 database a deployment runs on. Postgres is exercised in CI only; nothing here needs one on a
 laptop.
+
+The `backend-postgres` job runs this file under `pytest-xdist` (`-n auto`): several worker
+processes, each running its own tests against the same Postgres server, one test at a time per
+worker. The per-test schema is what makes that safe — a worker never sees another worker's
+tables — and the schema name carries the worker's own id (`WORKER`, below) so a schema found
+still on the server after a hung or killed run says which worker left it there.
 """
 
 from __future__ import annotations
@@ -84,6 +90,13 @@ TEST_DATABASE_URL: str | None = (
 """A Postgres to run every test's database on, or None for SQLite in memory (the default)."""
 ON_POSTGRES = TEST_DATABASE_URL is not None
 
+WORKER = os.environ.get("PYTEST_XDIST_WORKER", "solo")
+"""pytest-xdist's own id for this process (`gw0`, `gw1`, ...), or "solo" outside xdist. Two
+workers hand out schema names from the same uuid4 address space, which collides in practice
+never — but a schema is also where a hung CI run gets debugged from `pg_stat_activity`, and
+`test_<uuid>` does not say which of the parallel workers left it there. `test_<worker>_<uuid>`
+does, at no cost to the uniqueness the uuid already gave it."""
+
 POSTGRES_TEST_SETTINGS = {"lock_timeout": "10s", "statement_timeout": "60s"}
 """A test that waits on a lock another of its own sessions holds fails in seconds, with the
 statement in the message, instead of hanging the CI job."""
@@ -124,7 +137,7 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
         finally:
             await engine.dispose()
         return
-    schema = f"test_{uuid.uuid4().hex}"
+    schema = f"test_{WORKER}_{uuid.uuid4().hex}"
     admin = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
     async with admin.begin() as connection:
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))

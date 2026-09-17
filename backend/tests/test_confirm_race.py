@@ -37,7 +37,13 @@ pytestmark = pytest.mark.skipif(
 
 WAITING = (
     "SELECT count(*) FROM pg_stat_activity "
-    "WHERE wait_event_type = 'Lock' AND query ILIKE 'UPDATE confirmation%'"
+    "WHERE wait_event_type = 'Lock' AND query ILIKE 'UPDATE confirmation%' "
+    # Scoped to this test's own schema (`empty_database` names every connection of its engine
+    # after it, `first`, `second` and `watch` alike): unscoped, this read the whole server, and
+    # under pytest-xdist another worker's own confirmation update — its own race, or just an
+    # ordinary spend caught mid-statement — matches the same query text and schema-less count,
+    # so the wait this test means to observe could be satisfied by a stranger's instead.
+    "AND application_name = current_setting('application_name')"
 )
 
 

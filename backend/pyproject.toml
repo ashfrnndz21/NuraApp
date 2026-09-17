@@ -21,7 +21,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 # aiosqlite is tests only: it is how the regional stores run in memory, one database per region.
-dev = ["pytest", "pytest-asyncio", "ruff==0.16.7", "mypy", "httpx", "aiosqlite"]
+dev = ["pytest", "pytest-asyncio", "pytest-xdist", "ruff==0.16.7", "mypy", "httpx", "aiosqlite"]
 [tool.setuptools]
 # The migrations directory is not a package; only `app` is installed.
 packages = ["app"]
