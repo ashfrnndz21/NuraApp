@@ -183,6 +183,13 @@ export function HealthScreen(): JSX.Element {
 
       <PaperTile testId="health-more">
         <nav class="place-rows" aria-label={owner ? s.record.title : fill(s.record.titleOther, { name })}>
+          {medicinesShown(owner, scopes) && (
+            <button type="button" class="place-row" onClick={() => toRecord({ name: "medicines" })} data-testid="health-medicines">
+              <Icon name="medicines" />
+              <span class="place-word">{s.record.medicines}</span>
+              <Icon name="chevron" />
+            </button>
+          )}
           <button type="button" class="place-row" onClick={() => toRecord({ name: "hub" })} data-testid="health-record-hub">
             <Icon name="records" />
             <span class="place-word">{owner ? s.record.title : fill(s.record.titleOther, { name })}</span>
