@@ -73,6 +73,7 @@ PRIORITY: dict[CardType, int] = {
     CardType.MEMO: 65,
     CardType.REORDER: 60,
     CardType.NOTICE: 75,
+    CardType.RECALL_ACTION: 75,
     CardType.READING: 50,
     CardType.GATE: 40,
     CardType.DUTY: 40,
@@ -97,6 +98,10 @@ SURFACE_OF: dict[CardType, Surface] = {
     CardType.LOCAL: Surface.LEARNING_CARD,
     CardType.SEASONAL: Surface.LEARNING_CARD,
     CardType.FOOD: Surface.LEARNING_CARD,
+    # The one card built from a notice (#183): its words are the catalogue's own, never the
+    # notice's compressed page, but the notice is still what State surfaced that made this
+    # card exist, so it carries the same line the notice would have.
+    CardType.RECALL_ACTION: Surface.LEARNING_CARD,
 }
 """The feed's inferring surfaces (E16-01, `app.safety.boundary`). A learning card is an
 explanation chosen for him from State and compressed from an allowlisted page; a notice is

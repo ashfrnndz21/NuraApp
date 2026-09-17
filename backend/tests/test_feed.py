@@ -3,9 +3,12 @@
 A card names its State or is not written; a card with a failing line is not written and the
 refusal is on the trail; a learning card from outside the allowlist is not written; a
 medicine on the list starts an explainer and a daily safety job, and a notice — whether or
-not it matches the batch on his pack — is held for the caregiver, or rerouted to the memo as
-a doctor question, and never delivered to him (#181; `items.NoticeNotForPatient` refuses one
-built for `DeliverTo.PATIENT` outright).
+not it matches the batch on his pack — is held for the caregiver, or rerouted to a doctor
+question when its words would change treatment (#181, #224, #236), and never delivered to
+him in the notice's own words (`items.NoticeNotForPatient` refuses one built for
+`DeliverTo.PATIENT` outright). Where the batch does match, he gets his own `RECALL_ACTION`
+card instead (spec §0, #183), in his own words, saying what he can do about the box in his
+hand today.
 """
 
 from __future__ import annotations
@@ -262,9 +265,9 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
     sg: AsyncSession,
 ) -> None:
     """E16-01 on the feed. A learning card is an inferring surface (`Surface.LEARNING_CARD`),
-    and so is a notice, the same compression of a regulator's page: the row carries the line
-    and the body and the voice end on it. Every other card shows the record back and
-    carries no line."""
+    and so is a notice, the same compression of a regulator's page, and the `RECALL_ACTION`
+    card built from one (#183): the row carries the line and the body and the voice end on
+    it. Every other card shows the record back and carries no line."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
@@ -275,7 +278,11 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
         "Ask your doctor.",
     ]
     inferring = [item for item in made if item.type in SURFACE_OF]
-    assert {item.type for item in inferring} == {CardType.LEARNING, CardType.NOTICE}
+    assert {item.type for item in inferring} == {
+        CardType.LEARNING,
+        CardType.NOTICE,
+        CardType.RECALL_ACTION,
+    }
     for item in inferring:
         assert item.boundary == line, item.type
         assert item.body[-3:] == line.splitlines() and item.voice[-3:] == line.splitlines()
@@ -408,13 +415,16 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     assert len(her_learning) == 1
     assert her_learning[0].cite is not None and "warfarin-inr" in her_learning[0].cite["url"]
     assert CardType.QUESTION not in by_type, "no orphaned FeedItem question"
+    # #183: the batch on his pack (230001) does not match the notice's (240077) — no
+    # RECALL_ACTION card at all, his or otherwise.
+    assert CardType.RECALL_ACTION not in by_type
     memos = await current_memos(sg, context=context)
     [memo] = [one for one in memos if one.kind is MemoKind.ASK]
     assert memo.key == "ask_safety_notice"
     assert "skip" not in memo.text.lower() and "dose" not in memo.text.lower()
     # Nothing for the patient carries the notice or the caregiver's copy of the found page.
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert CardType.NOTICE not in {item.type for item in page.items}
+    assert {item.type for item in page.items} & {CardType.NOTICE, CardType.RECALL_ACTION} == set()
     assert her_learning[0].id not in {item.id for item in page.items}
     # Delivery, not existence: his chief's own, independently resolved key actually reads
     # both the notice and the redirected learning card back.
@@ -548,12 +558,15 @@ async def test_a_food_page_that_would_change_treatment_is_held_for_his_chief_alo
     assert len(rows) == 1
 
 
-async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_card(
+async def test_a_notice_that_matches_the_batch_on_his_pack_gives_him_the_action_card_and_his_chief_the_notice(
     sg: AsyncSession,
 ) -> None:
-    """#181: a batch match no longer earns a notice a place in his feed (spec §0, §9). It is
-    still hers to act on — `Supply.TODAY`, same as before — and still not suppressed (a match
-    is relevant, just never a card he reads); it is simply never `DeliverTo.PATIENT`."""
+    """#181, #183: a batch match no longer earns the notice itself a place in his feed (spec
+    §0, §9) — it is still hers to act on (`Supply.TODAY`, same as before), still not
+    suppressed (a match is relevant, just never a card in the notice's own words), and never
+    `DeliverTo.PATIENT`. Where it matches his own pack, he gets his own `RECALL_ACTION` card
+    instead, in his own words, made and reviewed like every other card of his: neither the
+    notice's own compressed words, nor the batch number on it, ever reach him."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
@@ -561,14 +574,28 @@ async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_ca
     assert notice.deliver_to is DeliverTo.CAREGIVER and notice.supply is Supply.TODAY
     assert notice.why["suppressed"] is None
     assert notice.body[1] == "Look for the batch number 240077 on your box."
-    page = await feed_page(sg, context=context, engine=ENGINE)
-    assert CardType.NOTICE not in {item.type for item in page.items}
-    assert [item.type for item in page.items][:4] == [
-        CardType.NOW,
-        CardType.GATE,
-        CardType.STORY,  # the label photo is one of his papers
-        CardType.LEARNING,
+    action = next(item for item in made if item.type is CardType.RECALL_ACTION)
+    assert action.deliver_to is DeliverTo.PATIENT and action.supply is Supply.TODAY
+    assert action.headline == "The blood thinner tablet was recalled"
+    assert action.body == [
+        "Take the blood thinner tablet to the pharmacist today.",
+        "The pharmacist will tell you what to do next.",
+        "Nura explains one thing in simple words.",
+        "This is not a doctor's advice.",
+        "Ask your doctor.",
     ]
+    assert action.voice == action.body
+    assert action.boundary == boundary_line(Surface.LEARNING_CARD, "en")
+    # No batch number, and no word of the notice's own, reaches him.
+    assert "240077" not in " ".join(action.body) and "batch" not in " ".join(action.body)
+    assert action.action == "ask_the_pharmacist"
+    page = await feed_page(sg, context=context, engine=ENGINE)
+    assert [item.type for item in page.items][:3] == [
+        CardType.NOW,
+        CardType.RECALL_ACTION,
+        CardType.GATE,
+    ]
+    assert CardType.NOTICE not in {item.type for item in page.items}
 
 
 async def test_a_notice_is_refused_outright_if_a_caller_ever_sends_it_to_the_patient(
@@ -822,9 +849,16 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
     her_page = await feed_page(sg, context=mei, engine=engine)
     assert notice.id in {item.id for item in her_page.items}
 
-    # His own feed carries neither the notice nor any question — spec §0, §9.
+    # His own feed carries neither the notice nor any question — spec §0, §9. It does carry
+    # his own RECALL_ACTION card (#183): the batch match and the treatment-change reroute are
+    # independent, so a notice too dangerous to show him in its own words still leaves him
+    # with the one thing he needs, in fixed catalogue words that never repeat it.
     his_page = await feed_page(sg, context=context, engine=engine)
     assert {item.type for item in his_page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
+    action = next(item for item in made if item.type is CardType.RECALL_ACTION)
+    assert action.deliver_to is DeliverTo.PATIENT
+    assert action.id in {item.id for item in his_page.items}
+    assert "stop" not in " ".join(action.body).lower()
 
     # The doctor question: a real Memo, read back through the same function the post-visit
     # brief and the pre-visit question loop both call — not a raw table query.
