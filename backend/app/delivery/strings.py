@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from app.safety.boundary import Surface, boundary_line
@@ -48,6 +48,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "story_photo": "A photo from {who}",
         "recap": "Your week, in 30 seconds",
         "flag": "This one we do not wait for",
+        "notice_fallback": "A notice needs a look",
     },
     "ms": {
         "now_tablets": "Ubat anda hari ini",
@@ -69,6 +70,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "story_photo": "Gambar daripada {who}",
         "recap": "Minggu anda, dalam 30 saat",
         "flag": "Yang ini kita tidak tunggu",
+        "notice_fallback": "Notis perlu dilihat",
     },
     "zh": {
         "now_tablets": "您今天的药",
@@ -90,6 +92,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who}分享的照片",
         "recap": "30秒看您的这一周",
         "flag": "这个我们不等",
+        "notice_fallback": "有通知需要查看",
     },
 }
 
@@ -169,6 +172,12 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "This one we do not wait for.",
             "Call {emergency_number} now.",
         ),
+        # #231: a card whose own compressed words could not be worded plainly, held for the
+        # caregiver — a fixed line reaches her instead, never the words that failed.
+        "notice_fallback": (
+            "Nura found a notice that needs a look.",
+            "Open Nura to see it.",
+        ),
     },
     "ms": {
         "now_tablets": (
@@ -243,6 +252,10 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Yang ini kita tidak tunggu.",
             "Telefon {emergency_number} sekarang.",
         ),
+        "notice_fallback": (
+            "Nura jumpa notis yang perlu dilihat.",
+            "Buka Nura untuk melihatnya.",
+        ),
     },
     "zh": {
         "now_tablets": (
@@ -285,6 +298,7 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "请打给{who}，或者打{emergency_number}。",
         ),
         "flag_alone": ("您告诉Nura您{feeling}。", "这个我们不等。", "请现在打{emergency_number}。"),
+        "notice_fallback": ("Nura 找到一则需要查看的通知。", "打开Nura查看。"),
     },
 }
 
@@ -313,6 +327,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal": "{season} is on {day}.",
         "seasonal_about": "{season} begins around {day}.",
         "flag": "This is one of the things we never wait for.",
+        "notice_fallback": "Nura could not word this plainly by itself, so it is held for you to read.",
     },
     "ms": {
         "now_tablets": "Anda ada ubat dalam senarai anda.",
@@ -337,6 +352,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal": "{season} jatuh pada {day}.",
         "seasonal_about": "{season} bermula sekitar {day}.",
         "flag": "Ini salah satu perkara yang kita tidak pernah tunggu.",
+        "notice_fallback": "Nura tidak dapat menyusun ini dengan kata mudah, jadi ia disimpan untuk anda baca.",
     },
     "zh": {
         "now_tablets": "您的清单上有药。",
@@ -361,6 +377,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal": "{season}是{day}。",
         "seasonal_about": "{season}大约在{day}开始。",
         "flag": "这是我们从不等的事情之一。",
+        "notice_fallback": "Nura 无法用简单的话写出来，所以留给您查看。",
     },
 }
 
@@ -590,6 +607,23 @@ def learning_lines(
         why=_fill(WHY[code][why], filled),
         boundary=boundary,
     )
+
+
+def notice_fallback_lines(language: str | None, *, doctor: str) -> Lines:
+    """A fixed line for when a card's own compressed words could not be worded plainly (#231):
+    never the words that failed — they can never appear on a card — so this can never itself
+    fail. Used for a card held for the caregiver whose own content was refused
+    (`NotPlainWords`): the caregiver notice, or a treatment-changing finding from any other
+    search job, must still reach her rather than be silently dropped.
+
+    Carries the same boundary line every inferring surface does (`Surface.LEARNING_CARD`),
+    since the type this stands in for (`CardType.NOTICE`, or whatever `_shape` chose) still
+    names that surface and `items.create_item` still requires it."""
+    code = language_for(language)
+    boundary = boundary_line(Surface.LEARNING_CARD, code, doctor=doctor)
+    base = render("notice_fallback", code, body=("notice_fallback",))
+    tail = boundary.splitlines()
+    return replace(base, body=(*base.body, *tail), voice=(*base.voice, *tail), boundary=boundary)
 
 
 # @patient phrase

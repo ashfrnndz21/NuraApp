@@ -52,7 +52,14 @@ from app.delivery.feed.sources import (
     require_usable_source,
     usable_sources,
 )
-from app.delivery.strings import YOUR_DOCTOR, Lines, language_for, learning_lines, season_name
+from app.delivery.strings import (
+    YOUR_DOCTOR,
+    Lines,
+    language_for,
+    learning_lines,
+    notice_fallback_lines,
+    season_name,
+)
 from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
@@ -516,47 +523,75 @@ async def run_job(
                     search_job_id=job.id,
                 )
             except NotPlainWords as failed:
-                rejected.append(
-                    {"url": found.url, "because": "not_plain_words", "detail": str(failed)}
+                # #231: the chief's copy is never dropped just because the compressed words
+                # could not be worded plainly — a fixed fallback line reaches her instead,
+                # never the words that failed. (Nothing today can raise NotPlainWords for a
+                # CAREGIVER-delivered card — `create_item` only verifies a PATIENT one — so
+                # this is defence in depth against that check ever widening, not a path
+                # proven to fire; the fallback is still real and tested on its own.)
+                notice = await create_item(
+                    session,
+                    context=context,
+                    state=state,
+                    type=CardType.NOTICE,
+                    lines=notice_fallback_lines(code, doctor=doctor or YOUR_DOCTOR[code]),
+                    why=Why(
+                        kind="notice_fallback",
+                        plain="",
+                        source_id=str(source.id),
+                        gap=job.terms[0],
+                        suppressed="original_words_failed_plain_words",
+                    ),
+                    scope=Scope.MEDICINES,
+                    deliver_to=DeliverTo.CAREGIVER,
+                    day=day.key,
+                    dedupe_key=key,
+                    expires_at=moment + LEARNING_LIFETIME,
+                    format=around.format,
+                    source=source,
+                    cite={**cite, "batch": found.batch},
+                    search_job_id=job.id,
                 )
-                continue
+                rejected.append(
+                    {
+                        "url": found.url,
+                        "because": "not_plain_words_fallback_sent",
+                        "detail": str(failed),
+                    }
+                )
             existing.add(key)
             made.append(notice)
             continue
-        if changes_treatment([compressed.headline, *compressed.body]):
-            # Not a card: a question for the doctor, held for the memo (E05 reads HELD).
-            question = await create_item(
+        # #231: a page whose words would start, stop or change a medicine is never simply
+        # dropped, whichever job found it. It is held for the chief instead of him — the
+        # same card he would have had, redirected — and, only where the job's own terms name
+        # a medicine he takes (so a real drug name is known), additionally filed as a real
+        # doctor question (`_ask_the_doctor`, the same door #224 built for a safety notice).
+        # A local hazard, a season or a food page names no medicine, so it gets the caregiver
+        # card alone: inventing a drug name for the question would be worse than not asking.
+        # This replaces a `CardType.QUESTION`/`DeliverTo.MEMO` `FeedItem` that used to stand
+        # here — nothing reads `DeliverTo.MEMO` (`rank.py`'s two supplies exclude it, no route
+        # queries it), so that card reached nobody at all.
+        treatment_changing = changes_treatment([compressed.headline, *compressed.body])
+        is_medicine_job = bool(job.terms) and job.reason.get("scope") == "medicines"
+        if treatment_changing and is_medicine_job:
+            memo_id = await _ask_the_doctor(
                 session,
                 context=context,
                 state=state,
-                type=CardType.QUESTION,
-                lines=Lines(
-                    language=code,
-                    headline=f"Ask about: {found.title}",
-                    body=tuple(compressed.body),
-                    voice=(),
-                    why=f"Found on {found.domain}; it could change treatment, so it is a question.",
-                ),
-                why=Why(kind="question", plain="", source_id=str(source.id), gap=job.terms[0]),
-                scope=Scope.RECORDS,
-                deliver_to=DeliverTo.MEMO,
-                day=day.key,
-                dedupe_key=key,
-                expires_at=moment + LEARNING_LIFETIME,
-                source=source,
-                cite=cite,
-                search_job_id=job.id,
+                code=code,
+                doctor=doctor,
+                generic=job.terms[0],
+                registry=engine.registry,
+                source_id=source.id,
             )
-            existing.add(key)
-            questions.append(question)
             rejected.append(
                 {
                     "url": found.url,
-                    "because": "treatment_change_rerouted_as_question",
-                    "item_id": str(question.id),
+                    "because": "treatment_change_also_filed_as_a_question",
+                    "memo_id": memo_id or "not_filed",
                 }
             )
-            continue
         shape = _shape(
             job.kind,
             found,
@@ -566,7 +601,7 @@ async def run_job(
             doctor=doctor or YOUR_DOCTOR[code],
             around=around,
             season=season,
-            about_a_medicine=job.kind is JobKind.EXPLAINER and job.reason.get("scope") == "medicines",
+            about_a_medicine=is_medicine_job,
         )
         if shape.cite:
             cite |= shape.cite
@@ -576,6 +611,7 @@ async def run_job(
                 | {one for reason in reasons for one in around.fact_ids.get(reason, ())}
             )
         )
+        deliver_to = DeliverTo.CAREGIVER if treatment_changing else DeliverTo.PATIENT
         try:
             item = await create_item(
                 session,
@@ -591,7 +627,7 @@ async def run_job(
                     fact_ids=fact_ids,
                 ),
                 scope=_scope_of(job, reasons, around),
-                deliver_to=DeliverTo.PATIENT,
+                deliver_to=deliver_to,
                 day=day.key,
                 dedupe_key=key,
                 expires_at=_expiry(job.kind, day, moment, season),
@@ -601,8 +637,43 @@ async def run_job(
                 search_job_id=job.id,
             )
         except NotPlainWords as failed:
-            rejected.append({"url": found.url, "because": "not_plain_words", "detail": str(failed)})
-            continue
+            if not treatment_changing:
+                rejected.append(
+                    {"url": found.url, "because": "not_plain_words", "detail": str(failed)}
+                )
+                continue
+            # #231: held for the chief, so — like the safety notice — never dropped just
+            # because the compressed words could not be worded plainly.
+            item = await create_item(
+                session,
+                context=context,
+                state=state,
+                type=shape.type,
+                lines=notice_fallback_lines(code, doctor=doctor or YOUR_DOCTOR[code]),
+                why=Why(
+                    kind="notice_fallback",
+                    plain="",
+                    source_id=str(source.id),
+                    gap=job.terms[0],
+                    suppressed="original_words_failed_plain_words",
+                ),
+                scope=_scope_of(job, reasons, around),
+                deliver_to=DeliverTo.CAREGIVER,
+                day=day.key,
+                dedupe_key=key,
+                expires_at=_expiry(job.kind, day, moment, season),
+                format=shape.format,
+                source=source,
+                cite=cite,
+                search_job_id=job.id,
+            )
+            rejected.append(
+                {
+                    "url": found.url,
+                    "because": "not_plain_words_fallback_sent",
+                    "detail": str(failed),
+                }
+            )
         existing.add(key)
         made.append(item)
     job.status = JobStatus.DONE
