@@ -121,7 +121,7 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   // The whole video is on the heart centre's own site: a link he taps, in a tab of its own.
   const link = card.getByTestId("watch-whole");
   await expect(link).toHaveText("Watch the whole video at National Heart Centre Singapore");
-  await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/understanding-high-blood-pressure");
+  await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/amlodipine-in-brief");
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   // Every card keeps Hear and Not for me.
