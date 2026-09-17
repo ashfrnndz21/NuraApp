@@ -588,6 +588,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
         holder_phone_e164=kit.phone_e164,
         holder_display_name=kit.name,
         scopes=["records", "medicines", "visits"],
+        role="caregiver",
+        window="always",
         relationship="son",
         language="ms",
         captured_via="app",

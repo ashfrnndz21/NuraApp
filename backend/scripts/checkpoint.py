@@ -284,6 +284,8 @@ def checkpoint_2(client: httpx.Client) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": ["medicines", "visits"],
+                "role": "caregiver",
+                "window": "thirty_days",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",
@@ -588,6 +590,8 @@ def checkpoint_3(client: httpx.Client) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",
@@ -1278,6 +1282,8 @@ def checkpoint_5(client: httpx.Client) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",
@@ -1720,6 +1726,8 @@ def checkpoint_6(client: httpx.Client) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": ["medicines"],
+                "role": "helper",
+                "window": "always",
                 "relationship": "helper",
                 "language": "en",
                 "captured_via": "app",
@@ -2318,6 +2326,8 @@ def checkpoint_7(client: httpx.Client) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": ["readings", "records"],
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",
@@ -2686,6 +2696,8 @@ def checkpoint_8(client: httpx.Client) -> None:
                 "holder_phone_e164": mei.phone_e164,
                 "holder_display_name": mei.name,
                 "scopes": scopes,
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",
@@ -2755,7 +2767,21 @@ def checkpoint_8(client: httpx.Client) -> None:
     explainer = next(
         job for job in jobs if job["kind"] == "explainer" and job["terms"] == ["warfarin"]
     )
-    if not explainer["results"]["items"] or not explainer["results"]["questions"]:
+    # #236: a treatment-changing explainer finding is rerouted as a real question for the
+    # doctor (a memo, `_ask_the_doctor`) rather than a `questions` FeedItem nobody reads it
+    # as — so `questions` is empty by design here and the reroute shows up in `rejected`
+    # instead, naming a filed memo (never "not_filed").
+    rerouted = [
+        row
+        for row in explainer["results"]["rejected"]
+        if row["because"] == "treatment_change_rerouted_as_question"
+    ]
+    if (
+        not explainer["results"]["items"]
+        or explainer["results"]["questions"]
+        or not rerouted
+        or rerouted[0]["memo_id"] == "not_filed"
+    ):
         raise fail(
             "Pa reads the search jobs the engine started", why=f"results {explainer['results']}"
         )
@@ -2886,6 +2912,8 @@ def checkpoint_9(client: httpx.Client) -> None:
                     "emergency",
                     "send",
                 ],
+                "role": "chief",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "en",
                 "captured_via": "app",

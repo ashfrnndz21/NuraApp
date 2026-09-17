@@ -231,9 +231,14 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
     # 2. Pa lets Siti and Kit in; Mei cuts the keys.
     w.register(siti, "ms")
     w.register(kit, "en")
-    for person, scopes, relationship in (
-        (siti, ["medicines", "emergency", "send"], "helper"),
-        (kit, ["medicines", "visits", "readings", "records", "emergency", "family"], "son"),
+    for person, scopes, role, relationship in (
+        (siti, ["medicines", "emergency", "send"], "helper", "helper"),
+        (
+            kit,
+            ["medicines", "visits", "readings", "records", "emergency", "family"],
+            "caregiver",
+            "son",
+        ),
     ):
         check(
             client.post(
@@ -242,6 +247,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                 json={
                     "holder_person_id": person.person_id,
                     "scopes": scopes,
+                    "role": role,
+                    "window": "always",
                     "relationship": relationship,
                     "language": "ms",
                     "captured_via": "app",
@@ -359,6 +366,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                     "ask",
                     "send",
                 ],
+                "role": "chief",
+                "window": "always",
                 "relationship": "daughter",
                 "language": "ms",
                 "captured_via": "app",
@@ -674,6 +683,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                 "holder_phone_e164": priya.phone_e164,
                 "holder_display_name": priya.name,
                 "scopes": priya_scopes,
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "other_family",
                 "language": "ms",
             },
@@ -692,6 +703,8 @@ def walk(client: httpx.Client, dev_log: Path) -> None:
                 "holder_phone_e164": priya.phone_e164,
                 "holder_display_name": priya.name,
                 "scopes": priya_scopes,
+                "role": "caregiver",
+                "window": "always",
                 "relationship": "other_family",
                 "language": "ms",
                 "captured_via": "app",
