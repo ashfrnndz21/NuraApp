@@ -21,22 +21,43 @@ decision, the same as the trail or the self-search queue — and are not touched
 reported, not fixed, in the PR that carries this migration. None of them is proven to break a
 checkpoint the way the consent read did.
 
-`seq_counters` holds one row per table, and `app.db.monotonic` (a class decorator) gives
-every row of a decorated table a `seq`: the value the database itself hands out, atomically,
-at insert time — the row's real position in write order, immune to the clock. Eleven tables
-get it: the audit trail, whose whole purpose is telling him what happened in what order, so a
-mere stable-but-arbitrary tiebreaker is not enough; `consent`, above; and nine more where a
-tie makes a *decision* arbitrary (which delivery settings apply, which login challenge a code
-was sent for, which tablet a reply answers, a reader's own last-looked baseline, the newest
-reading on the emergency card, the last feed page cached for offline, and the watched feeling
-note or family message a nudge is built from, which return on the first match in a loop). Two
-more tables (red flags, the self-search queue) only order a listing for someone to browse,
-every row of it read regardless of order — a tie there makes the order unstable, not wrong,
-and ordering by the existing `id` is enough; they are not touched here.
+`app.db.monotonic` (a class decorator) gives every row of a decorated table a `seq`: the
+value the database itself hands out, atomically, at insert time — the row's real position in
+write order, immune to the clock. Twelve tables get it: the audit trail, whose whole purpose
+is telling him what happened in what order, so a mere stable-but-arbitrary tiebreaker is not
+enough; `consent`, above; and ten more where a tie makes a *decision* arbitrary (which
+delivery settings apply, which login challenge a code was sent for, which tablet a reply
+answers, a reader's own last-looked baseline, the newest reading on the emergency card, the
+last feed page cached for offline, and the watched feeling note or family message a nudge is
+built from, which return on the first match in a loop). Two more tables (red flags, the
+self-search queue) only order a listing for someone to browse, every row of it read regardless
+of order — a tie there makes the order unstable, not wrong, and ordering by the existing `id`
+is enough; they are not touched here.
 
 Existing rows get `seq=0`: every one of them sorts as older than anything written from here
 on, which is the safe direction to be wrong in (nothing already on a profile is ever picked
-as "newest" over a fresh write), and this app has no production data yet to reorder properly.
+as "newest" over a fresh write) *if* this app has no production data yet to reorder properly —
+an assumption, not a settled fact, and this migration does not check it.
+
+Where `seq` actually comes from is the second half of this migration, added after independent
+review proved the first version unsafe under load on a real Postgres 16: a shared counter row
+taken with `UPDATE ... RETURNING` is held by whichever transaction touched it until that
+transaction commits, and this app commits one transaction per HTTP request
+(`app.channels.api.deps.db`) that, for nearly every read and write, writes an `audit_entry` —
+one of the twelve tables below — through `app.audit.trail.record`. The review reproduced both
+failure modes directly: one request's still-open transaction blocked a second, wholly
+unrelated request's insert on `audit_entry` for the entire time the first stayed open; and two
+transactions taking two tables' counter rows in opposite order deadlocked. `seq_counters`
+(kept below, and still built on every dialect so the migrated schema matches what
+`Base.metadata.create_all` builds for the tests that don't run migrations at all) is real
+insurance for SQLite only, which this app's tests and a laptop's `make dev` are the only users
+of and which does not have this problem to begin with — every write there already begins
+IMMEDIATE (`app.db.make_engine`), serialising the whole database one writer at a time, so a
+row lock over one more row costs nothing that is not already true. Postgres — every real
+deployment — instead gets a `SEQUENCE` per table: `nextval()` takes no row lock held for a
+transaction's life, so it cannot block a concurrent insert and cannot deadlock against another
+table's sequence (both reproduced fixed, the same way they were reproduced broken, in
+`tests/test_monotonic_seq_concurrency.py`, Postgres-only, `backend-postgres` CI).
 
 Revision ID: 0040_monotonic_tiebreak
 Revises: 0039_feeling_question_marker
@@ -68,22 +89,35 @@ SEQUENCED_TABLES = (
 )
 
 
+def _sequence_name(table: str) -> str:
+    return f"{table}_seq_seq"
+
+
 def upgrade() -> None:
     op.create_table(
         "seq_counters",
         sa.Column("name", sa.String(length=64), primary_key=True),
         sa.Column("value", sa.BigInteger(), nullable=False, server_default="0"),
     )
+    on_postgres = op.get_bind().dialect.name == "postgresql"
     for table in SEQUENCED_TABLES:
         with op.batch_alter_table(table) as batch:
             batch.add_column(
                 sa.Column("seq", sa.BigInteger(), nullable=False, server_default="0")
             )
         op.create_index(f"ix_{table}_seq", table, ["seq"])
+        # `app.db.monotonic` reads `seq` from this sequence on Postgres, never from
+        # `seq_counters` (see the docstring above for why); SQLite has no CREATE SEQUENCE,
+        # and does not need one.
+        if on_postgres:
+            op.execute(f"CREATE SEQUENCE {_sequence_name(table)}")
 
 
 def downgrade() -> None:
+    on_postgres = op.get_bind().dialect.name == "postgresql"
     for table in reversed(SEQUENCED_TABLES):
+        if on_postgres:
+            op.execute(f"DROP SEQUENCE {_sequence_name(table)}")
         op.drop_index(f"ix_{table}_seq", table_name=table)
         with op.batch_alter_table(table) as batch:
             batch.drop_column("seq")

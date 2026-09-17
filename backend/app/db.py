@@ -21,6 +21,7 @@ from sqlalchemy import (
     Dialect,
     Enum,
     ForeignKey,
+    Sequence,
     String,
     Table,
     TypeDecorator,
@@ -169,24 +170,32 @@ seq_counters = Table(
     Column("name", String(64), primary_key=True),
     Column("value", BigInteger(), nullable=False, default=0),
 )
-"""One row per `@monotonic` table, its running count. A plain Core table, not an ORM model:
-nothing ever maps a row of it to a Python object, `monotonic`'s upsert is the only thing
-that ever touches it. Declared on `Base.metadata` all the same — `tests/conftest.py` builds
-the test database from this metadata, not by running the migrations, so a table only a
-migration knows about would leave every `@monotonic` model insert failing in every test with
-"no such table" — and so `scripts.data_map` (docs/trust/pdpa-data-map.md, E16-05) can see it
-too: it holds no identifier and no health data, but "every real table" means this one too."""
+"""SQLite only (dev and this laptop's own tests): one row per `@monotonic` table, its running
+count. A plain Core table, not an ORM model: nothing ever maps a row of it to a Python object,
+`monotonic`'s upsert is the only thing that ever touches it. Declared on `Base.metadata` all
+the same — `tests/conftest.py` builds the test database from this metadata, not by running
+the migrations, so a table only a migration knows about would leave every `@monotonic` model
+insert failing with "no such table" — and so `scripts.data_map` (docs/trust/pdpa-data-map.md,
+E16-05) can see it too: it holds no identifier and no health data, but "every real table"
+means this one too.
+
+Postgres does not use this table at all (see `monotonic`, below): a shared counter row taken
+with `UPDATE` is held by the transaction that touched it until that transaction commits, and
+this app runs one transaction per HTTP request (`app.channels.api.deps.db`) that writes an
+`audit_entry` — one of the twelve `@monotonic` tables — on nearly every read and write
+(`app.audit.trail.record`). A review of #228 proved this against a real Postgres 16 before it
+was ever asked to run under load: one request's open transaction blocked a second request's
+unrelated insert for the whole two seconds the first stayed open, and two transactions taking
+two tables' counter rows in opposite order deadlocked outright. SQLite does not have this
+problem to begin with — every write already begins IMMEDIATE (`make_engine`, below), so the
+whole database is already serialised one writer at a time, and the counter-row upsert costs
+nothing beyond what is already true."""
 
 _NEXT_SEQ = text(
     "INSERT INTO seq_counters (name, value) VALUES (:name, 1) "
     "ON CONFLICT (name) DO UPDATE SET value = seq_counters.value + 1 "
     "RETURNING value"
 )
-"""One counter per table, in `seq_counters` (0040_monotonic_tiebreak). The upsert is one
-statement, atomic on both dialects this app runs on: SQLite serialises it because every
-write already begins IMMEDIATE (`make_engine`, below); Postgres serialises it on the row
-lock the UPDATE takes. Neither depends on the wall clock or on how many processes are
-writing — which a clock-derived or per-process value cannot promise (#192, #218)."""
 
 
 def monotonic(model: type[Any]) -> type[Any]:
@@ -194,29 +203,49 @@ def monotonic(model: type[Any]) -> type[Any]:
     the database hands out at insert time — the row's real position in write order.
 
     #218 (the CI job that walks the product's own acceptance checkpoints end to end) found
-    ten of them failing only under a frozen clock — not flaky; deterministic every run — and
-    checkpoint 13's failure was word for word the false regression report on #190. The cause
-    generalises past that one table: sixteen reads across audit, delivery, safety, identity
-    and WhatsApp order "newest first" by a timestamp column alone. A timestamp is not unique:
-    two rows written in the same request (or, always, under a frozen clock — every
-    checkpoint, `make web-e2e`, and the demo run on one) can share an instant, and primary
-    keys are UUID4, which cannot break the tie either because they carry no order at all.
+    ten checkpoints failing only under a frozen clock — not flaky; deterministic every run —
+    and checkpoint 13's failure was word for word the false regression report on #190. The
+    cause generalises past that one table: seventeen reads across audit, consent, delivery,
+    safety, identity and WhatsApp order "newest first" by a timestamp column alone. A
+    timestamp is not unique: two rows written in the same request (or, always, under a frozen
+    clock — every checkpoint, `make web-e2e`, and the demo run on one) can share an instant,
+    and primary keys are UUID4, which cannot break the tie either because they carry no order
+    at all.
 
-    Not every one of the sixteen needs this. Sorted into two kinds (see the PR that added
+    Not every one of the seventeen needs this. Sorted into two kinds (see the PR that added
     this): a "latest wins" read, where the first row *is* a decision — which delivery
     settings apply, which login challenge a code was sent for, which tablet a reply answers,
     a reader's own last-looked baseline, the newest reading on the emergency card, the last
-    feed page cached for offline, which watched feeling note or family message a nudge is
-    built from — needs a real, monotonic tiebreaker: `Model.seq.desc()`, alongside the
-    timestamp, never instead of it. A table decorated with `@monotonic` gets one. A read that
-    only orders a listing for someone to browse (the trail, the family thread's page, a red
-    flag's card, the self-search queue) decides nothing on a tie; ordering it by its existing
-    `id` as well is enough, and does not need a migration.
+    feed page cached for offline, which consent a key is cut from, which watched feeling note
+    or family message a nudge is built from — needs a real, monotonic tiebreaker:
+    `Model.seq.desc()`, alongside the timestamp, never instead of it. A table decorated with
+    `@monotonic` gets one. A read that only orders a listing for someone to browse (the trail,
+    the family thread's page, a red flag's card, the self-search queue) decides nothing on a
+    tie; ordering it by its existing `id` as well is enough, and does not need this.
+
+    On Postgres, `seq` comes from a real `SEQUENCE` (`<table>_seq_seq`, created alongside
+    every other table on `Base.metadata` — see `seq_counters` above for why that matters for
+    tests): `nextval()` is not transactional. It is not rolled back if the insert that asked
+    for it is, so a refused write leaves a gap in the numbering, which is fine — `seq` only
+    has to keep rows in write order, never be dense — and, the property this exists for, it
+    takes no row lock held for the asking transaction's life, so it cannot block a concurrent
+    insert on the same table and cannot deadlock against another table's sequence (both
+    reproduced against a real Postgres 16 with the row-lock version this replaced; see
+    `tests/test_monotonic_seq_concurrency.py`). SQLite has no `SEQUENCE`; there the shared
+    `seq_counters` row above is used instead, which is safe for the reason given on it.
     """
+    sequence = Sequence(f"{model.__tablename__}_seq_seq", metadata=Base.metadata)
 
     @event.listens_for(model, "before_insert")
     def _assign_seq(mapper: Any, connection: Any, target: Any) -> None:
-        target.seq = connection.execute(_NEXT_SEQ, {"name": model.__tablename__}).scalar_one()
+        if connection.dialect.name == "postgresql":
+            target.seq = connection.execute(
+                text("SELECT nextval(:name)"), {"name": sequence.name}
+            ).scalar_one()
+        else:
+            target.seq = connection.execute(
+                _NEXT_SEQ, {"name": model.__tablename__}
+            ).scalar_one()
 
     return model
 
