@@ -3,7 +3,7 @@ import type { JSX } from "preact";
 import * as family from "../../api/family";
 import type { SharingPreviewOut } from "../../api/types";
 import type { GrantOut, KeyRole, KeyWindow, RolePresetOut, Scope } from "../../api/familyTypes";
-import { PARTS, partsOf, ROLES, WINDOWS } from "../../family/model";
+import { PARTS, partsOf, ROLE_DEFAULTS, ROLES, WINDOWS } from "../../family/model";
 import { Field, Notice, Pill, Tile } from "../../ui/components";
 import { FamilyPage, Lines, NoticeAt, s, useAct, useHere, useRead, type Here } from "./common";
 
@@ -142,9 +142,18 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   // elderly owner is never made to pick a role before he can even ask to see the words —
   // caregiver is already chosen, and the window is already the widest, the moment he opens
   // this tile. He can still change either before he asks.
+  //
+  // The parts and window seed from the role's own built-in default (`ROLE_DEFAULTS`,
+  // mirrored from the backend's `ROLE_SCOPES`/`DEFAULT_WINDOW`) rather than sitting empty:
+  // "See the words" must be ready to ask the moment a role, a name and a phone number are on
+  // screen, never waiting on `GET /family/roles` to answer first. `builtin` tracks whether
+  // what is on screen is still that unconfirmed guess (true) or the backend's own answer, or
+  // the owner's own edit (false) — only a guess still standing is replaced once the real
+  // preset lands (below); an edit he already made never is.
   const [role, setRole] = useState<KeyRole | null>("caregiver");
-  const [parts, setParts] = useState<Scope[]>([]);
-  const [window, setWindow] = useState<KeyWindow>("always");
+  const [parts, setParts] = useState<Scope[]>([...ROLE_DEFAULTS.caregiver.parts]);
+  const [window, setWindow] = useState<KeyWindow>(ROLE_DEFAULTS.caregiver.window);
+  const builtin = useRef(true);
   const [said, setSaid] = useState<RolePresetOut[] | null>(null);
   const [preview, setPreview] = useState<SharingPreviewOut | null>(null);
   const defaults = useRead(() => family.roles(here.bearer, here.lang, "Ash"), [here.lang]);
@@ -184,20 +193,29 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
     if (found) {
       setParts(partsOf(found.scopes));
       setWindow(found.window);
+      builtin.current = false;
+    } else {
+      // The backend's own preset for this role has not answered yet (or never will, on a
+      // slow connection): the role's built-in default stands in so the parts are never
+      // empty and "See the words" is never left waiting on the network (#185, CI flake).
+      setParts([...ROLE_DEFAULTS[next].parts]);
+      setWindow(ROLE_DEFAULTS[next].window);
+      builtin.current = true;
     }
   };
   // The preset parts for the chosen role are the backend's own (`/family/roles`), never
-  // guessed here — but the default role above is already chosen before that request can have
-  // answered. This catches the still-empty parts up the moment the preset lands, whether the
-  // role was the default or a click that beat the response (#185): never a role sitting on
-  // screen with no parts a "See the words" ask could ever be ready for. A part the owner has
-  // since toggled off by hand (`parts.length > 0`) is left alone.
+  // guessed here — but the built-in default above is already standing in before that request
+  // can have answered. This catches the still-unconfirmed guess up the moment the real preset
+  // lands, whether the role was the default or a click that beat the response (#185): never a
+  // role sitting on screen with parts the backend has not actually said are this role's own.
+  // A part the owner has since chosen by hand (`!builtin.current`) is left alone.
   useEffect(() => {
-    if (!role || parts.length > 0) return;
+    if (!role || !builtin.current) return;
     const found = defaults.value?.find((each) => each.role === role);
     if (found) {
       setParts(partsOf(found.scopes));
       setWindow(found.window);
+      builtin.current = false;
     }
   }, [role, defaults.value]);
   const shown = role && said?.find((each) => each.role === role);
@@ -263,9 +281,25 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
       {role && (
         <>
           <p class="label">{words.partsLabel}</p>
-          <PartChoices chosen={parts} onToggle={(part) => changed(setParts)(toggle(parts, part))} testId="new-part" disabled={busyHere} />
+          <PartChoices
+            chosen={parts}
+            onToggle={(part) => {
+              builtin.current = false; // his own choice of parts is never taken back by a late preset
+              changed(setParts)(toggle(parts, part));
+            }}
+            testId="new-part"
+            disabled={busyHere}
+          />
           <p class="label">{words.windowLabel}</p>
-          <WindowChoices chosen={window} onChoose={changed(setWindow)} testId="new-window" disabled={busyHere} />
+          <WindowChoices
+            chosen={window}
+            onChoose={(next) => {
+              builtin.current = false; // his own choice of window is never taken back by a late preset
+              changed(setWindow)(next);
+            }}
+            testId="new-window"
+            disabled={busyHere}
+          />
           {!here.owner && (
             <Pill plum onClick={() => void cut()} disabled={!ready} testId="make-key">
               {words.makeKey}

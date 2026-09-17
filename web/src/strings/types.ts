@@ -84,6 +84,11 @@ export interface Strings {
     visitsNoneOther: string;
     planTitle: string;
     planLead: string;
+    careTitle: string;
+    careNoneOwn: string; careNoneOther: string;
+    nearYouOwn: string; nearYouOther: string;
+    nearYouArea: string; nearYouAreaOther: string;
+    guidesTitle: string;
   };
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his day
    *  and Coming up. Every figure and status word beside these is the backend's own

@@ -223,6 +223,22 @@ export const ms = {
     planTitle: "Rancangan untuk lawatan seterusnya",
     // @patient
     planLead: "Semua yang perlu untuk lawatan seterusnya ada di sini.",
+    // @patient headline
+    careTitle: "Perkhidmatan penjagaan",
+    // @patient
+    careNoneOwn: "Nura tiada perkhidmatan penjagaan tempatan untuk anda buat masa ini.",
+    // @patient
+    careNoneOther: "Nura tiada perkhidmatan penjagaan tempatan untuk {name} buat masa ini.",
+    // @patient headline
+    nearYouOwn: "Berhampiran anda",
+    // @patient headline
+    nearYouOther: "Berhampiran {name}",
+    // @patient
+    nearYouArea: "Nura tahu kawasan anda ialah {area}.",
+    // @patient
+    nearYouAreaOther: "Nura tahu kawasan {name} ialah {area}.",
+    // @patient headline
+    guidesTitle: "Panduan",
   },
   health: {
     // @patient headline
