@@ -6,7 +6,10 @@ Records is Ask (`POST /profiles/{id}/ask`, E03-05), unchanged. The other three a
   made from, in his region, through the same `Searcher` port — and each page found is said the
   way a learning card says it: compressed into his language, citing its passage, checked
   against the plain-words standard, ending on the boundary line. A page whose lines would
-  change a treatment is not shown at all; a page from anywhere else is never returned.
+  change a treatment is not shown at all; a page from anywhere else is never returned. Each
+  result is sampled for the pharmacist's queue the same way a learning card is (#188,
+  `review.sample_find_result`): a source new enough that its first fifty renderings are still
+  pending gets no fewer eyes on it for being found on demand than it would from a search job.
   What is sent to the searcher is the words typed and the allowlisted domains — no name, no
   area, no fact of his, and the compressor is given none of his facts either. The words are
   not kept: the trail says a search was made and how many pages came back, not what for.
@@ -16,6 +19,7 @@ Records is Ask (`POST /profiles/{id}/ask`, E03-05), unchanged. The other three a
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -24,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_guard
 from app.audit.models import Action
 from app.audit.trail import record
-from app.db import as_utc
+from app.db import as_utc, nested_unit_of_work
 from app.delivery.feed.compress import changes_treatment
 from app.delivery.feed.items import failures_in
 from app.delivery.feed.search import Engine, on_its_source
@@ -34,6 +38,8 @@ from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.providers import directory
+
+log = logging.getLogger("nura.delivery.find")
 
 WHERE = ("web", "videos", "providers")
 MOST = 8
@@ -142,6 +148,9 @@ async def find_stream(
         if failures_in(lines):
             continue
         closing = len((lines.boundary or "").splitlines())
+        await _sample(
+            session, language=code, headline=compressed.headline, body=lines.body, why=lines.why
+        )
         results.append(
             Result(
                 title=compressed.headline,
@@ -183,3 +192,20 @@ async def find(
             result = event
     assert result is not None
     return result
+
+
+async def _sample(
+    session: AsyncSession, *, language: str, headline: str, body: tuple[str, ...], why: str
+) -> None:
+    """One of the first fifty renderings of a learning-shaped result goes to the pharmacist's
+    queue, de-identified (#188, `app.language.review.sample_find_result`). In a savepoint of
+    its own, the same way `items._sample` sits beside a card: whatever goes wrong in it — a
+    refusal, the database, a bug — is written to the log and rolled back. A sample never costs
+    him the result."""
+    from app.language.review import sample_find_result
+
+    try:
+        async with nested_unit_of_work(session):
+            await sample_find_result(session, language=language, headline=headline, body=body, why=why)
+    except Exception as skipped:  # noqa: BLE001 — nothing in a sample may cost him the result
+        log.warning("review sample skipped: %s", type(skipped).__name__)

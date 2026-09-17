@@ -42,7 +42,9 @@ async def current(
         DeliverySettings,
         context,
         Scope.PROFILE,
-        order_by=(DeliverySettings.set_at.desc(),),
+        # `.seq` breaks a tie in `set_at` (#192/#218): which settings are in force is a
+        # decision, not a display order, so it needs the real write-order tiebreaker.
+        order_by=(DeliverySettings.set_at.desc(), DeliverySettings.seq.desc()),
         limit=1,
     )
     row = rows[0] if rows else None
@@ -61,7 +63,9 @@ async def daily_cap(session: AsyncSession, *, context: KeyContext, type: Trigger
         DeliverySettings,
         context,
         Scope.PROFILE,
-        order_by=(DeliverySettings.set_at.desc(),),
+        # `.seq` breaks a tie in `set_at` (#192/#218): which settings are in force is a
+        # decision, not a display order, so it needs the real write-order tiebreaker.
+        order_by=(DeliverySettings.set_at.desc(), DeliverySettings.seq.desc()),
         limit=1,
     )
     return config_of(rows[0] if rows else None).cap_for(type)
