@@ -22,6 +22,8 @@ from app.clock import FrozenClock
 from app.db import utcnow
 from app.keys.context import KeyContext
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
+from app.lifestyle.food import Meal, log_food
+from app.lifestyle.metrics import MetricKind, log_metric
 from app.medicines.service import record_dose_taken
 from app.memory.models import EventKind
 from app.reasoning.feelings.record import local_date
@@ -133,6 +135,80 @@ async def test_series_match_the_golden_profile(sg: AsyncSession, clock: FrozenCl
     assert found.withheld == ()
 
 
+async def test_lifestyle_and_food_series_match_what_was_logged(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """RE-10: steps, sleep, water and the four meal slots, plus heart rate reusing the
+    existing PULSE reading series — read back through `read_series` and checked against
+    exactly what was logged, a skip included as an answered day (§2.7)."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+
+    steps_day = local_date(utcnow(), owner)
+    await log_metric(sg, context=owner, kind=MetricKind.STEPS, value=4200)
+
+    clock.step(timedelta(days=1))
+    water_skip_day = local_date(utcnow(), owner)
+    await log_metric(sg, context=owner, kind=MetricKind.WATER, skipped=True)
+
+    clock.step(timedelta(days=1))
+    sleep_day = local_date(utcnow(), owner)
+    await log_metric(sg, context=owner, kind=MetricKind.SLEEP, value=420)
+
+    clock.step(timedelta(days=1))
+    pulse_day = local_date(utcnow(), owner)
+    await log_metric(sg, context=owner, kind=MetricKind.HEART_RATE, value=72)
+
+    clock.step(timedelta(days=1))
+    breakfast_day = local_date(utcnow(), owner)
+    await log_food(sg, context=owner, meal=Meal.BREAKFAST, skipped=True)
+
+    clock.step(timedelta(days=1))
+    lunch_day = local_date(utcnow(), owner)
+    await log_food(sg, context=owner, meal=Meal.LUNCH, food="chicken rice")
+
+    # `food_log`'s window is `[since, until)` (its own docstring): step past the last write
+    # so `read_series`'s "now" does not land exactly on it and exclude it by that boundary.
+    clock.step(timedelta(seconds=1))
+    found = await read_series(sg, context=owner)
+
+    steps = found.get(SeriesKind.STEPS)
+    assert steps is not None
+    assert [(p.day, p.value) for p in steps.points] == [(steps_day, 4200.0)]
+    assert steps.answered_days == {steps_day}
+
+    water = found.get(SeriesKind.WATER_CUPS)
+    assert water is not None
+    assert [(p.day, p.value) for p in water.points] == [(water_skip_day, 0.0)]
+    assert water.answered_days == {water_skip_day}
+
+    sleep = found.get(SeriesKind.SLEEP_MINUTES)
+    assert sleep is not None
+    assert [(p.day, p.value) for p in sleep.points] == [(sleep_day, 420.0)]
+
+    # Heart rate needs no reader of its own: `log_metric` writes it in the same shape a
+    # typed blood-pressure machine's pulse already takes, so the existing PULSE series
+    # already picks it up.
+    pulse = found.get(SeriesKind.PULSE)
+    assert pulse is not None
+    assert [(p.day, p.value) for p in pulse.points] == [(pulse_day, 72.0)]
+
+    breakfast = found.get(SeriesKind.MEAL_BREAKFAST)
+    assert breakfast is not None
+    assert [(p.day, p.value) for p in breakfast.points] == [(breakfast_day, False)]
+    assert breakfast.answered_days == {breakfast_day}
+
+    lunch = found.get(SeriesKind.MEAL_LUNCH)
+    assert lunch is not None
+    assert [(p.day, p.value) for p in lunch.points] == [(lunch_day, True)]
+
+    dinner = found.get(SeriesKind.MEAL_DINNER)
+    assert dinner is not None and dinner.points == ()
+    assert found.get(SeriesKind.MEAL_SNACK) is not None
+
+    assert found.withheld == ()
+
+
 async def test_a_key_without_readings_gets_no_reading_series_named_as_withheld(
     sg: AsyncSession, clock: FrozenClock
 ) -> None:
@@ -153,6 +229,10 @@ async def test_a_key_without_readings_gets_no_reading_series_named_as_withheld(
     assert found.get(SeriesKind.SUGAR) is None
     assert found.get(SeriesKind.WEIGHT) is None
     assert found.get(SeriesKind.PULSE) is None
+    assert found.get(SeriesKind.STEPS) is None
+    assert found.get(SeriesKind.SLEEP_MINUTES) is None
+    assert found.get(SeriesKind.WATER_CUPS) is None
+    assert found.get(SeriesKind.MEAL_BREAKFAST) is None
     assert found.withheld == (Scope.READINGS,)
 
     # A scope kit does hold still reads: the withheld reading series is not read as "nothing

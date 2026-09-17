@@ -45,6 +45,7 @@ from app.channels.api.schemas import (
     AreaConfirmIn,
     AttachConfirmIn,
     AuditOut,
+    CallConfirmIn,
     ClaimableOut,
     ClaimConfirmIn,
     ClaimIn,
@@ -107,6 +108,7 @@ from app.delivery.feed.area import area_draft_for
 from app.delivery.strings import language_for
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
+from app.family.calls import call_draft_for
 from app.family.privacy import only_me_draft
 from app.family.pushes import preview_push, push_draft
 from app.family.roster import task_done_draft_for
@@ -332,6 +334,18 @@ async def mint_confirmation(
             session, context=context, appointment_id=body.appointment_id, person_id=body.person_id
         )
         return ConfirmationOut.of(await confirm(session, context, drive))
+    if isinstance(body, CallConfirmIn):
+        # A call with a family member (design-direction.md, Connect's "Upcoming Call"): the
+        # chief's or his own yes, recomputed from who, when and the link, so it cannot be
+        # minted for a stranger or a link nobody was shown.
+        call = await call_draft_for(
+            session,
+            context=context,
+            with_person_id=body.with_person_id,
+            scheduled_at=body.scheduled_at,
+            call_link=body.call_link,
+        )
+        return ConfirmationOut.of(await confirm(session, context, call))
     if isinstance(body, TaskDoneConfirmIn):
         # The doer's own tap (E12-03): the task must name the person minting.
         done = await task_done_draft_for(session, context=context, task_id=body.task_id)
