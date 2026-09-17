@@ -108,7 +108,9 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   await openFeed(page);
   await pageUntil(page, "clip");
   const card = page.locator("article.feed-card[data-type=clip]").first();
-  await expect(card.locator("h2.title")).toHaveText("Your blood pressure, in 30 seconds");
+  // RE-07: the broker leads the learning supply with the new medicine's own clip that week, so
+  // the first clip is the tablet's, not the general blood-pressure one.
+  await expect(card.locator("h2.title")).toHaveText("Your blood pressure tablet, in 30 seconds");
   const still = card.getByTestId("clip-poster");
   await expect(still).toBeVisible();
   expect(await still.getAttribute("src")).toMatch(/^blob:/);
