@@ -134,6 +134,48 @@ async def test_a_shorter_window_than_the_consent_is_never_refused_for_that(
     assert shorter.status_code == 201, shorter.text
 
 
+async def test_a_role_or_window_cannot_be_recorded_against_an_older_wording(
+    deployment: Deployment,
+) -> None:
+    """Only the current wording (version 3) renders `{role_line}`/`{window_line}`; naming a
+    role or a window against an older version would enforce a constraint the words the
+    patient actually read never stated (independent review of #185)."""
+    pa, profile_id = await _pa(deployment)
+    refused = await deployment.client.post(
+        f"/profiles/{profile_id}/consents/sharing",
+        json={
+            "holder_phone_e164": KIT,
+            "holder_display_name": "Kit",
+            "scopes": ["medicines"],
+            "role": "caregiver",
+            "window": "always",
+            "relationship": "son",
+            "language": "en",
+            "captured_via": "app",
+            "wording_version": "2",
+        },
+        headers=bearer(pa["token"]),
+    )
+    assert refused.status_code == 400
+    assert refused.json() == {"refusal": "RoleWindowNeedCurrentWording"}
+
+    # The same ask, without naming a role or a window, is fine against the older version.
+    fine = await deployment.client.post(
+        f"/profiles/{profile_id}/consents/sharing",
+        json={
+            "holder_phone_e164": KIT,
+            "holder_display_name": "Kit",
+            "scopes": ["medicines"],
+            "relationship": "son",
+            "language": "en",
+            "captured_via": "app",
+            "wording_version": "2",
+        },
+        headers=bearer(pa["token"]),
+    )
+    assert fine.status_code == 201, fine.text
+
+
 async def test_a_consent_naming_neither_constrains_neither(deployment: Deployment) -> None:
     """The shape every caller used before #185: a key of any role, for any window, still
     rests on it — nothing here narrows what already worked."""

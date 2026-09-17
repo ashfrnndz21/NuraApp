@@ -121,6 +121,12 @@ class WordingNotOnFile(Refusal):
     """No such words were ever shown for this purpose, at this version, in this language."""
 
 
+class RoleWindowNeedCurrentWording(Refusal):
+    """The role and the window are named only in the current wording (#185): a version
+    before it renders neither, so recording them against an older version would enforce a
+    constraint the words he actually read never stated."""
+
+
 class NotTheCurrentWording(Refusal):
     """Opening a record is agreed to in today's words, not in words that have moved on."""
 
@@ -353,6 +359,17 @@ async def grant_consent(
             refusal = NotAgreedPerPerson(f"{purpose} is for the whole profile")
         elif sharing is not None and not sharing.name:
             refusal = HolderNeedsAName(f"{purpose} names the person, and there is no name")
+        elif (
+            sharing is not None
+            and (sharing.role is not None or sharing.window is not None)
+            and version != current_version(purpose)
+        ):
+            # Only the current wording has `{role_line}`/`{window_line}` to render them into
+            # (#185); an older version would still take the role or the window onto the row
+            # (`grant_key` would then enforce it) without the words ever having named it.
+            refusal = RoleWindowNeedCurrentWording(
+                f"{purpose} version {version} does not name a role or a window"
+            )
         elif rendered is None:
             refusal = WordingNotOnFile(f"{purpose} version {version} was never shown in {language}")
         else:
