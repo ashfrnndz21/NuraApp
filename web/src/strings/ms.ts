@@ -388,6 +388,10 @@ export const ms = {
     shared: "Keluarga anda boleh lihat kad ini sekarang.",
     // @patient phrase
     fromPublisher: "Daripada {publisher}",
+    // @patient phrase
+    whyLink: "Kenapa saya nampak ini?",
+    // @patient headline
+    whyTitle: "Kenapa saya nampak ini?",
     // @patient
     cannotShare: "Nura belum boleh hantar kad ini kepada keluarga anda.",
     // @patient

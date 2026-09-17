@@ -95,6 +95,17 @@ WINDOW_LINES: Mapping[str, Mapping[KeyWindow, str]] = {
 """How long a key runs, in his words, by the window it was cut for."""
 
 # @patient
+WINDOW_LINES_THEIRS: Mapping[str, Mapping[KeyWindow, str]] = {
+    "en": {KeyWindow.ALWAYS: "{name} can see them until {patient} says stop."},
+    "ms": {KeyWindow.ALWAYS: "{name} boleh melihatnya sehingga {patient} minta ia dihentikan."},
+    "zh": {KeyWindow.ALWAYS: "{name}可以一直看，直到{patient}说停。"},
+}
+"""The one window line that speaks to him directly (the other three only name him, never
+address him, so they need no twin): about him by name for anyone reading someone else's
+grants (`app.channels.about_him`). The consent wording (`app.consent.texts`) renders the same
+line for the same reason, so this twin says it for both."""
+
+# @patient
 UNTIL_DAY: Mapping[str, str] = {
     "en": "{name} can see them until {day}.",
     "ms": "{name} boleh melihatnya sehingga {day}.",

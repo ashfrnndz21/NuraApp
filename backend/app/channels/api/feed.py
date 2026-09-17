@@ -41,7 +41,9 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
-from app.channels.about_him import reader_of
+from app.audit.models import Action
+from app.audit.trail import record as record_audit
+from app.channels.about_him import Reader, reader_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
@@ -82,15 +84,19 @@ from app.delivery.feed.rank import (
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
 from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
+from app.delivery.feed.why_sheet import why_lines
 from app.delivery.strings import FIND_STEPS, language_for, watch_label
 from app.errors import Refusal
+from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.context import KeyContext
+from app.keys.scopes import Scope
 from app.reasoning.signals import (
     SignalFamily,
     current_signal_use,
     set_signal_use,
     signals_may_be_set,
 )
+from app.search.narrate import NarratedStep
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
 log = logging.getLogger("nura.channels.feed")
@@ -107,6 +113,35 @@ def _engine(request: Request) -> Engine:
         store=providers.object_store,
         clips=providers.clips,
     )
+
+
+def _with_why_sheet(out: FeedPageOut, *, context: KeyContext, reader: Reader) -> FeedPageOut:
+    """Every card's Why, as this reader hears it (RE-08, docs/recommendation-engine.md §3.3):
+    its plain reason, when the reader's key covers the scope the card and its evidence rest
+    on, or the line that says a part of the record is withheld — never silent. Runs before
+    `Reader.page()`, whose voice twins already turn `why["plain"]` into the caregiver's voice
+    and do the same here, the same way, for `why["lines"]`."""
+    items = [
+        item.model_copy(
+            update={
+                "why": {
+                    **item.why,
+                    "lines": list(
+                        why_lines(
+                            str(item.why.get("plain") or ""),
+                            scope=Scope(item.scope),
+                            context=context,
+                            language=item.language,
+                            his=reader.his,
+                            patient_name=reader.name,
+                        )
+                    ),
+                }
+            }
+        )
+        for item in out.items
+    ]
+    return out.model_copy(update={"items": items})
 
 
 @router.get("/{profile_id}/feed")
@@ -128,14 +163,16 @@ async def feed(
     page = await feed_page(
         session, context=context, engine=_engine(request), cursor=cursor, pretend_local=pretend
     )
-    return (await reader_of(session, context, None)).page(FeedPageOut.of(page))
+    reader = await reader_of(session, context, None)
+    return reader.page(_with_why_sheet(FeedPageOut.of(page), context=context, reader=reader))
 
 
 @router.get("/{profile_id}/feed/today")
 async def feed_today(request: Request, context: Context, session: Db) -> FeedPageOut:
     """Today's top three (E11-02): alerts, then reminders, then insights, each with its why."""
     top = FeedPageOut.of(await top_three(session, context=context, engine=_engine(request)))
-    return (await reader_of(session, context, None)).page(top)
+    reader = await reader_of(session, context, None)
+    return reader.page(_with_why_sheet(top, context=context, reader=reader))
 
 
 @router.get("/{profile_id}/feed/{item_id}/voice")
@@ -185,8 +222,12 @@ async def feed_events(body: EventsIn, context: Context, session: Db) -> EventsOu
 @router.get("/{profile_id}/feed/week")
 async def feed_week(context: Context, session: Db) -> list[SentOut]:
     """Sent to Pa this week (spec §1): every card made for him since Monday, newest first,
-    with what became of it — sent, opened, played, dismissed, held — and its source."""
-    return [SentOut.of(one) for one in await sent_this_week(session, context=context)]
+    with what became of it — sent, opened, played, dismissed, held — and its source. On a
+    key that is not his, said about him by name, the way `GET /feed` already is (#210): a
+    card of his with no twin for a line that still speaks to him is not shown to her either."""
+    reader = await reader_of(session, context, None)
+    found = [SentOut.of(one) for one in await sent_this_week(session, context=context)]
+    return reader.sent(found)
 
 
 @router.get("/{profile_id}/feed/{item_id}/clip/poster")
@@ -235,7 +276,8 @@ async def feed_clip_video(
 async def cached(context: Context, session: Db) -> FeedPageOut:
     """The last first page rendered for this person, as it was: the offline page."""
     kept = FeedPageOut.of(await cached_page(session, context=context))
-    return (await reader_of(session, context, None)).page(kept)
+    reader = await reader_of(session, context, None)
+    return reader.page(_with_why_sheet(kept, context=context, reader=reader))
 
 
 @router.post("/{profile_id}/feed/{item_id}/engagement", status_code=status.HTTP_201_CREATED)
@@ -437,6 +479,11 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
     Opens its own session (`session_scope`), never `Depends(db)` — see `app.channels.api.
     timeline.ask_stream` for why a stream cannot use a `yield` dependency."""
     code = language_for(body.language)
+    outside = providers_of(request)
+    # FIND_STEPS carries no caregiver twin (its lines are neutral, "Looking online." — see
+    # `app.delivery.strings.FIND_STEPS`), so there is no "his voice" to get wrong here the way
+    # Ask's steps have; the narrator sees the direct-voice reader.
+    reader = Reader(his=True, language=code)
 
     async def events() -> AsyncIterator[bytes]:
         try:
@@ -445,7 +492,25 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
                     session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
                 ):
                     if isinstance(event, FindStep):
-                        yield _sse({"type": "step", "key": event.key, "label": FIND_STEPS[code][body.where]})
+                        label = FIND_STEPS[code][body.where]
+                        if outside.narrator.external_processor is not None:
+                            # One reach outside the region per streamed search (ADR 0017),
+                            # mirroring `app.channels.api.timeline.ask_stream`'s line for Ask.
+                            await record_audit(
+                                session,
+                                context=context,
+                                action=Action.SHARE,
+                                scope=Scope.ASK,
+                                target=EXTERNAL_MODEL_PROCESSOR,
+                                rows=1,
+                                shared_with_label=outside.narrator.external_processor,
+                            )
+                        steps = [NarratedStep(key=event.key, label=label)]
+                        text = label
+                        async for line in outside.narrator.narrate(steps, language=code, reader=reader):
+                            if line.key == event.key:
+                                text = line.text
+                        yield _sse({"type": "step", "key": event.key, "label": text})
                     else:
                         yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
         except Refusal as refusal:

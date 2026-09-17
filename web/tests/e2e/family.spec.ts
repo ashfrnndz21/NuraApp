@@ -341,15 +341,17 @@ test.describe("the caregiver density at 360 by 640", () => {
     expect(await caregiverScreenOk(page)).toEqual([]);
     await page.getByTestId("make-key").click();
     const siti = page.getByTestId("grant").filter({ hasText: "Siti" });
-    await expect(siti).toContainText("your emergency card");
+    // Mei reads this about Pa, by name (#210): the parts a key opens are never "your"s on a
+    // screen that is not his own.
+    await expect(siti).toContainText("Pa's emergency card");
 
     await siti.getByTestId("narrow").click();
     await siti.getByTestId("narrow-part-emergency").click();
     await siti.getByTestId("narrow-part-send").click();
     expect(await caregiverScreenOk(page)).toEqual([]);
     await siti.getByTestId("narrow-yes").click();
-    await expect(siti).not.toContainText("your emergency card");
-    await expect(siti).toContainText("your medicines");
+    await expect(siti).not.toContainText("Pa's emergency card");
+    await expect(siti).toContainText("Pa's medicines");
 
     // Wider is not a change in place: the backend says no, in its words.
     await siti.getByTestId("narrow").click();

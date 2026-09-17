@@ -14,7 +14,7 @@ this is not shown to anyone else (`page`).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -24,15 +24,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
 from app.channels import state_words
+from app.consent import texts as consent_words
 from app.delivery import strings as feed_words
 from app.delivery import timeline_strings
 from app.delivery.strings import language_for, theirs
+from app.family import strings as family_words
 from app.keys.context import KeyContext
 from app.medicines import strings as medicine_words
 from app.safety.boundary import BOUNDARY_THEIRS
 
 if TYPE_CHECKING:
-    from app.channels.api.feed_schemas import FeedPageOut
+    from app.channels.api.feed_schemas import FeedItemOut, FeedPageOut, SentOut
 
 LANGUAGES = ("en", "ms", "zh")
 
@@ -78,6 +80,16 @@ def _strings(value: Any) -> Iterator[str]:
             yield from _strings(each)
 
 
+def _bulleted(mapping: Mapping[str, Mapping[Any, str]]) -> dict[str, dict[Any, str]]:
+    """Each part of the record as the family's grant lines and the consent wording both list
+    it: one bullet a line (`app.family.grants._grant_lines`, `app.consent.texts.render_sharing`,
+    both `f"- {part}"`)."""
+    return {
+        language: {scope: f"- {text}" for scope, text in by_scope.items()}
+        for language, by_scope in mapping.items()
+    }
+
+
 def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
     return (
         (feed_words.HEADLINES, feed_words.HEADLINES_THEIRS),
@@ -94,7 +106,32 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (medicine_words.SOURCE, medicine_words.SOURCE_THEIRS),
         (medicine_words.IF_FORGOTTEN, medicine_words.IF_FORGOTTEN_THEIRS),
         (state_words.POSTURE_LINE, state_words.POSTURE_LINE_THEIRS),
+        # The family's grant lines (#210): the parts a key opens.
+        (family_words.WINDOW_LINES, family_words.WINDOW_LINES_THEIRS),
+        (_bulleted(consent_words.SCOPE_WORDS), _bulleted(consent_words.SCOPE_WORDS_THEIRS)),
     )
+
+
+@lru_cache(maxsize=1)
+def _role_is_theirs() -> Mapping[str, Mapping[str, tuple[str, str]]]:
+    """`family_words.ROLE_IS` ("{name} is {role}.") made into one concrete pattern a role at a
+    time — "{name} is the person who runs your care.", and its five siblings — rather than
+    registered generic (`_theirs` only rewrites "your", the possessive, so a role-less "X is
+    Y." sentence elsewhere in the corpus whose Y happens to contain a bare "you" — "Nothing is
+    added until you say yes.", a consent line, found in review — would fullmatch the generic
+    pattern first, "translate" through it doing nothing, and come out unchanged with nobody
+    the wiser). Registering the six full sentences instead means only they can match."""
+    built: dict[str, dict[str, tuple[str, str]]] = {}
+    for language in LANGUAGES:
+        template = family_words.ROLE_IS[language]
+        built[language] = {
+            role.value: (
+                template.format(name="{name}", role=words),
+                template.format(name="{name}", role=theirs(words, "{patient}", language)),
+            )
+            for role, words in family_words.ROLE_WORDS[language].items()
+        }
+    return built
 
 
 def _pattern(template: str) -> re.Pattern[str] | None:
@@ -128,7 +165,13 @@ def twins(language: str) -> tuple[tuple[str, str], ...]:
         same.extend((one, one) for one in _strings(mine) if not TO_HIM[language].search(one))
     # The written twins first, so a template that is all slot around a few words ("This comes
     # from {…}.") never takes a line that has a twin of its own.
-    pairs = [*written, *BOUNDARY_THEIRS.get(language, {}).values(), *same]
+    pairs = [
+        *written,
+        *BOUNDARY_THEIRS.get(language, {}).values(),
+        *consent_words.CONSENT_THEIRS.get(language, {}).values(),
+        *_role_is_theirs().get(language, {}).values(),
+        *same,
+    ]
     first: dict[str, str] = {}
     for original, twin in pairs:
         first.setdefault(original, twin)
@@ -223,21 +266,29 @@ class Reader:
             return out
         return type(out).model_validate(self.about(out.model_dump(mode="json")))
 
+    def _kept(self, item: FeedItemOut) -> bool:
+        """Whether a card belongs in front of this reader: hers are hers already; one of his
+        with no twin for a line that still speaks to him is not shown to anyone else."""
+        return item.deliver_to != "patient" or not self.speaks_to_him(
+            [item.headline, item.body, item.voice, item.why.get("plain", ""), item.why.get("lines", [])]
+        )
+
     def page(self, out: FeedPageOut) -> FeedPageOut:
         """A feed page as this reader hears it: his cards about him by name, and a card of his
         with no twin for a line that speaks to him not shown (hers are hers already)."""
         if self.his:
             return out
         heard = self.model(out)
-        kept = [
-            item
-            for item in heard.items
-            if item.deliver_to != "patient"
-            or not self.speaks_to_him(
-                [item.headline, item.body, item.voice, item.why.get("plain", "")]
-            )
-        ]
-        return heard.model_copy(update={"items": kept})
+        return heard.model_copy(update={"items": [item for item in heard.items if self._kept(item)]})
+
+    def sent(self, items: Sequence[SentOut]) -> list[SentOut]:
+        """"Sent to Pa this week" as this reader hears it: the same rule `page` holds every
+        other card to — his cards about him by name, and one of his with no twin for a line
+        that still speaks to him not shown to anyone else."""
+        if self.his:
+            return list(items)
+        heard = [self.model(one) for one in items]
+        return [one for one in heard if self._kept(one.item)]
 
 
 async def reader_of(session: AsyncSession, context: KeyContext, language: str | None) -> Reader:
