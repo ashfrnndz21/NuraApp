@@ -3,10 +3,13 @@
 A job is made from a gap State shows — a medicine with no explainer, a condition with none —
 or by the owner or his chief by hand. It names the sources it may read, every one of them
 usable at the time, and `run_job` reads no others. What comes back goes through the
-compressor; what the compressor returns is checked — cited, in his language, not a change
-of treatment — and only then becomes a learning card through `items.create_item`, which
-checks the source and the words again. A finding that would change treatment is not lost:
-it becomes a `QUESTION` item for the memo, never for his feed.
+compressor; what the compressor returns is checked — cited, in his language — and only then
+becomes a learning card through `items.create_item`, which checks the source and the words
+again, and refuses outright anything that would change treatment (#236,
+`items.TreatmentChangingCard`). A finding like that is not lost: it is held for his chief as
+a card that says a finding needs her doctor's look, never the finding's own words, and — a
+real drug name known or not — becomes a real question for the doctor
+(`reasoning.visits.memos.write_memo`), never a `FeedItem` nothing reads.
 """
 
 from __future__ import annotations
@@ -57,7 +60,7 @@ from app.delivery.strings import (
     Lines,
     language_for,
     learning_lines,
-    notice_fallback_lines,
+    needs_doctor_look_lines,
     season_name,
 )
 from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
@@ -70,7 +73,7 @@ from app.language.voice_script import script_for
 from app.reasoning.ranges import ReferenceRanges
 from app.reasoning.visits.memos import MEMO, write_memo
 from app.reasoning.visits.models import MemoKind, MemoSource
-from app.reasoning.visits.strings import medicine_words
+from app.reasoning.visits.strings import NotASlotValue, medicine_words
 from app.state.models import Dimension
 from app.state.service import StateView
 
@@ -310,8 +313,8 @@ def _hash(found: Found) -> str:
     return hashlib.sha256(found.url.encode()).hexdigest()[:24]
 
 
-def _dedupe_key(found: Found, language: str) -> str:
-    return f"learning:{_hash(found)}:{language}"
+def _dedupe_key(job_id: uuid.UUID, found: Found, language: str) -> str:
+    return f"learning:{job_id}:{_hash(found)}:{language}"
 
 
 def _narrates_in_time(lines: Sequence[str], language: str, boundary: str | None) -> bool:
@@ -430,7 +433,7 @@ async def run_job(
         if not compressed.passage.strip():
             rejected.append({"url": found.url, "because": "uncited"})
             continue
-        key = _key_for(job.kind, found, code, day, season.starts.year if season else None)
+        key = _key_for(job, found, code, day, season.starts.year if season else None)
         if key in existing:
             continue
         cite: dict[str, Any] = {
@@ -462,12 +465,15 @@ async def run_job(
             # about a recall on his own box whatever else is true of it (#224 review finding:
             # a `continue` here used to skip the caregiver notice entirely whenever the words
             # also read as a treatment change, so the most urgent notice reached nobody).
-            # When its words would start, stop or change a medicine, that is filed too, as a
-            # real question for the doctor (`reasoning.visits.memos.write_memo`) — in
-            # addition to the caregiver notice, never instead of it, and never a `FeedItem`
-            # nobody reads (`DeliverTo.MEMO` is not a supply any route or ranking serves).
-            # A safety notice never reaches `create_item` with `DeliverTo.PATIENT` either way
-            # (that door is shut there too, `NoticeNotForPatient`).
+            # When its words would start, stop or change a medicine, the card is never those
+            # words (#236, `items.TreatmentChangingCard`): a safety job always names the
+            # medicine it watches (`job.terms[0]`), so the caregiver's card is rerouted to
+            # `needs_doctor_look_lines` and a real question is filed for the doctor
+            # (`reasoning.visits.memos.write_memo`) — the caregiver still gets a card, never
+            # nothing, and never a `FeedItem` nobody reads (`DeliverTo.MEMO` is not a supply
+            # any route or ranking serves). A safety notice never reaches `create_item` with
+            # `DeliverTo.PATIENT` either way (that door is shut there too,
+            # `NoticeNotForPatient`).
             matches = found.batch is not None and found.batch.strip().lower() in _batches_on_record(
                 state
             )
@@ -479,6 +485,8 @@ async def run_job(
                 source_name=source.name,
                 doctor=doctor or YOUR_DOCTOR[code],
             )
+            fact_ids = tuple(_fact_ids_about(state, job.terms))
+            suppressed = None if matches else "batch_does_not_match_the_pack"
             if changes_treatment([notice_lines.headline, *notice_lines.body]):
                 memo_id = await _ask_the_doctor(
                     session,
@@ -493,115 +501,75 @@ async def run_job(
                 rejected.append(
                     {
                         "url": found.url,
-                        "because": "treatment_change_also_filed_as_a_question",
+                        "because": "treatment_change_rerouted_as_question",
                         "memo_id": memo_id or "not_filed",
                     }
                 )
-            try:
-                notice = await create_item(
-                    session,
-                    context=context,
-                    state=state,
-                    type=CardType.NOTICE,
-                    lines=notice_lines,
-                    why=Why(
-                        kind="notice",
-                        plain=notice_lines.why,
-                        source_id=str(source.id),
-                        gap=job.terms[0],
-                        fact_ids=tuple(_fact_ids_about(state, job.terms)),
-                        suppressed=None if matches else "batch_does_not_match_the_pack",
-                    ),
-                    scope=Scope.MEDICINES,
-                    deliver_to=DeliverTo.CAREGIVER,
-                    day=day.key,
-                    dedupe_key=key,
-                    expires_at=moment + LEARNING_LIFETIME,
-                    format=around.format,
-                    source=source,
-                    cite={**cite, "batch": found.batch},
-                    search_job_id=job.id,
+                lines = needs_doctor_look_lines(code, doctor=doctor or YOUR_DOCTOR[code])
+                why = Why(
+                    kind="needs_doctor_look",
+                    plain=lines.why,
+                    source_id=str(source.id),
+                    gap=job.terms[0],
+                    fact_ids=fact_ids,
+                    suppressed=suppressed,
+                    memo_id=memo_id,
                 )
-            except NotPlainWords as failed:
-                # #231: the chief's copy is never dropped just because the compressed words
-                # could not be worded plainly — a fixed fallback line reaches her instead,
-                # never the words that failed. (Nothing today can raise NotPlainWords for a
-                # CAREGIVER-delivered card — `create_item` only verifies a PATIENT one — so
-                # this is defence in depth against that check ever widening, not a path
-                # proven to fire; the fallback is still real and tested on its own.)
-                notice = await create_item(
-                    session,
-                    context=context,
-                    state=state,
-                    type=CardType.NOTICE,
-                    lines=notice_fallback_lines(code, doctor=doctor or YOUR_DOCTOR[code]),
-                    why=Why(
-                        kind="notice_fallback",
-                        plain="",
-                        source_id=str(source.id),
-                        gap=job.terms[0],
-                        suppressed="original_words_failed_plain_words",
-                    ),
-                    scope=Scope.MEDICINES,
-                    deliver_to=DeliverTo.CAREGIVER,
-                    day=day.key,
-                    dedupe_key=key,
-                    expires_at=moment + LEARNING_LIFETIME,
-                    format=around.format,
-                    source=source,
-                    cite={**cite, "batch": found.batch},
-                    search_job_id=job.id,
+            else:
+                lines = notice_lines
+                why = Why(
+                    kind="notice",
+                    plain=notice_lines.why,
+                    source_id=str(source.id),
+                    gap=job.terms[0],
+                    fact_ids=fact_ids,
+                    suppressed=suppressed,
                 )
-                rejected.append(
-                    {
-                        "url": found.url,
-                        "because": "not_plain_words_fallback_sent",
-                        "detail": str(failed),
-                    }
-                )
+            notice = await create_item(
+                session,
+                context=context,
+                state=state,
+                type=CardType.NOTICE,
+                lines=lines,
+                why=why,
+                scope=Scope.MEDICINES,
+                deliver_to=DeliverTo.CAREGIVER,
+                day=day.key,
+                dedupe_key=key,
+                expires_at=moment + LEARNING_LIFETIME,
+                format=around.format,
+                source=source,
+                cite={**cite, "batch": found.batch},
+                search_job_id=job.id,
+            )
             existing.add(key)
             made.append(notice)
             continue
-        # #231: a page whose words would start, stop or change a medicine is never simply
-        # dropped, whichever job found it. It is held for the chief instead of him — the
-        # same card he would have had, redirected — and, only where the job's own terms name
-        # a medicine he takes (so a real drug name is known), additionally filed as a real
-        # doctor question (`_ask_the_doctor`, the same door #224 built for a safety notice).
-        # A local hazard, a season or a food page names no medicine, so it gets the caregiver
-        # card alone: inventing a drug name for the question would be worse than not asking.
+        # #236: a page whose words would start, stop or change a medicine is never simply
+        # dropped, whichever job found it, and it is never addressed to anyone in its own
+        # words (`items.TreatmentChangingCard`) — the caregiver gets a card that says a
+        # finding needs her doctor's look and points at the question filed for him
+        # (`needs_doctor_look_lines`), the same card she would have had, rerouted. A doctor
+        # question is filed whenever the finding is treatment-changing, whether or not a real
+        # drug name is known: where the job's own terms name a medicine he takes, the question
+        # asks about it by name (`_ask_the_doctor`, the same door #224 built for a safety
+        # notice); a local hazard, a season or a food page names no medicine, so the question
+        # asks about "your medicines" generally instead — a name-free memo key, never nothing.
         # This replaces a `CardType.QUESTION`/`DeliverTo.MEMO` `FeedItem` that used to stand
         # here — nothing reads `DeliverTo.MEMO` (`rank.py`'s two supplies exclude it, no route
         # queries it), so that card reached nobody at all.
         #
-        # #236: whether a real drug name is known cannot be read off `job.reason["scope"]` —
-        # a watch added by hand (`add_search_job`) builds `reason={"asked": ..., "by": ...}`
-        # with no `"scope"` at all, so a chief who names a medicine he takes got no doctor
-        # question when its finding changed treatment. Decided instead from whether the job's
-        # own first term actually is a medicine on his list (`_medicine_he_takes`), which is
-        # true for every planner-made job too (`compose._gaps` only ever names his own
-        # medicines with a `"medicines"` reason), so this changes nothing for those.
+        # Whether a real drug name is known cannot be read off `job.reason["scope"]` — a watch
+        # added by hand (`add_search_job`) builds `reason={"asked": ..., "by": ...}` with no
+        # `"scope"` at all, so a chief who names a medicine he takes got no doctor question
+        # when its finding changed treatment. Decided instead from whether the job's own first
+        # term actually is a medicine on his list (`_medicine_he_takes`), which is true for
+        # every planner-made job too (`compose._gaps` only ever names his own medicines with a
+        # `"medicines"` reason), so this changes nothing for those.
         treatment_changing = changes_treatment([compressed.headline, *compressed.body])
         is_medicine_job = bool(job.terms) and _medicine_he_takes(
             job.terms[0], around, engine.registry
         )
-        if treatment_changing and is_medicine_job:
-            memo_id = await _ask_the_doctor(
-                session,
-                context=context,
-                state=state,
-                code=code,
-                doctor=doctor,
-                generic=job.terms[0],
-                registry=engine.registry,
-                source_id=source.id,
-            )
-            rejected.append(
-                {
-                    "url": found.url,
-                    "because": "treatment_change_also_filed_as_a_question",
-                    "memo_id": memo_id or "not_filed",
-                }
-            )
         shape = _shape(
             job.kind,
             found,
@@ -621,53 +589,41 @@ async def run_job(
                 | {one for reason in reasons for one in around.fact_ids.get(reason, ())}
             )
         )
-        deliver_to = DeliverTo.CAREGIVER if treatment_changing else DeliverTo.PATIENT
-        try:
+        scope = _scope_of(job, reasons, around, engine.registry)
+        if treatment_changing:
+            memo_id = await _ask_the_doctor(
+                session,
+                context=context,
+                state=state,
+                code=code,
+                doctor=doctor,
+                generic=job.terms[0] if is_medicine_job else None,
+                registry=engine.registry,
+                source_id=source.id,
+            )
+            rejected.append(
+                {
+                    "url": found.url,
+                    "because": "treatment_change_rerouted_as_question",
+                    "memo_id": memo_id or "not_filed",
+                }
+            )
+            lines = needs_doctor_look_lines(code, doctor=doctor or YOUR_DOCTOR[code])
             item = await create_item(
                 session,
                 context=context,
                 state=state,
                 type=shape.type,
-                lines=shape.lines,
+                lines=lines,
                 why=Why(
-                    kind=shape.type.value,
-                    plain=shape.lines.why,
+                    kind="needs_doctor_look",
+                    plain=lines.why,
                     source_id=str(source.id),
                     gap=job.terms[0],
                     fact_ids=fact_ids,
+                    memo_id=memo_id,
                 ),
-                scope=_scope_of(job, reasons, around, engine.registry),
-                deliver_to=deliver_to,
-                day=day.key,
-                dedupe_key=key,
-                expires_at=_expiry(job.kind, day, moment, season),
-                format=shape.format,
-                source=source,
-                cite=cite,
-                search_job_id=job.id,
-            )
-        except NotPlainWords as failed:
-            if not treatment_changing:
-                rejected.append(
-                    {"url": found.url, "because": "not_plain_words", "detail": str(failed)}
-                )
-                continue
-            # #231: held for the chief, so — like the safety notice — never dropped just
-            # because the compressed words could not be worded plainly.
-            item = await create_item(
-                session,
-                context=context,
-                state=state,
-                type=shape.type,
-                lines=notice_fallback_lines(code, doctor=doctor or YOUR_DOCTOR[code]),
-                why=Why(
-                    kind="notice_fallback",
-                    plain="",
-                    source_id=str(source.id),
-                    gap=job.terms[0],
-                    suppressed="original_words_failed_plain_words",
-                ),
-                scope=_scope_of(job, reasons, around, engine.registry),
+                scope=scope,
                 deliver_to=DeliverTo.CAREGIVER,
                 day=day.key,
                 dedupe_key=key,
@@ -677,13 +633,36 @@ async def run_job(
                 cite=cite,
                 search_job_id=job.id,
             )
-            rejected.append(
-                {
-                    "url": found.url,
-                    "because": "not_plain_words_fallback_sent",
-                    "detail": str(failed),
-                }
-            )
+        else:
+            try:
+                item = await create_item(
+                    session,
+                    context=context,
+                    state=state,
+                    type=shape.type,
+                    lines=shape.lines,
+                    why=Why(
+                        kind=shape.type.value,
+                        plain=shape.lines.why,
+                        source_id=str(source.id),
+                        gap=job.terms[0],
+                        fact_ids=fact_ids,
+                    ),
+                    scope=scope,
+                    deliver_to=DeliverTo.PATIENT,
+                    day=day.key,
+                    dedupe_key=key,
+                    expires_at=_expiry(job.kind, day, moment, season),
+                    format=shape.format,
+                    source=source,
+                    cite=cite,
+                    search_job_id=job.id,
+                )
+            except NotPlainWords as failed:
+                rejected.append(
+                    {"url": found.url, "because": "not_plain_words", "detail": str(failed)}
+                )
+                continue
         existing.add(key)
         made.append(item)
     job.status = JobStatus.DONE
@@ -698,20 +677,32 @@ async def run_job(
     return [*made, *questions]
 
 
-def _key_for(kind: JobKind, found: Found, code: str, day: Day, season_year: int | None) -> str:
-    """A card is made once per page — and, for what comes round, once per issue of a local
-    bulletin, once per week (a food card) or once per season (a seasonal page)."""
-    if kind is JobKind.LOCAL:
+def _key_for(job: SearchJob, found: Found, code: str, day: Day, season_year: int | None) -> str:
+    """A card is made once per page, per job — and, for what comes round, once per issue of a
+    local bulletin, once per week (a food card) or once per season (a seasonal page).
+
+    #236: keyed on `job.id`, not just the page and the kind. `existing` is one dedupe set
+    shared across every job a run touches (`compose.refresh`), and two different jobs can find
+    the same page — an EXPLAINER on "metformin" and one on "diabetes" both turning up the same
+    explainer, say. Without the job in the key, whichever ran first silently claimed the page
+    for both: its own `treatment_changing`/`is_medicine_job` decided whether a question got
+    filed, and the second job's `if key in existing: continue` (above) skipped its page
+    entirely — table row order, not anything about the finding, decided whether a question
+    existed. Keying on the job makes every job's dedupe independent of every other job's, so
+    running order can no longer change what gets filed; a job is still idempotent against
+    itself (`job.id` is stable across `refresh()` calls for the same `(kind, terms)`,
+    `compose._learning`'s `have` set reuses the row rather than making a new one)."""
+    if job.kind is JobKind.LOCAL:
         # Once a bulletin: an unchanged bulletin does not take one of his two new cards a
         # day, every day. A new issue of it (its date) is a new card.
-        return f"local:{_hash(found)}:{code}:{found.published_at or day.key}"
-    if kind is JobKind.FOOD:
-        return f"food:{_hash(found)}:{code}:{day.week}"
-    if kind is JobKind.SEASONAL:
-        return f"seasonal:{_hash(found)}:{code}:{season_year}"
+        return f"local:{job.id}:{_hash(found)}:{code}:{found.published_at or day.key}"
+    if job.kind is JobKind.FOOD:
+        return f"food:{job.id}:{_hash(found)}:{code}:{day.week}"
+    if job.kind is JobKind.SEASONAL:
+        return f"seasonal:{job.id}:{_hash(found)}:{code}:{season_year}"
     if found.media == "video":
-        return f"clip:{_hash(found)}:{code}"
-    return _dedupe_key(found, code)
+        return f"clip:{job.id}:{_hash(found)}:{code}"
+    return _dedupe_key(job.id, found, code)
 
 
 def _expiry(kind: JobKind, day: Day, moment: datetime, season: Any) -> datetime:
@@ -730,17 +721,26 @@ def _expiry(kind: JobKind, day: Day, moment: datetime, season: Any) -> datetime:
 def _medicine_he_takes(term: str, around: Around, registry: DrugRegistry) -> bool:
     """Whether a job's first term names a medicine he actually takes: his own list first
     (`around.medicines`, already the licensed register's generic — `compose.around_for`), then
-    the register's generic for whatever name the term was written as, for a term that names
-    the same medicine by a different name (a brand, a salt) the register still resolves.
+    the register's brand lookup for whatever name the term was written as, for a term that
+    names the same medicine by a different name (a brand, a salt) the register still resolves.
 
     #236: this is the one source of truth for "is this a medicine job" — `job.reason["scope"]`
     is not, because a watch added by hand (`add_search_job`) never sets it. Every job the
     planner itself makes with a `"medicines"` reason already names one of his own medicines as
-    its first term (`compose._gaps`), so this agrees with the old check for all of those."""
+    its first term (`compose._gaps`), so this agrees with the old check for all of those.
+
+    The register is asked by `brand`, not `generic`: `identify` narrows its candidates to
+    products whose own generic name equals whatever `LabelFields.generic` is given
+    (`app.drugs.fixture.FixtureRegistry.identify`), so asking it "is `written` a generic?"
+    with `generic=written` only ever hands back a product whose generic already *is*
+    `written` — the same fact the line above already checked, and already returned on. A term
+    written as a brand ("Coumadin" for warfarin) needs the brand field to resolve at all; a
+    term already written as the generic is answered by the first check and never reaches the
+    register a second time."""
     written = term.strip().lower()
     if written in around.medicines:
         return True
-    matches = registry.identify(LabelFields(generic=written))
+    matches = registry.identify(LabelFields(brand=written))
     return bool(matches) and matches[0].generic.strip().lower() in around.medicines
 
 
@@ -861,34 +861,52 @@ async def _ask_the_doctor(
     state: StateView,
     code: str,
     doctor: str | None,
-    generic: str,
+    generic: str | None,
     registry: DrugRegistry,
     source_id: uuid.UUID,
 ) -> str | None:
-    """File a safety notice that would change treatment as a real question for the doctor
-    (#181, #224), through the same memo the post-visit summary files one against — never a
-    `FeedItem`, which nothing reads for `DeliverTo.MEMO` (rank.py's two supplies exclude it,
-    and no route queries it). `appointment_id` is left unset: this is not about one visit, so
-    it is a standing question `current_memos`/`propose_questions` picks up for whichever
-    comes next, the same way an unfiled memo already works there.
+    """File a treatment-changing finding as a real question for the doctor (#181, #224, #236),
+    through the same memo the post-visit summary files one against — never a `FeedItem`, which
+    nothing reads for `DeliverTo.MEMO` (rank.py's two supplies exclude it, and no route queries
+    it). `appointment_id` is left unset: this is not about one visit, so it is a standing
+    question `current_memos`/`propose_questions` picks up for whichever comes next, the same
+    way an unfiled memo already works there.
+
+    `generic` names the medicine when one is known — a safety job's own term, or a job whose
+    first term `_medicine_he_takes`. A question that names it asks about it by name
+    (`"ask_safety_notice"`); one that cannot is filed anyway, never dropped for want of a name
+    (#236's own finding, one branch over from the bug it fixed) — a name-free question asks
+    about "your medicines" generally (`"ask_medicines_change"`, `reasoning.visits.strings`,
+    the same name-free key `visits.summary.compose_items` already uses for a post-visit change
+    whose drug the register does not know). The same fallback covers a `generic` the
+    register does not carry a plain name for (`medicine_words` raising `NotASlotValue`): asking
+    about his medicines in general is still a real question, where asking about a name he'd
+    never recognise would not be.
 
     In a savepoint of its own, the way a review sample sits beside a card
-    (`items._sample`): whatever goes wrong here — a name the register does not carry, a line
-    that fails the verifier, the database — is logged, written to the audit trail as a
-    refusal, and rolled back. It must never cost him the caregiver notice this always runs
-    alongside; that is written by the caller regardless of what happens here.
+    (`items._sample`): whatever goes wrong here — a line that fails the verifier, the database
+    — is logged, written to the audit trail as a refusal, and rolled back. It must never cost
+    him the caregiver notice this always runs alongside; that is written by the caller
+    regardless of what happens here. The audit write itself is guarded too (#236): a caller
+    that already lost the question filing to an exception must never also lose the caregiver
+    notice to a second, unrelated failure writing that down.
     """
+    key = "ask_medicines_change"
+    slots: dict[str, Any] = {"doctor": doctor or YOUR_DOCTOR[code]}
+    if generic:
+        try:
+            slots["medicine"] = medicine_words(generic, code, registry)
+            key = "ask_safety_notice"
+        except NotASlotValue:
+            pass  # no plain name known either: ask about his medicines, not nothing.
     try:
         async with nested_unit_of_work(session):
             memo = await write_memo(
                 session,
                 context=context,
                 kind=MemoKind.ASK,
-                key="ask_safety_notice",
-                slots={
-                    "doctor": doctor or YOUR_DOCTOR[code],
-                    "medicine": medicine_words(generic, code, registry),
-                },
+                key=key,
+                slots=slots,
                 source=MemoSource.SEARCH,
                 source_id=source_id,
                 state=state,
@@ -896,17 +914,23 @@ async def _ask_the_doctor(
             )
             return str(memo.id)
     except Exception as skipped:  # noqa: BLE001 — nothing here may cost him the notice
-        log.warning("safety-notice question skipped: %s", type(skipped).__name__)
+        log.warning("doctor-question filing skipped: %s", type(skipped).__name__)
         # A filing failure is silent to him by design (the caregiver notice still lands
         # regardless), but it must never be silent on the trail: the same discipline
         # `create_job`'s own refusals already keep (#236).
-        await record(
-            session,
-            context=context,
-            action=Action.WRITE,
-            scope=Scope.VISITS,
-            target=MEMO,
-            outcome=Outcome.REFUSED,
-            refused_because=type(skipped).__name__,
-        )
+        try:
+            await record(
+                session,
+                context=context,
+                action=Action.WRITE,
+                scope=Scope.VISITS,
+                target=MEMO,
+                outcome=Outcome.REFUSED,
+                refused_because=type(skipped).__name__,
+            )
+        except Exception as unaudited:  # noqa: BLE001 — see the docstring: never his notice
+            log.error(
+                "the filing failure itself could not be written to the trail: %s",
+                type(unaudited).__name__,
+            )
         return None
