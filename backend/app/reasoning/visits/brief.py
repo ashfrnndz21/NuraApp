@@ -46,9 +46,10 @@ from app.memory.models import Appointment, AppointmentStatus, Fact
 from app.reasoning.visits.gaps import find_gaps
 from app.reasoning.visits.guard import can_render_brief, may_render_brief
 from app.reasoning.visits.memos import current_memos
-from app.reasoning.visits.models import Brief, MemoKind
+from app.reasoning.visits.models import Brief, MemoKind, QuestionSource
 from app.reasoning.visits.questions import (
     Visit,
+    feeling_notes_for,
     propose_questions,
     questions_for,
     render_proposed,
@@ -263,7 +264,11 @@ def symptom_lines(entries: Sequence[Any], language: str, zone: tzinfo) -> list[l
 def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
     """The groups that fit in `cap` lines, whole, then `more` — or all of them when they fit.
     The section is never empty when it has something to say: a first group too long for the
-    page is cut to fit, never dropped (B1 review)."""
+    page is cut to fit, never dropped (B1 review) — except a feeling-note group, which is
+    never cut. A medicine-naming feeling-note group carries `DO_NOT_STOP` right after the line
+    that names it (#157): cutting the group mid-way can write the medicine's name without the
+    line that keeps it as it is, so that group goes whole into `more` instead (PR #233 review,
+    3b) — the same as any other group that is not first."""
     every = [line for group in groups for line in group]
     if len(every) <= cap:
         return every
@@ -273,15 +278,36 @@ def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
         if len(group) <= room:
             shown.extend(group)
             continue
-        if not shown:
+        indivisible = bool(group) and group[0].key == "feeling_note"
+        if not shown and not indivisible:
             shown.extend(group[:room])
         break
     return [*shown, more]
 
 
-SYMPTOM_KEYS = frozenset({"symptom", "symptom_detail", "symptoms_more"})
+SYMPTOM_KEYS = frozenset({"symptom", "symptom_detail", "symptoms_more", "feeling_note"})
 """The brief's lines about how he feels: the record's (`Scope.RECORDS`, the scope the symptom
-log is read under), not the visits'."""
+log and the feeling notes (RE-02) are read under), not the visits'."""
+
+
+def feeling_note_lines(notes: Sequence[Any]) -> list[list[Line]]:
+    """One group of lines per feeling note kept for this visit (RE-02), newest first, beside
+    the symptom log: the note's own words, already rendered and verified when the tap was
+    answered (`app.reasoning.feelings.inference.compose_note`) — never re-templated here, so
+    what he read on the cloud's reply is exactly what reaches the doctor. The source is the
+    note itself, so a reader without the part of the record it rests on loses it, not just its
+    provenance (`lines_for`, `SYMPTOM_KEYS`)."""
+
+    def order(note: Any) -> tuple[float, str]:
+        return (-note.created_at.timestamp(), str(note.id))
+
+    return [
+        [
+            Line("changed", "feeling_note", text, (str(note.id), str(note.tap_id)))
+            for text in note.lines
+        ]
+        for note in sorted(notes, key=order)
+    ]
 
 
 def lines_for(brief: Brief, context: KeyContext) -> tuple[list[dict[str, Any]], list[Scope]]:
@@ -434,9 +460,19 @@ async def build_brief(
     since_day = day_and_date(since_moment, visit.language, context.region)
     proposed = await propose_questions(session, context=context, visit=visit)
     proposed_lines = [
-        (one.key, render_proposed(one, visit.language), one.source_ids) for one in proposed
+        (
+            one.key,
+            one.text if one.text is not None else render_proposed(one, visit.language),
+            one.source_ids,
+        )
+        for one in proposed
+        # A feeling note is listed beside the symptom log (RE-02, below), in its own words,
+        # not a second time in the questions section: it is already his own account of how he
+        # feels, not a gap or a flag the record raised.
+        if one.source is not QuestionSource.FEELING
     ]
     symptoms: list[list[Line]] = []
+    feeling_notes: Sequence[Any] = ()
     if context.allows(Scope.RECORDS):
         # Every symptom written down since the last visit (E14-01), each its own line.
         from app.safety.symptom_log import symptoms_since
@@ -445,6 +481,13 @@ async def build_brief(
             session, context=context, since=since_moment, language=visit.language
         )
         symptoms = symptom_lines(log.entries, visit.language, REGION_TZ[context.region])
+        # A cloud tap read against the record, kept for this visit (RE-02): beside the
+        # symptom log, in his own already-verified words, never re-read from a Fact — the
+        # promise the feeling cloud makes is kept here, not just recorded.
+        feeling_notes = await feeling_notes_for(
+            session, context=context, appointment_id=appointment_id
+        )
+        symptoms = [*symptoms, *feeling_note_lines(feeling_notes)]
     memos = await current_memos(session, context=context)
     bring = [
         (m.key, m.text) for m in memos if m.kind is MemoKind.BRING and m.language == visit.language
@@ -489,6 +532,7 @@ async def build_brief(
             "flag_ids": sorted(
                 {sid for one in proposed if one.source.value == "flag" for sid in one.source_ids}
             ),
+            "feeling_note_ids": sorted(str(note.id) for note in feeling_notes),
         },
         built_at=utcnow(),
     )

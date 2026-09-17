@@ -78,6 +78,9 @@ SUBJECT_DIMENSION: dict[str, Dimension] = {
     "declined": Dimension.PREFERENCE,
     "nudges": Dimension.PREFERENCE,
     "who_to_tell": Dimension.PREFERENCE,
+    "signals": Dimension.PREFERENCE,
+    # "What Nura uses" (RE-05, docs/recommendation-engine.md §3.6): the attribute names the
+    # family (food, sleep, steps, water, search_topics), the value whether it is on.
     "travel": Dimension.SITUATIONAL,
     "fasting": Dimension.SITUATIONAL,
     "feeling": Dimension.SITUATIONAL,

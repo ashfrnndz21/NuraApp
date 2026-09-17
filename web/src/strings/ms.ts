@@ -686,6 +686,42 @@ export const ms = {
     ramadanOn: "Nura akan beritahu anda sebelum bulan puasa.",
     // @patient phrase
     ramadanStop: "Berhenti beritahu saya",
+    // @patient headline
+    whatNuraUsesTitle: "Apa yang Nura guna",
+    // @patient
+    whatNuraUsesLead: "Pilih apa yang Nura boleh guna untuk cadangkan bacaan dan video untuk anda.",
+    // @patient
+    whatNuraUsesLeadOther: "Pilih apa yang Nura boleh guna untuk cadangkan bacaan dan video untuk {patient}.",
+    // @patient phrase
+    whatNuraUsesOn: "Buka",
+    // @patient phrase
+    whatNuraUsesOff: "Tutup",
+    // @patient
+    whatNuraUsesReadOnly: "Hanya {name} atau ketua keluarga boleh ubah ini.",
+    whatNuraUsesFamilies: {
+      // @patient phrase
+      food: "Apa yang anda makan",
+      // @patient phrase
+      sleep: "Tidur anda",
+      // @patient phrase
+      steps: "Langkah anda",
+      // @patient phrase
+      water: "Air anda",
+      // @patient phrase
+      search_topics: "Apa yang anda tanya",
+    },
+    whatNuraUsesFamiliesOther: {
+      // @patient phrase
+      food: "Apa yang {patient} makan",
+      // @patient phrase
+      sleep: "Tidur {patient}",
+      // @patient phrase
+      steps: "Langkah {patient}",
+      // @patient phrase
+      water: "Air {patient}",
+      // @patient phrase
+      search_topics: "Apa yang {patient} tanya",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -2191,6 +2227,10 @@ export const ms = {
     NoSuchProvider: "Doktor itu tiada dalam senarai anda.",
     StaleState: ["Nura masih mengemas kini.", "Sila cuba lagi."],
     NotIdentified: "Nura tidak dapat mencari ubat ini.",
+    StrengthNotRead: [
+      "Nura tahu ubat ini tetapi tidak tahu berapa kuat ubat ini.",
+      "Ambil gambar label sekali lagi supaya nampak berapa kuat ubat ini.",
+    ],
     DoseNotRead: "Sila taip cara mengambilnya, seperti pada label.",
     NotADose: "Nura tidak faham cara mengambilnya.",
     WouldWiden: ["Nura tidak boleh meluaskan ini.", "Pemilik perlu setuju dengan lebih dahulu."],

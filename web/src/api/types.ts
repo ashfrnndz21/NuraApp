@@ -1570,6 +1570,20 @@ export interface AreaOut {
   may_set: boolean;
 }
 
+/** "What Nura uses" (RE-05): the everyday series the recommendation engine may read. */
+export type SignalFamily = "food" | "sleep" | "steps" | "water" | "search_topics";
+
+export interface SignalOut {
+  family: SignalFamily;
+  on: boolean;
+  fact_id: string | null;
+}
+
+export interface SignalsOut {
+  signals: SignalOut[];
+  may_set: boolean;
+}
+
 export type FindWhere = "web" | "videos" | "providers";
 
 /** One thing the ask bar's Web, Videos or Providers filter found: the backend's words. */

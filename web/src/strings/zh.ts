@@ -686,6 +686,42 @@ export const zh = {
     ramadanOn: "斋戒月前 Nura 会告诉您。",
     // @patient phrase
     ramadanStop: "不用再告诉我",
+    // @patient headline
+    whatNuraUsesTitle: "Nura 使用什么",
+    // @patient
+    whatNuraUsesLead: "选择 Nura 可以用什么来为您推荐文章和视频。",
+    // @patient
+    whatNuraUsesLeadOther: "选择 Nura 可以用什么来为{patient}推荐文章和视频。",
+    // @patient phrase
+    whatNuraUsesOn: "开",
+    // @patient phrase
+    whatNuraUsesOff: "关",
+    // @patient
+    whatNuraUsesReadOnly: "只有{name}或负责的家人可以更改这个。",
+    whatNuraUsesFamilies: {
+      // @patient phrase
+      food: "您吃的东西",
+      // @patient phrase
+      sleep: "您的睡眠",
+      // @patient phrase
+      steps: "您的步数",
+      // @patient phrase
+      water: "您喝的水",
+      // @patient phrase
+      search_topics: "您问过的事",
+    },
+    whatNuraUsesFamiliesOther: {
+      // @patient phrase
+      food: "{patient}吃的东西",
+      // @patient phrase
+      sleep: "{patient}的睡眠",
+      // @patient phrase
+      steps: "{patient}的步数",
+      // @patient phrase
+      water: "{patient}喝的水",
+      // @patient phrase
+      search_topics: "{patient}问过的事",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -2190,6 +2226,7 @@ export const zh = {
     NoSuchProvider: "这位医生不在您的名单上。",
     StaleState: ["Nura 还在更新。", "请再试一次。"],
     NotIdentified: "Nura 找不到这个药。",
+    StrengthNotRead: ["Nura 找到了这个药，但不知道它有多强。", "请再拍一张照片，清楚拍到它有多强。"],
     DoseNotRead: "请照标签打怎么吃。",
     NotADose: "Nura 看不懂怎么吃。",
     WouldWiden: ["Nura 不能把这个放宽。", "文件的主人要先同意更多。"],

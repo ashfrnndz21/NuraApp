@@ -40,12 +40,14 @@ const ABOUT_HIM = {
   record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes", "notSet", "setDay", "dayAsk"],
   reading: ["title"],
   visit: ["open"],
+  me: ["whatNuraUsesLead"],
 } as const satisfies Partial<Record<keyof Strings, readonly string[]>>;
 
 /** The same, for the chrome kept as a map of lines rather than one line a key: his blood tests
  *  are named one per code ("Your cholesterol"), and each name has its twin in `…Other`. */
 const ABOUT_HIM_MAPS = {
   record: ["analytes", "anchors"],
+  me: ["whatNuraUsesFamilies"],
 } as const satisfies Partial<Record<keyof Strings, readonly string[]>>;
 const theirs = new Map<string, Strings>();
 

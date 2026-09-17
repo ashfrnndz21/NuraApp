@@ -334,6 +334,28 @@ describe("FeedCard", () => {
     expect(all(card, hasClass("card-foot"))).toEqual([]);
     expect(all(card, hasClass("card-figure"))).toEqual([]);
   });
+
+  it("a video card's media is a thumbnail with a play affordance, why still under it", () => {
+    const play = vi.fn();
+    const card = one(
+      <FeedCard
+        lines={["A short video on checking your blood pressure at home."]}
+        source="From HealthHub, 1 January."
+        why="You are seeing this because a video explains it best."
+        media={<Poster label="Play, 20 seconds" onPlay={play} testId="clip-poster" />}
+        testId="video-card"
+      />,
+    );
+    const poster = all(card, byTestId("clip-poster"))[0]!;
+    expect(poster.type).toBe("button");
+    expect(text(poster)).toBe("Play, 20 seconds");
+    (poster.props.onClick as () => void)();
+    expect(play).toHaveBeenCalledOnce();
+    const foot = all(card, hasClass("card-foot"))[0]!;
+    expect(text(all(foot, hasClass("why-line")))).toBe(
+      "You are seeing this because a video explains it best.",
+    );
+  });
 });
 
 describe("Sheet", () => {

@@ -73,6 +73,7 @@ PRIORITY: dict[CardType, int] = {
     CardType.MEMO: 65,
     CardType.REORDER: 60,
     CardType.NOTICE: 75,
+    CardType.RECALL_ACTION: 75,
     CardType.READING: 50,
     CardType.GATE: 40,
     CardType.DUTY: 40,
@@ -97,6 +98,10 @@ SURFACE_OF: dict[CardType, Surface] = {
     CardType.LOCAL: Surface.LEARNING_CARD,
     CardType.SEASONAL: Surface.LEARNING_CARD,
     CardType.FOOD: Surface.LEARNING_CARD,
+    # The one card built from a notice (#183): its words are the catalogue's own, never the
+    # notice's compressed page, but the notice is still what State surfaced that made this
+    # card exist, so it carries the same line the notice would have.
+    CardType.RECALL_ACTION: Surface.LEARNING_CARD,
 }
 """The feed's inferring surfaces (E16-01, `app.safety.boundary`). A learning card is an
 explanation chosen for him from State and compressed from an allowlisted page; a notice is
@@ -213,6 +218,7 @@ async def create_item(
     number: str | None = None,
     direction: Direction | None = None,
     action: CardAction | None = None,
+    private_to: uuid.UUID | None = None,
 ) -> FeedItem:
     """Write one card, or refuse it.
 
@@ -222,6 +228,9 @@ async def create_item(
     a card that infers nothing carries none. The row is rendered from `state`, so a snapshot
     the record has moved past is refused too. Every refusal here is written down under the
     card's own scope.
+
+    `private_to`, when set, is his alone (RE-01): `rank._visible_to` drops the row for every
+    other person, whatever her scopes — the one exception a `Scope` cannot express.
     """
     async with audited_guard(session, context, Action.WRITE, scope, FEED_TARGET):
         if changes_treatment([lines.headline, *lines.body]):
@@ -279,6 +288,7 @@ async def create_item(
             direction=None if grammar.direction is None else grammar.direction.value,
             colour=grammar.colour.value,
             action=grammar.action.value,
+            private_to=private_to,
         )
     await _sample(session, item)
     return item

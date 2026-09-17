@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited, audited_read, audited_write
+from app.audit.access import audited, audited_guard, audited_read, audited_write
 from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import as_utc, utcnow
@@ -34,7 +34,7 @@ from app.delivery.feed.models import (
     EngagementKind,
     FeedItem,
 )
-from app.delivery.feed.rank import DECLINED
+from app.delivery.feed.rank import DECLINED, FEED_TARGET, NoSuchItem, _visible, require_item
 from app.drafts import FactDraft
 from app.errors import Refusal
 from app.keys.confirm import confirm
@@ -46,9 +46,15 @@ from app.memory.semantic import assert_fact, current_facts
 
 ENGAGEMENT_TARGET = Engagement.__tablename__
 
-
-class NoSuchItem(Refusal):
-    """No feed item by that id on this profile that this key can see."""
+__all__ = [
+    "ENGAGEMENT_TARGET",
+    "Flushed",
+    "NoSuchItem",
+    "Queued",
+    "SecondsOnlyOnAPlay",
+    "record_engagement",
+    "record_events",
+]
 
 
 class SecondsOnlyOnAPlay(Refusal):
@@ -126,7 +132,12 @@ async def record_events(
             flushed.skipped.append((event.client_id, "already_written"))
         elif item is None:
             flushed.skipped.append((event.client_id, "no_such_card"))
-        elif not context.allows(item.scope):
+        elif not _visible(item, context):
+            # Out of scope and `private_to` someone else (RE-01, §3.5) are refused the same
+            # skip reason to the caller — a caregiver's flush of a queue that names a private
+            # card learns nothing about why it did not write — but the trail he owns still
+            # names which one it was.
+            private = item.private_to is not None and item.private_to != context.person_id
             await record(
                 session,
                 context=context,
@@ -134,7 +145,7 @@ async def record_events(
                 scope=item.scope,
                 target=ENGAGEMENT_TARGET,
                 outcome=Outcome.REFUSED,
-                refused_because="OutOfScope",
+                refused_because="NoSuchItem" if private else "OutOfScope",
             )
             flushed.skipped.append((event.client_id, "out_of_scope"))
         elif at < now - QUEUE_WINDOW:
@@ -181,20 +192,25 @@ async def record_engagement(
     """Write down what this person did with this card.
 
     The item is read under the profile scope and then required under its own, so a key that
-    does not cover the part of the record the card came from cannot engage with it. The
-    event needs the record scope, as every event does. For the owner, "not for me" also
+    does not cover the part of the record the card came from cannot engage with it; a card
+    `private_to` someone else is the same refusal as one that does not exist (RE-01, §3.5).
+    The event needs the record scope, as every event does. For the owner, "not for me" also
     writes the `declined` fact that holds the card's kind back for the rest of his day.
     """
     if seconds is not None and kind not in PLAYS:
         raise SecondsOnlyOnAPlay(f"a {kind.value} event carries no seconds")
     if item is None:
-        found = await audited_read(
-            session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id,)
-        )
-        if not found:
-            raise NoSuchItem(f"no feed item {item_id} on profile {context.profile_id}")
-        item = found[0]
-    context.require(item.scope)
+        item = await require_item(session, context=context, item_id=item_id)
+    else:
+        # The same door `require_item` opens for the item's own scope (PR #233 review, 8):
+        # a card `private_to` someone else raised here, without it, was caught only by this
+        # function's own `@audited(Scope.PROFILE, ...)` door — a different scope and a
+        # different target than `require_item`'s write, so the trail told the two refusals
+        # apart though the promise at `rank.require_item` says they should not be told apart.
+        async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+            context.require(item.scope)
+            if item.private_to is not None and item.private_to != context.person_id:
+                raise NoSuchItem(f"no feed item {item_id} on profile {context.profile_id}")
     moment = utcnow() if at is None else at
     event = await record_event(
         session,

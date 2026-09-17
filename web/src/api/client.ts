@@ -90,6 +90,28 @@ let sending = false;
  *  arriving behind it can still reach past it (see `enqueue`). */
 let current: Job | null = null;
 
+/** Held while a screen that may end in a red word is open (the not-feeling-well flow):
+ *  `holdBackground`/`releaseBackground`, called from that screen's own mount and unmount.
+ *  A background read already on the wire when the hold starts is left to finish — it is not
+ *  urgent yet, and aborting it for no reason wastes it — but no *further* one is dispatched
+ *  while held, whatever is still waiting. This does not replace the urgent-arrival abort in
+ *  `enqueue` (a read can still be on the wire the instant he actually sends his words, and
+ *  that is still caught there); it only closes the much likelier gap: a background read that
+ *  starts and finishes on its own schedule in the seconds between opening the screen and
+ *  speaking, which no abort can undo once the response is already back on the wire (a real
+ *  CI race, `tests/e2e/day.spec.ts`'s "a red word said out loud"). Held reads resume the
+ *  moment the hold is released, in the order they were queued. */
+let held = false;
+
+export function holdBackground(): void {
+  held = true;
+}
+
+export function releaseBackground(): void {
+  held = false;
+  void pump();
+}
+
 /** How long an urgent call may take from the tap before it is given up as unreachable, whatever
  *  is on the wire: the red-flag path shows the backend's offline card then, never a page that
  *  waits (W7, ADR 0012). A call still waiting then is taken out of the queue and never sent; one
@@ -161,11 +183,19 @@ async function fetchWithin(url: URL, init: RequestInit, signal: AbortSignal, wit
   }
 }
 
+/** The next job to send: none, while held, unless a red word has actually reached the queue
+ *  (`held` never blocks an urgent call — only ever what is still merely waiting). */
+function next(): Job | undefined {
+  if (!held) return waiting.shift();
+  const at = waiting.findIndex((one) => one.urgent);
+  return at < 0 ? undefined : waiting.splice(at, 1)[0];
+}
+
 async function pump(): Promise<void> {
   if (sending) return;
   sending = true;
   try {
-    for (let job = waiting.shift(); job; job = waiting.shift()) {
+    for (let job = next(); job; job = next()) {
       current = job;
       await job.run();
     }
@@ -192,7 +222,10 @@ function urlFor(path: string, call: Call): URL {
 
 /** The same queue, for bytes: a card's pre-rendered voice (E11). A Blob on success; a refusal
  *  as `Refused`; a 404 that is not a refusal — the route is not on this backend yet — as
- *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". */
+ *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". Given up after
+ *  `CALL_DEADLINE_MS` like any other call (#193): a stalled connection — the ordinary way a
+ *  phone moving between cells or onto a captive-portal wifi behaves — becomes `Unreachable`
+ *  rather than a tap on *Hear* that waits for ever with nothing to say why. */
 export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
   return enqueue((signal) => sendBlob(path, call, signal), call.urgent, true);
 }
@@ -202,7 +235,12 @@ async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit", signal });
+    response = await fetchWithin(
+      urlFor(path, call),
+      { method: "GET", headers, cache: "no-store", credentials: "omit" },
+      signal,
+      call.slow ? 0 : CALL_DEADLINE_MS,
+    );
   } catch {
     throw new Unreachable();
   }
@@ -248,7 +286,9 @@ export function apiText(path: string, call: Call = {}): Promise<string> {
 }
 
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). Always
- *  a write (`sendBytes` is `POST` only): never abortable, the same as any other write. */
+ *  a write (`sendBytes` is `POST` only): never abortable, the same as any other write. Given up
+ *  after `CALL_DEADLINE_MS` like any other call (#193): a visit recording is the one upload
+ *  where a silent hang would cost the most, so it gets no exemption from the ceiling either. */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
   return enqueue((signal) => sendBytes<T>(path, body, contentType, call, signal), call.urgent, false);
 }
@@ -258,7 +298,12 @@ async function sendBytes<T>(path: string, body: Blob, contentType: string, call:
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(urlFor(path, call), { method: "POST", headers, body, cache: "no-store", credentials: "omit", signal });
+    response = await fetchWithin(
+      urlFor(path, call),
+      { method: "POST", headers, body, cache: "no-store", credentials: "omit" },
+      signal,
+      call.slow ? 0 : CALL_DEADLINE_MS,
+    );
   } catch {
     throw new Unreachable();
   }
