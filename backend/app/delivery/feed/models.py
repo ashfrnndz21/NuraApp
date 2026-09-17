@@ -19,10 +19,19 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
+from app.db import Base, ProfileScoped, enum_column, frozen, monotonic, utcnow
 from app.keys.scopes import Scope
 from app.memory.models import _row_of_profile, _tied_to_profile
 from app.state.models import RenderedFromState
@@ -50,10 +59,12 @@ class CardType(StrEnum):
     REORDER = "reorder"
     """A medicine running low (E04 works the date out; the card repeats it)."""
     NOTICE = "notice"
-    """A safety notice from a regulator matching a medicine. Never his card (spec §0, #183):
-    held for the caregiver, whether or not it matches the batch on his pack, and for the memo
-    where it is a question for the doctor. Where the batch on his own pack matches, he gets
-    `RECALL_ACTION` instead — never this card's own words about the notice."""
+    """A safety notice from a regulator matching a medicine. Never his card, batch match or
+    not (#181, #183): held for the caregiver always, or rerouted to `needs_doctor_look_lines`
+    and filed as a real question for the doctor when its words would change treatment (#224,
+    #236) — never dropped either way. `app/delivery/feed/items.py` refuses one built for the
+    patient. Where the batch on his own pack matches, he gets `RECALL_ACTION` instead — never
+    this card's own words about the notice."""
     RECALL_ACTION = "recall_action"
     """A safety notice whose batch matches his own pack (#183): the one card that tells him
     what he can do about the box in his hand today, in his own words, made and reviewed the
@@ -400,11 +411,13 @@ class Engagement(ProfileScoped, Base):
 frozen(Engagement)
 
 
+@monotonic
 class FeedPage(ProfileScoped, Base):
     """The last page rendered for one person: what the app keeps for an offline launch.
 
     A list of item ids in the order they were shown, the cursor it was shown under and the
-    next one, and whether the quiet hours held anything back. `GET …/feed/cached` reads it.
+    next one, and whether the quiet hours held anything back. `GET …/feed/cached` reads the
+    newest row — `rendered_at`, tied by `seq` (#192/#218) — as the one cached page.
     """
 
     __tablename__ = "feed_page"
@@ -419,6 +432,7 @@ class FeedPage(ProfileScoped, Base):
     quiet: Mapped[bool] = mapped_column(Boolean, default=False)
     held_by_caps: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
     rendered_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 frozen(FeedPage)

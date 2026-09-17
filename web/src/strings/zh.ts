@@ -414,6 +414,12 @@ export const zh = {
     sourceVisits: "这来自您看医生的安排。",
     // @patient
     askWithheld: "有些文件没有对您开放。",
+    // @patient
+    askThinking: "Nura正在查看。",
+    // @patient
+    askAnswered: "Nura回答了。",
+    // @patient phrase
+    askLookedAt: "Nura查看了：{parts}",
     // @patient phrase
     back: "回到您的卡",
     // @patient
@@ -1561,6 +1567,8 @@ export const zh = {
     messageLabel: "您给家人的消息",
     // @patient phrase
     sendMessage: "发给家人",
+    // @patient phrase
+    sendingMessage: "正在发给家人",
     // @patient headline
     keys: "改谁可以看什么",
     // @patient headline

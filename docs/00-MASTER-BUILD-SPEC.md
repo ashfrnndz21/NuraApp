@@ -21,6 +21,7 @@ This is the one document to start from. It consolidates everything designed in t
 - `experience-and-feed-engine.md` — upload flow, search, self-search jobs, compression, ranking.
 - `health-feed-spec.md` — the vertical feed: card types, pipeline, data model, API, iOS build, acceptance.
 - `smart-nudges.md` — eight nudge kinds, the feeling cloud, stickiness, what is refused.
+- `recommendation-engine.md` — the correlation layer: every input turned into reminders, visit prep, reads, clips and nudges; the audit, the safety design, the build plan (ADR 0016).
 - `gaps-and-unlocks.md` — missing-context cards, catalogue, cadence and stop rules.
 - `whatsapp-agent.md` — what the agent can see, the group and private threads, platform rules, classifier, guardrails.
 - `read-only-connectors.md` — email, photos, calendar, SMS, WhatsApp export: what can be read, the allowlist design, compliance.

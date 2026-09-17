@@ -317,6 +317,58 @@ the words heard in it are the note's own and played from it. `transcript_said` h
 sentence found in a confirmed visit's transcript (E02-05), which is the room's words, quoted."""
 
 # @patient
+ASK_STEPS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "visits": "Checking your visits.",
+        "readings": "Looking at your blood pressure book.",
+        "medicines": "Checking your medicines.",
+        "records": "Looking at your papers.",
+    },
+    "ms": {
+        "visits": "Menyemak lawatan anda.",
+        "readings": "Melihat buku tekanan darah anda.",
+        "medicines": "Menyemak ubat anda.",
+        "records": "Melihat surat anda.",
+    },
+    "zh": {
+        "visits": "正在查看您看医生的记录。",
+        "readings": "正在查看您的血压本。",
+        "medicines": "正在查看您的药。",
+        "records": "正在查看您的文件。",
+    },
+}
+"""What Ask's trace says while it works (spec 'Conversation, waiting and thinking'), one line
+per part of the record `app.search.ask.recall_stream` actually just read — never a step that
+was not real, never held back to look slower. Keyed by `app.search.ask.STEP_KEYS`, the order
+the parts are read in. A caregiver hears the `_THEIRS` twin below (`app.channels.about_him`),
+by name, never in his voice."""
+
+# @patient phrase
+ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "visits": "visits",
+        "readings": "blood pressure book",
+        "medicines": "medicines",
+        "records": "papers",
+    },
+    "ms": {
+        "visits": "lawatan",
+        "readings": "buku tekanan darah",
+        "medicines": "ubat",
+        "records": "surat",
+    },
+    "zh": {
+        "visits": "看医生的记录",
+        "readings": "血压本",
+        "medicines": "药",
+        "records": "文件",
+    },
+}
+"""The short name for each part `ASK_STEPS` reads — a bare noun, not "your" or "his" and not a
+sentence, for the trace's collapsed line, "What Nura looked at: {parts}" — the same words
+whoever is asking, so it needs no `_THEIRS` twin."""
+
+# @patient
 READING: Mapping[str, Lines] = {
     "en": ("Your blood pressure on {date} was {top_number} over {bottom_number}.",),
     "ms": ("Tekanan darah anda pada {date} ialah {top_number} atas {bottom_number}.",),
@@ -436,6 +488,8 @@ def catalogue() -> list[str]:
 
 __all__ = [
     "ANCHORS",
+    "ASK_STEPS",
+    "ASK_STEP_NAMES",
     "CHANGED",
     "HONEST",
     "LANGUAGES",
@@ -509,3 +563,26 @@ ANCHORS_THEIRS: Mapping[str, Mapping[str, str]] = {
     },
 }
 """The timeline's three anchors said about him by name, for a key that is not his."""
+
+# @patient
+ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "visits": "Checking {patient}'s visits.",
+        "readings": "Looking at {patient}'s blood pressure book.",
+        "medicines": "Checking {patient}'s medicines.",
+        "records": "Looking at {patient}'s papers.",
+    },
+    "ms": {
+        "visits": "Menyemak lawatan {patient}.",
+        "readings": "Melihat buku tekanan darah {patient}.",
+        "medicines": "Menyemak ubat {patient}.",
+        "records": "Melihat surat {patient}.",
+    },
+    "zh": {
+        "visits": "正在查看{patient}看医生的记录。",
+        "readings": "正在查看{patient}的血压本。",
+        "medicines": "正在查看{patient}的药。",
+        "records": "正在查看{patient}的文件。",
+    },
+}
+"""`ASK_STEPS`, said about him by name, for a key that is not his."""

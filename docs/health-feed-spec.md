@@ -56,14 +56,29 @@ every other card of his is made and read by the pharmacist's first fifty before 
 (`REVIEWED_TYPES`, `app/language/review.py`). "Your pack is one of the batches; bring it to the
 pharmacy" is his card, because it is his to act on. "This batch was recalled" is not.
 
-**Built** (#183). `CardType.RECALL_ACTION` is that card: `app/delivery/feed/search.py`'s
-`JobKind.SAFETY` branch still writes the `NOTICE` — held for the chief either way, matched
-batch or not — and, only where the batch on his own pack matches, additionally writes a
-`RECALL_ACTION` card to `DeliverTo.PATIENT` (`app/delivery/strings.py:recall_action_lines`):
-in his own words, from the catalogue, ending on the boundary line, never a word of the
-notice's own. `tests/test_feed.py` asserts both halves — a matching recall gives him the
-action card and his chief the notice; a recall that needs nothing of him reaches only his
-chief.
+**The code does this now** (#181, #183, #224, #236). `app/delivery/feed/search.py` holds
+every safety notice for the chief, batch match or not — unconditionally, so a notice never
+reaches nobody (#224 review finding: a `continue` used to skip the caregiver notice whenever
+its words also changed treatment). One whose words would start, stop or change a medicine is
+never sent in its own words to any audience, hers included: `app/delivery/feed/items.py`'s
+`create_item` refuses a `TreatmentChangingCard` outright, the same choke point that refuses a
+`NOTICE` built for the patient (`NoticeNotForPatient`), so no later job or caller can send
+either by mistake. Instead her card is rerouted to a fixed line
+(`app/delivery/strings.py:needs_doctor_look_lines`) and a real question is filed for the
+doctor through `reasoning.visits.memos.write_memo` (`search._ask_the_doctor`) — the same door
+the post-visit summary uses, never a `FeedItem` nothing reads. It is still sampled for the
+pharmacist's first fifty like every other reviewed type, whoever it is held for
+(`app/language/review.py`).
+
+**Built** (#183). `CardType.RECALL_ACTION` is his own card, independent of whether the
+notice above was rerouted: only where the batch on his own pack matches, `search.py`'s
+`JobKind.SAFETY` branch additionally writes a `RECALL_ACTION` card to `DeliverTo.PATIENT`
+(`app/delivery/strings.py:recall_action_lines`) — in his own words, from the catalogue,
+ending on the boundary line, never a word of the notice's own. `tests/test_feed.py` asserts
+all of it: a matching recall gives him the action card and his chief the notice; a recall
+that needs nothing of him reaches only his chief; and a recall that both matches his batch
+and changes treatment still gives him the action card even though the notice itself is
+rerouted to a doctor question.
 
 
 Every card carries: `headline`, `body` (plain words), `why` (one sentence, plain), `source` (name, URL, date), `profileRefs` (facts it was built from), `format`, `language`, `audioURL`, `mediaURL`, `expiresAt`, `deliverTo` (patient / caregiver / memo).

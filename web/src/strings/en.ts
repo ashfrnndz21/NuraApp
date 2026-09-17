@@ -414,6 +414,12 @@ export const en = {
     sourceVisits: "This comes from your visits to the doctor.",
     // @patient
     askWithheld: "Some of the papers are not open to you.",
+    // @patient
+    askThinking: "Nura is looking.",
+    // @patient
+    askAnswered: "Nura answered.",
+    // @patient phrase
+    askLookedAt: "What Nura looked at: {parts}",
     // @patient phrase
     back: "Back to your cards",
     // @patient
@@ -1564,6 +1570,8 @@ export const en = {
     messageLabel: "Your message to the family",
     // @patient phrase
     sendMessage: "Send to the family",
+    // @patient phrase
+    sendingMessage: "Sending to the family",
     // @patient headline
     keys: "Change who can see what",
     // @patient headline
