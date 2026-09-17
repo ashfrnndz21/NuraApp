@@ -311,7 +311,7 @@ test("a tap in the first second after reopening lands where it was aimed, never 
   const gate = new Promise<void>((resolve) => {
     releaseDoors = resolve;
   });
-  await page.route("**/api/doors", async (route) => {
+  await page.route("**/api/doors**", async (route) => {
     await gate;
     await route.continue();
   });
