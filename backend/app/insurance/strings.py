@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from app.errors import Refusal
-from app.safety.plain_words import Kind, verify
+from app.safety.plain_words import verify
 
 LANGUAGES = ("en", "ms", "zh")
 DEFAULT_LANGUAGE = "en"
@@ -38,7 +38,7 @@ class NoSuchTemplate(Refusal):
     """A decision named a line this catalogue does not have."""
 
 
-# @patient action
+# @patient line
 BRING_CARD: Mapping[str, str] = {
     "en": "Bring {name}'s insurance card to the visit.",
     "ms": "Bawa kad insurans {name} ke lawatan itu.",
@@ -47,7 +47,7 @@ BRING_CARD: Mapping[str, str] = {
 """The one line a key that cannot see the money record gets, whatever it holds: it names no
 insurer, no policy, no amount — only what to bring."""
 
-# @patient action
+# @patient line
 HAS_COVER: Mapping[str, str] = {
     "en": "{name} has insurance on file that may apply to this visit.",
     "ms": "{name} ada insurans yang mungkin berkaitan dengan lawatan ini.",
@@ -56,40 +56,43 @@ HAS_COVER: Mapping[str, str] = {
 """Nura never says a visit *is* covered: this says cover may apply, on his own record —
 paired with `CONFIRM_WITH_INSURER`, which sends him to confirm it."""
 
-# @patient action
+# @patient line
 CONFIRM_WITH_INSURER: Mapping[str, str] = {
-    "en": "Confirm with the insurer or the clinic before the visit.",
-    "ms": "Sahkan dengan syarikat insurans atau klinik sebelum lawatan itu.",
-    "zh": "看诊前请向保险公司或诊所确认。",
+    "en": "Confirm with the insurer before the visit.",
+    "ms": "Sahkan dengan syarikat insurans sebelum lawatan itu.",
+    "zh": "看诊前请向保险公司确认。",
 }
 
-# @patient action
+# @patient line
 NO_COVER_ON_FILE: Mapping[str, str] = {
     "en": "Nura has no insurance policy on file for {name}.",
     "ms": "Nura tiada rekod polisi insurans untuk {name}.",
     "zh": "Nura没有{name}的保险记录。",
 }
 
-# @patient action
+# @patient line
 CONFIRM_IF_ANY: Mapping[str, str] = {
     "en": "Confirm with the insurer before the visit, if there is one.",
     "ms": "Sahkan dengan syarikat insurans sebelum lawatan itu, jika ada.",
     "zh": "看诊前请向保险公司确认一下,如果有保单的话。",
 }
 
-# @patient action
+# @patient line
 BRING_POLICY_CARD: Mapping[str, str] = {
     "en": "Bring the insurance card to the visit.",
     "ms": "Bawa kad insurans itu ke lawatan itu.",
     "zh": "带上保险卡去看诊。",
 }
 
-# @patient action
+# @patient line
 BRING_GUARANTEE_LETTER: Mapping[str, str] = {
-    "en": "Bring the guarantee letter, if the insurer asks for one.",
-    "ms": "Bawa surat jaminan itu, jika syarikat insurans memintanya.",
-    "zh": "如果保险公司要求,带上保证书。",
+    "en": "Bring the insurance letter, if the insurer asks for one.",
+    "ms": "Bawa surat insurans itu, jika syarikat insurans memintanya.",
+    "zh": "如果保险公司要求,带上保险信。",
 }
+"""What the glossary calls a guarantee letter (docs/plain-words.md §4) is always said as
+"the insurance letter" — the same words `Scope.MONEY` already uses for it
+(`app.consent.texts.SCOPE_WORDS`)."""
 
 TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.bring_card": BRING_CARD,
@@ -100,9 +103,6 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.bring_policy_card": BRING_POLICY_CARD,
     "insurance.bring_guarantee_letter": BRING_GUARANTEE_LETTER,
 }
-
-KIND_OF: Mapping[str, Kind] = {template_id: "action" for template_id in TEMPLATES}
-
 
 def language_of(asked: str | None) -> str:
     code = (asked or "").lower()[:2]
@@ -126,7 +126,7 @@ def render(template_id: str, language: str, **slots: str) -> str:
     )
     failures = [
         f"rule {finding.rule} — {finding.problem}"
-        for finding in verify(checked, lang, KIND_OF.get(template_id, "line"))
+        for finding in verify(checked, lang, "line")
         if finding.severity == "fail"
     ]
     if failures:

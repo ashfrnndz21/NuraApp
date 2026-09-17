@@ -138,16 +138,42 @@ async def test_his_chief_may_set_a_policy(sg: AsyncSession) -> None:
 async def test_a_helper_cannot_read_or_set_a_policy_and_a_caregiver_cannot_either(
     sg: AsyncSession,
 ) -> None:
+    """Neither role is preset to `Scope.MONEY` (`app.keys.scopes.ROLE_SCOPES`), so the door
+    itself refuses them, on the trail, before `may_set_a_policy` is ever reached — a stronger
+    guard than the role check alone."""
     owner = await pa(sg, phone="+6591120006")
     await _write(sg, owner)
     helper = await let_in(sg, owner, phone="+6593330006", name="Kit", role=KeyRole.HELPER)
     caregiver = await let_in(sg, owner, phone="+6594440006", name="Lin", role=KeyRole.CAREGIVER)
     for narrower in (helper, caregiver):
-        with pytest.raises(OutOfScope) as failed:
+        with pytest.raises(OutOfScope) as read_failed:
             await current_policies(sg, context=narrower)
-        assert failed.value.scope is Scope.MONEY
-        with pytest.raises(NotTheirsToSetAPolicy):
+        assert read_failed.value.scope is Scope.MONEY
+        with pytest.raises(OutOfScope) as write_failed:
             await _write(sg, narrower)
+        assert write_failed.value.scope is Scope.MONEY
+
+
+async def test_a_custom_key_holding_money_but_not_the_chief_role_still_cannot_set_a_policy(
+    sg: AsyncSession,
+) -> None:
+    """`may_set_a_policy` is not dead code: the owner can cut a viewer's key that adds
+    `Scope.MONEY` by hand (`grant_key(scopes=...)`), and that key still may not set a policy
+    — only read the ones already held (money is not the same door as "may arrange money")."""
+    owner = await pa(sg, phone="+6591120009")
+    await _write(sg, owner)
+    widened = await let_in(
+        sg,
+        owner,
+        phone="+6595550009",
+        name="Wan",
+        role=KeyRole.VIEWER,
+        scopes={Scope.PROFILE, Scope.MONEY},
+    )
+    held = await current_policies(sg, context=widened)
+    assert len(held) == 1
+    with pytest.raises(NotTheirsToSetAPolicy):
+        await _write(sg, widened)
 
 
 async def test_an_identity_card_number_is_refused_in_any_field(sg: AsyncSession) -> None:

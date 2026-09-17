@@ -44,6 +44,10 @@ from app.clock import now
 from app.consent.models import Consent
 from app.db import take_keepers
 from app.delivery.feed.models import FeedItem
+from app.drafts import InsuranceClaimDraft
+from app.insurance.claim import file_a_claim
+from app.insurance.policy import PolicyStatus, PolicyType, policy_draft, set_a_policy
+from app.keys.confirm import confirm as confirm_draft
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.repository import scoped_new
 from app.keys.scopes import ALL_SCOPES, ROLE_SCOPES, KeyRole, Scope, scope_for_subject
@@ -557,6 +561,57 @@ async def _seed(deployment: Deployment) -> Seeded:
             episode_id=illness.id,
         )
         medicine = await add(session, owner, label("amlodipine", "5 mg"))
+        # The fuller insurance record (E13-03): a policy and a claim against it, for the
+        # check-up already on the spine — both money, the owner's decision, so a key without
+        # `Scope.MONEY` must never see either id, wherever a route or a service names it.
+        policy_yes = await confirm_draft(
+            session,
+            owner,
+            policy_draft(
+                insurer_name="Great Eastern",
+                policy_reference="GE-4471-0932",
+                policy_type=PolicyType.HOSPITAL,
+                covered="Pa",
+                covers="Hospital stays, up to $500 a day.",
+                start_date=None,
+                renewal_date=None,
+                premium_due_date=None,
+                status=PolicyStatus.ACTIVE,
+                guarantee_letter=True,
+                supersedes_id=None,
+            ),
+        )
+        policy = await set_a_policy(
+            session,
+            context=owner,
+            insurer_name="Great Eastern",
+            policy_reference="GE-4471-0932",
+            policy_type=PolicyType.HOSPITAL,
+            covered="Pa",
+            covers="Hospital stays, up to $500 a day.",
+            start_date=None,
+            renewal_date=None,
+            premium_due_date=None,
+            status=PolicyStatus.ACTIVE,
+            guarantee_letter=True,
+            supersedes_id=None,
+            confirmation_id=policy_yes.id,
+        )
+        claim_yes = await confirm_draft(
+            session,
+            owner,
+            InsuranceClaimDraft(
+                policy_id=policy.id, appointment_id=checkup.id, claim_reference="CLM-1"
+            ),
+        )
+        claim = await file_a_claim(
+            session,
+            context=owner,
+            policy_id=policy.id,
+            appointment_id=checkup.id,
+            claim_reference="CLM-1",
+            confirmation_id=claim_yes.id,
+        )
         await session.commit()
     await _ok(
         await client.post(
@@ -663,10 +718,17 @@ async def _seed(deployment: Deployment) -> Seeded:
             if f.attribute in ("control", "allergy") or f.subject in ("blood_type", "person"):
                 seeded.card.add(str(f.id))
         consents = list(await session.scalars(select(Consent).where(Consent.profile_id == pid)))
+        # The fuller insurance record (E13-03): money, not read through any door the tables
+        # above already cover, so a leak of either id anywhere is its own finding.
+        seeded.scopes[str(policy.id)] = Scope.MONEY
+        seeded.kinds[str(policy.id)] = "policy"
+        seeded.scopes[str(claim.id)] = Scope.MONEY
+        seeded.kinds[str(claim.id)] = "insurance_claim"
         seeded.params = {
             "event_id": [str(e.id) for e in events],
             "episode_id": [str(illness.id)],
             "appointment_id": [str(next_visit.id), str(checkup.id)],
+            "claim_id": [str(claim.id)],
             "analyte": ["ldl", "total_cholesterol", "blood_pressure"],
             "provider_id": [str(tan.id)],
             "line_id": [str(medicine.line.id)],
@@ -851,6 +913,11 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/me-summary"),
     Walk("GET", f"{P}/nudges"),
     Walk("GET", f"{P}/not-feeling-well/offline"),
+    # The fuller insurance record (E13-03): money, not the emergency card's EMERGENCY.
+    Walk("GET", f"{P}/insurance/policies"),
+    Walk("GET", f"{P}/insurance/appointments/{{appointment_id}}/claims"),
+    Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
+    Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
@@ -978,6 +1045,9 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/thread/photos"): "shares a photo with the family; returns the entry",
     ("POST", f"{P}/whatsapp/group"): "opens the family's WhatsApp group; returns who is in it",
     ("POST", f"{P}/thread/photos/{{photo_id}}/take-back"): "takes a photo back; returns it",
+    ("POST", f"{P}/insurance/policies"): "writes a policy on a yes; returns it",
+    ("POST", f"{P}/insurance/claims"): "files a claim on a yes; returns it",
+    ("POST", f"{P}/insurance/claims/{{claim_id}}/status"): "moves a claim on a yes; returns it",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and
 answers with what the caller wrote."""

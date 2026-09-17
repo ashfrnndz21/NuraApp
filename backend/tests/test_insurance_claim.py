@@ -22,7 +22,8 @@ from app.insurance.claim import (
     require_claim,
 )
 from app.keys.confirm import confirm
-from app.keys.scopes import KeyRole
+from app.keys.context import OutOfScope
+from app.keys.scopes import KeyRole, Scope
 from app.memory.attach import attach_to_appointment
 from tests.safety_support import clinic, let_in, pa
 from tests.timeline_support import artefact, book
@@ -101,13 +102,35 @@ async def test_the_papers_behind_a_claim_are_the_visits_own_attachments(sg: Asyn
 
 
 async def test_a_helper_may_neither_file_nor_move_a_claim(sg: AsyncSession) -> None:
+    """A helper is not preset to `Scope.MONEY`: the door itself refuses him, on the trail,
+    before `may_manage_a_claim` is ever reached."""
     owner = await pa(sg, phone="+6591130004")
     tan = await clinic(sg, owner)
     policy = await write_policy(sg, owner)
     visit = await book(sg, owner, tan, now(), "check-up")
     helper = await let_in(sg, owner, phone="+6593330004", name="Kit", role=KeyRole.HELPER)
-    with pytest.raises(NotTheirsToManageAClaim):
+    with pytest.raises(OutOfScope) as failed:
         await _file(sg, helper, policy.id, visit.id)
+    assert failed.value.scope is Scope.MONEY
+
+
+async def test_a_custom_key_holding_money_but_not_the_chief_role_still_cannot_file_a_claim(
+    sg: AsyncSession,
+) -> None:
+    owner = await pa(sg, phone="+6591130006")
+    tan = await clinic(sg, owner)
+    policy = await write_policy(sg, owner)
+    visit = await book(sg, owner, tan, now(), "check-up")
+    widened = await let_in(
+        sg,
+        owner,
+        phone="+6595550006",
+        name="Wan",
+        role=KeyRole.VIEWER,
+        scopes={Scope.PROFILE, Scope.MONEY, Scope.VISITS},
+    )
+    with pytest.raises(NotTheirsToManageAClaim):
+        await _file(sg, widened, policy.id, visit.id)
 
 
 async def test_no_such_claim_is_refused(sg: AsyncSession) -> None:

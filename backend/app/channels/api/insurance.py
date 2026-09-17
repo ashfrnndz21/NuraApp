@@ -1,13 +1,13 @@
 """The fuller insurance record's routes (E13-03). Every one takes the key context.
 
-    POST /profiles/{id}/insurance/policies                  write a policy, on a yes
-    GET  /profiles/{id}/insurance/policies                   every policy in force
-    POST /profiles/{id}/insurance/claims                     file a claim, on a yes
-    GET  /profiles/{id}/insurance/claims?appointment_id=     claims for one visit
-    POST /profiles/{id}/insurance/claims/{claim_id}/status   move a claim, on a yes
-    GET  /profiles/{id}/insurance/claims/{claim_id}/papers   the papers behind it
-    GET  /profiles/{id}/insurance/pre-visit/{appointment_id} what to prepare, narrowed to
-                                                              what this key may see
+    POST /profiles/{id}/insurance/policies                          write a policy, on a yes
+    GET  /profiles/{id}/insurance/policies                          every policy in force
+    POST /profiles/{id}/insurance/claims                            file a claim, on a yes
+    GET  /profiles/{id}/insurance/appointments/{appointment_id}/claims  claims for one visit
+    POST /profiles/{id}/insurance/claims/{claim_id}/status          move a claim, on a yes
+    GET  /profiles/{id}/insurance/claims/{claim_id}/papers          the papers behind it
+    GET  /profiles/{id}/insurance/pre-visit/{appointment_id}        what to prepare, narrowed
+                                                                     to what this key may see
 
 A policy and a claim open only under `Scope.MONEY`: a helper, a viewer, an emergency-only key
 and a clinic key are refused (`OutOfScope`, 403) reaching any route above but the last.
@@ -123,10 +123,8 @@ async def write_claim(body: ClaimIn, context: Context, session: Db) -> ClaimOut:
     return _claim_out(row)
 
 
-@router.get("/{profile_id}/insurance/claims")
-async def claims(
-    context: Context, session: Db, appointment_id: uuid.UUID = Query(...)
-) -> list[ClaimOut]:
+@router.get("/{profile_id}/insurance/appointments/{appointment_id}/claims")
+async def claims(appointment_id: uuid.UUID, context: Context, session: Db) -> list[ClaimOut]:
     """Every claim filed for one visit, newest first."""
     found = await claims_for_appointment(session, context=context, appointment_id=appointment_id)
     return [_claim_out(row) for row in found]
