@@ -126,10 +126,10 @@ for (const [label, viewport] of [
       await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
       expect(await page.getByTestId("home-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
 
-      // "What changed" is not on her Home: `GET /changes` is itself the looking — it writes the
-      // look on his trail and the next read counts from it — so it lives on the Record's own
-      // screen, where looking is what she came to do.
-      await expect(page.getByTestId("what-changed")).toHaveCount(0);
+      // "What changed" is back on her Home (#207): `GET /changes?peek=true` answers the same
+      // words without spending his look, so the tile draws without writing his trail — it is
+      // visible, not absent (§3).
+      await expect(page.getByTestId("what-changed")).toBeVisible();
       await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
       await expect(page.getByTestId("next-visit-tile")).toBeVisible();
       await expect(page.getByTestId("supply-tile")).toContainText("left");

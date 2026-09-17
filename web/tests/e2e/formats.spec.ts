@@ -206,13 +206,10 @@ test.describe("the caregiver density at 360 by 640", () => {
       expect(["now", "gate", "duty"]).not.toContain(type);
     }
     await expect(sent.getByTestId("sent-status").first()).toHaveText(/^(This was on the page Pa sees\.|Pa opened this card\.|Pa heard this card\.|Nura kept this back from Pa\.)$/);
-    // A card a watch found: where it came from, Hear, and Stop watching for this for now.
-    const clip = rows.filter({ hasText: "Your blood pressure, in 30 seconds" }).first();
-    await expect(clip).toContainText("From National Heart Centre Singapore");
-    await expect(clip.getByTestId("hear")).toBeVisible();
-    await clip.getByTestId("sent-pause").click();
-    await expect(explainer).toHaveAttribute("data-enabled", "false");
-    await expect(clip.getByTestId("sent-pause")).toHaveCount(0);
+    // The NHCS clip is a watch's find, but its only words are the compressor's free text, with
+    // no *_THEIRS twin to say them about him by name (#210) — it is silently left off her list,
+    // the same as the backend's own week-accounting test (test_feed_formats.py) now asserts.
+    await expect(rows.filter({ hasText: "Your blood pressure, in 30 seconds" })).toHaveCount(0);
     await shotAs(page, "cp28-sent");
   });
 

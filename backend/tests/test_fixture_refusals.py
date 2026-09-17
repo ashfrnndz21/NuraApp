@@ -112,6 +112,7 @@ def test_the_test_deployment_is_all_fixtures_but_the_retriever(tmp_path: Path) -
         "reference_ranges",
         "voice",
         "push",
+        "narrator",
     ]
     assert not is_fixture(providers.retriever)
 
