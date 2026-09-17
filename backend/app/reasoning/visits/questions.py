@@ -24,7 +24,7 @@ from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_profile_read, audited_read
-from app.audit.models import Action
+from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import QuestionDraft
@@ -61,9 +61,17 @@ from app.safety.red_flags import Flag, FlagKind
 from app.state.service import StateView, current_state, render_from_state
 
 QUESTION = Question.__tablename__
+NOTE = FeelingNote.__tablename__
 
 CARD_SIZE = 3
 """One card for him: the first three questions by priority, one screen."""
+
+FEELING_QUESTION_CAP = 2
+"""At most this many feeling notes become questions in one pass (PR #233 review, C): every one
+becomes a `PRIORITY_FEELING` question, ahead of a medicine gap, a record gap or a memo — with
+no cap, a quiet week of many small taps could push every one of those off `patient_card`'s
+first three. The rest are not lost: they still show, in full, beside the symptom log on the
+brief (`feeling_note_lines`) — capped only here, where a slot is scarcer."""
 
 PRIORITY_RED_FLAG = 0
 PRIORITY_MEDICINE_CHANGE = 1
@@ -270,8 +278,13 @@ def question_from_feeling(note: FeelingNote) -> Proposed:
     verifier (`app.reasoning.feelings.inference.compose_note`) — never re-templated here, so
     the words he was shown are the words that reach the doctor. `key`/`slots` name the note,
     not a template, so a question already written for this note is recognised and not
-    duplicated the next time the visit's questions are refreshed."""
-    line = note.lines[0] if note.lines else note.headline
+    duplicated the next time the visit's questions are refreshed.
+
+    Reads `note.said` (PR #233 review, 3a): the line to ask is named, not positional —
+    `note.lines[0]` happens to hold the same value today only because `compose_note` builds it
+    first, and leaning on that ordering here, unstated, is how a medicine-naming sentence
+    could someday reach a `Question` without its `DO_NOT_STOP` pair (#157)."""
+    line = note.said or note.headline
     if len(line) > LINE_LENGTH:
         # The feelings verifier bounds a note's own line to its own budget (200), wider than a
         # question's (120): never write a row a column would silently cut.
@@ -374,12 +387,34 @@ async def propose_questions(
     notes = await feeling_notes_for(
         session, context=context, appointment_id=visit.appointment.id
     )
+    # Newest first, then capped (C): a quiet week of many small taps never crowds every gap
+    # and memo off the card, and the ones cut are not lost — the brief still lists all of them
+    # beside the symptom log (`feeling_note_lines`). `seq` (#192/#218), not `created_at`, so a
+    # tie under the frozen clock still picks one note over another the same way every time.
+    newest_first = sorted(notes, key=lambda n: n.seq, reverse=True)[:FEELING_QUESTION_CAP]
     proposed: list[Proposed] = []
     for flag in sorted(flags, key=lambda f: (as_utc(f.raised_at), str(f.id))):
         one = question_from_flag(flag, visit)
         if one is not None:
             proposed.append(one)
-    proposed.extend(question_from_feeling(note) for note in notes)
+    for note in newest_first:
+        try:
+            proposed.append(question_from_feeling(note))
+        except NotAQuestion as refusal:
+            # A note over the question's own budget (A, PR #233 review): skipped, not raised —
+            # raising here used to take down every question and the whole brief with it, for
+            # every key, for good. The skip has provenance on the trail rather than silently
+            # vanishing.
+            await record(
+                session,
+                context=context,
+                action=Action.READ,
+                scope=Scope.RECORDS,
+                target=NOTE,
+                target_id=note.id,
+                outcome=Outcome.REFUSED,
+                refused_because=str(refusal),
+            )
     proposed.extend(question_from_gap(gap, visit) for gap in gaps)
     proposed.extend(
         question_from_memo(memo)
@@ -426,6 +461,38 @@ async def current_questions(
     return _current(await _rows(session, context=context, appointment_id=appointment_id))
 
 
+async def _may_supersede_feeling(
+    session: AsyncSession, *, context: KeyContext, question: Question
+) -> bool:
+    """Whether this key may still read the feeling note a `QuestionSource.FEELING` question
+    came from, in full (PR #233 review, B).
+
+    `_write` writes the row under the record's own scope alone (`Scope.RECORDS`), narrower
+    than `feeling_notes_for`'s own read check (`note_scopes`, ADR 0004: a reason a note cites
+    rests under its own scope too). A key holding RECORDS and VISITS but not, say, MEDICINES
+    therefore still sees a `new_medicine` note's question row here — `written_scope` is
+    satisfied — while `feeling_notes_for` already withholds the note itself from it, so the
+    same key can never propose that question again. Without this check `questions_for` reads
+    that as the source having gone and marks it superseded: his words taken down by a key that
+    was never allowed to read them.
+    """
+    from app.reasoning.feelings.service import note_scopes
+
+    if not question.source_ids:
+        return True
+    found = await audited_read(
+        session,
+        FeelingNote,
+        context,
+        Scope.RECORDS,
+        where=(FeelingNote.id == uuid.UUID(question.source_ids[0]),),
+    )
+    if not found:
+        # The note itself is gone (or was never on this profile): nothing left to protect.
+        return True
+    return note_scopes(found[0]) <= context.scopes
+
+
 @audited(Action.WRITE, Scope.VISITS, QUESTION)
 async def questions_for(
     session: AsyncSession,
@@ -455,18 +522,25 @@ async def questions_for(
 
     generated = [q for q in current if q.source is not QuestionSource.PERSON]
     for question in generated:
-        if not any(one.same_as(question) for one in proposed):
-            question.superseded_at = moment
-            await session.flush()
-            await record(
-                session,
-                context=context,
-                action=Action.WRITE,
-                scope=question.written_scope,
-                target=QUESTION,
-                target_id=question.id,
-                rows=1,
-            )
+        if any(one.same_as(question) for one in proposed):
+            continue
+        if question.source is QuestionSource.FEELING and not await _may_supersede_feeling(
+            session, context=context, question=question
+        ):
+            # A key that cannot read the note in full cannot propose it again either (B,
+            # PR #233 review) — so it must not take the words down as if it could.
+            continue
+        question.superseded_at = moment
+        await session.flush()
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=question.written_scope,
+            target=QUESTION,
+            target_id=question.id,
+            rows=1,
+        )
     for one in proposed:
         if (one.key, _slots_json(one.slots)) in removed_marks:
             continue

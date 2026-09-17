@@ -989,6 +989,7 @@ CLASSES: dict[str, str] = {
     "feeling_note.answer": HEALTH,
     "feeling_note.language": OPERATIONAL,
     "feeling_note.headline": HEALTH,
+    "feeling_note.said": HEALTH,
     "feeling_note.lines": HEALTH,
     "feeling_note.then": HEALTH,
     "feeling_note.voice": HEALTH,

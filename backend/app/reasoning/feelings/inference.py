@@ -30,7 +30,7 @@ from app.keys.context import KeyContext
 from app.medicines.strings import PLAIN_NAME, say_date
 from app.reasoning.feelings.models import NoteOutcome
 from app.reasoning.feelings.record import Situation, local_date, rising
-from app.reasoning.feelings.strings import DO_NOT_STOP, NOTE_HEADLINE, REASON, TELL, THEN, WHEN
+from app.reasoning.feelings.strings import DO_NOT_STOP, NOTE_HEADLINE, REASON, TELL_ON, THEN
 from app.reasoning.feelings.words import (
     NEW_MEDICINE_WINDOW,
     TIMELINE_WINDOW,
@@ -69,6 +69,7 @@ class Composed:
 
     language: str
     headline: str
+    said: str
     lines: tuple[str, ...]
     then: str
     boundary: str
@@ -143,14 +144,17 @@ def compose_note(
     word: Feeling, answer: Answer, situation: Situation, context: KeyContext, code: str
 ) -> Composed:
     """The note for this tap and answer, from templates, with the boundary last."""
-    if is_red(word) or word is Feeling.FINE or word not in TELL[code]:
+    if is_red(word) or word is Feeling.FINE or word not in TELL_ON[code]:
         raise NoInference(f"{word} is not read into a note")
     found = read_against(word, situation, context, code)
     visit = situation.next_visit
     doctor = (visit.doctor if visit else None) or next((f.doctor for f in found if f.doctor), None)
     who = doctor or YOUR_DOCTOR[code]
+    # Day-anchored (PR #233 review): the day he answered, fixed here, true however long after
+    # this a question row or the brief replays it — never "today" or "since yesterday" (which
+    # `TELL`, the cloud's own reply, still says, said once and never replayed).
     said = _sentence(
-        TELL[code][word].format(doctor=who, when=WHEN[code].get(answer, WHEN[code][Answer.TODAY]))
+        TELL_ON[code][word].format(doctor=who, date=say_date(local_date(situation.now, context), code))
     )
     shown: list[str] = [said]
     for f in found[: MAX_LINES - 1]:
@@ -184,6 +188,7 @@ def compose_note(
     return Composed(
         language=code,
         headline=headline,
+        said=said,
         lines=lines,
         then=then,
         boundary=boundary,

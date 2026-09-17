@@ -292,7 +292,7 @@ async def test_a_feeling_note_reaches_the_visits_questions_and_the_brief(
     feeling_questions = [q for q in found if q.source is QuestionSource.FEELING]
     assert len(feeling_questions) == 1
     question = feeling_questions[0]
-    assert question.text == note.lines[0] == "Tell Dr Tan you feel dizzy today."
+    assert question.text == note.lines[0] == note.said == "Tell Dr Tan you felt dizzy on Thursday 3 September."
     assert question.source_ids == [str(note.id), str(note.tap_id)]
     # His own card — the first three questions by priority — carries it too.
     card = await patient_card(sg, context=context, appointment_id=appointment.id)
@@ -310,13 +310,138 @@ async def test_a_feeling_note_reaches_the_visits_questions_and_the_brief(
     feeling_lines = [line for line in brief.lines if line["key"] == "feeling_note"]
     assert len(note.lines) > 1  # the medicine reason brings its DO_NOT_STOP lines with it
     assert [line["text"] for line in feeling_lines] == list(note.lines)
-    assert all(line["sources"] == [str(note.id)] for line in feeling_lines)
+    # The evidence keeps the tap too, not just the note (PR #233 review, 2): an auditor
+    # reading a feeling-note line can reach the tap and its SYMPTOM event, not only the note.
+    assert all(line["sources"] == [str(note.id), str(note.tap_id)] for line in feeling_lines)
     assert brief.sources["feeling_note_ids"] == [str(note.id)]
     # Not doubled into the brief's own questions preview: it is his account of how he feels,
     # listed once, beside the symptom log.
     assert note.lines[0] not in [
         line["text"] for line in brief.lines if line["section"] == "questions"
     ]
+
+
+async def test_two_medicine_naming_feeling_notes_never_split_their_do_not_stop_pair(
+    sg: AsyncSession,
+) -> None:
+    """PR #233 review, 3b: a medicine-naming feeling-note group is four lines — the line that
+    names the medicine and its `DO_NOT_STOP` pair (#157) — and `SYMPTOM_LINES` is also four.
+    Two such notes, with nothing else in the symptom log, used to have the first group's own
+    "Tell Dr Tan how you feel." sliced off to fit the page (`brief.py:275-277`), leaving the
+    medicine named with half its pair. The fixed fold never splits a feeling-note group: it is
+    shown whole or held back with `symptoms_more`, the same as any group that is not first."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    # Amlodipine's own monograph watches for both (fixture registry): one medicine, two taps.
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+
+    for word, answer in ((Feeling.DIZZY, Answer.TODAY), (Feeling.SWOLLEN_ANKLES, Answer.NO)):
+        tapped = await record_tap(
+            sg,
+            context=context,
+            word=word,
+            registry=REGISTRY,
+            store=STORE,
+            transcriber=TRANSCRIBER,
+            via=VIA,
+        )
+        answered = await answer_tap(
+            sg,
+            context=context,
+            tap_id=tapped.tap.id,
+            answer=answer,
+            registry=REGISTRY,
+            store=STORE,
+            transcriber=TRANSCRIBER,
+            via=VIA,
+        )
+        assert answered.note is not None and len(answered.note.lines) == 4
+
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    feeling_lines = [line for line in brief.lines if line["key"] == "feeling_note"]
+    assert feeling_lines == []
+    assert any(line["key"] == "symptoms_more" for line in brief.lines)
+    # Never a naked "Do not stop {medicine} yourself." without the line right after it that
+    # hands the decision to the doctor — on this brief, or on any other page of it.
+    do_not_stop = [line for line in brief.lines if line["text"].startswith("Do not stop")]
+    assert do_not_stop == []
+
+
+async def test_a_feeling_note_over_the_question_budget_is_skipped_not_raised(
+    sg: AsyncSession,
+) -> None:
+    """PR #233 review, A (blocking): a note's own budget is 200 characters
+    (`feelings.models.LINE_LENGTH`), a question's is 120 (`visits.models.LINE_LENGTH`) — a
+    clinic name long enough (`Provider.name` is up to 120 chars) can push the rendered line
+    past 120 while staying inside 200. `question_from_feeling` used to raise `NotAQuestion`
+    uncaught, which took down `propose_questions` and with it every question and the whole
+    brief, for every key, from then on (`questions.py:382`, absent from `refusals.STATUS` — a
+    bare 400). The note is skipped, not raised, and the skip is on the trail, not silent.
+
+    The long line is set directly on the written row (a Core update, bypassing the note's own
+    `frozen()` guard the way nothing in `app/` does) rather than through a very long doctor
+    name — a name that long would also break the visit's own "visit_with" brief line
+    (`_NAME`'s own 60-char slot rule), a different, unrelated gap this fix does not cover."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    # A medicine reason so the note is kept `FOR_THE_DOCTOR` (and so tied to this appointment)
+    # rather than only `WATCH`, which `feeling_notes_for` never reads for a visit at all.
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.appointment_id == appointment.id
+    long_line = note.said + " " + "and this clinic's own very long name besides" * 2
+    assert 120 < len(long_line) <= 200
+    await sg.execute(
+        FeelingNote.__table__.update()
+        .where(FeelingNote.id == note.id)
+        .values(said=long_line, lines=[long_line, *note.lines[1:]])
+    )
+    await sg.commit()
+    await sg.refresh(note)
+
+    # Refreshing this visit's questions does not raise, and the brief still builds — the rest
+    # of the visit is intact, not lost with the one note that could not become a question.
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    assert not any(q.source is QuestionSource.FEELING for q in found)
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    assert brief is not None
+
+    # The skip has provenance: a refused READ on the note itself, not a vanished note.
+    trail = await read_audit(sg, context=context)
+    skipped = [
+        entry
+        for entry in trail
+        if entry.target == "feeling_note"
+        and entry.target_id == note.id
+        and entry.outcome is Outcome.REFUSED
+    ]
+    # `propose_questions` runs once per call above (`questions_for`, then `build_brief`'s own
+    # refresh) — every run skips the note again and writes its own refusal line; the point is
+    # that at least one exists and names why, not how many.
+    assert len(skipped) >= 1
+    assert skipped[0].refused_because is not None and "120" in skipped[0].refused_because
 
 
 async def test_without_a_visit_the_promise_says_who_tells_the_doctor(sg: AsyncSession) -> None:
@@ -346,7 +471,7 @@ async def test_without_a_visit_the_promise_says_who_tells_the_doctor(sg: AsyncSe
     note = answered.note
     assert note is not None and note.outcome is NoteOutcome.FOR_THE_DOCTOR
     assert note.appointment_id is None
-    assert note.then == "Nura has kept this for you to tell Dr Tan."
+    assert note.then == "Nura wrote this down for you to tell Dr Tan."
     assert "next visit" not in note.then
     assert (await sg.scalars(select(FeelingNote))).all() == [note]
 

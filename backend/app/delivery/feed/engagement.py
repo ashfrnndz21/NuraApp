@@ -22,7 +22,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited, audited_read, audited_write
+from app.audit.access import audited, audited_guard, audited_read, audited_write
 from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import as_utc, utcnow
@@ -34,7 +34,7 @@ from app.delivery.feed.models import (
     EngagementKind,
     FeedItem,
 )
-from app.delivery.feed.rank import DECLINED, NoSuchItem, _visible, require_item
+from app.delivery.feed.rank import DECLINED, FEED_TARGET, NoSuchItem, _visible, require_item
 from app.drafts import FactDraft
 from app.errors import Refusal
 from app.keys.confirm import confirm
@@ -202,9 +202,15 @@ async def record_engagement(
     if item is None:
         item = await require_item(session, context=context, item_id=item_id)
     else:
-        context.require(item.scope)
-        if item.private_to is not None and item.private_to != context.person_id:
-            raise NoSuchItem(f"no feed item {item_id} on profile {context.profile_id}")
+        # The same door `require_item` opens for the item's own scope (PR #233 review, 8):
+        # a card `private_to` someone else raised here, without it, was caught only by this
+        # function's own `@audited(Scope.PROFILE, ...)` door — a different scope and a
+        # different target than `require_item`'s write, so the trail told the two refusals
+        # apart though the promise at `rank.require_item` says they should not be told apart.
+        async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+            context.require(item.scope)
+            if item.private_to is not None and item.private_to != context.person_id:
+                raise NoSuchItem(f"no feed item {item_id} on profile {context.profile_id}")
     moment = utcnow() if at is None else at
     event = await record_event(
         session,

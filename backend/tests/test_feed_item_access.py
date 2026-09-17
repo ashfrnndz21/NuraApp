@@ -26,12 +26,14 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.models import Action, Outcome
+from app.audit.trail import read_audit
 from app.clock import now
 from app.delivery.feed.days import today_for
 from app.delivery.feed.engagement import Queued, record_engagement, record_events
 from app.delivery.feed.items import Lines, Why, create_item
 from app.delivery.feed.models import CardType, DeliverTo, Engagement, EngagementKind, FeedItem
-from app.delivery.feed.rank import NoSuchItem
+from app.delivery.feed.rank import FEED_TARGET, NoSuchItem, require_item
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.state.service import current_state
@@ -186,3 +188,40 @@ async def test_record_events_skips_a_private_card_for_another_person(sg: AsyncSe
     his_queued = Queued(client_id=uuid.uuid4(), item_id=card.id, kind=EngagementKind.SEEN, at=now())
     his_flushed = await record_events(sg, context=owner, events=[his_queued])
     assert [e.item_id for e in his_flushed.written] == [card.id]
+
+
+async def test_not_found_and_private_to_write_the_same_shape_on_the_trail(
+    sg: AsyncSession,
+) -> None:
+    """PR #233 review, 8: `require_item` raises `NoSuchItem` two ways — the id is not on this
+    profile at all, or it is and `private_to` someone else — and the promise at
+    `rank.require_item`'s own docstring is that a caregiver holding every scope a card rests
+    on cannot tell the two apart. The `private_to` raise always wrote a `REFUSED` line
+    (`audited_guard`); the missing-id raise used to run before any guard opened and wrote
+    nothing but the read's own `READ rows=0` — a different shape a chief could tell apart on
+    her own trail, a one-bit existence oracle over guessed ids. Both now raise inside the same
+    guard and both write a `REFUSED` line of the same shape."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+    chief = await home.ctx(sg, home.mei)  # holds every scope the card rests on
+    card = await _private_card(sg, owner=owner)
+
+    async with refused_unit(sg, NoSuchItem):
+        await require_item(sg, context=chief, item_id=card.id)
+    async with refused_unit(sg, NoSuchItem):
+        await require_item(sg, context=chief, item_id=uuid.uuid4())
+
+    trail = await read_audit(sg, context=chief, action=Action.READ)
+    refused = [
+        entry
+        for entry in trail
+        if entry.target == FEED_TARGET
+        and entry.outcome is Outcome.REFUSED
+        and entry.refused_because == "NoSuchItem"
+    ]
+    # One line per attempt, same action/target/refusal on both — not one REFUSED and one bare
+    # ALLOWED READ rows=0 the way it used to be.
+    assert len(refused) == 2
+    assert {entry.action for entry in refused} == {Action.READ}
+    assert {entry.target for entry in refused} == {FEED_TARGET}
+    assert {entry.refused_because for entry in refused} == {"NoSuchItem"}

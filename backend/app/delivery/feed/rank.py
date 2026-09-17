@@ -184,20 +184,30 @@ async def require_item(
     this function and `record_events`' own bulk fetch, and fails if it finds one).
 
     Not on this profile, or `private_to` someone else, is the same refusal (`NoSuchItem`) —
-    a caregiver holding every scope the card rests on still cannot tell the two apart. Out of
+    a caregiver holding every scope the card rests on still cannot tell the two apart, on the
+    trail either (PR #233 review, 8): both raises run inside the same `audited_guard`, so both
+    write the same shape of `REFUSED` line — never on this profile writes it under the base
+    `Scope.PROFILE` the lookup itself used, since there is no item to name a truer one. Out of
     the key's own scope is `OutOfScope`, as every scope refusal here is, audited on the trail.
     `where` narrows further: an unexpired card, one of a given format.
     """
     found = await audited_read(
         session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id, *where)
     )
-    if not found:
-        raise NoSuchItem(f"no card {item_id} on this profile")
-    item = found[0]
-    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
+    item = found[0] if found else None
+    async with audited_guard(
+        session,
+        context,
+        Action.READ,
+        item.scope if item is not None else Scope.PROFILE,
+        FEED_TARGET,
+    ):
+        if item is None:
+            raise NoSuchItem(f"no card {item_id} on this profile")
         context.require(item.scope)
         if item.private_to is not None and item.private_to != context.person_id:
             raise NoSuchItem(f"no card {item_id} on this profile")
+    assert item is not None  # the guard above raises otherwise
     return item
 
 

@@ -264,7 +264,11 @@ def symptom_lines(entries: Sequence[Any], language: str, zone: tzinfo) -> list[l
 def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
     """The groups that fit in `cap` lines, whole, then `more` — or all of them when they fit.
     The section is never empty when it has something to say: a first group too long for the
-    page is cut to fit, never dropped (B1 review)."""
+    page is cut to fit, never dropped (B1 review) — except a feeling-note group, which is
+    never cut. A medicine-naming feeling-note group carries `DO_NOT_STOP` right after the line
+    that names it (#157): cutting the group mid-way can write the medicine's name without the
+    line that keeps it as it is, so that group goes whole into `more` instead (PR #233 review,
+    3b) — the same as any other group that is not first."""
     every = [line for group in groups for line in group]
     if len(every) <= cap:
         return every
@@ -274,7 +278,8 @@ def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
         if len(group) <= room:
             shown.extend(group)
             continue
-        if not shown:
+        indivisible = bool(group) and group[0].key == "feeling_note"
+        if not shown and not indivisible:
             shown.extend(group[:room])
         break
     return [*shown, more]
@@ -297,7 +302,10 @@ def feeling_note_lines(notes: Sequence[Any]) -> list[list[Line]]:
         return (-note.created_at.timestamp(), str(note.id))
 
     return [
-        [Line("changed", "feeling_note", text, (str(note.id),)) for text in note.lines]
+        [
+            Line("changed", "feeling_note", text, (str(note.id), str(note.tap_id)))
+            for text in note.lines
+        ]
         for note in sorted(notes, key=order)
     ]
 

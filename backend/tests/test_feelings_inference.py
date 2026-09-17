@@ -124,11 +124,12 @@ async def test_a_tap_asks_when_it_began_and_is_read_against_a_new_medicine(
     assert note is not None and answered.red is None
     assert note.headline == "Things to tell Dr Tan"
     assert note.lines == [
-        "Tell Dr Tan you feel dizzy since yesterday.",
+        "Tell Dr Tan you felt dizzy on Thursday 3 September.",
         "This can come from your blood pressure tablet, new since Thursday 3 September.",
         "Do not stop your blood pressure tablet yourself.",
         "Tell Dr Tan how you feel.",
     ]
+    assert note.said == note.lines[0]
     assert note.then == "Nura will keep this for your visit to Dr Tan."
     assert note.boundary == boundary_line(Surface.FEELING_INFERENCE, "en", doctor="Dr Tan")
     assert is_boundary_line(Surface.FEELING_INFERENCE, note.boundary)
@@ -155,10 +156,10 @@ async def test_without_a_visit_the_doctor_on_the_label_is_named(sg: AsyncSession
     note = (await _said(sg, owner, Feeling.SWOLLEN_ANKLES, Answer.NO)).note
     assert note is not None
     assert note.headline == "Things to tell Dr Tan"
-    assert note.lines[0] == "Tell Dr Tan about your swollen ankles today."
+    assert note.lines[0] == "Tell Dr Tan about your swollen ankles on Thursday 3 September."
     # No visit is booked yet, so nothing reads this note onto one later (RE-02): the words say
     # who tells the doctor — he does — rather than promising a delivery nothing performs.
-    assert note.then == "Nura has kept this for you to tell Dr Tan."
+    assert note.then == "Nura wrote this down for you to tell Dr Tan."
 
 
 async def test_the_same_word_as_yesterday_asks_whether_it_is_more(
@@ -190,9 +191,10 @@ async def test_the_same_word_as_yesterday_asks_whether_it_is_more(
         via=VIA,
     )
     assert answered.note is not None
-    assert answered.note.lines == [
-        "Tell your doctor you feel dizzy and that it is worse than yesterday."
-    ]
+    # Day-anchored, not "and that it is worse than yesterday" (plain words, rule 5 and B/C in
+    # the PR #233 review): two ideas in one ungrammatical sentence, true only the moment it was
+    # said and false by the time a brief replays it days later.
+    assert answered.note.lines == ["Tell your doctor you felt dizzy on Friday 4 September."]
 
 
 async def test_a_direction_in_his_blood_pressure_is_named_by_its_facts(sg: AsyncSession) -> None:
@@ -225,7 +227,7 @@ async def test_a_direction_in_his_blood_pressure_is_named_by_its_facts(sg: Async
     note = answered.note
     assert note is not None
     assert note.lines == [
-        "Tell your doctor about the headache today.",
+        "Tell your doctor about the headache on Thursday 3 September.",
         "Your last 3 blood pressure numbers went up each time.",
     ]
     assert note.reasons[0]["code"] == "reading_trend"
@@ -238,7 +240,7 @@ async def test_a_visit_this_week_is_named(sg: AsyncSession) -> None:
     note = (await _said(sg, owner, Feeling.TIRED, Answer.FEW_DAYS)).note
     assert note is not None
     assert note.lines == [
-        "Tell your doctor you feel tired for a few days now.",
+        "Tell your doctor you felt tired on Thursday 3 September.",
         "You went to see a doctor on Tuesday 1 September.",
     ]
     assert note.reasons == [{"code": "visit", "shown": True, "visit_id": str(visit.id)}]
@@ -248,7 +250,7 @@ async def test_nothing_to_read_it_against_is_watched_and_asked_again(sg: AsyncSe
     _, owner = await _home(sg)
     note = (await _said(sg, owner, Feeling.LOW, Answer.TODAY)).note
     assert note is not None
-    assert note.lines == ["Tell your doctor you feel sad today."]
+    assert note.lines == ["Tell your doctor you felt sad on Thursday 3 September."]
     assert note.then == "Nura will ask you again in a week."
     assert note.outcome is NoteOutcome.WATCH and note.reasons == []
 
