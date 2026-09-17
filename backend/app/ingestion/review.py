@@ -53,7 +53,14 @@ from app.ingestion.models import (
     ReviewField,
 )
 from app.ingestion.objects import ObjectStore
-from app.ingestion.readings import reading_from
+from app.ingestion.readings import (
+    BLOOD_PRESSURE_RANGE,
+    DIASTOLIC,
+    READING,
+    SINGLE_MEASURES,
+    SYSTOLIC,
+    reading_from,
+)
 from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
@@ -65,6 +72,7 @@ from app.memory.semantic import assert_fact
 from app.memory.working import require_open_episode
 from app.regions import REGION_TZ
 from app.safety.high_risk import high_risk_class
+from app.safety.red_flags import FlagKind, red_flags_in, write_red_flag
 
 CARD = ReviewCard.__tablename__
 FIELD = ReviewField.__tablename__
@@ -144,7 +152,98 @@ DOCUMENT_EVENTS: Mapping[DocumentKind, tuple[EventKind, str]] = {
     DocumentKind.CLINIC_SLIP: (EventKind.VISIT, "clinic slip"),
 }
 """The papers that record a moment, and the event each is written as on its date: the
-discharge a hospital letter records, the visit a clinic slip was written at (E02-03)."""
+discharge a hospital letter records, the visit a clinic slip was written at (E02-03). A lab
+report, an insurance policy or a claim record no moment of their own; their kept fields are
+plain facts on the paper's date (`_write_paper`'s fallback), a lab report's known-unit
+readings apart (`_LAB_READING_BY_UNIT`)."""
+
+
+async def _red_flag_lab_report(
+    session: AsyncSession, *, context: KeyContext, artifact: Artifact, extraction: Extraction
+) -> None:
+    """Every red-flag word anywhere in a lab report's proposed fields, raised before the card
+    is even shown — the same rule free text and a visit's transcript already keep
+    (`app.safety.red_flags` module docstring): "whichever way one comes in, it comes here
+    first". One flag per code, naming the artefact (never an appointment: a lab report is not
+    tied to a visit) so it still surfaces on `open_flags` (`Flag.artifact_id.is_not(None)`).
+    No medicine names are passed in: a lab report's fever rule, if any, waits for a person's
+    own word the way any paper field does — the report is read here, not reasoned about."""
+    seen: set[str] = set()
+    for field in extraction.fields:
+        for hit in red_flags_in(field.subject.replace("_", " "), field.attribute.replace("_", " "), field.value):
+            if hit.code in seen:
+                continue
+            seen.add(hit.code)
+            await write_red_flag(
+                session,
+                context=context,
+                tell_the_family=True,
+                kind=FlagKind.RED_FLAG,
+                code=hit.code,
+                subject="symptom",
+                fact_ids=[],
+                payload={
+                    "word": hit.word,
+                    "span": hit.span(),
+                    "found_in": f"{field.subject}.{field.attribute}",
+                },
+                artifact_id=artifact.id,
+                raised_at=utcnow(),
+            )
+
+
+_LAB_READING_CODES: Mapping[tuple[str, str], Any] = dict(SINGLE_MEASURES)
+"""A lab report's own row is a reading proposal when its (subject, attribute) is one of the
+app's own vitals codes — the exact pair a device's screen already writes
+(`app.ingestion.readings.SINGLE_MEASURES`: `("blood_sugar", "glucose")`, `("weight", "kg")`,
+`("heart_rate", "pulse")`), and its unit is the one the app already keeps that vital in. A
+row named any other way, or in a different unit, is a normal lab row — its own subject and
+attribute — and stays a plain paper fact: "a value with a unit the app knows becomes a
+reading proposal; an unknown unit stays a paper fact"."""
+
+
+def _in_range(value: Any, low: float, high: float) -> bool:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return False
+    return low <= value <= high
+
+
+def _lab_reading_split(
+    kept: Sequence[DecidedField],
+) -> tuple[list[DecidedField], list[DecidedField]]:
+    """Every kept field of a lab report, split into a reading proposal's fields and the rest,
+    which stay plain paper facts. A field never taken from twice: the blood-pressure pair, if
+    whole, in the app's own unit and in range, is taken first; every other field named and
+    unitted the way the app's own vitals are, with a value in range, next; everything else is
+    a paper fact — every ordinary lab row, a half blood pressure, and a vital in a unit or out
+    of a range the app does not recognise (kept as read, never refused, the same as any other
+    paper fact)."""
+    by_code = {(field.subject, field.attribute): field for field in kept}
+    systolic, diastolic = by_code.get(SYSTOLIC), by_code.get(DIASTOLIC)
+    whole_bp = (
+        systolic is not None
+        and diastolic is not None
+        and systolic.unit == "mmHg"
+        and diastolic.unit == "mmHg"
+        and _in_range(systolic.value, *BLOOD_PRESSURE_RANGE[SYSTOLIC])
+        and _in_range(diastolic.value, *BLOOD_PRESSURE_RANGE[DIASTOLIC])
+    )
+    taken: set[uuid.UUID] = set()
+    readings: list[DecidedField] = []
+    if whole_bp:
+        assert systolic is not None and diastolic is not None
+        readings.extend((systolic, diastolic))
+        taken.update((systolic.field_id, diastolic.field_id))
+    rest: list[DecidedField] = []
+    for field in kept:
+        if field.field_id in taken:
+            continue
+        measure = _LAB_READING_CODES.get((field.subject, field.attribute))
+        if measure is not None and field.unit == measure.unit and _in_range(field.value, measure.low, measure.high):
+            readings.append(field)
+        else:
+            rest.append(field)
+    return readings, rest
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +303,12 @@ async def review_artifact(
         artifact.content_type,
         Hints(language=language, region=context.region, expected=asked_as),
     )
+    if extraction.document_kind is DocumentKind.LAB_REPORT:
+        # The red-flag path first, exactly like typed free text (`app.safety.red_flags`
+        # module docstring): before the card is even written, not held for the person's
+        # review. A lab report rarely carries a red word, but a facility's own remark
+        # ("breathless at rest", "chest pain") is read the same way a transcript is.
+        await _red_flag_lab_report(session, context=context, artifact=artifact, extraction=extraction)
     return await card_from(
         session,
         context=context,
@@ -604,6 +709,67 @@ async def confirm_review_card(
     return card, fields, written
 
 
+async def _write_lab_readings(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    card: ReviewCard,
+    artifact: Artifact,
+    reading_fields: Sequence[DecidedField],
+    opens: datetime,
+    episode_id: uuid.UUID | None,
+) -> dict[uuid.UUID, Fact]:
+    """A lab report's known-unit fields (`_lab_reading_split`), written as reading facts on
+    one READING event at the date on the paper — the same fact shape a device's screen
+    writes (`app.ingestion.readings`), so a lab's own blood pressure or blood sugar line
+    joins the same trend a typed or a device reading does."""
+    fact_of: dict[uuid.UUID, Fact] = {}
+    event = await record_event(
+        session,
+        context=context,
+        kind=EventKind.READING,
+        occurred_at=opens,
+        label="reading",
+        artifact_id=artifact.id,
+        episode_id=episode_id,
+    )
+    by_subject = {field.subject: field for field in reading_fields}
+    systolic, diastolic = by_subject.get("systolic"), by_subject.get("diastolic")
+    if systolic is not None and diastolic is not None:
+        fact = await _write_fact_for(
+            session,
+            context=context,
+            card=card,
+            subject="blood_pressure",
+            attribute=READING,
+            value={"systolic": systolic.value, "diastolic": diastolic.value},
+            unit="mmHg",
+            event_id=event.id,
+            valid_from=opens,
+            episode_id=episode_id,
+        )
+        fact_of[systolic.field_id] = fact
+        fact_of[diastolic.field_id] = fact
+    for field in reading_fields:
+        if field.field_id in fact_of:
+            continue
+        measure = _LAB_READING_CODES[(field.subject, field.attribute)]
+        fact = await _write_fact_for(
+            session,
+            context=context,
+            card=card,
+            subject=measure.subject,
+            attribute=READING,
+            value={measure.key: field.value},
+            unit=measure.unit,
+            event_id=event.id,
+            valid_from=opens,
+            episode_id=episode_id,
+        )
+        fact_of[field.field_id] = fact
+    return fact_of
+
+
 async def _write_paper(
     session: AsyncSession,
     *,
@@ -614,9 +780,41 @@ async def _write_paper(
     episode_id: uuid.UUID | None = None,
 ) -> dict[uuid.UUID, Fact]:
     """One fact per kept field, valid from the date on the paper; for a paper that records a
-    moment (`DOCUMENT_EVENTS`), the event first, on that date, and every fact names it."""
+    moment (`DOCUMENT_EVENTS`), the event first, on that date, and every fact names it. A lab
+    report is its own case: its known-unit rows become reading facts on one READING event
+    (`_write_lab_readings`), everything else on it a plain fact exactly like any other kind
+    (a header field, a reference range, an insurance line) — the same fallback below."""
     opens = _opens_at(card, artifact, context)
     kept = [decided for decided in draft.fields if decided.decision != FieldState.REJECTED]
+    if card.document_kind is DocumentKind.LAB_REPORT:
+        reading_fields, plain_fields = _lab_reading_split(kept)
+        lab_fact_of: dict[uuid.UUID, Fact] = {}
+        if reading_fields:
+            lab_fact_of.update(
+                await _write_lab_readings(
+                    session,
+                    context=context,
+                    card=card,
+                    artifact=artifact,
+                    reading_fields=reading_fields,
+                    opens=opens,
+                    episode_id=episode_id,
+                )
+            )
+        for decided in plain_fields:
+            lab_fact_of[decided.field_id] = await _write_fact_for(
+                session,
+                context=context,
+                card=card,
+                subject=decided.subject,
+                attribute=decided.attribute,
+                value=decided.value,
+                unit=decided.unit,
+                event_id=None,
+                valid_from=opens,
+                episode_id=episode_id,
+            )
+        return lab_fact_of
     event_id: uuid.UUID | None = None
     shape = DOCUMENT_EVENTS.get(card.document_kind)
     if shape is not None and kept:

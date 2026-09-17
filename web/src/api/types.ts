@@ -635,7 +635,10 @@ export type DocumentKind =
   | "clinic_slip"
   | "handwritten_prescription"
   | "insurance_letter"
+  | "insurance_policy"
+  | "insurance_claim"
   | "device_screen"
+  | "other"
   | "not_health"
   | "unknown"
   | "unsupported_file_type";
