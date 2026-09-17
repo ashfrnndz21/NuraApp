@@ -87,6 +87,20 @@ a laptop:
 - **The nightly wipe.** Everything is wiped each night at 03:00 Singapore time.
 - **No dev features.** The frozen clock and the `/dev/…` routes stay off.
 
+**The pharmacist's review queue stays on the app's own origin, for now.** W6 (#137) serves it
+token-gated at `/app/review/`, never linked from the patient app and not cached by the
+service worker — fine for the demo, where nothing behind either surface is real. Before real
+data (#145), point a second DNS record — `review.<domain>` — at the same service and set
+`NURA_REVIEW_ORIGIN` to that hostname. One process still answers both; the app itself splits
+them by the Host header alone (`app.channels.api.ReviewOrigin`): the review page and its API
+answer only on the review hostname, everything else answers on every other hostname, and the
+review origin's answers carry a strict `Content-Security-Policy` distinct from the app's own.
+No cookie is set by either surface (both authenticate with a bearer token kept in
+`sessionStorage`, per tab), so there is nothing to scope apart there; the split is about
+storage and script isolation in a browser that ever opens both origins — a patient-origin
+script can no longer reach a staff session's page even in principle, and a review-origin page
+can never serve the patient app either.
+
 ## 3. Settings
 
 Every setting comes from the environment, and every secret from the platform's secret store:
@@ -114,6 +128,8 @@ the repo, `fly.toml` or `render.yaml`.
 | `NURA_WHATSAPP_NUMBER` | no | unset | the region's business number, E.164 | |
 | `NURA_DRUG_REGISTRY`, `NURA_REFERENCE_RANGES` | no | unset (`fixture`) | the licensed source's name, once built | |
 | `NURA_WEB_DIST` | no | set by the image (`/srv/web/dist`) | the same | |
+| `NURA_REVIEW_STAFF_TOKENS` | **yes** | `pharmacist:<24+ chars>`, one per reviewer | the same, rotated by a real deployment on its own schedule | ADR 0007. `handle:token` pairs, comma-separated. Unset, the queue answers nobody. |
+| `NURA_REVIEW_ORIGIN` | no | unset (the demo keeps the queue on the app's own origin, §2 above) | `review.<domain>`, a bare hostname pointed at the same service | **Before real data** (#145, ADR 0008). Splits `/app/review` and `/review/*` onto this hostname alone; refused everywhere else, and nothing else answers here. Point a second DNS record at the same service — no second deployment is needed. |
 | `PORT` | no | `8000` (Fly, in `fly.toml`); Render sets its own | the same | |
 | `NURA_DEV_CODE_SENDER` | — | **must be absent** | **must be absent** | A laptop's dev run: it prints login codes. It is refused alongside demo mode. |
 | `NURA_FROZEN_CLOCK` | — | **must be absent** | **must be absent** | Refused outside a dev run. |
@@ -129,6 +145,7 @@ holds:
 - `NURA_DEMO_LOGIN_CODE` is not six digits
 - demo mode and a dev run are declared together
 - a fixture would run without demo mode
+- `NURA_REVIEW_ORIGIN` is set to anything but a bare hostname (a scheme, a path or a port is refused rather than silently stripped)
 
 ## 4. First deploy on Render (recommended for the demo)
 

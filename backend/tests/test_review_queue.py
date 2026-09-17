@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -47,9 +48,9 @@ from app.language.review import (
 )
 from app.language.voice_script import BOUNDARY_PAUSE_MS, script_for
 from app.regions import Region
-from app.settings import BadStaffTokens, load_settings
+from app.settings import BadReviewOrigin, BadStaffTokens, load_settings
 from tests.api import bearer, let_in, own_profile, register_by_phone
-from tests.conftest import STAFF_TOKEN, Deployment
+from tests.conftest import STAFF_TOKEN, Deployment, _serve
 
 PA = "+6591230001"
 MEI = "+6591230002"
@@ -148,6 +149,72 @@ def test_the_staff_list_is_read_strictly() -> None:
         load_settings({**base, "NURA_REVIEW_STAFF_TOKENS": laptop})
     dev = load_settings({**base, "NURA_DEV_CODE_SENDER": "1", "NURA_REVIEW_STAFF_TOKENS": laptop})
     assert dev.review_staff == (("pharmacist", "nura-dev-pharmacist-token-0001"),)
+
+
+def test_the_review_origin_is_read_as_a_bare_hostname() -> None:
+    """#145: `NURA_REVIEW_ORIGIN` is a hostname alone, lowercased — no scheme, path or port
+    silently stripped, since a typo here would put the queue on the wrong host quietly."""
+    base = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
+    assert load_settings(base).review_origin is None
+    assert load_settings({**base, "NURA_REVIEW_ORIGIN": ""}).review_origin is None
+    read = load_settings({**base, "NURA_REVIEW_ORIGIN": "Review.Nura.Example"})
+    assert read.review_origin == "review.nura.example"
+    for bad in (
+        "https://review.nura.example",
+        "review.nura.example/queue",
+        "review.nura.example:8443",
+        "localhost",
+        "review nura example",
+    ):
+        with pytest.raises(BadReviewOrigin):
+            load_settings({**base, "NURA_REVIEW_ORIGIN": bad})
+
+
+REVIEW_ORIGIN = "review.nura.test"
+
+
+@pytest.fixture
+async def split() -> AsyncIterator[Deployment]:
+    """A deployment with a review origin named (#145), so a test can compare how one request
+    answers on the patient's host and on the review queue's."""
+    async for served in _serve(Region.SG, review_origin=REVIEW_ORIGIN):
+        yield served
+
+
+async def test_the_review_queue_is_refused_on_the_patients_host_once_an_origin_is_named(
+    split: Deployment,
+) -> None:
+    """#145: naming `NURA_REVIEW_ORIGIN` moves the queue's API off the patient's own host —
+    the same 404 whether or not a staff token rides along, because the wrong host is refused
+    before a token is even read."""
+    for headers in (staff(), {}):
+        blocked = await split.client.get("/review/status", headers=headers)
+        assert blocked.status_code == 404 and blocked.json() == {"refusal": "WrongOrigin"}
+        blocked_api = await split.client.get("/api/review/status", headers=headers)
+        assert blocked_api.status_code == 404 and blocked_api.json() == {"refusal": "WrongOrigin"}
+    # The rest of the app is unaffected on its own host.
+    health = await split.client.get("/api/health")
+    assert health.status_code == 200
+
+
+async def test_the_review_queue_answers_on_its_own_host_hardened_and_still_staff_only(
+    split: Deployment,
+) -> None:
+    on_review = {"host": REVIEW_ORIGIN}
+    ok = await split.client.get("/review/status", headers={**staff(), **on_review})
+    assert ok.status_code == 200, ok.text
+    assert ok.headers["content-security-policy"].startswith("default-src 'self'")
+    assert ok.headers["x-frame-options"] == "DENY"
+    # The origin split is not the authentication: a wrong or missing token is still refused,
+    # on the review host exactly as it always was.
+    for headers in (on_review, {**bearer("not-a-staff-token-at-all-000"), **on_review}):
+        refused = await split.client.get("/review/status", headers=headers)
+        assert refused.status_code == 403 and refused.json() == {"refusal": "NotStaff"}
+    # The patient app itself never answers on the review host.
+    app_blocked = await split.client.get("/api/health", headers=on_review)
+    assert app_blocked.status_code == 200  # health answers on either host on purpose
+    me_blocked = await split.client.get("/me", headers=on_review)
+    assert me_blocked.status_code == 404 and me_blocked.json() == {"refusal": "WrongOrigin"}
 
 
 # --- the samples carry no profile and no name ---------------------------------------------------
