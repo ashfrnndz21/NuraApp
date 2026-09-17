@@ -80,6 +80,10 @@ class QuestionSource(StrEnum):
     MEMO = "memo"
     FLAG = "flag"
     PERSON = "person"
+    FEELING = "feeling"
+    """A cloud tap read against the record (`app.reasoning.feelings.models.FeelingNote`,
+    `NoteOutcome.FOR_THE_DOCTOR`), on its own appointment: the note genuinely reaches the
+    visit it named (RE-02), instead of being kept and never read."""
 
 
 class Question(RenderedFromState, ProfileScoped, Base):

@@ -49,6 +49,7 @@ from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import Brief, MemoKind
 from app.reasoning.visits.questions import (
     Visit,
+    feeling_notes_for,
     propose_questions,
     questions_for,
     render_proposed,
@@ -279,9 +280,26 @@ def _fold(groups: Sequence[Sequence[Line]], cap: int, more: Line) -> list[Line]:
     return [*shown, more]
 
 
-SYMPTOM_KEYS = frozenset({"symptom", "symptom_detail", "symptoms_more"})
+SYMPTOM_KEYS = frozenset({"symptom", "symptom_detail", "symptoms_more", "feeling_note"})
 """The brief's lines about how he feels: the record's (`Scope.RECORDS`, the scope the symptom
-log is read under), not the visits'."""
+log and the feeling notes (RE-02) are read under), not the visits'."""
+
+
+def feeling_note_lines(notes: Sequence[Any]) -> list[list[Line]]:
+    """One group of lines per feeling note kept for this visit (RE-02), newest first, beside
+    the symptom log: the note's own words, already rendered and verified when the tap was
+    answered (`app.reasoning.feelings.inference.compose_note`) — never re-templated here, so
+    what he read on the cloud's reply is exactly what reaches the doctor. The source is the
+    note itself, so a reader without the part of the record it rests on loses it, not just its
+    provenance (`lines_for`, `SYMPTOM_KEYS`)."""
+
+    def order(note: Any) -> tuple[float, str]:
+        return (-note.created_at.timestamp(), str(note.id))
+
+    return [
+        [Line("changed", "feeling_note", text, (str(note.id),)) for text in note.lines]
+        for note in sorted(notes, key=order)
+    ]
 
 
 def lines_for(brief: Brief, context: KeyContext) -> tuple[list[dict[str, Any]], list[Scope]]:
@@ -434,9 +452,15 @@ async def build_brief(
     since_day = day_and_date(since_moment, visit.language, context.region)
     proposed = await propose_questions(session, context=context, visit=visit)
     proposed_lines = [
-        (one.key, render_proposed(one, visit.language), one.source_ids) for one in proposed
+        (
+            one.key,
+            one.text if one.text is not None else render_proposed(one, visit.language),
+            one.source_ids,
+        )
+        for one in proposed
     ]
     symptoms: list[list[Line]] = []
+    feeling_notes: Sequence[Any] = ()
     if context.allows(Scope.RECORDS):
         # Every symptom written down since the last visit (E14-01), each its own line.
         from app.safety.symptom_log import symptoms_since
@@ -445,6 +469,13 @@ async def build_brief(
             session, context=context, since=since_moment, language=visit.language
         )
         symptoms = symptom_lines(log.entries, visit.language, REGION_TZ[context.region])
+        # A cloud tap read against the record, kept for this visit (RE-02): beside the
+        # symptom log, in his own already-verified words, never re-read from a Fact — the
+        # promise the feeling cloud makes is kept here, not just recorded.
+        feeling_notes = await feeling_notes_for(
+            session, context=context, appointment_id=appointment_id
+        )
+        symptoms = [*symptoms, *feeling_note_lines(feeling_notes)]
     memos = await current_memos(session, context=context)
     bring = [
         (m.key, m.text) for m in memos if m.kind is MemoKind.BRING and m.language == visit.language
@@ -489,6 +520,7 @@ async def build_brief(
             "flag_ids": sorted(
                 {sid for one in proposed if one.source.value == "flag" for sid in one.source_ids}
             ),
+            "feeling_note_ids": sorted(str(note.id) for note in feeling_notes),
         },
         built_at=utcnow(),
     )

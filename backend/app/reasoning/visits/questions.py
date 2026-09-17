@@ -34,6 +34,8 @@ from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import Appointment, AppointmentStatus, Provider
+from app.reasoning.feelings.models import FeelingNote, NoteOutcome
+from app.reasoning.feelings.service import note_scopes
 from app.reasoning.visits.gaps import Gap, GapKind, NoSuchAppointment, find_gaps
 from app.reasoning.visits.guard import may_change_visits, may_render_brief
 from app.reasoning.visits.memos import current_memos
@@ -66,10 +68,13 @@ CARD_SIZE = 3
 
 PRIORITY_RED_FLAG = 0
 PRIORITY_MEDICINE_CHANGE = 1
-PRIORITY_PERSON = 2
-PRIORITY_MEDICINE_GAP = 3
-PRIORITY_RECORD_GAP = 4
-PRIORITY_MEMO = 5
+PRIORITY_FEELING = 2
+"""A cloud tap read against the record: his own words about how he feels, next to a medicine
+change and ahead of a gap the record itself raised (RE-02)."""
+PRIORITY_PERSON = 3
+PRIORITY_MEDICINE_GAP = 4
+PRIORITY_RECORD_GAP = 5
+PRIORITY_MEMO = 6
 
 GAP_PRIORITY: Mapping[GapKind, int] = {
     GapKind.INTERACTION_FLAGGED: PRIORITY_MEDICINE_GAP,
@@ -125,7 +130,13 @@ class Visit:
 
 @dataclass(frozen=True, slots=True)
 class Proposed:
-    """A question the loop proposes: which template, with what, from where, how urgent."""
+    """A question the loop proposes: which template, with what, from where, how urgent.
+
+    `text`, when set, is the line itself, already rendered and verified elsewhere (a
+    `FeelingNote`'s own words, RE-02): it is written as-is, never re-templated through
+    `key`/`slots`. Every other source still renders from `key` and `slots` through this
+    module's own templates.
+    """
 
     key: str
     slots: dict[str, Any]
@@ -133,6 +144,7 @@ class Proposed:
     source_kind: str
     source_ids: tuple[str, ...]
     priority: int
+    text: str | None = None
 
     def same_as(self, question: Question) -> bool:
         return question.key == self.key and _slots_json(question.slots) == _slots_json(self.slots)
@@ -253,6 +265,52 @@ def question_from_memo(memo: Memo) -> Proposed:
     )
 
 
+def question_from_feeling(note: FeelingNote) -> Proposed:
+    """A cloud tap read against the record becomes a question for this visit, in his own
+    words (RE-02): the note's own first line, already rendered and verified by the feelings
+    verifier (`app.reasoning.feelings.inference.compose_note`) — never re-templated here, so
+    the words he was shown are the words that reach the doctor. `key`/`slots` name the note,
+    not a template, so a question already written for this note is recognised and not
+    duplicated the next time the visit's questions are refreshed."""
+    line = note.lines[0] if note.lines else note.headline
+    if len(line) > LINE_LENGTH:
+        # The feelings verifier bounds a note's own line to its own budget (200), wider than a
+        # question's (120): never write a row a column would silently cut.
+        raise NotAQuestion(f"a question is one line of at most {LINE_LENGTH} characters")
+    return Proposed(
+        "feeling_note",
+        {"note_id": str(note.id)},
+        QuestionSource.FEELING,
+        "feeling",
+        (str(note.id), str(note.tap_id)),
+        PRIORITY_FEELING,
+        text=line,
+    )
+
+
+async def feeling_notes_for(
+    session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
+) -> Sequence[FeelingNote]:
+    """Every note kept for this visit (RE-02): a cloud tap read against the record, on this
+    appointment, that this key may read in full — the record's own scope, and any other scope
+    its reason rests on (ADR 0004). A key without `Scope.RECORDS` sees none: the notes are the
+    record's, the way the symptom log is (`app.safety.symptom_log`)."""
+    if not context.allows(Scope.RECORDS):
+        return ()
+    found = await audited_read(
+        session,
+        FeelingNote,
+        context,
+        Scope.RECORDS,
+        where=(
+            FeelingNote.appointment_id == appointment_id,
+            FeelingNote.outcome == NoteOutcome.FOR_THE_DOCTOR,
+        ),
+        order_by=(FeelingNote.created_at.asc(),),
+    )
+    return [note for note in found if note_scopes(note) <= context.scopes]
+
+
 async def _previous_visit_at(
     session: AsyncSession, *, context: KeyContext, visit: Visit
 ) -> datetime | None:
@@ -308,11 +366,15 @@ async def propose_questions(
         session, context=context, registry=visit.registry, appointment_id=visit.appointment.id
     )
     memos = await current_memos(session, context=context)
+    notes = await feeling_notes_for(
+        session, context=context, appointment_id=visit.appointment.id
+    )
     proposed: list[Proposed] = []
     for flag in sorted(flags, key=lambda f: (as_utc(f.raised_at), str(f.id))):
         one = question_from_flag(flag, visit)
         if one is not None:
             proposed.append(one)
+    proposed.extend(question_from_feeling(note) for note in notes)
     proposed.extend(question_from_gap(gap, visit) for gap in gaps)
     proposed.extend(
         question_from_memo(memo)
@@ -405,7 +467,7 @@ async def questions_for(
             continue
         if any(one.same_as(question) for question in generated):
             continue
-        await _write(session, context=context, visit=visit, state=state, proposed=one)
+        await _write(session, context=context, visit=visit, state=state, proposed=one, text=one.text)
     return _current(await _rows(session, context=context, appointment_id=appointment_id))
 
 
@@ -595,9 +657,11 @@ __all__ = [
     "Visit",
     "change_questions",
     "current_questions",
+    "feeling_notes_for",
     "patient_card",
     "propose_questions",
     "question_draft_for",
+    "question_from_feeling",
     "questions_for",
     "render",
     "require_visit",
