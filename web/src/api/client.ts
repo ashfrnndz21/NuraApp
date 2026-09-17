@@ -192,7 +192,10 @@ function urlFor(path: string, call: Call): URL {
 
 /** The same queue, for bytes: a card's pre-rendered voice (E11). A Blob on success; a refusal
  *  as `Refused`; a 404 that is not a refusal — the route is not on this backend yet — as
- *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". */
+ *  `Refused("NotFound", 404)`, so the caller can tell "no such route" from "no". Given up after
+ *  `CALL_DEADLINE_MS` like any other call (#193): a stalled connection — the ordinary way a
+ *  phone moving between cells or onto a captive-portal wifi behaves — becomes `Unreachable`
+ *  rather than a tap on *Hear* that waits for ever with nothing to say why. */
 export function apiBlob(path: string, call: Call = {}): Promise<Blob> {
   return enqueue((signal) => sendBlob(path, call, signal), call.urgent, true);
 }
@@ -202,7 +205,12 @@ async function sendBlob(path: string, call: Call, signal: AbortSignal): Promise<
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(urlFor(path, call), { method: "GET", headers, cache: "no-store", credentials: "omit", signal });
+    response = await fetchWithin(
+      urlFor(path, call),
+      { method: "GET", headers, cache: "no-store", credentials: "omit" },
+      signal,
+      call.slow ? 0 : CALL_DEADLINE_MS,
+    );
   } catch {
     throw new Unreachable();
   }
@@ -248,7 +256,9 @@ export function apiText(path: string, call: Call = {}): Promise<string> {
 }
 
 /** The same queue, for a body of bytes: a visit's recording, sent once on Stop (E02-05). Always
- *  a write (`sendBytes` is `POST` only): never abortable, the same as any other write. */
+ *  a write (`sendBytes` is `POST` only): never abortable, the same as any other write. Given up
+ *  after `CALL_DEADLINE_MS` like any other call (#193): a visit recording is the one upload
+ *  where a silent hang would cost the most, so it gets no exemption from the ceiling either. */
 export function apiUpload<T>(path: string, body: Blob, contentType: string, call: Call = {}): Promise<T> {
   return enqueue((signal) => sendBytes<T>(path, body, contentType, call, signal), call.urgent, false);
 }
@@ -258,7 +268,12 @@ async function sendBytes<T>(path: string, body: Blob, contentType: string, call:
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   let response: Response;
   try {
-    response = await fetch(urlFor(path, call), { method: "POST", headers, body, cache: "no-store", credentials: "omit", signal });
+    response = await fetchWithin(
+      urlFor(path, call),
+      { method: "POST", headers, body, cache: "no-store", credentials: "omit" },
+      signal,
+      call.slow ? 0 : CALL_DEADLINE_MS,
+    );
   } catch {
     throw new Unreachable();
   }

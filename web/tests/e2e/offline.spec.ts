@@ -17,6 +17,7 @@ import {
   keptKeys,
   seedOwner,
   waitForWorker, expectProud} from "./helpers";
+import { unknownPng } from "./record-helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -93,6 +94,47 @@ test("offline: the kept page as a dated list with no Taken; past midnight only t
 });
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
+
+/** #171: the kept emergency card is not only read once a day — it refreshes the moment a
+ *  medicine is added, while the network is still there for it, so a paramedic reading the
+ *  phone that same night never finds yesterday's list. Before this fix `wantsRead`'s
+ *  once-a-day gate meant a same-day add never reached the offline copy at all. */
+test("adding a medicine refreshes the kept emergency card the same day, before the network goes", async ({ page, context, request }) => {
+  const pa = await seedOwner(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
+
+  await page.getByTestId("tab-records").click();
+  await expect(page.getByTestId("record-hub")).toBeVisible();
+  await page.getByTestId("record-medicines").click();
+  await page.getByTestId("add-medicine").click();
+  await expect(page.getByTestId("add-photo")).toBeVisible();
+  await page.getByTestId("photo-input").setInputFiles({ name: "paracetamol.png", mimeType: "image/png", buffer: unknownPng() });
+  await expect(page.getByTestId("add-label")).toBeVisible();
+  await page.getByLabel("The name on the label").fill("paracetamol");
+  await page.getByLabel("How strong it is").fill("500 mg");
+  await page.getByLabel("How to take it").fill("1 tab OD");
+  await page.getByLabel("How many are in the box").fill("20");
+  await page.getByTestId("check-medicine").click();
+  await page.getByTestId("add-it").click();
+  await expect(page.getByTestId("record-note")).toHaveText("Nura added it to your list.");
+
+  // The card the backend would render now already names the new medicine — used below as the
+  // line the kept, offline copy must carry too, not the wording this test invents.
+  const fresh = (await (await request.get(`${API}/profiles/${pa.profileId}/emergency-card?language=en`, auth(pa.token))).json()) as {
+    lines: { text: string }[];
+  };
+  const line = fresh.lines.map((each) => each.text).find((text) => text.toLowerCase().includes("paracetamol"));
+  expect(line, JSON.stringify(fresh.lines)).toBeDefined();
+
+  // Offline from here on: what the phone kept is all there is left to read.
+  await context.setOffline(true);
+  await page.getByTestId("tab-today").click();
+  await page.getByTestId("open-emergency").click();
+  await expect(page.getByTestId("emergency-card").getByTestId("emergency-lines")).toContainText(line!);
+  await context.setOffline(false);
+});
 
 /** Every POST …/taken the phone got an answer to: the line, what it sent, and the status. */
 function answeredTaps(page: Page): { line: string; body: { anchor?: string; taken_at?: string }; status: number }[] {
