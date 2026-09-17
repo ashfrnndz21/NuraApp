@@ -49,6 +49,8 @@ async def test_every_labelled_paper_runs_through_the_pipeline_and_nothing_is_sil
 class _Confident:
     """An extractor that reads the lipid panel's triglycerides wrong and sure of it."""
 
+    external_processor: str | None = None
+
     def __init__(self) -> None:
         self._inner = FixtureExtractor(PAPER)
 

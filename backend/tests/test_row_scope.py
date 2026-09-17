@@ -788,6 +788,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/feed/{{item_id}}/clip/captions"),
     Walk("GET", f"{P}/feed/{{item_id}}/clip/video"),
     Walk("GET", f"{P}/area"),
+    Walk("GET", f"{P}/signals"),
     # The ask bar's filters: a read, sent as a POST so his words stay out of the URL.
     Walk("POST", f"{P}/find", json={"q": "blood pressure", "where": "web"}),
     Walk("POST", f"{P}/find/stream", json={"q": "blood pressure", "where": "web"}, stream=True),
@@ -900,6 +901,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("PATCH", f"{P}/search-jobs/{{job_id}}"): "pauses or resumes a search; returns the job",
     ("POST", f"{P}/feed/events"): "writes the phone's queue of what he did; returns their ids",
     ("PUT", f"{P}/area"): "sets his area on his yes; returns it",
+    ("PUT", f"{P}/signals/{{family}}"): "switches one family on or off; returns every family",
     ("POST", f"{P}/feelings"): "writes a feeling; returns the event and flag it wrote",
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",

@@ -554,6 +554,42 @@ export const en = {
     ramadanOn: "Nura will tell you before Ramadan.",
     // @patient phrase
     ramadanStop: "Stop telling me",
+    // @patient headline
+    whatNuraUsesTitle: "What Nura uses",
+    // @patient
+    whatNuraUsesLead: "Choose what Nura may use to suggest reads and videos for you.",
+    // @patient
+    whatNuraUsesLeadOther: "Choose what Nura may use to suggest reads and videos for {patient}.",
+    // @patient phrase
+    whatNuraUsesOn: "On",
+    // @patient phrase
+    whatNuraUsesOff: "Off",
+    // @patient
+    whatNuraUsesReadOnly: "Only {name} or the chief can change this.",
+    whatNuraUsesFamilies: {
+      // @patient phrase
+      food: "What you eat",
+      // @patient phrase
+      sleep: "Your sleep",
+      // @patient phrase
+      steps: "Your steps",
+      // @patient phrase
+      water: "Your water",
+      // @patient phrase
+      search_topics: "What you ask about",
+    },
+    whatNuraUsesFamiliesOther: {
+      // @patient phrase
+      food: "What {patient} eats",
+      // @patient phrase
+      sleep: "{patient}'s sleep",
+      // @patient phrase
+      steps: "{patient}'s steps",
+      // @patient phrase
+      water: "{patient}'s water",
+      // @patient phrase
+      search_topics: "What {patient} asks about",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
