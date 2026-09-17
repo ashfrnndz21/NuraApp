@@ -6,11 +6,10 @@ migration — carries neither. `app.keys.grants.grant_key` refuses a key cut for
 role, or for a window that would outlast this one, against `require_consent`'s read of these
 two columns.
 
-Numbered off main's head at the time this branched (0038); 0039 was in flight elsewhere and
-is expected to land first, so the operator repoints `down_revision` at merge time if it has.
+Repointed onto 0039 (#205), which landed on main first, so the directory keeps one head.
 
 Revision ID: 0040_consent_role_window
-Revises: 0038_dose_taken_late
+Revises: 0039_feeling_question_marker
 Create Date: 2026-09-17
 """
 
@@ -20,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0040_consent_role_window"
-down_revision = "0038_dose_taken_late"
+down_revision = "0039_feeling_question_marker"
 branch_labels = None
 depends_on = None
 

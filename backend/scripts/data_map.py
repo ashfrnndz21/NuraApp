@@ -768,6 +768,7 @@ CLASSES: dict[str, str] = {
     "whatsapp_message.template_name": OPERATIONAL,
     "whatsapp_message.catalogue_key": HEALTH,
     "whatsapp_message.state_id": HEALTH,
+    "whatsapp_message.asks_feeling": OPERATIONAL,
     # The family's WhatsApp group: the provider's handle names a group of people around him.
     "whatsapp_group.provider_group_id": IDENTIFIER,
     "whatsapp_group.opened_by_person_id": IDENTIFIER,
