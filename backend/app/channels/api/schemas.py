@@ -856,7 +856,10 @@ class KeyGrant(BaseModel):
     """Cut a key: for whom, as what, over which parts, for how long.
 
     The key rests on the sharing consent the owner gave for this person
-    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused.
+    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused. When that
+    consent named a role and a window (#185), `role` here must match it exactly and `window`
+    must not outlast it (`KeyNotAsAgreed`, 403) — a consent that named neither constrains
+    neither, unchanged from before.
     """
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
