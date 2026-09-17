@@ -31,7 +31,7 @@ asker's own answer for the same question: the stream never ends without one.
 Demo only (ADR 0017), the same story `app.llm.narrate.ClaudeNarrator`'s module docstring
 tells: Anthropic's first-party API does not process in SG or MY, so this adapter may only be
 built where every word it is shown is demo or test data (`app.search.asker_provider.
-asker_for`, gated by `app.llm.residency.require_demo`).
+asker_for`, gated by `app.llm.residency.allow_external_model`).
 """
 
 from __future__ import annotations
