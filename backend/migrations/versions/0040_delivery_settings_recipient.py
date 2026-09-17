@@ -24,15 +24,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "delivery_settings",
-        sa.Column("for_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=True),
-    )
-    op.create_index(
-        "ix_delivery_settings_for_person_id", "delivery_settings", ["for_person_id"]
-    )
+    with op.batch_alter_table("delivery_settings") as batch:
+        # No FK constraint added here (see 0039's own note): the model's `ForeignKey` is
+        # enough, and SQLite's batch rewrite needs every added constraint named.
+        batch.add_column(sa.Column("for_person_id", sa.Uuid(), nullable=True))
+        batch.create_index("ix_delivery_settings_for_person_id", ["for_person_id"])
 
 
 def downgrade() -> None:
-    op.drop_index("ix_delivery_settings_for_person_id", table_name="delivery_settings")
-    op.drop_column("delivery_settings", "for_person_id")
+    with op.batch_alter_table("delivery_settings") as batch:
+        batch.drop_index("ix_delivery_settings_for_person_id")
+        batch.drop_column("for_person_id")

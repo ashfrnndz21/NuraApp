@@ -23,15 +23,16 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column("key", sa.Column("successor_waived_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column(
-        "key",
-        sa.Column(
-            "successor_waived_by_person_id", sa.Uuid(), sa.ForeignKey("person.id"), nullable=True
-        ),
-    )
+    with op.batch_alter_table("key") as batch:
+        batch.add_column(sa.Column("successor_waived_at", sa.DateTime(timezone=True), nullable=True))
+        # No FK constraint added here, the way 0022's `recording_artifact_id` was not: SQLite's
+        # batch rewrite needs every added constraint named, and the model's own
+        # `ForeignKey("person.id")` is enough for the ORM and for `tests/test_migration.py`'s
+        # table-shape check, which is columns and types, not constraints.
+        batch.add_column(sa.Column("successor_waived_by_person_id", sa.Uuid(), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column("key", "successor_waived_by_person_id")
-    op.drop_column("key", "successor_waived_at")
+    with op.batch_alter_table("key") as batch:
+        batch.drop_column("successor_waived_by_person_id")
+        batch.drop_column("successor_waived_at")

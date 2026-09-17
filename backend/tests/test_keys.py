@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import FrozenClock
 from app.identity.models import Person
 from app.identity.service import create_own_profile, register_person
-from app.keys.context import KeyContext, OutOfScope, resolve_key_context
+from app.keys.context import KeyContext, NoKey, OutOfScope, resolve_key_context
 from app.keys.grants import (
     ChiefMustNameSuccessor,
     NoKeyToClose,
@@ -158,10 +158,10 @@ async def test_a_holder_with_no_family_scope_can_close_her_own_key(sg: AsyncSess
     assert closed.revoked_at is not None
     # The row stays, so Pa can still read that it was held.
     assert {row.id for row in await list_keys(sg, context=owner)} == {key.id}
-    refused = await resolve_key_context(
-        sg, region=Region.SG, person_id=mei.id, profile_id=owner.profile_id
-    )
-    assert refused.standing.value == "none" or refused.scopes == frozenset()  # NoKey normally
+    with pytest.raises(NoKey):
+        await resolve_key_context(
+            sg, region=Region.SG, person_id=mei.id, profile_id=owner.profile_id
+        )
 
 
 async def test_leaving_someone_elses_key_is_refused(sg: AsyncSession) -> None:
