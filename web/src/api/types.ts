@@ -179,8 +179,10 @@ export interface FeedItemOut {
   body: string[];
   /** The spoken twin, line by line. */
   voice: string[];
-  /** Why this card is here: `plain` is the sentence he reads under it. */
-  why: { plain?: string; kind?: string } & Record<string, unknown>;
+  /** Why this card is here: `plain` is the sentence he reads under it; `lines` is the Why
+   *  sheet's lines for this reader (RE-08) — the same reason, or a line saying it rests on a
+   *  part of the record that is withheld, when this key does not cover its scope. */
+  why: { plain?: string; kind?: string; lines?: string[] } & Record<string, unknown>;
   priority: number;
   caps_class: string;
   scope: string;
