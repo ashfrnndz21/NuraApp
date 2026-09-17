@@ -125,7 +125,10 @@ async def read_thread(
         context,
         Scope.FAMILY,
         where=where,
-        order_by=(ThreadMessage.posted_at.desc(),),
+        # `.seq` breaks a tie in `posted_at` (#192/#218): this table also has a "first match
+        # wins" reader (the presence nudge, app.delivery.nudges.engine), so every read of it
+        # uses the real write-order tiebreaker, not just the one that decides.
+        order_by=(ThreadMessage.posted_at.desc(), ThreadMessage.seq.desc()),
         limit=limit + 1,
     )
     page = list(found[:limit])

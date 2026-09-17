@@ -474,6 +474,26 @@ TEST_NAMES: Mapping[str, Mapping[str, str]] = {
 # @patient phrase
 YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh": "您的医生"}
 
+# @patient
+FIND_STEPS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "web": "Looking online.",
+        "videos": "Looking for videos.",
+    },
+    "ms": {
+        "web": "Melihat di web.",
+        "videos": "Melihat video.",
+    },
+    "zh": {
+        "web": "正在网上查看。",
+        "videos": "正在查看视频。",
+    },
+}
+"""What the ask bar's Web and Videos filters say while the allowlisted search runs
+(`app.delivery.feed.find.find_stream`, docs/design-direction.md 'Conversation, waiting and
+thinking'). One step, said once, because there is one real stage before the results: the
+search itself. Providers is a directory read and streams nothing."""
+
 EMERGENCY_NUMBER: Mapping[str, str] = {"SG": "995", "MY": "999"}
 """The ambulance number, by region: what a flag card says to call."""
 

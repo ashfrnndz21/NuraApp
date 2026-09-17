@@ -967,3 +967,197 @@ html.shot-full .shell > .shell-scroll {
 :root[data-density="patient"] .askbar-field input::placeholder {
   font-size: var(--text-caption);
 }
+
+/* The thinking trace (docs/design-direction.md "Conversation, waiting and thinking";
+   docs/design/nura-concept-board.html screen 5, the approved target — this file is a local
+   stand-in for its shared components, built to the same rules, until the foundation's own
+   land in web/src/ui/kit and this is swapped for them). His question and Nura's answer as
+   chat bubbles; while an answer streams, a trace of the real parts of the record being read,
+   each step ticking to done as its step event arrives — never a step that was not real,
+   never held to make the animation look longer. */
+.ask-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.ask-bubble {
+  max-width: 86%;
+  padding: 10px var(--space-2);
+  border-radius: var(--radius-tile);
+  font-size: var(--text-body);
+  line-height: var(--line-height);
+}
+.ask-bubble.me {
+  align-self: flex-end;
+  background: var(--plum);
+  color: var(--white);
+  border-bottom-right-radius: 5px;
+}
+.ask-bubble.nura {
+  align-self: flex-start;
+  background: var(--card-bg);
+  border: var(--paper-border);
+  border-bottom-left-radius: 5px;
+}
+.ask-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: var(--space-1);
+}
+.ask-source {
+  font-size: var(--text-caption);
+  background: var(--chip-fresh);
+  color: var(--plum);
+  border-radius: var(--radius-pill);
+  padding: 3px var(--space-1);
+  font-weight: 600;
+}
+.ask-boundary {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+  margin-top: var(--space-1);
+  font-style: italic;
+}
+.ask-looked {
+  margin-top: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.ask-looked > .icon {
+  width: 13px;
+  height: 13px;
+  color: var(--good);
+}
+/* The trace is its own bubble shape (a card, not a message he sent), so it reads as Nura
+   working rather than as a third thing said. */
+.ask-trace {
+  align-self: flex-start;
+  width: 86%;
+  background: var(--card-bg);
+  border: var(--paper-border);
+  border-radius: var(--radius-tile);
+  border-bottom-left-radius: 5px;
+  padding: 11px var(--space-2);
+  display: grid;
+  gap: var(--space-1);
+}
+.ask-trace-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--plum);
+}
+.ask-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-caption);
+}
+.ask-step.done {
+  color: var(--ink-soft);
+}
+.ask-step-tick {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--sage);
+  color: var(--good);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.ask-step-tick .icon {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.6;
+}
+.ask-step-spin {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--chip-fresh);
+  border-top-color: var(--plum);
+  flex: none;
+  animation: ask-spin 0.9s linear infinite;
+}
+.ask-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.ask-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--plum);
+  opacity: 0.35;
+  animation: ask-pulse 1.2s ease-in-out infinite;
+}
+.ask-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.ask-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes ask-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ask-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* Reduced motion: no spinner, no pulsing dots — a static ring and static dots, the step text
+   carries the meaning either way (docs/design-direction.md). */
+@media (prefers-reduced-motion: reduce) {
+  .ask-step-spin,
+  .ask-dots i {
+    animation: none;
+  }
+}
+
+/* Skeleton cards: a soft shimmering placeholder in a card's own shape, wherever a screen's
+   content is loading, instead of a spinner on a blank page. */
+.skeleton-card {
+  border-radius: var(--radius-tile);
+  padding: var(--space-3);
+  background: var(--card-bg);
+  border: var(--paper-border);
+  display: grid;
+  gap: var(--space-1);
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--chip-fresh) 25%, var(--mist) 50%, var(--chip-fresh) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-line.short {
+  width: 55%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-line {
+    animation: none;
+    background: var(--chip-fresh);
+  }
+}
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

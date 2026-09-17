@@ -526,6 +526,12 @@ export const ms = {
     sourceVisits: "Ini datang dari lawatan anda ke doktor.",
     // @patient
     askWithheld: "Sebahagian surat-surat ini tidak dibuka untuk anda.",
+    // @patient
+    askThinking: "Nura sedang melihat.",
+    // @patient
+    askAnswered: "Nura sudah menjawab.",
+    // @patient phrase
+    askLookedAt: "Apa yang Nura lihat: {parts}",
     // @patient phrase
     back: "Kembali ke kad anda",
     // @patient
@@ -1674,6 +1680,8 @@ export const ms = {
     messageLabel: "Mesej anda kepada keluarga",
     // @patient phrase
     sendMessage: "Hantar kepada keluarga",
+    // @patient phrase
+    sendingMessage: "Menghantar kepada keluarga",
     // @patient headline
     keys: "Ubah siapa boleh melihat apa",
     // @patient headline

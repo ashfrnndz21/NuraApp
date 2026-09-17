@@ -187,7 +187,9 @@ async def _said(session: AsyncSession, *, context: KeyContext, now: datetime) ->
             context,
             Scope.RECORDS,
             where=(FeelingTap.tapped_at > now - PAST_WORDS_WINDOW,),
-            order_by=(FeelingTap.tapped_at.desc(),),
+            # `.seq` breaks a tie in `tapped_at` (#192/#218): `taps[0]` becomes
+            # `last_tap_at`, a decision read elsewhere to gate a nudge.
+            order_by=(FeelingTap.tapped_at.desc(), FeelingTap.seq.desc()),
         )
     )
 

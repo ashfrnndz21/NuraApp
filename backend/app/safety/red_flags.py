@@ -1129,7 +1129,10 @@ async def open_flags(session: AsyncSession, *, context: KeyContext) -> Sequence[
             Flag.kind == FlagKind.RED_FLAG,
             or_(Flag.feeling.is_not(None), Flag.artifact_id.is_not(None)),
         ),
-        order_by=(Flag.raised_at.desc(),),
+        # `.id` breaks a tie in `raised_at` (#192/#218): every flag in the window is
+        # processed regardless of order (the caller decides who sees which), so a
+        # stable-but-arbitrary tiebreaker is enough — no decision rests on which is first.
+        order_by=(Flag.raised_at.desc(), Flag.id.asc()),
     )
     return [flag for flag in found if as_utc(flag.raised_at) <= moment]
 

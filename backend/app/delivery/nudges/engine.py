@@ -342,7 +342,9 @@ async def _check_in(p: _Planner, session: AsyncSession, changes: list[Any]) -> N
             FeelingNote.created_at <= p.situation.now - WATCH_AGAIN,
             FeelingNote.created_at > p.situation.now - WATCH_AGAIN * 2,
         ),
-        order_by=(FeelingNote.created_at.desc(),),
+        # `.seq` breaks a tie in `created_at` (#192/#218): the loop below returns on the
+        # first match, so which note that is is a decision, not a display order.
+        order_by=(FeelingNote.created_at.desc(), FeelingNote.seq.desc()),
     )
     for note in watched:
         if last_tap is not None and last_tap > as_utc(note.created_at) + WATCH_AGAIN:
@@ -451,7 +453,9 @@ async def _presence(p: _Planner, session: AsyncSession, *, steady: bool) -> Nudg
             p.context,
             Scope.FAMILY,
             where=(ThreadMessage.posted_at >= start, ThreadMessage.text.is_not(None)),
-            order_by=(ThreadMessage.posted_at.desc(),),
+            # `.seq` breaks a tie in `posted_at` (#192/#218): the loop below returns on the
+            # first match, so which message that is is a decision, not a display order.
+            order_by=(ThreadMessage.posted_at.desc(), ThreadMessage.seq.desc()),
         )
         for message in posted:
             if message.author_person_id == p.context.person_id:
