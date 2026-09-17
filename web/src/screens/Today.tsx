@@ -61,7 +61,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
   return (
-    <Shell tab="home" testId="today-screen">
+    <Shell tab="home" testId="today-screen" topBar={{ variant: "home" }}>
       <AskField placeholder={s.shell.askNura} />
       <Hero
         greeting={greeting(now.getHours(), name, s)}
@@ -154,7 +154,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const supply = page ? <SupplyTile lines={page.lines} /> : null;
   const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
   return (
-    <Shell tab="home" testId="home-screen">
+    <Shell tab="home" testId="home-screen" topBar={{ variant: "home" }}>
       {page && <span data-testid="today-ready" hidden />}
       {/* Her greeting is hers — her own name — and the question under it is about him, by name:
           on a key that is not his, `t()` reads `hub.howFeeling` as its twin `howFeelingOther`

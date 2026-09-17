@@ -57,9 +57,9 @@ export function ProfileScreen(): JSX.Element {
   // Whose emergency card, whose "Set up Nura", whose papers to add from a photo: the same gates
   // as the Me sheet (`MeBody` below) kept the same, so a key opens the same rows either way.
   const showEmergency = papers !== null && (papers.standing === "owner" || papers.scopes.includes("emergency"));
+  const showInsurance = papers !== null && (papers.standing === "owner" || papers.scopes.includes("money"));
   return (
-    <Shell tab="profile" testId="profile-screen">
-      <h1 class="title place-title">{s.tabs.profile}</h1>
+    <Shell tab="profile" testId="profile-screen" topBar={{ variant: "plain", title: s.tabs.profile }}>
       <ProfileHeader s={s} name={identity?.display_name ?? ""} />
       <ProudTile open />
       <LanguageRow s={s} code={language.value} names={names} onSet={(code) => void setLanguage(code)} />
@@ -76,6 +76,7 @@ export function ProfileScreen(): JSX.Element {
           onSwitchProfile={() => void reloadDoors()}
           onSetUp={only ? null : () => void startOnboarding(papers)}
           onOpenPapers={owner || papers.scopes.includes("records") ? () => go({ name: "papers" }) : null}
+          onOpenInsurance={showInsurance ? () => go({ name: "insurance" }) : null}
         />
       )}
       <WhatNuraUses />

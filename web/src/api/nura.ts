@@ -37,6 +37,7 @@ import type {
   FindWhere,
   FoodCatalogItemOut,
   FoodEntryOut,
+  FoodLogIn,
   HandedOverOut,
   HealthOverviewOut,
   ItemDecision,
@@ -49,6 +50,9 @@ import type {
   MeSummaryOut,
   MedicineDraftOut,
   MemoCardOut,
+  MetricEntryOut,
+  MetricKind,
+  MetricLogIn,
   MoreOut,
   NoticeOut,
   NowOut,
@@ -59,6 +63,7 @@ import type {
   PaperAddedOut,
   PlaceNoteOut,
   PlanOut,
+  PolicyOut,
   ProfileOut,
   ProudOut,
   ProviderHistoryOut,
@@ -250,6 +255,16 @@ export const foodCatalog = (language: string) => api<FoodCatalogItemOut[]>("/foo
 export const food = (token: string, profileId: string, language: string, since?: string, until?: string) =>
   api<FoodEntryOut[]>(`/profiles/${profileId}/food`, { token, query: { language, since, until } });
 
+/** Log one number for steps, heart rate, sleep or water — or, for steps and water, log it as
+ *  skipped. Home's "Things to do" writes here, through his own explicit Save (E14, the confirm
+ *  flow every reading takes: nothing is sent while he is still typing). */
+export const metricLog = (token: string, profileId: string, kind: MetricKind, body: MetricLogIn) =>
+  api<MetricEntryOut>(`/profiles/${profileId}/metrics/${kind}`, { method: "POST", token, body });
+
+/** Log one meal — a catalogue id, his own words, or both — or that he did not have it. */
+export const foodAdd = (token: string, profileId: string, body: FoodLogIn, language: string) =>
+  api<FoodEntryOut>(`/profiles/${profileId}/food`, { method: "POST", token, body, query: { language } });
+
 /** A word on the feeling strip (E17), as the phone held it while offline. */
 export const feeling = (token: string, profileId: string, word: string, language: string) =>
   api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
@@ -261,6 +276,11 @@ export const emergencyCard = (token: string, profileId: string, language: string
 /** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
 export const proud = (token: string, profileId: string) =>
   api<ProudOut>(`/profiles/${profileId}/proud`, { token });
+
+/** His policies (E13-03): every one on the profile, newest of each lineage — under
+ *  `Scope.MONEY`, the door already reserved for his insurance letters. */
+export const policies = (token: string, profileId: string) =>
+  api<PolicyOut[]>(`/profiles/${profileId}/insurance/policies`, { token });
 
 /** The first page of the feed: today's cards, rendered by the backend from a State. */
 export const feed = (token: string, profileId: string) =>

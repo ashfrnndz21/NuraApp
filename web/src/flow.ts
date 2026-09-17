@@ -40,6 +40,9 @@ export type Screen =
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his
    *  day, his medicines and what is coming up — one screen, the same for every persona. */
   | { name: "health" }
+  /** Home's "Things to do" tile (docs/design/nura-concept-board.html): today's steps, water
+   *  and meals, with the week ring — real writes through PR #235's lifestyle logs. */
+  | { name: "activity" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
   /** The visits tab: his visits, and getting ready for the next one. */
@@ -57,8 +60,8 @@ export type Screen =
   | { name: "papers"; report?: boolean }
   /** The Profile tab: what the Me sheet holds, as a screen of its own. */
   | { name: "profile" }
-  /** A place Home's grid names that is not built yet: said plainly, never a dead tap. */
-  | { name: "soon"; place: SoonPlace }
+  /** Profile's Insurance row (E13-03): his policies, in plain words. */
+  | { name: "insurance" }
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
   | { name: "notWell" }
@@ -94,9 +97,6 @@ export type FamilyPart =
   | "documents";
 
 export type { Tab };
-
-/** The places Home's grid offers that Nura has not built yet (docs/design-direction.md). */
-export type SoonPlace = "activities" | "care" | "resources";
 
 /** Each tab's first screen — one tab set for everyone (nav.ts). Home is Today; Health is
  *  "This week", his readings, his day, his medicines and what is coming up

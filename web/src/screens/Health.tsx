@@ -10,6 +10,7 @@ import { profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
 import { Icon, IconBadge, MetricRow, PaperTile, ProgressRing, SectionHeader, type Tint, TintCard } from "../ui/kit";
 import { Notice } from "../ui/components";
+import { go } from "../flow";
 import { session, toRecord, useRead } from "./record/parts";
 import { Shell } from "./Shell";
 
@@ -164,9 +165,11 @@ export function HealthScreen(): JSX.Element {
   }, [language.value]);
 
   return (
-    <Shell tab="health" testId="health-screen">
-      <h1 class="title">{healthTitle(owner, name, s)}</h1>
-
+    <Shell
+      tab="health"
+      testId="health-screen"
+      topBar={{ variant: "board", title: healthTitle(owner, name, s), back: true, action: { icon: "calendar", label: s.health.addReading, onClick: () => go({ name: "reading" }) } }}
+    >
       <SectionHeader title={s.health.thisWeek} />
       <Notice error={error} />
       <ThisWeek overview={overview} locale={locale} owner={owner} name={name} />

@@ -6,7 +6,7 @@ import { speak } from "../speech/speak";
 import { emergencyOnly } from "../offline/emergencyCache";
 import { density, profile } from "../store/session";
 import { fill, language, t } from "../strings";
-import { AskBar, Icon, TabBar, Wordmark } from "../ui/kit";
+import { AskBar, Icon, TabBar, Wordmark, type IconName } from "../ui/kit";
 import { ProfileSwitcher } from "./Switcher";
 
 /** Ask or search (docs/ui-mockup-v2.html), wired: Enter or Ask opens the answer, E03's recall
@@ -78,6 +78,70 @@ export function ShellHeader(): JSX.Element {
   );
 }
 
+/** The board's own per-screen top bars (`docs/design/nura-concept-board.html`), owner's
+ *  decision 2026-09-17: these replace the global menu+wordmark+switcher+bell header on a
+ *  tab's own root screen — the five screens the board actually draws. "board": back · centred
+ *  title · one action icon (Health, Connect, Services — the board's screens 3–5); "home": the
+ *  board's own screen 2, menu (still opening Me, the one entry point until every caller of the
+ *  sheet moves) · wordmark · bell (notifications, per the board), with no switcher — whose
+ *  papers are open lives on the Profile tab's own row (`ProfileNav`'s `switch-profile`) now,
+ *  not in every screen's header. "plain": Profile's own screen 6 — a bare title, no back, no
+ *  icon. Nested screens under a tab (Family, the Record, Emergency, Feed, …) are not on the
+ *  board at all, so they are untouched: they keep the old global `ShellHeader`, switcher
+ *  included, because only the five tab-root screens themselves pass `topBar`. */
+export type TopBarSpec =
+  | { variant: "board"; title: string; back?: boolean; action?: { icon: IconName; label: string; onClick: () => void } }
+  | { variant: "home" }
+  | { variant: "plain"; title: string };
+
+function BoardTopBar({ spec }: { spec: TopBarSpec }): JSX.Element {
+  const s = t();
+  const papers = profile.value;
+  if (spec.variant === "home") {
+    const bell = papers !== null && !emergencyOnly(papers);
+    return (
+      <header class="shell-head" data-testid="board-top-bar">
+        <span class="head-start">
+          <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+            <Icon name="menu" />
+          </button>
+        </span>
+        <span class="head-mark">
+          <Wordmark name={s.appName} mark={false} />
+        </span>
+        <span class="head-end">
+          {bell && (
+            <button type="button" class="head-button" aria-label={s.shell.bell} onClick={() => go({ name: "feed" })} data-testid="bell">
+              <Icon name="bell" />
+            </button>
+          )}
+        </span>
+      </header>
+    );
+  }
+  return (
+    <header class="shell-head board-top-bar" data-testid="board-top-bar">
+      <span class="head-start">
+        {spec.variant === "board" && spec.back && (
+          <button type="button" class="head-button" aria-label={s.shell.back} onClick={() => openTab("home")} data-testid="top-bar-back">
+            <Icon name="back" />
+          </button>
+        )}
+      </span>
+      <span class="head-mid">
+        <h1 class="title top-bar-title">{spec.title}</h1>
+      </span>
+      <span class="head-end">
+        {spec.variant === "board" && spec.action && (
+          <button type="button" class="head-button" aria-label={spec.action.label} onClick={spec.action.onClick} data-testid="top-bar-action">
+            <Icon name={spec.action.icon} />
+          </button>
+        )}
+      </span>
+    </header>
+  );
+}
+
 interface ShellProps {
   /** Which tab this screen is under; null for a screen under none. */
   tab: Tab | null;
@@ -92,19 +156,22 @@ interface ShellProps {
   bar?: boolean;
   /** False on a screen that is itself the question (Ask): no second ask bar over it. */
   ask?: boolean;
+  /** Only for the five tab-root screens (see `TopBarSpec` above): the board's own topbar in
+   *  place of the global header. Left off, the screen keeps the global `ShellHeader`. */
+  topBar?: TopBarSpec;
 }
 
 /** Every screen with the tab bar (D1): the header, in the chief's density the ask bar — "Ask
  *  about Pa", on every one of her screens — then the page, which scrolls in its own region, and
  *  the tab bar under it in the flow. The bar reserves its own space: nothing scrolls under it
  *  and it never covers a line. */
-export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, bar = true, ask = true }: ShellProps): JSX.Element {
+export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, bar = true, ask = true, topBar }: ShellProps): JSX.Element {
   const s = t();
   const d = density();
   const papers = profile.value;
   return (
     <main class={["shell", fills && "fill", extraClass].filter(Boolean).join(" ")} data-density={d} data-testid={testId} {...attrs}>
-      <ShellHeader />
+      {topBar ? <BoardTopBar spec={topBar} /> : <ShellHeader />}
       {ask && d === "caregiver" && papers && (
         <div class="shell-ask">
           <AskField placeholder={fill(s.shell.askAbout, { name: papers.display_name })} />

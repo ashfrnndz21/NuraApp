@@ -65,6 +65,7 @@ from app.memory.models import (
     Event,
     EventKind,
     Fact,
+    HomeCareCategory,
     Provider,
     ProviderKind,
     SourceChannel,
@@ -83,6 +84,32 @@ log = logging.getLogger("nura.demo_seed")
 
 AREA: dict[Region, str] = {Region.SG: "Ang Mo Kio", Region.MY: "George Town"}
 DOCTOR = "Dr Tan"
+
+# Two real-looking providers per category, near Pa's own area (`AREA`, above) — Services'
+# "Help at home" grid (board-fidelity-round-2). `address` says plainly where it is, in the
+# words a directory listing would use, never an invented distance Nura has no way to check.
+HOME_CARE: dict[Region, list[tuple[HomeCareCategory, str, str]]] = {
+    Region.SG: [
+        (HomeCareCategory.NURSING, "Amanah Home Nursing", "Serves Ang Mo Kio and nearby"),
+        (HomeCareCategory.NURSING, "CareBridge Nursing Services", "Based in Ang Mo Kio"),
+        (HomeCareCategory.PHYSIO, "MoveWell Physiotherapy", "Home visits around Ang Mo Kio"),
+        (HomeCareCategory.PHYSIO, "Golden Years Physio Clinic", "Clinic in Ang Mo Kio"),
+        (HomeCareCategory.MEALS, "Wholesome Meals on Wheels", "Delivers to Ang Mo Kio daily"),
+        (HomeCareCategory.MEALS, "Kampung Kitchen Delivery", "Kitchen based in Ang Mo Kio"),
+        (HomeCareCategory.TRANSPORT, "SafeRide Elder Transport", "Pickups across Ang Mo Kio"),
+        (HomeCareCategory.TRANSPORT, "CityLink Medical Transport", "Serves Ang Mo Kio and nearby"),
+    ],
+    Region.MY: [
+        (HomeCareCategory.NURSING, "Amanah Home Nursing", "Serves George Town and nearby"),
+        (HomeCareCategory.NURSING, "CareBridge Nursing Services", "Based in George Town"),
+        (HomeCareCategory.PHYSIO, "MoveWell Physiotherapy", "Home visits around George Town"),
+        (HomeCareCategory.PHYSIO, "Golden Years Physio Clinic", "Clinic in George Town"),
+        (HomeCareCategory.MEALS, "Wholesome Meals on Wheels", "Delivers to George Town daily"),
+        (HomeCareCategory.MEALS, "Kampung Kitchen Delivery", "Kitchen based in George Town"),
+        (HomeCareCategory.TRANSPORT, "SafeRide Elder Transport", "Pickups across George Town"),
+        (HomeCareCategory.TRANSPORT, "CityLink Medical Transport", "Serves George Town and nearby"),
+    ],
+}
 
 
 class DemoSeedOutsideDevOrDemo(RuntimeError):
@@ -116,6 +143,7 @@ async def seed_demo(session: AsyncSession, settings: Settings, providers: Provid
         await _seed_medicines(session, owner, providers.drug_registry)
         await _seed_readings(session, owner)
         await _seed_visits(session, owner)
+        await _seed_home_care(session, owner)
         await _seed_feeling(session, owner, providers, settings)
         await _seed_papers(session, owner)
     await session.commit()
@@ -431,6 +459,21 @@ async def _seed_visits(session: AsyncSession, owner: KeyContext) -> None:
         appointment_id=checkup.id,
     )
     await _book(session, owner, tan, today + timedelta(days=7), "see Dr Tan again")
+
+
+async def _seed_home_care(session: AsyncSession, owner: KeyContext) -> None:
+    """Two real-looking providers per category, near his own area — Services' "Help at home"
+    grid reads the same directory his doctors and clinics do, told apart by `category`."""
+    for category, name, address in HOME_CARE[owner.region]:
+        await add_provider(
+            session,
+            context=owner,
+            name=name,
+            kind=ProviderKind.OTHER,
+            region=owner.region,
+            address=address,
+            category=category,
+        )
 
 
 # --- a feeling note -----------------------------------------------------------------------

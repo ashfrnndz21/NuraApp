@@ -1,25 +1,21 @@
 import { useEffect, useState } from "preact/hooks";
-import type { ComponentChildren, JSX } from "preact";
+import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { AppointmentOut, FeedItemOut, ProviderSummaryOut } from "../api/types";
+import type { AppointmentOut, FeedItemOut, HomeCareCategory, ProviderSummaryOut } from "../api/types";
 import { go } from "../flow";
 import { careCards, clipOf, guideCards } from "../feed/model";
 import { startOnboarding } from "../onboarding/state";
-import { providerLines, kindWord } from "../record/model";
+import { providerLines, kindWord, homeCareCategoryLabel } from "../record/model";
 import { profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, feedLines, timeLine, whyLine } from "../today/model";
 import { Card, Notice } from "../ui/components";
-import { FeedCard, Icon, PaperTile, PillButton, Poster, SectionLabel } from "../ui/kit";
+import { FeatureTile, FeedCard, Icon, PaperTile, PillButton, Poster, SectionLabel, type Tint } from "../ui/kit";
 import { Shell } from "./Shell";
 
 /** The Visits tab (D1, one tab set): his visits — the spine of the record — and, under them,
  *  getting ready for the next one. This is the surface the design system calls Visits for him
  *  and Plan for her; it is one screen for both, because it answers one question either way. */
-
-function PlaceTitle({ children }: { children: ComponentChildren }): JSX.Element {
-  return <h1 class="title place-title">{children}</h1>;
-}
 
 function useOwner(): { own: boolean; name: string } {
   const papers = profile.value;
@@ -154,6 +150,52 @@ export function CareBody({ s, own, name, cards, providers, dateOf }: { s: String
           )}
         </>
       )}
+    </>
+  );
+}
+
+const HOME_CARE_CATEGORIES: readonly HomeCareCategory[] = ["nursing", "physio", "meals", "transport"];
+const HOME_CARE_TINT: Record<HomeCareCategory, Tint> = { nursing: "blush", physio: "sage", meals: "butter", transport: "sky" };
+const HOME_CARE_ICON: Record<HomeCareCategory, "care" | "steps" | "meal" | "transport"> = {
+  nursing: "care",
+  physio: "steps",
+  meals: "meal",
+  transport: "transport",
+};
+
+/** Services' "Help at home" grid (the concept board's Services screen, "Care services": four
+ *  tiles — Nursing at home, Physio, Meals, Transport), backed by the same provider directory
+ *  `CareBody` reads, told apart by `Provider.category`. A tile opens the directory filtered to
+ *  that category, with "Near you" distances from his own area; a category with nothing near
+ *  him says so once he opens it, rather than being hidden — every tile is always a real tap. */
+const HOME_CARE_LINE: Record<HomeCareCategory, keyof Strings["homeCare"]> = {
+  nursing: "nursingLine",
+  physio: "physioLine",
+  meals: "mealsLine",
+  transport: "transportLine",
+};
+
+export function HomeCareGrid({ s, own, name, providers }: { s: Strings; own: boolean; name: string; providers: readonly ProviderSummaryOut[] }): JSX.Element {
+  const counts: Record<HomeCareCategory, number> = { nursing: 0, physio: 0, meals: 0, transport: 0 };
+  for (const each of providers) {
+    if (each.provider.category) counts[each.provider.category] += 1;
+  }
+  return (
+    <>
+      <SectionLabel>{s.homeCare.title}</SectionLabel>
+      <div class="do-grid" data-testid="home-care-grid">
+        {HOME_CARE_CATEGORIES.map((category) => (
+          <FeatureTile
+            key={category}
+            icon={HOME_CARE_ICON[category]}
+            tint={HOME_CARE_TINT[category]}
+            label={homeCareCategoryLabel(category, s)}
+            caption={counts[category] > 0 ? fill(own ? s.homeCare.near : s.homeCare.nearOther, { name }) : s.homeCare[HOME_CARE_LINE[category]]}
+            onClick={() => go({ name: "record", at: { name: "providers", category } })}
+            testId={`home-care-${category}`}
+          />
+        ))}
+      </div>
     </>
   );
 }
@@ -301,10 +343,15 @@ function ServiceCards(): JSX.Element | null {
     );
   }, [bearer, papers?.profile_id]);
   if (!items || !providers || !areaKnown) return null;
+  // The doctors-and-clinics directory (`CareBody`, the app's own "Care services") and the
+  // board's home-care grid (`HomeCareGrid`, "Help at home") read the same directory, told
+  // apart only by `Provider.category` — never two separate lists to fall out of step.
+  const doctors = providers.filter((each) => !each.provider.category);
   return (
     <>
       <Notice error={error} />
-      <CareBody s={s} own={own} name={name} cards={careCards(items)} providers={providers} dateOf={(iso) => dateLine(new Date(iso), locale)} />
+      <HomeCareGrid s={s} own={own} name={name} providers={providers} />
+      <CareBody s={s} own={own} name={name} cards={careCards(items)} providers={doctors} dateOf={(iso) => dateLine(new Date(iso), locale)} />
       <NearYouBody s={s} own={own} name={name} area={area} />
       <GuideBody s={s} cards={guideCards(items)} />
     </>
@@ -350,9 +397,9 @@ function GettingReady(): JSX.Element {
 export function VisitsScreen(): JSX.Element {
   const s = t();
   const { own, name } = useOwner();
+  const title = own ? s.places.visitsOwn : fill(s.places.visitsOther, { name });
   return (
-    <Shell tab="services" testId="visits-screen">
-      <PlaceTitle>{own ? s.places.visitsOwn : fill(s.places.visitsOther, { name })}</PlaceTitle>
+    <Shell tab="services" testId="visits-screen" topBar={{ variant: "board", title, back: true }}>
       <VisitList />
       <GettingReady />
       <ServiceCards />

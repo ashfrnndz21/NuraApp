@@ -23,7 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.family.common import NotAChief
 from app.keys.context import OutOfScope
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
-from app.memory.models import Appointment, AppointmentStatus, ProviderNote
+from app.memory.models import (
+    Appointment,
+    AppointmentStatus,
+    HomeCareCategory,
+    ProviderKind,
+    ProviderNote,
+)
 from app.memory.providers import (
     NotAPlaceNote,
     NoteNamesHealth,
@@ -32,6 +38,8 @@ from app.memory.providers import (
     provider_history,
     write_chief_note,
 )
+from app.memory.spine import add_provider
+from app.regions import Region
 from app.safety.health_words import CONDITION, MEDICINE, names_health
 from tests.medicines_support import REGISTRY, let_in
 from tests.timeline_support import KIT_PHONE, record, refusals
@@ -56,6 +64,24 @@ async def test_every_visit_links_to_a_provider(sg: AsyncSession) -> None:
     with pytest.raises(IntegrityError):
         await sg.flush()
     await sg.rollback()
+
+
+async def test_a_home_care_provider_carries_its_category(sg: AsyncSession) -> None:
+    """Services' home-care grid (board-fidelity-round-2) reads the same directory as his
+    doctors and clinics, told apart only by `category` — null for the existing kinds."""
+    rec = await record(sg)
+    nurse = await add_provider(
+        sg,
+        context=rec.owner,
+        name="Home Nursing Co",
+        kind=ProviderKind.OTHER,
+        region=Region.SG,
+        category=HomeCareCategory.NURSING,
+    )
+    assert nurse.category is HomeCareCategory.NURSING
+    listed = {s.provider.name: s.provider.category for s in await directory(sg, context=rec.owner)}
+    assert listed["Home Nursing Co"] is HomeCareCategory.NURSING
+    assert listed["Dr Tan"] is None
 
 
 async def test_a_providers_history_is_its_visits_the_papers_and_the_medicines_on_its_name(

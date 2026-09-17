@@ -5,6 +5,7 @@ import {
   Bell,
   BookOpen,
   BriefcaseMedical,
+  Bus,
   CalendarClock,
   CalendarDays,
   Camera,
@@ -117,6 +118,7 @@ export const ICONS = {
   water: Droplet,
   gauge: Gauge,
   meal: UtensilsCrossed,
+  transport: Bus,
   comingUp: CalendarClock,
   phone: Phone,
   // Profile (docs/design/nura-concept-board.html, the Profile screen).

@@ -149,7 +149,7 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
   it("folds the steps into What Nura looked at under the answer, with its sources and boundary", () => {
     const exchange = one(<Exchange question="Q" steps={steps} status="answered" answer="A" sources={["Medicines", "Visit, 2 Sep"]} boundary={["Nura does not decide what is wrong."]} lookedAt="What Nura looked at: medicines, visits" words={words} />);
     const answer = all(exchange, byTestId("exchange-answer"))[0]!;
-    expect(all(answer, hasClass("source-chip")).map((chip) => text(chip))).toEqual(["Medicines", "Visit, 2 Sep"]);
+    expect(all(answer, byTestId("answer-source")).map((chip) => text(chip))).toEqual(["Medicines", "Visit, 2 Sep"]);
     expect(text(all(answer, byTestId("answer-boundary")))).toBe("Nura does not decide what is wrong.");
     const looked = all(answer, byType("details"))[0]!;
     expect(text(all(looked, byType("summary")))).toBe("What Nura looked at: medicines, visits");

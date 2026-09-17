@@ -321,6 +321,20 @@ class ProviderKind(StrEnum):
     OTHER = "other"
 
 
+class HomeCareCategory(StrEnum):
+    """Which of the board's four home-care tiles a provider is listed under (the concept
+    board's Services screen, "Care services": Nursing at home, Physio, Meals, Transport).
+    `None` on `Provider.category` for every doctor, clinic, hospital, pharmacy or lab in the
+    existing directory — this is a second, independent way to group a provider, not a
+    replacement for `kind`, so a home-care provider can still say what kind of place it is
+    (most are `OTHER`) while also saying which of the four tiles it answers."""
+
+    NURSING = "nursing"
+    PHYSIO = "physio"
+    MEALS = "meals"
+    TRANSPORT = "transport"
+
+
 class Provider(ProfileScoped, Base):
     """A doctor, clinic, hospital or pharmacy this profile has used.
 
@@ -346,6 +360,11 @@ class Provider(ProfileScoped, Base):
     closes_at: Mapped[time | None] = mapped_column(Time, default=None)
     """When the doctor or clinic answers, on his wall clock, where the directory says it. Out
     of these hours a red flag does not say "call the doctor today" (`app.safety.red_flags`)."""
+    category: Mapped[HomeCareCategory | None] = mapped_column(
+        enum_column(HomeCareCategory, "home_care_category"), default=None
+    )
+    """Set only for a home-care provider (Services' "Help at home" grid, board-fidelity-round-2);
+    null for every provider in the existing doctor/clinic/hospital directory."""
 
 
 class AppointmentStatus(StrEnum):

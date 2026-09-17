@@ -35,7 +35,7 @@ export function RecordScreen({ at }: { at: RecordAt }): JSX.Element {
     case "episode":
       return <EpisodeScreen episodeId={at.episodeId} />;
     case "providers":
-      return <ProvidersScreen />;
+      return <ProvidersScreen category={at.category} />;
     case "provider":
       return <ProviderScreen providerId={at.providerId} />;
     case "changes":

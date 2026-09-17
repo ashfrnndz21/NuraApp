@@ -1,4 +1,5 @@
 import type { ComponentChildren, JSX } from "preact";
+import { Chip, ChipRow } from "./Chip";
 import { Icon } from "./icons";
 
 /** Conversation, waiting and "thinking" (docs/design-direction.md), drawn as the approved board's
@@ -173,13 +174,13 @@ export function Exchange({ question, steps, status, answer, sources, boundary, l
         <MessageBubble from="nura" label={words.nura} testId="exchange-answer">
           <div class="answer-body">{answer}</div>
           {sources.length > 0 && (
-            <div class="sources" data-testid="answer-sources">
+            <ChipRow testId="answer-sources">
               {sources.map((source) => (
-                <span key={source} class="source-chip">
+                <Chip key={source} testId="answer-source">
                   {source}
-                </span>
+                </Chip>
               ))}
-            </div>
+            </ChipRow>
           )}
           {boundary.length > 0 && (
             <div class="answer-boundary" data-testid="answer-boundary">

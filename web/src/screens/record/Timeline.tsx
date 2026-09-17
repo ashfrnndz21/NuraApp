@@ -1,9 +1,9 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
-import type { ReviewCardOut, TimelineItemOut, TimelineOut } from "../../api/types";
+import type { HomeCareCategory, ReviewCardOut, TimelineItemOut, TimelineOut } from "../../api/types";
 import { kindLine } from "../../onboarding/review";
-import { artifactLine, hangingLines, itemTitle, kindWord, momentLine, papersToPut, providerLines, visitStatusLine } from "../../record/model";
+import { artifactLine, hangingLines, homeCareCategoryLabel, itemTitle, kindWord, momentLine, papersToPut, providerLines, visitStatusLine } from "../../record/model";
 import { density, profile } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
@@ -230,32 +230,51 @@ export function EpisodeScreen({ episodeId }: { episodeId: string }): JSX.Element
   );
 }
 
-/** His doctors and clinics (E03-03), with how many visits and the last and the next. */
-export function ProvidersScreen(): JSX.Element {
+/** His doctors and clinics (E03-03), with how many visits and the last and the next — or,
+ *  `category`, Services' "Help at home" grid opened to one of its four tiles
+ *  (board-fidelity-round-2): the same directory, read down to the providers under that
+ *  category alone, with a plain "nothing near him yet" where there are none. */
+export function ProvidersScreen({ category }: { category?: HomeCareCategory } = {}): JSX.Element {
   const s = t();
   const dateOf = useDateOf();
-  const { data: providers, error } = useRead(() => {
+  const papers = profile.value;
+  const owner = papers?.standing === "owner";
+  const name = papers?.display_name ?? "";
+  const { data: all, error } = useRead(() => {
     const { bearer, profileId } = session();
     return nura.providers(bearer, profileId);
   }, []);
+  const providers = all && (category ? all.filter((each) => each.provider.category === category) : all.filter((each) => !each.provider.category));
+  const title = category ? homeCareCategoryLabel(category, s) : s.record.providers;
   return (
-    <RecordFrame title={s.record.providers} back={{ name: "hub" }} testId="record-providers">
+    <RecordFrame title={title} back={{ name: "hub" }} testId="record-providers">
       <Notice error={error} />
+      {providers && providers.length === 0 && category && (
+        <Tile paper testId="home-care-none">
+          <p>{owner ? s.homeCare.none : fill(s.homeCare.noneOther, { name })}</p>
+        </Tile>
+      )}
       {providers && (
         <Paged
           items={providers}
           render={(summary) => (
             <Tile paper={density() === "patient"} glass={density() !== "patient"} key={summary.provider.provider_id} testId="provider">
               <h2 class="title">{summary.provider.name}</h2>
-              <p class="caption">{kindWord(summary.provider.kind, s)}</p>
-              <div class="lines">
-                {providerLines(summary, dateOf, s).map((line, index) => (
-                  <p key={index}>{line}</p>
-                ))}
-              </div>
-              <Pill onClick={() => toRecord({ name: "provider", providerId: summary.provider.provider_id })} testId="see-doctor">
-                {s.record.seeDoctor}
-              </Pill>
+              <p class="caption">{category ? homeCareCategoryLabel(category, s) : kindWord(summary.provider.kind, s)}</p>
+              {category ? (
+                summary.provider.address && <p class="source-line">{summary.provider.address}</p>
+              ) : (
+                <div class="lines">
+                  {providerLines(summary, dateOf, s).map((line, index) => (
+                    <p key={index}>{line}</p>
+                  ))}
+                </div>
+              )}
+              {!category && (
+                <Pill onClick={() => toRecord({ name: "provider", providerId: summary.provider.provider_id })} testId="see-doctor">
+                  {s.record.seeDoctor}
+                </Pill>
+              )}
             </Tile>
           )}
         />

@@ -57,6 +57,8 @@ export const ms = {
     close: "Tutup",
     // @patient phrase
     bell: "Lagi untuk anda",
+    // @patient phrase
+    back: "Kembali",
   },
   welcome: {
     // @patient headline
@@ -214,6 +216,36 @@ export const ms = {
     // @patient
     bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
   },
+  activity: {
+    // @patient headline
+    title: "Perkara untuk dibuat",
+    // @patient headline
+    weekTitle: "Minggu ini",
+    // @patient phrase
+    stepsLabel: "Langkah hari ini",
+    // @patient phrase
+    stepsSave: "Simpan",
+    // @patient phrase
+    waterLabel: "Cawan air hari ini",
+    // @patient phrase
+    waterSave: "Simpan",
+    // @patient phrase
+    waterSkip: "Tiada air hari ini",
+    // @patient
+    saved: "Nura sudah tulis.",
+    // @patient headline
+    mealsTitle: "Makanan anda hari ini",
+    // @patient headline
+    mealsTitleOther: "Makanan {patient} hari ini",
+    // @patient phrase
+    meal: { breakfast: "Sarapan", lunch: "Makan tengah hari", dinner: "Makan malam", snack: "Snek" },
+    // @patient phrase
+    skipMeal: "Tidak makan ini",
+    // @patient
+    skipped: "Anda tidak makan ini.",
+    // @patient
+    skippedOther: "{patient} tidak makan ini.",
+  },
   places: {
     // @patient headline
     visitsOwn: "Lawatan anda",
@@ -243,6 +275,34 @@ export const ms = {
     nearYouAreaOther: "Nura tahu kawasan {name} ialah {area}.",
     // @patient headline
     guidesTitle: "Panduan",
+  },
+  homeCare: {
+    // @patient headline
+    title: "Bantuan di rumah",
+    // @patient phrase
+    nursing: "Jururawat di rumah",
+    // @patient phrase
+    nursingLine: "Jururawat datang kepada anda",
+    // @patient phrase
+    physio: "Fisioterapi",
+    // @patient phrase
+    physioLine: "Kekal bergerak dengan baik",
+    // @patient phrase
+    meals: "Makanan",
+    // @patient phrase
+    mealsLine: "Dihantar kepada anda",
+    // @patient phrase
+    transport: "Pengangkutan",
+    // @patient phrase
+    transportLine: "Ke temu janji anda",
+    // @patient phrase
+    near: "Berhampiran anda",
+    // @patient phrase
+    nearOther: "Berhampiran {name}",
+    // @patient
+    none: "Nura tiada apa-apa berhampiran anda untuk ini lagi.",
+    // @patient
+    noneOther: "Nura tiada apa-apa berhampiran {name} untuk ini lagi.",
   },
   health: {
     // @patient headline
@@ -281,6 +341,8 @@ export const ms = {
     mealNotHadOther: "{name} tidak makan ini.",
     // @patient headline
     comingUpTitle: "Akan datang",
+    // @patient phrase
+    addReading: "Tulis bacaan baharu",
   },
   signIn: {
     // @patient headline
@@ -786,6 +848,44 @@ export const ms = {
       // @patient phrase
       search_topics: "Apa yang {patient} tanya",
     },
+    // @patient phrase
+    insurance: "Insurans",
+  },
+  insurance: {
+    // @patient headline
+    title: "Insurans anda",
+    // @patient headline
+    titleOther: "Insurans {patient}",
+    // @patient
+    none: "Nura tiada rekod insurans untuk anda lagi.",
+    // @patient
+    noneOther: "Nura tiada rekod insurans untuk {patient} lagi.",
+    type: {
+      // @patient phrase
+      hospital: "Perlindungan hospital",
+      // @patient phrase
+      outpatient: "Perlindungan pesakit luar",
+      // @patient phrase
+      critical_illness: "Perlindungan penyakit kritikal",
+      // @patient phrase
+      government_scheme: "Skim kerajaan",
+    },
+    status: {
+      // @patient phrase
+      active: "Aktif",
+      // @patient phrase
+      lapsed: "Luput",
+      // @patient phrase
+      cancelled: "Dibatalkan",
+    },
+    // @patient
+    covers: "Ia melindungi {value}.",
+    // @patient
+    renews: "Diperbaharui pada {date}.",
+    // @patient
+    premiumDue: "Bayaran seterusnya perlu dibayar pada {date}.",
+    // @patient
+    reference: "Nombor polisi {reference}.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

@@ -22,7 +22,7 @@ export interface Strings {
   tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string; health: string; connect: string; services: string; profile: string };
   /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close;
    *  the header's bell, which opens what is new for him (docs/design-direction.md). */
-  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string; bell: string };
+  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string; bell: string; back: string };
   /** The welcome screen before sign-in (docs/design-direction.md, Reference B's first screen):
    *  a two-line tagline, the line under it, three value tiles, Get started and Sign in. */
   welcome: {
@@ -81,6 +81,25 @@ export interface Strings {
   };
   /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
   home: { mostLikely: string; whatChanged: string; nextVisit: string; atTime: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
+  /** Home's "Things to do" tile (docs/design/nura-concept-board.html): his day's activity —
+   *  today's steps, water and meals, each a real write through PR #235's lifestyle logs
+   *  (`/metrics/{kind}`, `/food`), with the same week ring the Health tab shows. */
+  activity: {
+    title: string;
+    weekTitle: string;
+    stepsLabel: string;
+    stepsSave: string;
+    waterLabel: string;
+    waterSave: string;
+    waterSkip: string;
+    saved: string;
+    mealsTitle: string;
+    mealsTitleOther: string;
+    meal: { breakfast: string; lunch: string; dinner: string; snack: string };
+    skipMeal: string;
+    skipped: string;
+    skippedOther: string;
+  };
   /** The tabs' own titles (D1). */
   places: {
     visitsOwn: string; visitsOwnOther: string;
@@ -93,6 +112,18 @@ export interface Strings {
     nearYouOwn: string; nearYouOther: string;
     nearYouArea: string; nearYouAreaOther: string;
     guidesTitle: string;
+  };
+  /** Services' "Help at home" grid (docs/design/nura-concept-board.html, Services' four
+   *  tiles): four categories over the same provider directory `places.careTitle` already
+   *  reads, told apart by `Provider.category` — never a second, invented directory. */
+  homeCare: {
+    title: string;
+    nursing: string; nursingLine: string;
+    physio: string; physioLine: string;
+    meals: string; mealsLine: string;
+    transport: string; transportLine: string;
+    near: string; nearOther: string;
+    none: string; noneOther: string;
   };
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his day
    *  and Coming up. Every figure and status word beside these is the backend's own
@@ -117,6 +148,7 @@ export interface Strings {
     mealNotHad: string;
     mealNotHadOther: string;
     comingUpTitle: string;
+    addReading: string;
   };
   signIn: {
     title: string;
@@ -345,6 +377,21 @@ export interface Strings {
     whatNuraUsesReadOnly: string;
     whatNuraUsesFamilies: Record<"food" | "sleep" | "steps" | "water" | "search_topics", string>;
     whatNuraUsesFamiliesOther: Record<"food" | "sleep" | "steps" | "water" | "search_topics", string>;
+    insurance: string;
+  };
+  /** Profile's Insurance row (E13-03): his policies, in plain words — one row each. The Ledger
+   *  (claim amounts, #260) is a later screen; this is the policy list alone. */
+  insurance: {
+    title: string;
+    titleOther: string;
+    none: string;
+    noneOther: string;
+    type: Record<"hospital" | "outpatient" | "critical_illness" | "government_scheme", string>;
+    status: Record<"active" | "lapsed" | "cancelled", string>;
+    covers: string;
+    renews: string;
+    premiumDue: string;
+    reference: string;
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */

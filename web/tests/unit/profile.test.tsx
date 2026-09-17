@@ -47,6 +47,7 @@ describe("the Profile tab's list (docs/design/nura-concept-board.html, the Profi
     const onOpenConsents = vi.fn();
     const onOpenOnlyMe = vi.fn();
     const onOpenEmergency = vi.fn();
+    const onOpenInsurance = vi.fn();
     const nav = one(
       <ProfileNav
         s={en}
@@ -60,12 +61,14 @@ describe("the Profile tab's list (docs/design/nura-concept-board.html, the Profi
         onSwitchProfile={() => undefined}
         onSetUp={null}
         onOpenPapers={null}
+        onOpenInsurance={onOpenInsurance}
       />,
     );
     expect(text(all(nav, byTestId("profile-consents")))).toBe(en.family.consentsSelf);
     expect(text(all(nav, byTestId("profile-keys")))).toBe(en.family.keys);
     expect(text(all(nav, byTestId("profile-only-me")))).toBe(en.family.onlyMe);
     expect(text(all(nav, byTestId("me-emergency")))).toBe(en.today.emergencyTitle);
+    expect(text(all(nav, byTestId("profile-insurance")))).toBe(en.me.insurance);
     (all(nav, byTestId("profile-keys"))[0]!.props.onClick as () => void)();
     expect(onOpenKeys).toHaveBeenCalledOnce();
     (all(nav, byTestId("profile-consents"))[0]!.props.onClick as () => void)();
@@ -74,6 +77,28 @@ describe("the Profile tab's list (docs/design/nura-concept-board.html, the Profi
     expect(onOpenOnlyMe).toHaveBeenCalledOnce();
     (all(nav, byTestId("me-emergency"))[0]!.props.onClick as () => void)();
     expect(onOpenEmergency).toHaveBeenCalledOnce();
+    (all(nav, byTestId("profile-insurance"))[0]!.props.onClick as () => void)();
+    expect(onOpenInsurance).toHaveBeenCalledOnce();
+  });
+
+  it("a key that does not open Scope.MONEY has no Insurance row", () => {
+    const nav = one(
+      <ProfileNav
+        s={en}
+        papers={HIS}
+        owner={false}
+        showEmergency={false}
+        onOpenEmergency={() => undefined}
+        onOpenKeys={() => undefined}
+        onOpenConsents={() => undefined}
+        onOpenOnlyMe={() => undefined}
+        onSwitchProfile={() => undefined}
+        onSetUp={null}
+        onOpenPapers={null}
+        onOpenInsurance={null}
+      />,
+    );
+    expect(all(nav, byTestId("profile-insurance"))).toEqual([]);
   });
 
   it("on a chief's read of his papers: the same rows say his name instead of 'you' (the *Other twin), and no emergency row without the scope", () => {
@@ -90,6 +115,7 @@ describe("the Profile tab's list (docs/design/nura-concept-board.html, the Profi
         onSwitchProfile={() => undefined}
         onSetUp={null}
         onOpenPapers={null}
+        onOpenInsurance={null}
       />,
     );
     expect(text(all(nav, byTestId("profile-consents")))).toBe("What Pa said yes to");
@@ -111,6 +137,7 @@ describe("the Profile tab's list (docs/design/nura-concept-board.html, the Profi
         onSwitchProfile={() => undefined}
         onSetUp={onSetUp}
         onOpenPapers={() => undefined}
+        onOpenInsurance={null}
       />,
     );
     expect(all(withBoth, byTestId("set-up")).length).toBe(1);
@@ -128,6 +155,7 @@ describe("the Profile tab's list (docs/design/nura-concept-board.html, the Profi
         onSwitchProfile={() => undefined}
         onSetUp={null}
         onOpenPapers={null}
+        onOpenInsurance={null}
       />,
     );
     expect(all(withNeither, byTestId("set-up"))).toEqual([]);

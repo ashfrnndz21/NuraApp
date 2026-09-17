@@ -57,6 +57,8 @@ export const en = {
     close: "Close",
     // @patient phrase
     bell: "More for you",
+    // @patient phrase
+    back: "Go back",
   },
   welcome: {
     // @patient headline
@@ -214,6 +216,36 @@ export const en = {
     // @patient
     bpLast: "The last blood pressure had a top number of {number}.",
   },
+  activity: {
+    // @patient headline
+    title: "Things to do",
+    // @patient headline
+    weekTitle: "This week",
+    // @patient phrase
+    stepsLabel: "Steps today",
+    // @patient phrase
+    stepsSave: "Save",
+    // @patient phrase
+    waterLabel: "Cups of water today",
+    // @patient phrase
+    waterSave: "Save",
+    // @patient phrase
+    waterSkip: "No water today",
+    // @patient
+    saved: "Nura wrote it down.",
+    // @patient headline
+    mealsTitle: "Your meals today",
+    // @patient headline
+    mealsTitleOther: "{patient}'s meals today",
+    // @patient phrase
+    meal: { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" },
+    // @patient phrase
+    skipMeal: "Did not have this",
+    // @patient
+    skipped: "You did not have this.",
+    // @patient
+    skippedOther: "{patient} did not have this.",
+  },
   places: {
     // @patient headline
     visitsOwn: "Your visits",
@@ -243,6 +275,34 @@ export const en = {
     nearYouAreaOther: "Nura knows {name}'s area is {area}.",
     // @patient headline
     guidesTitle: "Guides",
+  },
+  homeCare: {
+    // @patient headline
+    title: "Help at home",
+    // @patient phrase
+    nursing: "Nursing at home",
+    // @patient phrase
+    nursingLine: "A nurse comes to you",
+    // @patient phrase
+    physio: "Physio",
+    // @patient phrase
+    physioLine: "Keep moving well",
+    // @patient phrase
+    meals: "Meals",
+    // @patient phrase
+    mealsLine: "Delivered to you",
+    // @patient phrase
+    transport: "Transport",
+    // @patient phrase
+    transportLine: "To your visits",
+    // @patient phrase
+    near: "Near you",
+    // @patient phrase
+    nearOther: "Near {name}",
+    // @patient
+    none: "Nura has nothing near you for this yet.",
+    // @patient
+    noneOther: "Nura has nothing near {name} for this yet.",
   },
   health: {
     // @patient headline
@@ -281,6 +341,8 @@ export const en = {
     mealNotHadOther: "{name} did not have this.",
     // @patient headline
     comingUpTitle: "Coming up",
+    // @patient phrase
+    addReading: "Write down a reading",
   },
   signIn: {
     // @patient headline
@@ -786,6 +848,44 @@ export const en = {
       // @patient phrase
       search_topics: "What {patient} asks about",
     },
+    // @patient phrase
+    insurance: "Insurance",
+  },
+  insurance: {
+    // @patient headline
+    title: "Your insurance",
+    // @patient headline
+    titleOther: "{patient}'s insurance",
+    // @patient
+    none: "Nura has no insurance written down for you yet.",
+    // @patient
+    noneOther: "Nura has no insurance written down for {patient} yet.",
+    type: {
+      // @patient phrase
+      hospital: "Hospital cover",
+      // @patient phrase
+      outpatient: "Outpatient cover",
+      // @patient phrase
+      critical_illness: "Critical illness cover",
+      // @patient phrase
+      government_scheme: "Government scheme",
+    },
+    status: {
+      // @patient phrase
+      active: "Active",
+      // @patient phrase
+      lapsed: "Lapsed",
+      // @patient phrase
+      cancelled: "Cancelled",
+    },
+    // @patient
+    covers: "It covers {value}.",
+    // @patient
+    renews: "Renews on {date}.",
+    // @patient
+    premiumDue: "The next payment is due on {date}.",
+    // @patient
+    reference: "Policy number {reference}.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
