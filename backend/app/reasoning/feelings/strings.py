@@ -362,7 +362,7 @@ THEN: Mapping[str, Mapping[str, str]] = {
     },
     "zh": {
         "for_the_doctor": "Nura 会把这个留到您看{doctor}的时候。",
-        "for_the_next_visit": "Nura 已经保存这个，方便您告诉{doctor}。",
+        "for_the_next_visit": "Nura 已经把这个留着，让您告诉{doctor}。",
         "watch": "一个星期后，Nura 会再问您。",
     },
 }
