@@ -13,9 +13,12 @@ A step crosses this seam exactly as far as `backend/CLAUDE.md` allows: its id, t
 own label for it — already read, already real, already in the right voice (his own, or a
 caregiver's twin by his name) — and how many things that part of the record held. Never a row,
 never a fact's value, never free text off the record. `FixtureNarrator` is today's behaviour
-unchanged, and the default; `app.search.claude_narrate.ClaudeNarrator` is the demo-only
-adapter that may vary the words, never the facts. `narrator_for` (`app.search.
-narrator_provider`) is the one place a deployment chooses between them.
+unchanged, and the default; `app.llm.narrate.ClaudeNarrator` is the demo-only adapter that may
+vary the words, never the facts — it lives under `app/llm/`, not here, because nothing under
+`app/search/` may import the SDK or reach the network (`tests/test_recall.py::
+test_recall_calls_no_model`; `backend/CLAUDE.md` model calls go through `app/llm/`).
+`narrator_for` (`app.search.narrator_provider`) is the one place a deployment chooses between
+them.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.channels.about_him import Reader
+from app.fixtures import fixture
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +74,7 @@ class Narrator(Protocol):
         ...
 
 
+@fixture
 class FixtureNarrator:
     """Today's behaviour, unchanged, and the default: the catalogue's own label for each step,
     exactly as the routes said it before this port existed. No call, no delay, nothing to fall

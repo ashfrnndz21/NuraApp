@@ -59,7 +59,7 @@ class Settings:
     """NURA_NARRATOR: what says Ask's and Find's trace steps aloud
     (`app.search.narrator_provider.narrator_for`). `fixture` (the default) is today's
     behaviour, unchanged — each step's catalogue label, every time; `claude` is the
-    Claude-backed narrator (`app.search.claude_narrate.ClaudeNarrator`), which only builds on
+    Claude-backed narrator (`app.llm.narrate.ClaudeNarrator`), which only builds on
     a declared demo (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process
     in SG or MY and no in-region provider exists yet (ADR 0017) — a laptop dev run stays on
     the fixture. A name this build does not have refuses to start."""

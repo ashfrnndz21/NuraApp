@@ -2,7 +2,7 @@
 
 `NURA_NARRATOR=fixture` (the default) is today's behaviour, unchanged
 (`app.search.narrate.FixtureNarrator`): the catalogue's own label for every step, every time.
-`NURA_NARRATOR=claude` is the Claude-backed narrator (`app.search.claude_narrate.
+`NURA_NARRATOR=claude` is the Claude-backed narrator (`app.llm.narrate.
 ClaudeNarrator`) — a real adapter behind the same port, not a fixture — but Anthropic's
 first-party API does not process in SG or MY, and no in-region provider exists yet, so it may
 only be built where every word it will ever be shown is demo or test data: a declared demo
@@ -19,7 +19,7 @@ nothing above this module changes.
 from __future__ import annotations
 
 from app.llm.client import client_for
-from app.search.claude_narrate import ClaudeNarrator
+from app.llm.narrate import ClaudeNarrator
 from app.search.narrate import FixtureNarrator, Narrator
 from app.settings import Settings
 

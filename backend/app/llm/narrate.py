@@ -1,8 +1,16 @@
 """The Claude-backed narrator (`NURA_NARRATOR=claude`): a model rephrases the trace's real
-steps into a livelier spoken line, behind the same port (`app.search.narrate.Narrator`).
-Nothing above this file, or `FixtureNarrator` beside it, changes — the answer itself stays the
+steps into a livelier spoken line, behind the port `app.search.narrate.Narrator`. Nothing in
+that port module, or `FixtureNarrator` there, changes — the answer itself stays the
 rule-based retriever's, untouched; this only ever varies how a step that already happened is
 said.
+
+Lives here, not beside the port: `backend/CLAUDE.md` says model calls go through `app/llm/`,
+and `tests/test_recall.py::test_recall_calls_no_model` enforces it the same way for the
+retriever's own port module — nothing under `app/search/` may import the SDK or the network,
+so the port and its fixture stay in `app.search.narrate` and this adapter lives beside
+`app/llm/client.py` instead. `narrator_provider.py` (`app.search.narrator_provider`, itself
+under `app/search/` because it only selects between adapters and never calls out) imports
+`ClaudeNarrator` from here.
 
 Demo only (ADR 0017). Anthropic's first-party API processes in the US or globally, never in
 SG or MY, and no in-region provider exists yet. This adapter is a runtime feature that may

@@ -5,7 +5,7 @@
 ## Context
 
 E02's document extractor (`app.ingestion.claude_extract.ClaudeExtractor`) reads a photo or a
-PDF with Anthropic's first-party API. The trace narrator (`app.search.claude_narrate.
+PDF with Anthropic's first-party API. The trace narrator (`app.llm.narrate.
 ClaudeNarrator`) rephrases a step's own catalogue label the same demo-only way. Two more
 runtime features are coming behind the same kind of adapter: the feed's searcher and
 compressor (`app.delivery.feed.compress.Searcher`, `pdpa-data-map.md` §5). All four send bytes

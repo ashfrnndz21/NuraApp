@@ -22,9 +22,9 @@ import httpx
 import pytest
 
 from app.channels.about_him import Reader
+from app.llm import narrate as claude_narrate
+from app.llm.narrate import ClaudeNarrator
 from app.regions import Region
-from app.search import claude_narrate
-from app.search.claude_narrate import ClaudeNarrator
 from app.search.narrate import FixtureNarrator, NarratedLine, NarratedStep
 from app.search.narrator_provider import (
     ClaudeNarratorOutsideDemo,
