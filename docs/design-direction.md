@@ -4,6 +4,21 @@
 `docs/design-system.md`, `docs/ui-mockup.html` and `docs/ui-mockup-v2.html` where they
 disagree. Tokens, accessibility, plain words and every safety rule still bind.**
 
+## The approved target: `docs/design/nura-concept-board.html`
+
+**Approved by the owner on 2026-09-17: "the app final state must look functionally exactly like this."**
+
+`docs/design/nura-concept-board.html` is the target. Open it in a browser. It shows seven screens: Welcome, Home, Health, Connect, Ask Nura (with the thinking trace), Services and Profile, plus the value tiles. **The finished app must match it in layout, components, content structure, labels and behaviour.** Every element on it is a working feature, not decoration: the check-in button opens the check-in, the grid tiles open their places, "Add a health report" uploads, "Join" starts the call, and the switches really switch.
+
+**Where this document and the board disagree, the board wins.** In particular, use the board's labels:
+- Home grid: **Health · Medicines · Connect · Activities · Care services · Guides**
+- Home section: **"Coming up"**, with **"See all"** links
+- Health: **"This week"**, a ring of **doses taken** (e.g. 12/14), then blood pressure, steps, sleep and water; **"What Nura noticed"**; **"Next tablet"**; **"Today's tip"**
+- Connect: **"Your family"**, **"Next call"**, **"Near you"** (Events · Volunteer · Groups), **"Messages"**
+- Profile: **"What Nura uses"**, with a switch per data source
+
+**What the board does not settle:** the illustrations on it are simple stand-ins. The finished app needs a proper illustration set in the same warm, soft, rounded style. The board's content (Pa, Mei, Dr Tan, the readings) is sample data; the app shows each person's real data. Accessibility, plain words in three languages, the caregiver voice and every safety rule still apply on top of the board.
+
 ## Why this exists
 
 The owner tested the app after the D1 design pass (#194) and said it is still *dull*:
