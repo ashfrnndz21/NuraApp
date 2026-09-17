@@ -231,8 +231,13 @@ async def changes(
     next read counts from it — unless `peek=true` (#207), for a tile that draws itself every
     time a screen renders (her Home) rather than a screen she came to read this on (the
     Record's own "what changed"). A peek answers the same question with the same words, under
-    the same scope, but writes nothing: it marks no look, so it leaves no entry on his trail,
-    and the next marking read still counts from wherever it last did."""
+    the same scope, but writes no `LastLooked` row: it does not become the next marking read's
+    baseline, and no "wrote in what changed" line reaches the trail for it. `last_look` itself
+    is still a fully audited read, like every read here, and that reads as "looked at what
+    changed" on the trail too, the same as any other read of anything on a first visit that
+    day — the trail's own day-level folding is what keeps this to at most once a day rather
+    than once a render, not this parameter. A peek is a lighter *write*, not an invisible
+    *read*: making the read itself unauditable would be the unlogged path the project forbids."""
     last = await last_look(session, context=context)
     found = await what_changed(
         session,

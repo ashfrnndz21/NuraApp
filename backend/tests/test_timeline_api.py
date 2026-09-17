@@ -313,13 +313,22 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
     assert len([e for e in trail if e["target"] == "last_looked" and e["action"] == "write"]) == 2
 
 
-async def test_a_peek_at_what_changed_marks_no_look_and_writes_no_trail_entry(
+async def test_a_peek_at_what_changed_writes_no_look_and_does_not_move_the_baseline(
     deployment: Deployment, clock: FrozenClock
 ) -> None:
     """#207: `?peek=true` is for a tile that draws itself every time a screen renders (her
     Home), not a screen she came to read this on. It answers the same question, twice over,
-    without writing a look down — his trail gains no `last_looked` write for it — and a
-    marking read afterwards still starts from wherever the last marking read left off."""
+    without writing a `LastLooked` row down — his trail gains no `last_looked` *write* for it,
+    however many times she peeks — and a marking read afterwards still starts from wherever
+    the last marking read left off, not from a peek.
+
+    This is narrower than "leaves no entry on his trail": `last_look` is itself a fully
+    audited read (as every read here is), and reads of `last_looked` do render as "Mei looked
+    at what changed in your papers on …" on the human trail (`GET /trail`), the same as any
+    other first read of a part that day — the trail's own day-level folding, not this
+    endpoint, is what keeps that to at most once a day. What this test proves is the specific,
+    narrower claim #207 is actually about: a peek never becomes *his* record of her having
+    looked, and never moves the baseline the next marking read starts from."""
     client = deployment.client
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)
@@ -340,13 +349,18 @@ async def test_a_peek_at_what_changed_marks_no_look_and_writes_no_trail_entry(
         return len([e for e in entries if e["target"] == "last_looked" and e["action"] == "write"])
 
     # Her Home renders twice (a peek each time): the first look is still there to have, and
-    # his trail gains nothing for either glance.
+    # neither glance writes the "she looked" marker down.
     first_peek = await _ok(await client.get(f"/profiles/{profile_id}/changes?peek=true", headers=hers))
     assert first_peek["first_look"]
     second_peek = await _ok(await client.get(f"/profiles/{profile_id}/changes?peek=true", headers=hers))
     assert second_peek["first_look"], "a peek does not spend the first look"
     trail = await _ok(await client.get(f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his))
     assert written_looks(trail) == 0
+    # The underlying read is still fully audited, though (every read here is), and it does
+    # render on the human trail — narrower than "no entry", and worth being precise about.
+    human_trail = await _ok(await client.get(f"/profiles/{profile_id}/trail", headers=his))
+    her_sentences = [s for day in human_trail for line in day["lines"] if line["who"] == "Mei" for s in line["sentences"]]
+    assert any("changed" in s for s in her_sentences), her_sentences
 
     # She opens the Record's own "what changed" screen: that is a look, and it is the one
     # that marks it.
@@ -356,13 +370,14 @@ async def test_a_peek_at_what_changed_marks_no_look_and_writes_no_trail_entry(
     assert written_looks(trail) == 1
 
     # Home renders again: the tile still answers, from the marking read's baseline, and still
-    # writes nothing — the Record's screen still has something to say next time she opens it.
+    # writes no "she looked" marker — the Record's screen still has something to say next
+    # time she opens it.
     clock.step(timedelta(minutes=1))
     third_peek = await _ok(await client.get(f"/profiles/{profile_id}/changes?peek=true", headers=hers))
     assert not third_peek["first_look"]
     assert third_peek["since"] == marking["looked_at"]
     trail = await _ok(await client.get(f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his))
-    assert written_looks(trail) == 1, "a peek after a marking read still writes nothing"
+    assert written_looks(trail) == 1, "a peek after a marking read still writes no look"
 
     still_marking = await _ok(await client.get(f"/profiles/{profile_id}/changes", headers=hers))
     assert not still_marking["first_look"]

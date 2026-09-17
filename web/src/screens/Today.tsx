@@ -177,9 +177,10 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {(stateAt === "top" || stateAt === "forYou") && <StateCard v={v} />}
             {/* "What changed since you last looked" (docs/design-system.md §3): a peek, not a
                 look (#207) — `GET /changes` is the looking, and a tile that draws itself on
-                every Home render is not her choosing to look, so it reads with `peek=true`
-                and marks nothing. The Record's own "what changed" screen is the one place
-                that marks a look, because reading it is what she came there to do. */}
+                every Home render is not her choosing to look, so it reads with `peek=true`,
+                which writes no look and does not move the next marking read's baseline. The
+                Record's own "what changed" screen is the one place that marks a look, because
+                reading it is what she came there to do. */}
             <WhatChanged />
             {((nextVisit && !fromPhone) || supply) && (
               <div class="two-up">
@@ -512,9 +513,10 @@ function WhatChanged(): JSX.Element | null {
   useEffect(() => {
     if (!bearer || !papers) return;
     // A peek (#207): the same words `GET /changes` always says, but Home draws this tile on
-    // every render, and a glance she did not choose is not a look — it marks nothing and
-    // leaves no entry on his trail. The Record's own "what changed" screen is the one place
-    // that marks a look, because reading it is what she came there to do.
+    // every render, and a glance she did not choose is not a look — it writes no `LastLooked`
+    // row, so it never becomes the next marking read's baseline. The Record's own "what
+    // changed" screen is the one place that marks a look, because reading it is what she
+    // came there to do.
     nura.changes(bearer, papers.profile_id, language.value, true).then(setFound, () => setFound(null));
   }, [bearer, papers?.profile_id]);
   if (!found) return null;

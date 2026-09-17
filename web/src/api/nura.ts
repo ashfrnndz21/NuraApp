@@ -533,7 +533,9 @@ export const noteOnProvider = (token: string, profileId: string, providerId: str
 
 /** What changed since this reader last looked; reading it is looking (E03-04) — unless
  *  `peek`, for a tile that draws itself every time (Home) rather than a screen she came to
- *  read this on: the same words, marking no look and leaving no entry on his trail (#207). */
+ *  read this on: the same words, but no `LastLooked` row written, so it never becomes the
+ *  next marking read's baseline and adds no "wrote in what changed" line to his trail (#207).
+ *  The backend still audits the read itself, the way it audits every read. */
 export const changes = (token: string, profileId: string, language: string, peek?: boolean) =>
   api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language, peek: peek ? "true" : undefined } });
 
