@@ -11,7 +11,7 @@ from typing import Literal
 from pydantic import AwareDatetime, BaseModel, Field
 
 from app.lifestyle.food import FoodEntry, Meal
-from app.lifestyle.metrics import LogStatus, MetricEntry, MetricKind, MetricRow
+from app.lifestyle.metrics import LogStatus, MetricEntry, MetricKind
 from app.reasoning.health_insights import Insight
 
 # --- the ring and the metric rows (Health Overview) -----------------------------------------

@@ -17,7 +17,6 @@ holds the family scope, the way the roster is.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +33,7 @@ from app.family.roster import NotOnThisProfile
 from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import Scope
-from app.memory.models import LABEL_LENGTH, short_label
+from app.memory.models import short_label
 
 CALLS_TARGET = ScheduledCall.__tablename__
 """`NotOnThisProfile` (a call is with someone who holds a key on this profile, or its owner,

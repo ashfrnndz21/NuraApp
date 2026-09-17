@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
+from app.channels.api.health_tab import NoSuchMetric
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
@@ -44,6 +45,7 @@ from app.delivery.triggers.rules import AlertsGoEveryWay
 from app.delivery.voice import NoVoiceFor, TooLongToSay
 from app.demo import NotInTheDemo
 from app.errors import Refusal
+from app.family.calls import LinkTooLong, NoSuchCall
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
@@ -55,8 +57,6 @@ from app.family.pushes import (
     NoSuchTemplate,
     NotAMemo,
 )
-from app.channels.api.health import NoSuchMetric
-from app.family.calls import LinkTooLong, NoSuchCall
 from app.family.roster import (
     AlreadyDone,
     NoSuchSlot,

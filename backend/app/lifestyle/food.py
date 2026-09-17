@@ -178,6 +178,10 @@ async def log_food(
     return _entry_of(fact)
 
 
+def _str_or_none(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
 def _entry_of(fact: Fact) -> FoodEntry:
     value = _value_of(fact)
     had = bool(value.get("had", True))
@@ -186,9 +190,9 @@ def _entry_of(fact: Fact) -> FoodEntry:
         fact_id=fact.id,
         meal=Meal(fact.attribute),
         status=LogStatus.LOGGED if had else LogStatus.SKIPPED,
-        catalog_id=value.get("catalog_id"),
-        food=value.get("food"),
-        amount=value.get("amount"),
+        catalog_id=_str_or_none(value.get("catalog_id")),
+        food=_str_or_none(value.get("food")),
+        amount=_str_or_none(value.get("amount")),
         eaten_at=as_utc(fact.valid_from),
     )
 

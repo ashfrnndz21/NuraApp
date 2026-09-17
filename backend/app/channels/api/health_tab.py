@@ -49,13 +49,18 @@ from app.channels.health_strings import (
 from app.errors import Refusal
 from app.lifestyle.food import food_log, log_food
 from app.lifestyle.metrics import LogStatus, MetricKind, MetricRow, log_metric, metric_series
-from app.medicines.service import language_for, today
-from app.medicines.strings import PLAIN_NAME
 from app.reasoning.health_insights import health_insights
-from app.reasoning.health_overview import HealthOverview, HeartRateRow, health_overview
-from app.routines.service import his_day
+from app.reasoning.health_overview import (
+    HealthOverview,
+    HeartRateRow,
+    health_overview,
+    medication_reminder,
+)
 
 router = APIRouter(prefix="/profiles", tags=["health"])
+catalog_router = APIRouter(tags=["health"])
+"""`/food-catalog` is not one profile's: it holds no key context, so it sits outside the
+`/profiles` prefix the rest of this module's routes share."""
 
 Language = Query(default=None, min_length=2, max_length=16)
 
@@ -217,39 +222,39 @@ async def insights(context: Context, session: Db, language: str | None = Languag
     """Health Insights: true cards built from his own records — nothing speculative,
     nothing diagnostic."""
     theirs, patient = await _voice(session, context)
-    found = await health_insights(session, context=context, language=language, patient=patient)
+    found = await health_insights(
+        session, context=context, language=language, theirs=theirs, patient=patient
+    )
     return [InsightOut.of(card) for card in found]
 
 
 @router.get("/{profile_id}/medication-reminder")
-async def medication_reminder(
+async def medication_reminder_list(
     request: Request, context: Context, session: Db, language: str | None = Language
 ) -> list[MedicationReminderOut]:
     """His next doses, from his existing medicines and dose windows
-    (`app.medicines.service.today`) — the untaken ones, soonest anchor first."""
-    lang = await language_for(session, context, language)
-    registry = providers_of(request).drug_registry
-    slots = await today(session, context=context, registry=registry, language=lang)
-    day = await his_day(session, context=context)
-    order = ("breakfast", "lunch", "dinner", "bed")
-    untaken = sorted(
-        (slot for slot in slots if not slot.taken),
-        key=lambda slot: (order.index(slot.anchor), slot.line.generic),
+    (`app.reasoning.health_overview.medication_reminder`, which wraps
+    `app.medicines.service.today` — nothing here duplicates that logic)."""
+    lines = await medication_reminder(
+        session,
+        context=context,
+        registry=providers_of(request).drug_registry,
+        language=language,
     )
     return [
         MedicationReminderOut(
-            line_id=slot.line.id,
-            name=PLAIN_NAME[lang][registry.monograph(slot.line.generic).plain_name_id],
-            instruction=slot.card,
-            anchor=slot.anchor,
-            time=day.anchors[slot.anchor].strftime("%H:%M"),
-            taken=slot.taken,
+            line_id=line.line_id,
+            name=line.name,
+            instruction=line.instruction,
+            anchor=line.anchor,
+            time=line.time_of_day,
+            taken=False,
         )
-        for slot in untaken
+        for line in lines
     ]
 
 
-@router.get("/food-catalog")
+@catalog_router.get("/food-catalog")
 async def food_catalog_list(language: str | None = Language) -> list[FoodCatalogItemOut]:
     """Common foods in Singapore and Malaysia, for a tap instead of typing."""
     return [
@@ -291,4 +296,4 @@ async def food_list(
     return [FoodEntryOut.of(entry, meal_label=meal_label(entry.meal.value, language)) for entry in found]
 
 
-__all__ = ["router"]
+__all__ = ["catalog_router", "router"]

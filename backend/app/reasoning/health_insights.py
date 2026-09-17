@@ -17,7 +17,12 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.channels.health_strings import active_insight, checked_in_insight, doses_insight, water_insight
+from app.channels.health_strings import (
+    active_insight,
+    checked_in_insight,
+    doses_insight,
+    water_insight,
+)
 from app.keys.context import KeyContext
 from app.lifestyle.metrics import MetricKind, metric_row
 from app.reasoning.health_overview import check_ins_this_week, doses_this_week
@@ -31,26 +36,42 @@ class Insight:
 
 
 async def health_insights(
-    session: AsyncSession, *, context: KeyContext, language: str | None = None, patient: str = ""
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    language: str | None = None,
+    theirs: bool = False,
+    patient: str = "",
 ) -> list[Insight]:
     """Every card there is a true thing to say, in the order a person would want to hear them:
-    how the week's medicine went, whether he has been in touch, then today's numbers."""
+    how the week's medicine went, whether he has been in touch, then today's numbers.
+
+    `theirs=True` speaks of him in the third person — the caregiver-voice rule: a caregiver's
+    screen never speaks in his voice — and then `patient` names him."""
     cards: list[Insight] = []
     doses = await doses_this_week(session, context=context)
     if doses.total > 0:
-        headline, detail = doses_insight(doses.taken, doses.total, language=language)
+        headline, detail = doses_insight(
+            doses.taken, doses.total, language=language, theirs=theirs, patient=patient
+        )
         cards.append(Insight(kind="doses", headline=headline, detail=detail))
     check_ins = await check_ins_this_week(session, context=context)
     if check_ins.days > 0:
-        headline, detail = checked_in_insight(check_ins.days, language=language)
+        headline, detail = checked_in_insight(
+            check_ins.days, language=language, theirs=theirs, patient=patient
+        )
         cards.append(Insight(kind="check_ins", headline=headline, detail=detail))
     steps = await metric_row(session, context=context, kind=MetricKind.STEPS)
     if steps.value:
-        headline, detail = active_insight(steps.value, language=language)
+        headline, detail = active_insight(
+            steps.value, language=language, theirs=theirs, patient=patient
+        )
         cards.append(Insight(kind="steps", headline=headline, detail=detail))
     water = await metric_row(session, context=context, kind=MetricKind.WATER)
     if water.value:
-        headline, detail = water_insight(water.value, language=language)
+        headline, detail = water_insight(
+            water.value, language=language, theirs=theirs, patient=patient
+        )
         cards.append(Insight(kind="water", headline=headline, detail=detail))
     return cards
 
