@@ -49,7 +49,7 @@ async function photosOnThePhone(page: Page) {
 async function openPapers(page: Page, phone: string): Promise<void> {
   await signInThroughTheApp(page, phone, "Pa");
   await todayReady(page);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("open-papers").click();
   await expect(page.getByTestId("papers-lead")).toContainText("Nura sends nothing until you tap Send.");
 }

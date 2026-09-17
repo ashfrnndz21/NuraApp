@@ -33,6 +33,14 @@ export const ms = {
     timeline: "Surat",
     // @patient headline
     plan: "Rancangan",
+    // @patient headline
+    health: "Kesihatan",
+    // @patient headline
+    connect: "Hubungi",
+    // @patient headline
+    services: "Perkhidmatan",
+    // @patient headline
+    profile: "Profil",
   },
   shell: {
     // @patient phrase
@@ -47,6 +55,132 @@ export const ms = {
     voiceSaid2: "Kemudian sebut soalan anda.",
     // @patient phrase
     close: "Tutup",
+    // @patient phrase
+    bell: "Lagi untuk anda",
+  },
+  welcome: {
+    // @patient headline
+    tagline1: "Kesihatan anda, tersimpan bersama.",
+    // @patient headline
+    tagline2: "Keluarga anda, sentiasa dekat.",
+    // @patient
+    lead: "Nura menyimpan ubat dan surat anda di satu tempat.",
+    // @patient headline
+    remember: "Ingat",
+    // @patient line
+    rememberLine: "Nura ingat ubat dan surat anda.",
+    // @patient headline
+    share: "Kongsi",
+    // @patient line
+    shareLine: "Anda pilih siapa dalam keluarga boleh melihatnya.",
+    // @patient headline
+    prepare: "Bersedia",
+    // @patient line
+    prepareLine: "Nura sediakan anda sebelum jumpa doktor.",
+    // @patient phrase
+    start: "Mula",
+  },
+  talk: {
+    // @patient phrase
+    you: "Anda bertanya",
+    // @patient phrase
+    nura: "Nura menjawab",
+    // @patient
+    working: "Nura sedang mencari.",
+    // @patient
+    answered: "Nura ada jawapan.",
+    // @patient headline
+    lookedAt: "Apa yang Nura lihat",
+    // @patient
+    slow: "Ini mengambil masa lebih lama daripada biasa.",
+    // @patient
+    failed: "Nura tidak dapat menjawab sekarang.",
+    // @patient phrase
+    tryAgain: "Cuba lagi",
+    // @patient phrase
+    loading: "Nura sedang menyediakan halaman Hari Ini anda.",
+  },
+  hub: {
+    // @patient
+    howFeeling: "Apa khabar hari ini?",
+    // @patient
+    howFeelingOther: "Apa khabar {patient} hari ini?",
+    // @patient headline
+    checkTitle: "Apa yang anda rasa hari ini",
+    // @patient headline
+    checkTitleOther: "Apa yang {patient} rasa hari ini",
+    // @patient line
+    checkLine: "Beritahu Nura apa yang anda rasa hari ini.",
+    // @patient phrase
+    checkLineOther: "Beritahu Nura apa yang {patient} rasa hari ini",
+    // @patient phrase
+    checkIn: "Beritahu Nura",
+    // @patient
+    doTitle: "Apa yang anda mahu buat?",
+    // @patient
+    doTitleOther: "Apa yang perlu dibuat untuk {patient}.",
+    // @patient headline
+    health: "Kesihatan",
+    // @patient line
+    healthLine: "Buku tekanan darah dan surat anda.",
+    // @patient line
+    healthLineOther: "Buku tekanan darah dan surat {patient}.",
+    // @patient headline
+    medicines: "Ubat",
+    // @patient line
+    medicinesLine: "Ubat anda, dan bila hendak makan.",
+    // @patient line
+    medicinesLineOther: "Ubat {patient}, dan bila hendak makan.",
+    // @patient headline
+    connect: "Hubungi",
+    // @patient line
+    connectLine: "Lihat keluarga dan kawan anda.",
+    // @patient line
+    connectLineOther: "Lihat keluarga dan kawan {patient}.",
+    // @patient headline
+    activities: "Perkara untuk dibuat",
+    // @patient line
+    activitiesLine: "Sesuatu untuk dibuat hari ini.",
+    // @patient headline
+    care: "Bantuan di rumah",
+    // @patient line
+    careLine: "Seseorang boleh datang membantu anda di rumah.",
+    // @patient line
+    careLineOther: "Seseorang boleh datang membantu {patient} di rumah.",
+    // @patient headline
+    resources: "Bahan bacaan",
+    // @patient line
+    resourcesLine: "Nura terangkan dalam kata-kata mudah.",
+    // @patient headline
+    report: "Tambah surat",
+    // @patient line
+    reportLine: "Ambil gambarnya, atau pilih yang doktor hantar kepada anda.",
+    // @patient line
+    reportLineOther: "Ambil gambarnya, atau pilih yang doktor {patient} hantar.",
+    // @patient line
+    reportNote: "Nura akan membacanya dan tunjuk apa yang dijumpainya.",
+    // @patient line
+    reportNoteOther: "Nura akan membacanya dan tunjuk apa yang dijumpainya.",
+    // @patient line
+    reportReady: "Nura tidak akan hantar ini sehingga anda kata boleh.",
+    // @patient phrase
+    reportReadyOther: "Nura tidak akan hantar ini untuk {patient} sehingga anda kata boleh.",
+    // @patient phrase
+    reportSend: "Hantar ini",
+    // @patient headline
+    upcoming: "Lawatan seterusnya",
+    // @patient phrase
+    seeAll: "Lihat semua",
+    // @patient phrase
+    seeAllVisits: "Lihat semua lawatan",
+    // @patient
+    soonLine1: "Nura belum boleh buat ini.",
+    // @patient
+    soonLine2: "Kami masih membuatnya.",
+    // @patient phrase
+    backHome: "Kembali ke halaman Hari Ini",
+    // @patient phrase
+    backHomeOther: "Kembali ke halaman Hari Ini {patient}",
   },
   home: {
     // @patient headline
@@ -55,6 +189,8 @@ export const ms = {
     whatChanged: "Apa yang berubah",
     // @patient headline
     nextVisit: "Lawatan seterusnya",
+    // @patient phrase
+    atTime: "Pada {time}.",
     // @patient headline
     buyMore: "Beli lagi",
     // @patient headline
@@ -415,7 +551,7 @@ export const ms = {
     // @patient
     askWithheld: "Sebahagian surat-surat ini tidak dibuka untuk anda.",
     // @patient
-    askThinking: "Nura sedang melihat.",
+    askThinking: "Nura sedang mencari.",
     // @patient
     askAnswered: "Nura sudah menjawab.",
     // @patient phrase

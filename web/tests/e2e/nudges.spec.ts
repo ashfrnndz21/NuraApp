@@ -149,7 +149,7 @@ test("both densities show the day's nudge with nothing drawn over a line", async
   await expect(nudge).toBeVisible();
   expect(await nothingDrawnOverLines(nudge, { lines: "p", controls: "button", minTarget: 56 })).toEqual([]);
 
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("density-caregiver").click();
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
   // Me is a sheet over the screen (D1): shut it, and Today is the screen it was opened from.

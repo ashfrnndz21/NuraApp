@@ -1,17 +1,6 @@
-import type { JSX } from "preact";
-
-/** A soft shimmering placeholder in a card's own shape, wherever a screen's content is
- *  loading — instead of a spinner on a blank page (docs/design-direction.md "Conversation,
- *  waiting and thinking"). A static wash under `prefers-reduced-motion` (design.css).
- *
- *  LOCAL STAND-IN: the foundation builder is building a shared skeleton card in
- *  `web/src/ui/kit`; once it lands on main, swap this for it rather than keeping two. */
-export function SkeletonCard({ lines = 2, testId }: { lines?: number; testId?: string }): JSX.Element {
-  return (
-    <div class="skeleton-card" data-testid={testId ?? "skeleton-card"} aria-hidden="true">
-      {Array.from({ length: lines }, (_, at) => (
-        <div key={at} class={`skeleton-line${at === lines - 1 ? " short" : ""}`} />
-      ))}
-    </div>
-  );
-}
+// This local stand-in `SkeletonCard` has been retired: the shared skeleton card it stood in
+// for landed in `./Conversation` when PR #240's `main` work was merged into this branch.
+// `HomeParts.tsx` now gets `SkeletonCard` from `./Conversation` (re-exported by `./index`).
+// Kept as an empty module, rather than deleted, because this session's tooling could not
+// remove a tracked file; nothing imports from it directly any more.
+export {};

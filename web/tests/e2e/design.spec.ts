@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** One tab set, the same for everyone (docs/product-reset.md §6, the owner's decision). */
-const TAB_SET = ["Today", "Medicines", "Papers", "Visits", "Family"];
+const TAB_SET = ["Today", "Health", "Family", "Visits", "Me"];
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
 
@@ -93,7 +93,7 @@ for (const [label, viewport] of [
       for (const id of ["lang-en", "density-patient", "switch-profile", "me-emergency", "sign-out"]) await expect(sheet.getByTestId(id)).toBeVisible();
       // Family is a tab for everyone now (D1, the reset), so the sheet no longer carries it.
       await expect(sheet.getByTestId("me-family")).toHaveCount(0);
-      await expect(page.getByTestId("tab-family")).toBeVisible();
+      await expect(page.getByTestId("tab-connect")).toBeVisible();
       // The chosen language and look are outlined, not filled: at most one Plum button in the sheet.
       await expect(sheet.getByTestId("lang-en")).toHaveAttribute("aria-pressed", "true");
       expect(await sheet.locator("button.plum").count()).toBeLessThanOrEqual(1);
@@ -145,7 +145,8 @@ for (const [label, viewport] of [
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 
       // "Ask about Pa" stays on her other screens, and asks.
-      await page.getByTestId("tab-medicines").click();
+      await page.getByTestId("tab-health").click();
+      await page.getByTestId("record-medicines").click();
       await expect(page.getByTestId("medicine-line").first()).toBeVisible();
       await page.locator(".shell-ask").getByTestId("ask-input").fill("When is his next visit?");
       await page.locator(".shell-ask").getByTestId("ask-input").press("Enter");

@@ -79,8 +79,11 @@ test("her Home, her Medicines and her Papers say his papers about him by name, n
   const home = await linesOn(page);
   expect(home.filter(aboutHim)).toEqual([]);
 
-  for (const tab of ["tab-medicines", "tab-records"]) {
+  // Her Medicines is a place in Health now (the warm tabs): the tab, then the place; and Health
+  // itself, the hub of his papers.
+  for (const [tab, place] of [["tab-health", "record-medicines"], ["tab-health", null]] as const) {
     await page.getByTestId(tab).click();
+    if (place) await page.getByTestId(place).click();
     await expect(page.getByTestId(tab)).toHaveAttribute("aria-current", "page");
     await page.waitForLoadState("networkidle");
     const lines = await linesOn(page);
@@ -158,15 +161,25 @@ test("no caregiver-density screen says a second-person line about his record", a
     await expect(page.getByTestId(id)).toHaveAttribute("aria-current", "page");
   };
 
-  for (const id of ["tab-today", "tab-medicines", "tab-records", "tab-visits", "tab-family"]) {
+  // Profile is not in this sweep, as the Me sheet it holds never was: it is the reader's own
+  // settings — her sign-in, her language, her look — so its "you" is hers.
+  for (const id of ["tab-home", "tab-health", "tab-connect", "tab-services"]) {
     await tab(id);
     await check(id);
   }
+  // Her Medicines, a place in Health, as the Medicines tab was.
+  await tab("tab-health");
+  await page.getByTestId("record-medicines").click();
+  await check("medicines");
+  // The places Home's grid names that are not built yet: said about him, never to him, too.
+  await tab("tab-home");
+  await page.getByTestId("do-care").click();
+  await check("soon");
 
   // Every place in his Record her key opens: the Papers tab, then the place — two taps, which
   // is the most any feature is allowed to be.
   for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
-    await tab("tab-records");
+    await tab("tab-health");
     const row = page.getByTestId(`record-${entry}`);
     if (!(await row.isVisible().catch(() => false))) continue;
     await row.click();
@@ -174,10 +187,10 @@ test("no caregiver-density screen says a second-person line about his record", a
   }
 
   // Every part of Family her key opens.
-  await tab("tab-family");
+  await tab("tab-connect");
   const parts = ["trail", "keys", "roster", "thread", "messages", "metrics", "calendar", "deliveries", "settings", "documents", "consents", "onlyMe"];
   for (const part of parts) {
-    await tab("tab-family");
+    await tab("tab-connect");
     const pill = page.getByTestId(`open-${part}`);
     if (!(await pill.isVisible().catch(() => false))) continue;
     await pill.click();
@@ -187,11 +200,11 @@ test("no caregiver-density screen says a second-person line about his record", a
   // The feed, the emergency card, the symptom log and the pill — reached the way she reaches
   // them, through the tab bar, never by reloading the app: a reload puts her back through the
   // doors and is not what this sweep is about.
-  await tab("tab-today");
+  await tab("tab-home");
   await page.getByTestId("open-feed").click();
   await check("feed");
 
-  await tab("tab-today");
+  await tab("tab-home");
   await openMe(page);
   // The sheet fills in what it reads (his proud number), which re-renders it: let that land
   // before tapping, or the tap lands on a button that is about to be replaced.
@@ -200,12 +213,12 @@ test("no caregiver-density screen says a second-person line about his record", a
   await expect(page.getByTestId("emergency-screen")).toBeVisible();
   await check("emergency");
 
-  await tab("tab-today");
+  await tab("tab-home");
   await page.getByTestId("open-symptoms").click();
   await check("symptoms");
 
   // The pill is about him, and it is the same button: it opens what it says it opens.
-  await tab("tab-today");
+  await tab("tab-home");
   await expect(page.getByTestId("not-well")).toHaveText(/Pa is not feeling well/);
   await page.getByTestId("not-well").click();
   await check("not-well");
@@ -241,7 +254,7 @@ test.fixme("her Family screen says what a key opens about him by name", async ({
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
   await todayReady(page);
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   await expect(page.getByTestId("grant-lines").first()).toBeVisible();
   const lines = (await page.getByTestId("grant-lines").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
   expect(lines.filter(aboutHim)).toEqual([]);
@@ -263,7 +276,7 @@ test.fixme("her Family consents screen names whose words the quote is", async ({
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
   await todayReady(page);
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   await page.getByTestId("open-consents").click();
   await expect(page.getByTestId("consent-words").first()).toBeVisible();
   const lines = (await page.getByTestId("consent-words").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);

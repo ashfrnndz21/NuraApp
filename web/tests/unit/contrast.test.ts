@@ -48,7 +48,7 @@ const plum = hex(token("plum"));
 const white: RGB = [255, 255, 255];
 const paper = rgba(token("paper-bg"));
 const glass = rgba(token("glass-bg"));
-const washStops = ["lavender", "blush", "sage", "cream", "coral-wash", "coral-mid", "mist"].map((name) => hex(token(name)));
+const washStops = ["lavender", "blush", "sage", "cream", "coral-wash", "coral-mid", "mist", "ground", "ground-warm", "ground-soft"].map((name) => hex(token(name)));
 
 describe("contrast on decision elements", () => {
   it("Ink on Paper is 7:1 or better over every wash stop", () => {
@@ -72,6 +72,34 @@ describe("contrast on decision elements", () => {
 
   it("Ink soft is caption-only: 4.5:1 on Paper, which is why it never carries a decision", () => {
     for (const stop of washStops) expect(contrast(inkSoft, over(paper.rgb, paper.alpha, stop))).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("the warm tints (docs/design-direction.md)", () => {
+  const tints = ["blush", "lavender", "sage", "coral-wash", "cream", "peach", "butter", "sky", "tint-paper"].map((name) => [name, hex(token(name))] as const);
+  const grounds = ["ground", "ground-warm", "ground-soft"].map((name) => [name, hex(token(name))] as const);
+
+  it("keep Ink 7:1 on every card tint and every ground, so a decision may sit on any of them", () => {
+    for (const [name, tint] of [...tints, ...grounds]) expect(contrast(ink, tint), name).toBeGreaterThanOrEqual(7);
+  });
+
+  it("keep a caption and a Plum icon or word 4.5:1 on every tint, in her density too", () => {
+    const quiet = hex(token("ink-on-tint"));
+    for (const [name, tint] of tints) {
+      expect(contrast(quiet, tint), name).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(plum, tint), name).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keep Plum words and Ink soft captions readable on the ground", () => {
+    for (const [name, ground] of grounds) {
+      expect(contrast(plum, ground), name).toBeGreaterThanOrEqual(7);
+      expect(contrast(inkSoft, ground), name).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keep the Good pill's word 7:1 on its green", () => {
+    expect(contrast(hex(token("good-ink")), hex(token("good-bg")))).toBeGreaterThanOrEqual(7);
   });
 });
 

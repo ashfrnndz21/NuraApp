@@ -111,8 +111,19 @@ export async function seedMedicine(
 }
 
 /** Sign in through the app's own screens: phone → code (from the log) → doors. */
+/** Past the welcome a phone shows before its first sign-in (docs/design-direction.md), to the
+ *  phone number: Get started when the welcome is there, nothing when this phone has seen it. */
+export async function pastWelcome(page: Page): Promise<void> {
+  const welcome = page.getByTestId("welcome-screen");
+  const phone = page.getByLabel("Your phone number");
+  await expect(welcome.or(phone)).toBeVisible();
+  if (await welcome.isVisible()) await page.getByTestId("welcome-start").click();
+  await expect(phone).toBeVisible();
+}
+
 export async function signInThroughTheApp(page: Page, phone: string, name: string): Promise<void> {
   await page.goto("./");
+  await pastWelcome(page);
   await page.getByLabel("Your phone number").fill(phone);
   await page.getByLabel("Your name").fill(name);
   const before = codesSoFar(phone);
@@ -710,7 +721,12 @@ export async function nothingDrawnOverLines(
         problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);
       }
     }
+    // `clear()` brings each line and control to the centre of the screen in turn, which can
+    // leave the shell's own scroll region (D1: the page scrolls in its own region, not the
+    // window) sitting wherever the last one needed. Reset both, so a check run straight after
+    // this one starts from the top the way this one did.
     window.scrollTo(0, 0);
+    document.querySelector<HTMLElement>('[data-testid="shell-scroll"]')?.scrollTo(0, 0);
     return problems;
   }, settings);
 }
@@ -720,9 +736,10 @@ export async function todayReady(page: Page): Promise<void> {
   await expect(page.getByTestId("today-ready")).toBeAttached();
 }
 
-/** Open the Me sheet from the header's avatar. */
+/** Open the Me sheet from the header's avatar. By testid, not its accessible name: the Profile
+ *  tab is named "Me" too now (plain words), so "Me" alone no longer picks out one button. */
 export async function openMe(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByTestId("me-sheet")).toBeVisible();
 }
 

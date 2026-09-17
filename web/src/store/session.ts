@@ -23,6 +23,10 @@ export const largeText = signal(false);
  *  takes it from here (`player/voice.ts`). */
 export const savedSpeed = signal<number | null>(null);
 export const SPEED_KEY = "device.speed";
+/** Whether this phone has been past the welcome screen (docs/design-direction.md): the welcome
+ *  is shown once a phone, before its first sign-in. It says nothing about anyone — no name, no
+ *  papers — so signing out does not forget it, and the next person goes straight to sign-in. */
+export const welcomed = signal(false);
 
 const KEYS = {
   token: "session.token",
@@ -31,6 +35,7 @@ const KEYS = {
   density: "device.density",
   text: "device.text",
   speed: SPEED_KEY,
+  welcomed: "device.welcomed",
 } as const;
 
 /** Patient density for the owner of the papers; caregiver density for anyone holding a key. */
@@ -65,14 +70,16 @@ effect(() => {
 });
 
 export async function restoreSession(): Promise<void> {
-  const [savedToken, savedProfile, savedLanguage, savedDensity, savedText, savedRate] = await Promise.all([
+  const [savedToken, savedProfile, savedLanguage, savedDensity, savedText, savedRate, savedWelcomed] = await Promise.all([
     kvGet<string>(KEYS.token),
     kvGet<ProfileOut>(KEYS.profile),
     kvGet<string>(KEYS.language),
     kvGet<Density>(KEYS.density),
     kvGet<string>(KEYS.text),
     kvGet<number>(KEYS.speed),
+    kvGet<boolean>(KEYS.welcomed),
   ]);
+  welcomed.value = savedWelcomed === true;
   largeText.value = savedText === "large";
   savedSpeed.value = typeof savedRate === "number" ? savedRate : null;
   language.value = isLanguage(savedLanguage)
@@ -82,6 +89,12 @@ export async function restoreSession(): Promise<void> {
   token.value = savedToken ?? null;
   profile.value = savedProfile ?? null;
   restored.value = true;
+}
+
+/** Past the welcome: kept on the phone first, then shown, like every device setting here. */
+export async function setWelcomed(): Promise<void> {
+  await kvSet(KEYS.welcomed, true);
+  welcomed.value = true;
 }
 
 export async function setToken(value: string | null): Promise<void> {

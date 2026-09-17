@@ -14,7 +14,7 @@ import { fill, language, LOCALE, t } from "../strings";
 import { dateLine } from "../today/model";
 import { voice } from "../player/voice";
 import { Field, Header, Hear, Notice, Pill, Tile } from "../ui/components";
-import { LookedAt, MessageBubble, ThinkingTrace } from "../ui/kit";
+import { LookedAt, MessageBubble, StepTrace } from "../ui/kit";
 import { HearClip } from "../ui/Player";
 import { Shell } from "./Shell";
 
@@ -127,8 +127,11 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
   const words: Record<Where, string> = { records: s.feed.filterRecords, web: s.feed.filterWeb, providers: s.feed.filterProviders, videos: s.feed.filterVideos };
   const view = answer ? answerView(answer) : null;
   const locale = LOCALE[language.value];
+  // The shared trace's shape (`text`, `done`): every step but the one still streaming is done —
+  // the same rule the old local stand-in used, now against `web/src/ui/kit/Conversation.tsx`.
+  const traceSteps = steps.map((step, at) => ({ key: step.key, text: step.label, done: at < steps.length - 1 }));
   return (
-    <Shell tab="today" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
+    <Shell tab="home" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
       <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
       {item && (
         <Tile paper>
@@ -158,17 +161,18 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
       </p>
       {sentQuestion && (busy || view || found) && (
         <div class="ask-thread">
-          <MessageBubble from="me" testId="ask-question">
+          <MessageBubble from="person" label={s.talk.you} testId="ask-question">
             <p>{sentQuestion}</p>
           </MessageBubble>
-          {busy && <ThinkingTrace heading={s.feed.askThinking} steps={steps} testId="ask-trace" />}
+          {busy && <StepTrace steps={traceSteps} working={s.feed.askThinking} testId="ask-trace" />}
         </div>
       )}
       {view && (
         <Tile paper testId="answer">
           {where === "records" && steps.length > 0 && (
             <LookedAt
-              label={fill(s.feed.askLookedAt, { parts: steps.map((step) => step.name).join(", ") })}
+              summary={fill(s.feed.askLookedAt, { parts: steps.map((step) => step.name).join(", ") })}
+              steps={traceSteps}
               testId="ask-looked-at"
             />
           )}
