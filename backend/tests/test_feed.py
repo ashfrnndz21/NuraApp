@@ -53,7 +53,7 @@ from app.delivery.feed.rank import (
 )
 from app.delivery.feed.search import Engine, list_jobs
 from app.delivery.feed.sources import SourceNotAllowlisted
-from app.delivery.strings import Lines, learning_lines, render
+from app.delivery.strings import Lines, learning_lines, notice_fallback_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
@@ -66,6 +66,7 @@ from app.reasoning.visits.models import MemoKind
 from app.reasoning.visits.questions import question_from_memo
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_line
+from app.safety.plain_words import verify
 from app.state.models import NotRenderedFromState
 from app.state.service import NoBoundaryLine, current_state
 from tests.conftest import FEED
@@ -267,7 +268,7 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
         assert item.boundary == line, item.type
         assert item.body[-3:] == line.splitlines() and item.voice[-3:] == line.splitlines()
     plain = [item for item in made if item.type not in SURFACE_OF]
-    assert {CardType.NOW, CardType.STORY, CardType.QUESTION} <= {item.type for item in plain}
+    assert {CardType.NOW, CardType.STORY} <= {item.type for item in plain}
     assert all(item.boundary is None for item in plain), [(i.type, i.boundary) for i in plain]
 
 
@@ -380,24 +381,144 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     assert by_type[CardType.NOW][0].scope is Scope.MEDICINES
     assert by_type[CardType.NOW][0].body[0] == "Your tablets for today are on your list."
     learning = by_type[CardType.LEARNING]
-    assert len(learning) == 1 and learning[0].cite is not None
-    assert learning[0].cite["url"].startswith("https://www.hsa.gov.sg/")
-    assert learning[0].why["fact_ids"], "the explainer cites the facts it is about"
+    his_learning = [item for item in learning if item.deliver_to is DeliverTo.PATIENT]
+    assert len(his_learning) == 1 and his_learning[0].cite is not None
+    assert his_learning[0].cite["url"].startswith("https://www.hsa.gov.sg/")
+    assert his_learning[0].why["fact_ids"], "the explainer cites the facts it is about"
     notice = by_type[CardType.NOTICE][0]
     assert notice.deliver_to is DeliverTo.CAREGIVER
     assert notice.why["suppressed"] == "batch_does_not_match_the_pack"
     assert notice.cite is not None and notice.cite["batch"] == "240077"
-    question = by_type[CardType.QUESTION][0]
-    assert question.deliver_to is DeliverTo.MEMO and question.supply is Supply.HELD
-    # Nothing for the patient carries the notice or the question.
+    # #231: the "skip a dose" page used to become an orphaned QUESTION/DeliverTo.MEMO FeedItem
+    # nothing read. Now it is held for the chief as a real card, and — because the EXPLAINER
+    # job it came from names a medicine he takes — also filed as a real doctor question.
+    her_learning = [item for item in learning if item.deliver_to is DeliverTo.CAREGIVER]
+    assert len(her_learning) == 1
+    assert her_learning[0].cite is not None and "warfarin-inr" in her_learning[0].cite["url"]
+    assert CardType.QUESTION not in by_type, "no orphaned FeedItem question"
+    memos = await current_memos(sg, context=context)
+    [memo] = [one for one in memos if one.kind is MemoKind.ASK]
+    assert memo.key == "ask_safety_notice"
+    assert "skip" not in memo.text.lower() and "dose" not in memo.text.lower()
+    # Nothing for the patient carries the notice or the caregiver's copy of the found page.
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert {item.type for item in page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
+    assert CardType.NOTICE not in {item.type for item in page.items}
+    assert her_learning[0].id not in {item.id for item in page.items}
+    # Delivery, not existence: his chief's own, independently resolved key actually reads
+    # both the notice and the redirected learning card back.
+    mei = await let_in(
+        sg, context, phone="+6591230098", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.MEDICINES}
+    )
+    her_page = await feed_page(sg, context=mei, engine=ENGINE)
+    her_ids = {item.id for item in her_page.items}
+    assert notice.id in her_ids and her_learning[0].id in her_ids
     assert [item.type for item in page.items][:4] == [
         CardType.NOW,
         CardType.GATE,
         CardType.STORY,  # the label photo is one of his papers
         CardType.LEARNING,
     ]
+
+
+class _TreatyFoodSearcher:
+    """A food page whose words would change treatment — a hazard/season/food job names no
+    medicine, so this is the case #231's routing must hold for the chief alone, no doctor
+    question invented from a name it does not have."""
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if kind != "food" or "food.example.sg" not in domains:
+            return []
+        return [
+            Found(
+                domain="food.example.sg",
+                url="https://food.example.sg/diabetes-meal",
+                title="A diabetes meal that skips your tablet",
+                published_at="2026-09-01",
+                text=(
+                    "Skip your diabetes tablet before this meal and see how you feel "
+                    "afterwards."
+                ),
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _TreatyFoodCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="A meal idea for diabetes",
+            body=("Skip your diabetes tablet before this meal.",),
+            why_topic="your diabetes",
+            passage=text,
+        )
+
+
+async def test_a_food_page_that_would_change_treatment_is_held_for_his_chief_alone(
+    sg: AsyncSession,
+) -> None:
+    """#231: the general (non-SAFETY) `changes_treatment` reroute used to write an orphaned
+    `CardType.QUESTION`/`DeliverTo.MEMO` `FeedItem` nothing reads — the exact gap #224 closed
+    for a safety notice, left open one branch over. A food (or local, or seasonal) job names
+    no medicine, so it is held for the chief as a real card, the same card he would have had,
+    redirected — and, because there is no drug name to ask about, no doctor question is
+    invented for one."""
+    context = await _pa(sg)
+    photo = await store_artifact(
+        sg,
+        context=context,
+        kind=ArtifactKind.PHOTO,
+        storage_key=f"sg/profiles/pa/onboarding-{uuid.uuid4()}.jpg",
+        content_type="image/jpeg",
+        sha256="e" * 64,
+        captured_at=MONDAY,
+        source_channel=SourceChannel.APP,
+        region=Region.SG,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject="condition",
+        attribute="diabetes",
+        value=True,
+        confidence=1.0,
+        artifact_id=photo.id,
+    )
+    source = Source(
+        name="Food Example",
+        domain="food.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_TreatyFoodSearcher(),
+        compressor=_TreatyFoodCompressor(),
+        registry=FixtureRegistry.load(),
+    )
+    _, made = await refresh(sg, context=context, engine=engine)
+    food = next(item for item in made if item.type is CardType.FOOD)
+    assert food.deliver_to is DeliverTo.CAREGIVER
+    assert CardType.QUESTION not in {item.type for item in made}, "no orphaned FeedItem question"
+    # No medicine name was ever known for this job, so no doctor question is filed at all.
+    memos = await current_memos(sg, context=context)
+    assert not [one for one in memos if one.kind is MemoKind.ASK]
+    # His own feed never carries it.
+    his_page = await feed_page(sg, context=context, engine=engine)
+    assert food.id not in {item.id for item in his_page.items}
+    # Delivery, not existence: his chief's own, independently resolved key reads it back.
+    mei = await let_in(
+        sg, context, phone="+6591230097", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS}
+    )
+    her_page = await feed_page(sg, context=mei, engine=engine)
+    assert food.id in {item.id for item in her_page.items}
 
 
 async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_card(
@@ -456,6 +577,68 @@ async def test_a_notice_is_refused_outright_if_a_caller_ever_sends_it_to_the_pat
     refusals = [e for e in trail if e.outcome is Outcome.REFUSED]
     assert refusals and refusals[-1].refused_because == "NoticeNotForPatient"
     assert not [item for item in await _items(sg, context) if item.type is CardType.NOTICE]
+
+
+def test_the_not_plain_words_fallback_line_can_never_itself_fail(sg: AsyncSession) -> None:
+    """#231: when a caregiver-held card's own compressed words fail the plain-words check, a
+    fixed catalogue line reaches her instead — never the words that failed. That line must
+    never be able to fail the same check it stands in for, in any of his languages, or the
+    fallback would just move the silent drop one step over."""
+    for language in ("en", "ms", "zh"):
+        lines = notice_fallback_lines(language, doctor="Dr Tan")
+        findings = verify(lines.headline, language, "headline")
+        for line in (*lines.body, *lines.voice, lines.why):
+            findings += verify(line, language, "line")
+        failing = [f for f in findings if f.severity == "fail"]
+        assert not failing, (language, failing)
+        assert lines.boundary is not None
+        assert lines.body[-3:] == tuple(lines.boundary.splitlines())
+        assert lines.voice[-3:] == tuple(lines.boundary.splitlines())
+
+
+async def test_the_not_plain_words_fallback_writes_a_real_card_for_the_caregiver(
+    sg: AsyncSession,
+) -> None:
+    """The fallback content is a genuine, writable `FeedItem` — every other check `create_item`
+    runs (the boundary line, the card grammar, the source) still has to pass it, the same as
+    any other notice. (`create_item` only verifies plain-words for `DeliverTo.PATIENT` today,
+    so the `except NotPlainWords` branch around the caregiver notice cannot fire yet — this
+    proves the fallback it would send is itself sound, independent of that.)"""
+    context = await _pa(sg)
+    state = await current_state(sg, context=context)
+    source = Source(
+        name="Health Sciences Authority",
+        domain="hsa.gov.sg",
+        kind=SourceKind.REGULATOR,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    fallback = await create_item(
+        sg,
+        context=context,
+        state=state,
+        type=CardType.NOTICE,
+        lines=notice_fallback_lines("en", doctor="Dr Tan"),
+        why=Why(
+            kind="notice_fallback",
+            plain="",
+            source_id=str(source.id),
+            suppressed="original_words_failed_plain_words",
+        ),
+        scope=Scope.MEDICINES,
+        deliver_to=DeliverTo.CAREGIVER,
+        day="2026-09-03",
+        dedupe_key="notice:fallback",
+        expires_at=MONDAY,
+        source=source,
+    )
+    assert fallback.deliver_to is DeliverTo.CAREGIVER
+    assert fallback.headline == "A notice needs a look"
+    assert fallback.why["suppressed"] == "original_words_failed_plain_words"
 
 
 class _TreatyNoticeSearcher:

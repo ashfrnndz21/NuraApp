@@ -327,7 +327,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal": "{season} is on {day}.",
         "seasonal_about": "{season} begins around {day}.",
         "flag": "This is one of the things we never wait for.",
-        "notice_fallback": "Nura could not word this plainly by itself, so it is held for you to read.",
+        "notice_fallback": "Nura could not say this plainly, so it is held for you.",
     },
     "ms": {
         "now_tablets": "Anda ada ubat dalam senarai anda.",
