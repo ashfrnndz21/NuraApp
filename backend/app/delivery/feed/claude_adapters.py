@@ -171,18 +171,122 @@ def _looks_like_video(url: str) -> bool:
     return host in _VIDEO_HOSTS
 
 
-def _found_from_entry(entry: Mapping[str, Any], allowed: Sequence[str]) -> Found | None:
-    url = str(entry.get("url") or "").strip()
-    domain = _on_allowlist(url, allowed)
-    title = str(entry.get("title") or "").strip()
-    text = str(entry.get("text") or "").strip()
-    if domain is None or not title or not text:
+def _normalize_url(url: str) -> str:
+    """Light normalisation for matching the model's claimed URL to a tool result's own URL:
+    scheme and host lower-cased, trailing slash and fragment dropped. This is only ever used
+    to compare one string to another — the allowlist decision itself (`_on_allowlist`) always
+    runs on a tool's own URL, never on this normalised form."""
+    parsed = urlparse(url.strip())
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower()
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path or ""
+    if len(path) > 1 and path.endswith("/"):
+        path = path.rstrip("/")
+    normalized = f"{scheme}://{host}{port}{path}"
+    return f"{normalized}?{parsed.query}" if parsed.query else normalized
+
+
+def _block_type(block: Any) -> str | None:
+    if isinstance(block, Mapping):
+        return block.get("type")
+    return getattr(block, "type", None)
+
+
+def _block_field(block: Any, key: str) -> Any:
+    if block is None:
         return None
-    media = "video" if entry.get("media") == "video" or _looks_like_video(url) else None
+    if isinstance(block, Mapping):
+        return block.get(key)
+    return getattr(block, key, None)
+
+
+def _fetch_document_text(fetch_result: Any) -> str:
+    """The plain text of a `web_fetch_tool_result`'s document, however its `source` carries
+    it. Anything that is not plain text (an image, a PDF this port does not parse here)
+    answers `''` — never falls back to the model's own restated text."""
+    document = _block_field(fetch_result, "content")
+    source = _block_field(document, "source")
+    if source is None:
+        return ""
+    kind = _block_field(source, "type")
+    data = _block_field(source, "data")
+    if kind in (None, "text") and isinstance(data, str) and data.strip():
+        return data
+    return ""
+
+
+def _tool_results(response: Any) -> tuple[dict[str, str], dict[str, tuple[str, str]]]:
+    """What the server tools themselves returned — never the model's prose. `tool_urls` maps
+    every URL a `web_search_tool_result` or `web_fetch_tool_result` block named (normalised)
+    to that tool's own, un-normalised URL. `fetched` maps the same normalised key, for
+    `web_fetch_tool_result` blocks only, to `(resolved_url, document_text)`: the one place a
+    found item's text is allowed to come from. A page the model mentions but no tool result
+    named is in neither map, and a page a tool named but never fetched has no entry in
+    `fetched` — both are how `_found_from_entry` drops an item, never by trusting the model."""
+    tool_urls: dict[str, str] = {}
+    fetched: dict[str, tuple[str, str]] = {}
+    for block in getattr(response, "content", None) or []:
+        block_type = _block_type(block)
+        if block_type == "web_search_tool_result":
+            content = _block_field(block, "content") or []
+            if not isinstance(content, Sequence) or isinstance(content, (str, bytes)):
+                continue
+            for result in content:
+                url = str(_block_field(result, "url") or "").strip()
+                if url:
+                    tool_urls[_normalize_url(url)] = url
+        elif block_type == "web_fetch_tool_result":
+            fetch_result = _block_field(block, "content")
+            url = str(_block_field(fetch_result, "url") or "").strip()
+            if not url:
+                continue
+            key = _normalize_url(url)
+            tool_urls[key] = url
+            text = _fetch_document_text(fetch_result).strip()
+            if text:
+                fetched[key] = (url, text)
+    return tool_urls, fetched
+
+
+def _found_from_entry(
+    entry: Mapping[str, Any],
+    allowed: Sequence[str],
+    tool_urls: Mapping[str, str],
+    fetched: Mapping[str, tuple[str, str]],
+) -> Found | None:
+    """A card's page, built only from what the server tools themselves returned. A fetched
+    page could make the model write an allowlisted URL into its JSON while the text it gives
+    came from an off-list page or a redirect — so the model's own `url` and `text` are never
+    trusted here. The model's claimed URL must match, after `_normalize_url`, a URL a tool
+    result actually named; that tool's own URL (never the model's string) must be on the
+    allowlist; and the text must be the matching `web_fetch_tool_result` document's own text.
+    Short of all three, the item is dropped — never a fallback to the model's prose."""
+    claimed_url = str(entry.get("url") or "").strip()
+    if not claimed_url:
+        return None
+    key = _normalize_url(claimed_url)
+    tool_url = tool_urls.get(key)
+    if tool_url is None:
+        return None
+    domain = _on_allowlist(tool_url, allowed)
+    if domain is None:
+        return None
+    fetch = fetched.get(key)
+    if fetch is None:
+        # A tool named this URL but never fetched it (or the fetch was not text): there is
+        # nowhere else in the port's shape to get real text from, so the item is dropped
+        # rather than compressing the model's restated version of it.
+        return None
+    _, text = fetch
+    title = str(entry.get("title") or "").strip()
+    if not title or not text:
+        return None
+    media = "video" if entry.get("media") == "video" or _looks_like_video(tool_url) else None
     licence = entry.get("licence")
     return Found(
         domain=domain,
-        url=url,
+        url=tool_url,
         title=title,
         published_at=str(entry.get("published_at") or ""),
         text=text,
@@ -195,8 +299,10 @@ class ClaudeSearcher:
     """The `Searcher` port, answered for real: Claude's own `web_search` and `web_fetch` server
     tools, asked for pages on the allowlisted publishers only, structured to the shape this
     port promises. The allowlist is enforced twice — once in the prompt, and again here on
-    every result's own URL (`_on_allowlist`) — because a model asked to stay on a list is not
-    the same guarantee as a caller that never returns a page off it."""
+    every URL a tool result itself returned (`_on_allowlist`, through `_tool_results` and
+    `_found_from_entry`) — never on the URL string the model writes into its JSON, because a
+    model asked to stay on a list is not the same guarantee as a caller that never returns a
+    page off it, or a page whose text did not come from where its URL says it did."""
 
     def __init__(self, *, api_key: str | None, demo_mode: bool, client: Any | None = None) -> None:
         key = _checked_key(api_key=api_key, demo_mode=demo_mode, what="searcher")
@@ -246,11 +352,16 @@ class ClaudeSearcher:
         payload = _structured_json(response)
         if payload is None:
             return []
+        tool_urls, fetched = _tool_results(response)
+        if not tool_urls:
+            # No web_search_tool_result or web_fetch_tool_result blocks at all: never fall
+            # back to trusting the model's own URLs.
+            return []
         results: list[Found] = []
         for entry in payload.get("results", []) or []:
             if not isinstance(entry, Mapping):
                 continue
-            one = _found_from_entry(entry, allowed)
+            one = _found_from_entry(entry, allowed, tool_urls, fetched)
             if one is not None:
                 results.append(one)
         return results

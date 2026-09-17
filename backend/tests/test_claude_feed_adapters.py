@@ -45,9 +45,72 @@ class FakeBlock:
 
 
 @dataclass
+class FakeWebSearchResult:
+    """One entry of a `web_search_tool_result` block's own `content` — the tool's own URL,
+    never the model's."""
+
+    url: str
+    title: str = ""
+    type: str = "web_search_result"
+
+
+@dataclass
+class FakeWebSearchToolResult:
+    content: Sequence[FakeWebSearchResult]
+    type: str = "web_search_tool_result"
+
+
+@dataclass
+class FakeFetchSource:
+    data: str
+    type: str = "text"
+
+
+@dataclass
+class FakeFetchDocument:
+    source: FakeFetchSource
+    type: str = "document"
+
+
+@dataclass
+class FakeFetchResult:
+    """A `web_fetch_tool_result` block's own `content`: the *resolved* URL the fetch actually
+    landed on (which a redirect can make different from the URL that was asked for) and the
+    document it fetched."""
+
+    url: str
+    content: FakeFetchDocument
+    type: str = "web_fetch_result"
+
+
+@dataclass
+class FakeWebFetchToolResult:
+    content: FakeFetchResult
+    type: str = "web_fetch_tool_result"
+
+
+@dataclass
 class FakeResponse:
     content: Sequence[Any]
     stop_reason: str = "end_turn"
+
+
+def _search_result_block(urls: Sequence[str]) -> FakeWebSearchToolResult:
+    """A `web_search_tool_result` block naming exactly these URLs, as the tool itself found
+    them."""
+    return FakeWebSearchToolResult(content=[FakeWebSearchResult(url=url) for url in urls])
+
+
+def _fetch_result_block(url: str, text: str, *, resolved: str | None = None) -> FakeWebFetchToolResult:
+    """A `web_fetch_tool_result` block: `url` is what was asked for, `resolved` is the URL the
+    fetch actually landed on (a redirect can make it a different site) and defaults to `url`
+    when there was no redirect. `text` is the document's own body."""
+    return FakeWebFetchToolResult(
+        content=FakeFetchResult(
+            url=resolved if resolved is not None else url,
+            content=FakeFetchDocument(source=FakeFetchSource(data=text)),
+        )
+    )
 
 
 class FakeMessages:
@@ -71,10 +134,14 @@ class FakeClient:
         self.messages = FakeMessages(responses)
 
 
-def _search_response(results: list[dict[str, Any]], *, stop_reason: str = "end_turn") -> FakeResponse:
-    return FakeResponse(
-        content=[FakeBlock(json.dumps({"results": results}))], stop_reason=stop_reason
-    )
+def _search_response(
+    results: list[dict[str, Any]],
+    *,
+    tool_blocks: Sequence[Any] = (),
+    stop_reason: str = "end_turn",
+) -> FakeResponse:
+    content: list[Any] = [*tool_blocks, FakeBlock(json.dumps({"results": results}))]
+    return FakeResponse(content=content, stop_reason=stop_reason)
 
 
 def _compress_response(payload: dict[str, Any] | None, *, stop_reason: str = "end_turn") -> FakeResponse:
@@ -115,19 +182,22 @@ def test_claude_compressor_refuses_without_an_api_key() -> None:
 
 
 def test_claude_searcher_returns_the_ports_found_shape() -> None:
+    url = "https://healthhub.sg/live-healthy/bp"
+    text = "Checking your blood pressure regularly helps you and your doctor."
     client = FakeClient(
         [
             _search_response(
                 [
                     {
                         "title": "Managing high blood pressure",
-                        "url": "https://healthhub.sg/live-healthy/bp",
+                        "url": url,
                         "publisher": "HealthHub",
-                        "text": "Checking your blood pressure regularly helps you and your doctor.",
+                        "text": text,
                         "published_at": "2026-01-01",
                         "media": "article",
                     }
-                ]
+                ],
+                tool_blocks=[_search_result_block([url]), _fetch_result_block(url, text)],
             )
         ]
     )
@@ -153,25 +223,32 @@ def test_claude_searcher_drops_a_result_off_the_allowlist() -> None:
     """The allowlist is enforced here too, not only by the prompt: a page the model returns
     from a site it was not asked for is dropped, never smuggled onto a card (the same
     guarantee `FixtureSearcher.search` gives by construction)."""
+    on_list_url = "https://healthhub.sg/a"
+    off_list_url = "https://not-allowlisted.example/a"
     client = FakeClient(
         [
             _search_response(
                 [
                     {
                         "title": "On the list",
-                        "url": "https://healthhub.sg/a",
+                        "url": on_list_url,
                         "publisher": "HealthHub",
                         "text": "This page is on the allowlist.",
                         "media": "article",
                     },
                     {
                         "title": "Not on the list",
-                        "url": "https://not-allowlisted.example/a",
+                        "url": off_list_url,
                         "publisher": "Some Blog",
                         "text": "This page is not on the allowlist.",
                         "media": "article",
                     },
-                ]
+                ],
+                tool_blocks=[
+                    _search_result_block([on_list_url, off_list_url]),
+                    _fetch_result_block(on_list_url, "This page is on the allowlist."),
+                    _fetch_result_block(off_list_url, "This page is not on the allowlist."),
+                ],
             )
         ]
     )
@@ -181,25 +258,32 @@ def test_claude_searcher_drops_a_result_off_the_allowlist() -> None:
 
 
 def test_claude_searcher_only_returns_https_pages_on_the_named_domain() -> None:
+    wrong_scheme = "http://healthhub.sg/a"
+    lookalike = "https://healthhub.sg.evil.example/a"
     client = FakeClient(
         [
             _search_response(
                 [
                     {
                         "title": "Wrong scheme",
-                        "url": "http://healthhub.sg/a",
+                        "url": wrong_scheme,
                         "publisher": "HealthHub",
                         "text": "Not https.",
                         "media": "article",
                     },
                     {
                         "title": "Lookalike host",
-                        "url": "https://healthhub.sg.evil.example/a",
+                        "url": lookalike,
                         "publisher": "HealthHub",
                         "text": "Not really healthhub.sg.",
                         "media": "article",
                     },
-                ]
+                ],
+                tool_blocks=[
+                    _search_result_block([wrong_scheme, lookalike]),
+                    _fetch_result_block(wrong_scheme, "Not https."),
+                    _fetch_result_block(lookalike, "Not really healthhub.sg."),
+                ],
             )
         ]
     )
@@ -208,19 +292,22 @@ def test_claude_searcher_only_returns_https_pages_on_the_named_domain() -> None:
 
 
 def test_claude_searcher_tags_video_results() -> None:
+    url = "https://healthhub.sg/videos/bp-check"
+    text = "A short video on checking your blood pressure at home."
     client = FakeClient(
         [
             _search_response(
                 [
                     {
                         "title": "How to check your blood pressure",
-                        "url": "https://healthhub.sg/videos/bp-check",
+                        "url": url,
                         "publisher": "HealthHub",
-                        "text": "A short video on checking your blood pressure at home.",
+                        "text": text,
                         "media": "video",
                         "licence": "permission",
                     }
-                ]
+                ],
+                tool_blocks=[_search_result_block([url]), _fetch_result_block(url, text)],
             )
         ]
     )
@@ -232,18 +319,21 @@ def test_claude_searcher_tags_video_results() -> None:
 
 
 def test_claude_searcher_find_media_filter_excludes_articles() -> None:
+    url = "https://healthhub.sg/a"
+    text = "Plain text about diabetes."
     client = FakeClient(
         [
             _search_response(
                 [
                     {
                         "title": "An article, not a video",
-                        "url": "https://healthhub.sg/a",
+                        "url": url,
                         "publisher": "HealthHub",
-                        "text": "Plain text about diabetes.",
+                        "text": text,
                         "media": "article",
                     }
-                ]
+                ],
+                tool_blocks=[_search_result_block([url]), _fetch_result_block(url, text)],
             )
         ]
     )
@@ -274,6 +364,110 @@ def test_claude_searcher_with_no_domains_or_no_terms_calls_nothing() -> None:
     assert searcher.search("explainer", ["x"], []) == []
     assert searcher.search("explainer", [], ALLOWLIST) == []
     assert client.messages.calls == []
+
+
+# ---------------------------------------------------------------------------
+# ClaudeSearcher: the allowlist is checked against what the tools themselves returned, never
+# against the URL string the model writes into its final JSON (the safety-review fix).
+# ---------------------------------------------------------------------------
+
+
+def test_claude_searcher_drops_a_model_claimed_url_absent_from_the_tool_results() -> None:
+    """A fetched page could make the model write an allowlisted URL into its JSON while the
+    text it gives came from somewhere else entirely. If no `web_search_tool_result` or
+    `web_fetch_tool_result` block ever named that URL, the model's own say-so is not enough —
+    the item is dropped."""
+    claimed_url = "https://healthhub.sg/live-healthy/bp"
+    other_url = "https://healthhub.sg/some-other-page"
+    client = FakeClient(
+        [
+            _search_response(
+                [
+                    {
+                        "title": "Managing high blood pressure",
+                        "url": claimed_url,
+                        "publisher": "HealthHub",
+                        "text": "Checking your blood pressure regularly helps you and your doctor.",
+                        "media": "article",
+                    }
+                ],
+                # The tools only ever named a different page — never `claimed_url`.
+                tool_blocks=[
+                    _search_result_block([other_url]),
+                    _fetch_result_block(other_url, "Some other page entirely."),
+                ],
+            )
+        ]
+    )
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    assert searcher.search("explainer", ["blood pressure"], ALLOWLIST) == []
+
+
+def test_claude_searcher_drops_a_fetch_whose_resolved_url_is_off_list() -> None:
+    """The model asks for an allowlisted page, but the fetch tool's own resolved URL (after a
+    redirect) lands off the allowlist. The model then honestly reports the resolved URL — so
+    it matches a tool result — but that tool's own URL is not on the allowlist, and the item
+    is still dropped."""
+    resolved_off_list = "https://off-list-redirect.example/landed-here"
+    client = FakeClient(
+        [
+            _search_response(
+                [
+                    {
+                        "title": "Redirected away from the allowlist",
+                        "url": resolved_off_list,
+                        "publisher": "HealthHub",
+                        "text": "This is what the redirect actually served.",
+                        "media": "article",
+                    }
+                ],
+                tool_blocks=[
+                    _fetch_result_block(
+                        "https://healthhub.sg/live-healthy/bp",
+                        "This is what the redirect actually served.",
+                        resolved=resolved_off_list,
+                    )
+                ],
+            )
+        ]
+    )
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    assert searcher.search("explainer", ["blood pressure"], ALLOWLIST) == []
+
+
+def test_claude_searcher_keeps_a_matching_allowlisted_fetch_with_its_fetched_text() -> None:
+    """The good path: the model's claimed URL matches a `web_fetch_tool_result` whose own
+    resolved URL is on the allowlist. The card's text is the tool's own fetched document text
+    — not whatever the model restated in its `text` field."""
+    url = "https://healthhub.sg/live-healthy/bp"
+    fetched_text = "The tool's own fetched document body, verbatim, word for word."
+    model_restated_text = "A shorter summary the model wrote in its own words."
+    client = FakeClient(
+        [
+            _search_response(
+                [
+                    {
+                        "title": "Managing high blood pressure",
+                        "url": url,
+                        "publisher": "HealthHub",
+                        "text": model_restated_text,
+                        "media": "article",
+                    }
+                ],
+                tool_blocks=[
+                    _search_result_block([url]),
+                    _fetch_result_block(url, fetched_text),
+                ],
+            )
+        ]
+    )
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    found = searcher.search("explainer", ["blood pressure"], ALLOWLIST)
+    assert len(found) == 1
+    assert found[0].url == url
+    assert found[0].domain == "healthhub.sg"
+    assert found[0].text == fetched_text
+    assert found[0].text != model_restated_text
 
 
 # ---------------------------------------------------------------------------
