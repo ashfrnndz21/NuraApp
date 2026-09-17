@@ -79,6 +79,49 @@ SCOPE_WORDS: Mapping[str, Mapping[Scope, str]] = {
 to see."""
 
 # @patient phrase
+SCOPE_WORDS_THEIRS: Mapping[str, Mapping[Scope, str]] = {
+    "en": {
+        Scope.MEDICINES: "{patient}'s medicines",
+        Scope.VISITS: "{patient}'s visits to the doctor",
+        Scope.READINGS: "{patient}'s blood pressure book and {patient}'s sugar numbers",
+        Scope.RECORDS: "{patient}'s papers",
+        Scope.NOTES: "{patient}'s private notes",
+        Scope.MONEY: "{patient}'s insurance letters",
+        Scope.EMERGENCY: "{patient}'s emergency card",
+        Scope.FAMILY: "{patient}'s family list",
+        Scope.ASK: "{patient}'s questions to Nura",
+        Scope.SEND: "the messages Nura sends",
+    },
+    "ms": {
+        Scope.MEDICINES: "ubat {patient}",
+        Scope.VISITS: "lawatan {patient} ke doktor",
+        Scope.READINGS: "buku tekanan darah dan bacaan gula {patient}",
+        Scope.RECORDS: "surat-surat {patient}",
+        Scope.NOTES: "nota peribadi {patient}",
+        Scope.MONEY: "surat insurans {patient}",
+        Scope.EMERGENCY: "kad kecemasan {patient}",
+        Scope.FAMILY: "senarai keluarga {patient}",
+        Scope.ASK: "soalan {patient} kepada Nura",
+        Scope.SEND: "mesej yang Nura hantar",
+    },
+    "zh": {
+        Scope.MEDICINES: "{patient}的药",
+        Scope.VISITS: "{patient}看医生的记录",
+        Scope.READINGS: "{patient}的血压本和血糖数字",
+        Scope.RECORDS: "{patient}的病历文件",
+        Scope.NOTES: "{patient}的私人笔记",
+        Scope.MONEY: "{patient}的保险信件",
+        Scope.EMERGENCY: "{patient}的紧急卡",
+        Scope.FAMILY: "{patient}的家人名单",
+        Scope.ASK: "{patient}问 Nura 的问题",
+        Scope.SEND: "Nura 发的信息",
+    },
+}
+"""`SCOPE_WORDS` about him by name, for anyone reading them on someone else's screen — the
+family's grant lines and the consent wording both list parts this way, in his words when
+they are his to read and about him by name otherwise (`app.channels.about_him`)."""
+
+# @patient phrase
 NAMED_WITH_RELATIONSHIP: Mapping[str, str] = {
     "en": "{name}, {relationship},",
     "ms": "{name}, {relationship},",
@@ -371,3 +414,83 @@ def render_sharing(
     """Fill the sharing template with the person and the parts, as the patient will read it."""
     parts = "\n".join(f"- {part}" for part in what_lines(scopes, language))
     return template.format(named=named_words(name, relationship, language), name=name, parts=parts)
+
+
+# @patient
+CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
+    "en": {
+        "keeps": (
+            "Nura keeps your papers, your medicines and your blood pressure book.",
+            "Nura keeps {patient}'s papers, {patient}'s medicines and {patient}'s blood "
+            "pressure book.",
+        ),
+        "stop_record": (
+            "You can tell Nura to stop at any time.",
+            "{patient} can tell Nura to stop at any time.",
+        ),
+        "stays": (
+            "The papers Nura already has stay in your record.",
+            "The papers Nura already has stay in {patient}'s record.",
+        ),
+        "share_lead": (
+            "You are letting {named} see some of your record.",
+            "{patient} is letting {named} see some of {patient}'s record.",
+        ),
+        "share_stop": (
+            "You can stop this at any time.",
+            "{patient} can stop this at any time.",
+        ),
+    },
+    "ms": {
+        "keeps": (
+            "Nura menyimpan surat-surat anda, ubat anda dan buku tekanan darah anda.",
+            "Nura menyimpan surat-surat {patient}, ubat {patient} dan buku tekanan darah "
+            "{patient}.",
+        ),
+        "stop_record": (
+            "Anda boleh minta Nura berhenti pada bila-bila masa.",
+            "{patient} boleh minta Nura berhenti pada bila-bila masa.",
+        ),
+        "stays": (
+            "Apa yang sudah disimpan kekal dalam rekod anda.",
+            "Apa yang sudah disimpan kekal dalam rekod {patient}.",
+        ),
+        "share_lead": (
+            "Anda membenarkan {named} melihat sebahagian daripada rekod anda.",
+            "{patient} membenarkan {named} melihat sebahagian daripada rekod {patient}.",
+        ),
+        "share_stop": (
+            "Anda boleh berhenti pada bila-bila masa.",
+            "{patient} boleh berhenti pada bila-bila masa.",
+        ),
+    },
+    "zh": {
+        "keeps": (
+            "Nura 帮您保存您的病历文件、您的药和您的血压本。",
+            "Nura 帮{patient}保存{patient}的病历文件、{patient}的药和{patient}的血压本。",
+        ),
+        "stop_record": (
+            "您可以随时叫 Nura 停下来。",
+            "{patient}可以随时叫 Nura 停下来。",
+        ),
+        "stays": (
+            "已经保存的，还是留在您的记录里。",
+            "已经保存的，还是留在{patient}的记录里。",
+        ),
+        "share_lead": (
+            "您让{named}看您记录里的一部分。",
+            "{patient}让{named}看{patient}记录里的一部分。",
+        ),
+        "share_stop": (
+            "您可以随时停止。",
+            "{patient}可以随时停止。",
+        ),
+    },
+}
+"""Consent wording that speaks to him, each with its twin about him by name
+(`app.channels.about_him`): the lines from `HOLD_HEALTH_RECORD` he reads when he opens his
+own account, and from `SHARE_WITH_PERSON` when he lets someone in. A consent record quotes
+his own words verbatim, so a key holder reading someone else's — his chief, on the Family
+consents screen — reads them about him by name instead, never as if they were her own. The
+window line ("{name} can see them until you say stop.") is shared with the family's grant
+lines and its twin lives with them (`app.family.strings.WINDOW_LINES_THEIRS`)."""

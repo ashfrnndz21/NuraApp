@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
 from app.channels import state_words
+from app.consent import texts as consent_words
 from app.delivery import strings as feed_words
 from app.delivery import timeline_strings
 from app.delivery.strings import language_for, theirs
+from app.family import strings as family_words
 from app.keys.context import KeyContext
 from app.medicines import strings as medicine_words
 from app.safety.boundary import BOUNDARY_THEIRS
@@ -78,6 +80,16 @@ def _strings(value: Any) -> Iterator[str]:
             yield from _strings(each)
 
 
+def _bulleted(mapping: Mapping[str, Mapping[Any, str]]) -> dict[str, dict[Any, str]]:
+    """Each part of the record as the family's grant lines and the consent wording both list
+    it: one bullet a line (`app.family.grants._grant_lines`, `app.consent.texts.render_sharing`,
+    both `f"- {part}"`)."""
+    return {
+        language: {scope: f"- {text}" for scope, text in by_scope.items()}
+        for language, by_scope in mapping.items()
+    }
+
+
 def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
     return (
         (feed_words.HEADLINES, feed_words.HEADLINES_THEIRS),
@@ -93,6 +105,13 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (medicine_words.SOURCE, medicine_words.SOURCE_THEIRS),
         (medicine_words.IF_FORGOTTEN, medicine_words.IF_FORGOTTEN_THEIRS),
         (state_words.POSTURE_LINE, state_words.POSTURE_LINE_THEIRS),
+        # The family's grant lines (#210) and the consent wording (#214): who a role is to
+        # him and the parts a key opens speak to him inside a slot ("the person who runs your
+        # care"), so the outer template needs no twin of its own — registering it here is
+        # enough for the slot it carries to be said about him (`_theirs`, below).
+        (family_words.ROLE_IS, family_words.ROLE_IS),
+        (family_words.WINDOW_LINES, family_words.WINDOW_LINES_THEIRS),
+        (_bulleted(consent_words.SCOPE_WORDS), _bulleted(consent_words.SCOPE_WORDS_THEIRS)),
     )
 
 
@@ -127,7 +146,12 @@ def twins(language: str) -> tuple[tuple[str, str], ...]:
         same.extend((one, one) for one in _strings(mine) if not TO_HIM[language].search(one))
     # The written twins first, so a template that is all slot around a few words ("This comes
     # from {…}.") never takes a line that has a twin of its own.
-    pairs = [*written, *BOUNDARY_THEIRS.get(language, {}).values(), *same]
+    pairs = [
+        *written,
+        *BOUNDARY_THEIRS.get(language, {}).values(),
+        *consent_words.CONSENT_THEIRS.get(language, {}).values(),
+        *same,
+    ]
     first: dict[str, str] = {}
     for original, twin in pairs:
         first.setdefault(original, twin)

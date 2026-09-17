@@ -169,8 +169,12 @@ async def feed_events(body: EventsIn, context: Context, session: Db) -> EventsOu
 @router.get("/{profile_id}/feed/week")
 async def feed_week(context: Context, session: Db) -> list[SentOut]:
     """Sent to Pa this week (spec §1): every card made for him since Monday, newest first,
-    with what became of it — sent, opened, played, dismissed, held — and its source."""
-    return [SentOut.of(one) for one in await sent_this_week(session, context=context)]
+    with what became of it — sent, opened, played, dismissed, held — and its source. On a
+    key that is not his, said about him by name, the way `GET /feed` already is (#210)."""
+    reader = await reader_of(session, context, None)
+    return [
+        reader.model(SentOut.of(one)) for one in await sent_this_week(session, context=context)
+    ]
 
 
 @router.get("/{profile_id}/feed/{item_id}/clip/poster")

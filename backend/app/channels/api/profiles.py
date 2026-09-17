@@ -546,9 +546,17 @@ async def revoke(key_id: uuid.UUID, request: Request, context: Context, session:
 async def consents(context: ClosingContext, session: Db) -> list[ConsentOut]:
     """Every agreement ever given on this profile, withdrawn ones included, oldest first.
     Read under the family scope: the owner's and his chief's. While his account is closing
-    (#143) it stays his to read, and nobody else's."""
+    (#143) it stays his to read, and nobody else's.
+
+    Each wording is the words he read, verbatim — a consent record's whole value is being
+    unambiguous about who agreed to what. On his own key that is what he reads; on a key
+    that is not his, the same words are said about him by name, never left to read as if
+    they were the reader's own (#214)."""
     await only_the_owner_while_closing(session, context)
-    return [ConsentOut.of(row) for row in await all_consents(session, context=context)]
+    reader = await reader_of(session, context, None)
+    return [
+        reader.model(ConsentOut.of(row)) for row in await all_consents(session, context=context)
+    ]
 
 
 @router.get("/{profile_id}/consents/record.html", response_class=HTMLResponse)
