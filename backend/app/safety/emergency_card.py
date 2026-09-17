@@ -48,8 +48,10 @@ from app.audit.models import Action
 from app.channels.safety_strings import (
     BLOOD_GROUP_WORDS,
     CONDITION_WORDS,
+    HIGH_RISK_LABEL_WORDS,
     LANGUAGE_NAMES,
     WHEN_WORDS,
+    YOUR_MEDICINE,
     NotPlainWords,
     language_of,
     phrase,
@@ -107,10 +109,20 @@ log = logging.getLogger("nura.safety")
 
 @dataclass(frozen=True, slots=True)
 class Line:
-    """One verified sentence on the card and the template it came from."""
+    """One verified sentence on the card and the template it came from.
+
+    `medicine_line_id` is the medication line this sentence is about (`Medicine.line_id`,
+    the register's own id) when it is one of `_MEDICINE_TEMPLATES`'s sentences, one per
+    medicine; `None` for every other line. The printable page joins a line to its English
+    twin by this id, not by where the two happen to fall in their lists (A2, clinical-safety
+    review on #229's own PR): the patient-language and English lines are built from two
+    separate passes over the same medicines (`emergency_card.lines_in`), and nothing
+    guarantees the two passes keep the same medicines in the same order — a line withheld in
+    one language and not the other (A1) is one way they diverge, not the only one."""
 
     id: str
     text: str
+    medicine_line_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +142,18 @@ class Allergy:
 @dataclass(frozen=True, slots=True)
 class Medicine:
     """One active line as the card shows it. `strength` and `generic` are the register's
-    words, data for the stranger; `plain_name`, `amount` and `when` are his."""
+    words, data for the stranger; `plain_name`, `amount` and `when` are his.
+
+    `has_plain_name` says whether `plain_name` came from his story for this generic
+    (`app.medicines.strings.PLAIN_NAME`) or is the register's own name, title-cased, because
+    the register has none (#222): either way `plain_name` is never empty and never withheld —
+    a stranger reading this card sees every active medicine, named one way or the other.
+
+    `high_risk_label` is `HIGH_RISK_LABEL_WORDS` in his language, catalogued and plain-words
+    checked, never `None` when `high_risk` is true (A3, clinical-safety review on #229's own
+    PR): the client renders this and nothing of its own, so the word "high-risk" a stranger
+    reads is never typed into a screen outside the verified strings this card already goes
+    through for everything else."""
 
     line_id: uuid.UUID
     fact_id: uuid.UUID
@@ -139,10 +162,12 @@ class Medicine:
     strength: str
     form: str
     plain_name: str
+    has_plain_name: bool
     amount: str
     when: str
     high_risk: bool
     high_risk_class: str | None
+    high_risk_label: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -343,15 +368,22 @@ def age_band(birth_year: int, today_year: int) -> str | None:
     return f"{low} to {low + 9}"
 
 
-def _plain_medicine(registry: DrugRegistry, line: MedicationLine, language: str) -> str:
-    """His name for the medicine — "the water pill" — with the register's name small beside
-    it in English ("the water pill (frusemide)"), as the standard allows. In Malay and
-    Chinese the sentence carries his name only: the generic is in the table beside it."""
+def _plain_medicine(registry: DrugRegistry, line: MedicationLine, language: str) -> tuple[str, bool]:
+    """His name for the medicine — "the water pill" — and whether it is really his: a story
+    from the register (`True`), or, when the register has none, its own name, title-cased,
+    so a clinician still gets the register's word for it and the line is never blank (#222).
+
+    Never appends the register's name here: an English sentence that names a generic
+    (`bisoprolol`, `paracetamol` …) alongside its plain name fails the plain-words length
+    check (rule 3) for every generic outside the handful `GLOSSARY` already allows to stand
+    beside its plain name, and #202 grew the register past that handful — see
+    `_medicine_label`, which tries the parenthetical only where it can still pass, and
+    `Medicine.generic`, which carries the register's name as data regardless, beside the
+    line, the way the strength and the chief's phone number already do (module doc)."""
     try:
-        plain = PLAIN_NAME[language][registry.monograph(line.generic).plain_name_id]
+        return PLAIN_NAME[language][registry.monograph(line.generic).plain_name_id], True
     except Exception:  # noqa: BLE001 — a generic the register has no story for keeps its name
-        return line.generic.title()
-    return f"{plain} ({line.generic})" if language == "en" else plain
+        return line.generic.title(), False
 
 
 def _medicines(
@@ -363,6 +395,8 @@ def _medicines(
         danger = high_risk_class(line.generic) or (
             line.drug_class.lower() if is_high_risk(line.drug_class) else None
         )
+        plain_name, has_plain_name = _plain_medicine(registry, line, language)
+        is_high_risk_medicine = bool(line.high_risk or danger)
         shown.append(
             Medicine(
                 line_id=line.id,
@@ -371,14 +405,74 @@ def _medicines(
                 brand=line.brand,
                 strength=line.strength,
                 form=line.form,
-                plain_name=_plain_medicine(registry, line, language),
+                plain_name=plain_name,
+                has_plain_name=has_plain_name,
                 amount=say_amount(dose.amount, dose.unit, language),
                 when=phrase(WHEN_WORDS, language, dose.frequency.value),
-                high_risk=bool(line.high_risk or danger),
+                high_risk=is_high_risk_medicine,
                 high_risk_class=danger or ("high_risk" if line.high_risk else None),
+                # A3: the word a stranger reads for this ("high-risk") comes from the same
+                # catalogue and plain-words path as everything else on the card, never typed
+                # into the client outside `render` (clinical-safety review on #229's own PR).
+                high_risk_label=(
+                    HIGH_RISK_LABEL_WORDS[language_of(language)]
+                    if is_high_risk_medicine
+                    else None
+                ),
             )
         )
     return shown
+
+
+_MEDICINE_TEMPLATES: tuple[str, ...] = ("ec.medicine", "ec.high_risk")
+"""Every template a medicine's label fills (`compose_lines`). `_medicine_label` must probe all
+of them, not just `ec.medicine`: `ec.high_risk` wraps the same label in more words and sits
+closer to rule 3's 15-word hard fail, so a label that passes the shorter sentence is not
+proof it passes the longer one (clinical-safety review on #222's own PR, #229)."""
+
+
+def _medicine_label(medicine: Medicine, language: str, name: str) -> str:
+    """The word for this medicine in his sentence: his plain name, with the register's name
+    small beside it in English ("the water pill (frusemide)") only when *every* template that
+    uses this label — `_MEDICINE_TEMPLATES` — still passes the plain-words standard with it
+    there. True for the handful of chemical names `GLOSSARY` already allows beside their plain
+    name, false for most of the register since #202 (measured: 26 of the register's 50
+    generics, `test_emergency_card.py`). The parenthetical is opportunistic, never
+    load-bearing: whichever label is chosen here, the register's own name for the medicine is
+    always on the card as `Medicine.generic`, data beside the line for the stranger, exactly
+    like the strength and the chief's phone number (module doc) — so nothing a clinician needs
+    is lost when the parenthetical cannot be said, and the sentence naming the medicine is
+    never withheld for carrying it (#222).
+
+    `theirs()` is applied here, before the trial render, not by the caller afterwards: the
+    probe must check the exact string that ships, and `theirs()` can change a label's length
+    and words (English "your" becomes "{name}'s"), so probing the pre-`theirs()` string was
+    checking a sentence nobody ever sees (clinical-safety review on #229).
+
+    The fallback branch — `language != "en"`, or `has_plain_name` is false — used to be
+    handed straight back to the caller with no probe at all (A1, clinical-safety review on
+    #229's own PR): his plain name, or the register's bare name when it has none, is not
+    guaranteed safe just because it is not the enriched form. A generic that is also one of
+    `GLOSSARY`'s red words needing its plain name beside it (`frusemide`, `amlodipine`,
+    `atorvastatin`, `metformin` …) fails rule 4 on its own, in any language, the moment the
+    register has no story to pair it with — so this branch is probed too, and falls back
+    further, to `YOUR_MEDICINE`, a phrase that names no chemical and so cannot trip that or
+    any other rule, before anything is handed to `say`."""
+    plain = theirs(medicine.plain_name, name, language)
+    try:
+        for template_id in _MEDICINE_TEMPLATES:
+            render(template_id, language, name=name, medicine=plain)
+    except NotPlainWords:
+        plain = theirs(YOUR_MEDICINE[language_of(language)], name, language)
+    if language != "en" or not medicine.has_plain_name:
+        return plain
+    enriched = theirs(f"{medicine.plain_name} ({medicine.generic})", name, language)
+    try:
+        for template_id in _MEDICINE_TEMPLATES:
+            render(template_id, language, name=name, medicine=enriched)
+    except NotPlainWords:
+        return plain
+    return enriched
 
 
 def compose_lines(
@@ -397,18 +491,37 @@ def compose_lines(
     region: Region,
     insurer: str | None = None,
 ) -> list[Line]:
-    """The card as sentences, in order, every one through `render` and so verified."""
+    """The card as sentences, in order, every one through `render` and so verified.
+
+    No active medicine is ever withheld (#222): `_medicine_label` never returns a name that
+    fails the standard, so `ec.medicine` and `ec.high_risk` cannot raise for a medicine's own
+    name — the one thing left to guard is everything else on the card, still withheld-and-
+    logged by `say`, and now also surfaced on the card itself when it happens, not only in
+    the log, so a stranger reading it sees that a line is missing instead of a card that
+    looks complete and is not.
+    """
     lang = language_of(language)
     zone = REGION_TZ[region]
     lines: list[Line] = []
+    withheld: list[str] = []
 
-    def say(template_id: str, **slots: Any) -> None:
-        """One line, or none: a line that fails the standard is withheld and logged, so the
-        card a stranger is holding is never taken away whole for one bad template."""
+    def say(
+        template_id: str, *, medicine_line_id: uuid.UUID | None = None, **slots: Any
+    ) -> None:
+        """One line, or none: a line that fails the standard is withheld, logged, and
+        remembered, so the card a stranger is holding is never taken away whole for one bad
+        template — and never left to look complete when it is not (#222).
+
+        `medicine_line_id`, when this line is one of `_MEDICINE_TEMPLATES`'s, names the
+        medicine it is about — carried on the `Line`, not a render slot — so the printable
+        page can join it to its English twin by the medicine, not by position (A2)."""
         try:
-            lines.append(Line(template_id, render(template_id, lang, **slots)))
+            lines.append(
+                Line(template_id, render(template_id, lang, **slots), medicine_line_id)
+            )
         except NotPlainWords as failed:
             log.warning("emergency card line withheld: %s", failed)
+            withheld.append(template_id)
 
     say("ec.title", name=name)
     say("ec.show")
@@ -423,11 +536,27 @@ def compose_lines(
     if medicines:
         for medicine in medicines:
             # His words for a medicine carry his possessive; on his card it is said about him.
-            say("ec.medicine", name=name, medicine=theirs(medicine.plain_name, name, lang))
-            say("ec.medicine_when", name=name, amount=medicine.amount, when=medicine.when)
+            # `_medicine_label` applies `theirs()` itself, before it probes the label against
+            # every template that uses it, so the probe checks exactly what ships (#229) and
+            # the sentence always passes; the register's own name is on the card regardless,
+            # as `Medicine.generic`.
+            label = _medicine_label(medicine, lang, name)
+            say("ec.medicine", name=name, medicine=label, medicine_line_id=medicine.line_id)
+            say(
+                "ec.medicine_when",
+                name=name,
+                amount=medicine.amount,
+                when=medicine.when,
+                medicine_line_id=medicine.line_id,
+            )
             if medicine.high_risk:
                 # The same name as the line above it, so the two are one tablet to him.
-                say("ec.high_risk", name=name, medicine=theirs(medicine.plain_name, name, lang))
+                say(
+                    "ec.high_risk",
+                    name=name,
+                    medicine=label,
+                    medicine_line_id=medicine.line_id,
+                )
     else:
         say("ec.no_medicine", name=name)
     if allergies:
@@ -454,6 +583,15 @@ def compose_lines(
     if last_reading_at is not None:
         say("ec.last_reading", name=name, date=as_utc(last_reading_at).astimezone(zone).date())
     say("ec.boundary")
+    if withheld:
+        # Surfaced on the card, not only in the log (#222): these two lines are static and
+        # verified in every language (test_plain_words.py's catalogue check), so in practice
+        # they always render. They still go through `say`, not a bare `render` call, so a
+        # future edit to either template degrades the same way every other line does —
+        # dropped and logged — rather than raising out of card generation entirely
+        # (clinical-safety review on #229's own PR).
+        say("ec.render_issue", name=name)
+        say("ec.render_issue_family")
     return lines
 
 

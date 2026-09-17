@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -35,7 +35,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import (
-    audited,
+    audited_guard,
     audited_profile_read,
     audited_read,
     audited_write,
@@ -230,6 +230,22 @@ class Answer:
         return [line.text for line in self.lines] + list(self.honest) + list(self.boundary)
 
 
+STEP_KEYS = ("visits", "readings", "medicines", "records")
+"""One step per part of the record `_corpus_stream` reads, in the order it reads them. Each
+name is a key into `app.delivery.timeline_strings.ASK_STEPS` (and its `_THEIRS` twin), never
+prose composed here — the step is real work that already happened by the time it is yielded,
+and it is yielded only when the key's scope let that part be read at all (`_corpus_stream`
+skips a withheld scope's work entirely, so a step for it is never produced)."""
+
+
+@dataclass(frozen=True, slots=True)
+class AskStep:
+    """One real stage of building the answer, streamed as it finishes: which part of the
+    record was just read. Never invented, never delayed — see `recall_stream`."""
+
+    key: str
+
+
 # --- the corpus: what this key may read, as candidates ---------------------------------------
 
 
@@ -333,13 +349,19 @@ def _is_reading(fact: Fact) -> bool:
     )
 
 
-async def _corpus(
+async def _corpus_stream(
     session: AsyncSession,
     context: KeyContext,
     registry: DrugRegistry | None,
     store: ObjectStore,
-) -> _Corpus:
+) -> AsyncIterator[AskStep | _Corpus]:
+    """Build the corpus one part of the record at a time, in `STEP_KEYS` order, yielding an
+    `AskStep` the moment each part's real read finishes — and finally the `_Corpus` itself, the
+    last item. A part this key's scope does not open is never read, so its step is never
+    yielded either: the caregiver-scoping rule holds by construction, not by a filter bolted
+    on after (spec 'Conversation, waiting and thinking')."""
     corpus = _Corpus()
+    # visits (+ what was heard at a recorded one, E03-05: the same scope opens both)
     if context.allows(Scope.VISITS):
         providers = await audited_read(session, Provider, context, Scope.VISITS)
         corpus.providers = {provider.id: provider for provider in providers}
@@ -350,33 +372,25 @@ async def _corpus(
             corpus.candidates.append(
                 Candidate("visit", visit.id, visit.scheduled_at, frozenset(names))
             )
+        corpus.clips_open = hears_consults(context)
+        await _consults(session, context, registry, corpus)
+        yield AskStep("visits")
     else:
         corpus.withhold(Scope.VISITS)
-    # Readings and the record: current facts, each under its subject's scope. A medicine is
-    # recalled from its line, below, not from the facts under it.
-    for scope in (Scope.READINGS, Scope.RECORDS):
-        if not context.allows(scope):
-            corpus.withhold(scope)
-            continue
-        facts = await audited_read(
-            session,
-            Fact,
-            context,
-            scope,
-            where=(
-                fact_is_under(scope),
-                Fact.superseded_at.is_(None),
-                Fact.confidence_state != ConfidenceState.DISPUTED,
-                fact_cites_only_what_is_held_here(context, scope),
-            ),
-        )
-        for fact in facts:
+    # readings: current facts under the readings scope. A medicine is recalled from its line,
+    # below, not from the facts under it.
+    if context.allows(Scope.READINGS):
+        for fact in await _facts_under(session, context, Scope.READINGS):
             corpus.facts[fact.id] = fact
             names = _what_names(fact.subject)
             if fact.attribute not in ("reading", "value", "systolic", "diastolic"):
                 names.add(fact.attribute.replace("_", " "))
             kind = "reading" if _is_reading(fact) else "fact"
             corpus.candidates.append(Candidate(kind, fact.id, fact.valid_from, _with_words(names)))
+        yield AskStep("readings")
+    else:
+        corpus.withhold(Scope.READINGS)
+    # medicines
     if context.allows(Scope.MEDICINES):
         lines = await audited_read(
             session,
@@ -395,12 +409,20 @@ async def _corpus(
             corpus.candidates.append(
                 Candidate("medicine", line.id, line.started_at, frozenset(names))
             )
+        yield AskStep("medicines")
     else:
         corpus.withhold(Scope.MEDICINES)
-    corpus.clips_open = context.allows(Scope.VISITS) and hears_consults(context)
-    if context.allows(Scope.VISITS):
-        await _consults(session, context, registry, corpus)
+    # records: facts under the record's catch-all scope, the papers hung with something on
+    # them, and his and the family's notes on his moments (E02-06) — one part, one scope, one
+    # step.
     if context.allows(Scope.RECORDS):
+        for fact in await _facts_under(session, context, Scope.RECORDS):
+            corpus.facts[fact.id] = fact
+            names = _what_names(fact.subject)
+            if fact.attribute not in ("reading", "value", "systolic", "diastolic"):
+                names.add(fact.attribute.replace("_", " "))
+            kind = "reading" if _is_reading(fact) else "fact"
+            corpus.candidates.append(Candidate(kind, fact.id, fact.valid_from, _with_words(names)))
         hung = await audited_read(session, Attachment, context, Scope.RECORDS)
         for each in hung:
             corpus.hung.setdefault(each.artifact_id, []).append(each)
@@ -435,7 +457,29 @@ async def _corpus(
                 Candidate("paper", artifact.id, artifact.captured_at, _with_words(names))
             )
         await _notes(session, context, store, corpus)
-    return corpus
+        yield AskStep("records")
+    else:
+        corpus.withhold(Scope.RECORDS)
+    yield corpus
+
+
+async def _facts_under(
+    session: AsyncSession, context: KeyContext, scope: Scope
+) -> Sequence[Fact]:
+    """The current facts held under one scope (readings, or the record's catch-all) — the
+    read `_corpus_stream` does once per part, before it says that part was read."""
+    return await audited_read(
+        session,
+        Fact,
+        context,
+        scope,
+        where=(
+            fact_is_under(scope),
+            Fact.superseded_at.is_(None),
+            Fact.confidence_state != ConfidenceState.DISPUTED,
+            fact_cites_only_what_is_held_here(context, scope),
+        ),
+    )
 
 
 async def _notes(
@@ -793,7 +837,81 @@ async def _keep_question(
     )
 
 
-@audited(Action.READ, Scope.ASK, ASK_TARGET)
+async def recall_stream(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    question: str,
+    mode: Mode,
+    retriever: Retriever,
+    store: ObjectStore,
+    registry: DrugRegistry | None = None,
+    language: str | None = None,
+) -> AsyncIterator[AskStep | Answer]:
+    """Answer a question from his own record, with citations, the boundary last — streamed: an
+    `AskStep` the moment each part of the record is actually read (`_corpus_stream`), then the
+    `Answer`, the last item. The single source of truth for recall: `recall` (below) is this,
+    drained. Nothing here is scripted or delayed for effect — a step is real work that already
+    happened, and the answer is yielded the instant it is ready (spec 'Conversation, waiting
+    and thinking').
+
+    Voice gives the best thing, in one line (two where one line would carry too many numbers),
+    and text up to five lines. Every cited line is a
+    template filled with the values of what it cites and passes the plain-words verifier;
+    a line that does not is not said. Nothing answered is "Nura does not have that written
+    down", never a guess. The question is kept as a MESSAGE artefact and the ask is written
+    to the trail, naming it.
+    """
+    async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):
+        context.require(Scope.ASK)
+        text = question.strip()
+        if not text or len(text) > QUESTION_LENGTH or "\n" in text or "\r" in text:
+            raise NotAQuestion(f"a question is one line of one to {QUESTION_LENGTH} characters")
+        lang = await language_for(session, context, language)
+        kept = await _keep_question(session, context, store, text)
+        corpus: _Corpus | None = None
+        async for item in _corpus_stream(session, context, registry, store):
+            if isinstance(item, AskStep):
+                yield item
+            else:
+                corpus = item
+        assert corpus is not None
+        hits = retriever.retrieve(text, corpus.candidates)
+        doctor = _doctor(corpus)
+        groups = _compose(hits, corpus, context, lang, registry)
+        passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
+        dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)
+        said: list[AnswerLine] = []
+        for group in passing[:1] if mode is Mode.VOICE else passing:
+            if said and len(said) + len(group) > TEXT_LINES:
+                break
+            said.extend(group)
+        honest: list[str] = []
+        if _would_change_treatment(text, hits):
+            honest = words.reroute_lines(lang, doctor)
+        elif not said:
+            honest = words.honest_lines(lang, doctor)
+        await record(
+            session,
+            context=context,
+            action=Action.READ,
+            scope=Scope.ASK,
+            target=ASK_TARGET,
+            target_id=kept.id,
+            rows=len(said),
+        )
+        yield Answer(
+            question_artifact_id=kept.id,
+            mode=mode,
+            language=lang,
+            lines=tuple(said),
+            honest=tuple(honest),
+            boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
+            withheld=tuple(corpus.withheld),
+            dropped=dropped,
+        )
+
+
 async def recall(
     session: AsyncSession,
     *,
@@ -805,65 +923,36 @@ async def recall(
     registry: DrugRegistry | None = None,
     language: str | None = None,
 ) -> Answer:
-    """Answer a question from his own record, with citations, the boundary last.
-
-    Voice gives the best thing, in one line (two where one line would carry too many numbers),
-    and text up to five lines. Every cited line is a
-    template filled with the values of what it cites and passes the plain-words verifier;
-    a line that does not is not said. Nothing answered is "Nura does not have that written
-    down", never a guess. The question is kept as a MESSAGE artefact and the ask is written
-    to the trail, naming it.
-    """
-    text = question.strip()
-    if not text or len(text) > QUESTION_LENGTH or "\n" in text or "\r" in text:
-        raise NotAQuestion(f"a question is one line of one to {QUESTION_LENGTH} characters")
-    lang = await language_for(session, context, language)
-    kept = await _keep_question(session, context, store, text)
-    corpus = await _corpus(session, context, registry, store)
-    hits = retriever.retrieve(text, corpus.candidates)
-    doctor = _doctor(corpus)
-    groups = _compose(hits, corpus, context, lang, registry)
-    passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
-    dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)
-    said: list[AnswerLine] = []
-    for group in passing[:1] if mode is Mode.VOICE else passing:
-        if said and len(said) + len(group) > TEXT_LINES:
-            break
-        said.extend(group)
-    honest: list[str] = []
-    if _would_change_treatment(text, hits):
-        honest = words.reroute_lines(lang, doctor)
-    elif not said:
-        honest = words.honest_lines(lang, doctor)
-    await record(
+    """`recall_stream`, drained: the answer alone, for a caller that does not stream (the
+    existing `POST /profiles/{id}/ask` route, unchanged)."""
+    result: Answer | None = None
+    async for event in recall_stream(
         session,
         context=context,
-        action=Action.READ,
-        scope=Scope.ASK,
-        target=ASK_TARGET,
-        target_id=kept.id,
-        rows=len(said),
-    )
-    return Answer(
-        question_artifact_id=kept.id,
+        question=question,
         mode=mode,
-        language=lang,
-        lines=tuple(said),
-        honest=tuple(honest),
-        boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
-        withheld=tuple(corpus.withheld),
-        dropped=dropped,
-    )
+        retriever=retriever,
+        store=store,
+        registry=registry,
+        language=language,
+    ):
+        if isinstance(event, Answer):
+            result = event
+    assert result is not None
+    return result
 
 
 __all__ = [
     "ASK_TARGET",
+    "STEP_KEYS",
     "Answer",
     "AnswerLine",
+    "AskStep",
     "Cite",
     "ClipRef",
     "Mode",
     "NotAQuestion",
     "recall",
+    "recall_stream",
     "writer_name",
 ]

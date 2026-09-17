@@ -18,12 +18,14 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
-from app.delivery.feed.compose import Day, plain_day, refresh, today_for
+from app.delivery.feed import search as search_module
+from app.delivery.feed.compose import Day, around_for, plain_day, refresh, today_for
 from app.delivery.feed.compress import (
     Compressed,
     FixtureCompressor,
@@ -31,13 +33,22 @@ from app.delivery.feed.compress import (
     Found,
     changes_treatment,
 )
-from app.delivery.feed.items import SURFACE_OF, NoticeNotForPatient, NotPlainWords, Why, create_item
+from app.delivery.feed.items import (
+    SURFACE_OF,
+    NoticeNotForPatient,
+    NotPlainWords,
+    TreatmentChangingCard,
+    Why,
+    create_item,
+)
 from app.delivery.feed.models import (
     CardType,
     DeliverTo,
     FeedItem,
     JobKind,
+    JobStatus,
     ReviewStatus,
+    SearchJob,
     Source,
     SourceKind,
     Supply,
@@ -51,13 +62,14 @@ from app.delivery.feed.rank import (
     feed_page,
     in_quiet_hours,
 )
-from app.delivery.feed.search import Engine, list_jobs
+from app.delivery.feed.search import Engine, create_job, list_jobs, run_job
 from app.delivery.feed.sources import SourceNotAllowlisted
-from app.delivery.strings import Lines, learning_lines, render
+from app.delivery.strings import Lines, learning_lines, needs_doctor_look_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.scopes import KeyRole, Scope
+from app.language.models import ReviewItem
 from app.memory.episodic import store_artifact
 from app.memory.models import ArtifactKind, SourceChannel
 from app.memory.semantic import assert_fact
@@ -66,6 +78,7 @@ from app.reasoning.visits.models import MemoKind
 from app.reasoning.visits.questions import question_from_memo
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_line
+from app.safety.plain_words import verify
 from app.state.models import NotRenderedFromState
 from app.state.service import NoBoundaryLine, current_state
 from tests.conftest import FEED
@@ -267,7 +280,7 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
         assert item.boundary == line, item.type
         assert item.body[-3:] == line.splitlines() and item.voice[-3:] == line.splitlines()
     plain = [item for item in made if item.type not in SURFACE_OF]
-    assert {CardType.NOW, CardType.STORY, CardType.QUESTION} <= {item.type for item in plain}
+    assert {CardType.NOW, CardType.STORY} <= {item.type for item in plain}
     assert all(item.boundary is None for item in plain), [(i.type, i.boundary) for i in plain]
 
 
@@ -380,24 +393,159 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     assert by_type[CardType.NOW][0].scope is Scope.MEDICINES
     assert by_type[CardType.NOW][0].body[0] == "Your tablets for today are on your list."
     learning = by_type[CardType.LEARNING]
-    assert len(learning) == 1 and learning[0].cite is not None
-    assert learning[0].cite["url"].startswith("https://www.hsa.gov.sg/")
-    assert learning[0].why["fact_ids"], "the explainer cites the facts it is about"
+    his_learning = [item for item in learning if item.deliver_to is DeliverTo.PATIENT]
+    assert len(his_learning) == 1 and his_learning[0].cite is not None
+    assert his_learning[0].cite["url"].startswith("https://www.hsa.gov.sg/")
+    assert his_learning[0].why["fact_ids"], "the explainer cites the facts it is about"
     notice = by_type[CardType.NOTICE][0]
     assert notice.deliver_to is DeliverTo.CAREGIVER
     assert notice.why["suppressed"] == "batch_does_not_match_the_pack"
     assert notice.cite is not None and notice.cite["batch"] == "240077"
-    question = by_type[CardType.QUESTION][0]
-    assert question.deliver_to is DeliverTo.MEMO and question.supply is Supply.HELD
-    # Nothing for the patient carries the notice or the question.
+    # #231: the "skip a dose" page used to become an orphaned QUESTION/DeliverTo.MEMO FeedItem
+    # nothing read. Now it is held for the chief as a real card, and — because the EXPLAINER
+    # job it came from names a medicine he takes — also filed as a real doctor question.
+    her_learning = [item for item in learning if item.deliver_to is DeliverTo.CAREGIVER]
+    assert len(her_learning) == 1
+    assert her_learning[0].cite is not None and "warfarin-inr" in her_learning[0].cite["url"]
+    assert CardType.QUESTION not in by_type, "no orphaned FeedItem question"
+    memos = await current_memos(sg, context=context)
+    [memo] = [one for one in memos if one.kind is MemoKind.ASK]
+    assert memo.key == "ask_safety_notice"
+    assert "skip" not in memo.text.lower() and "dose" not in memo.text.lower()
+    # Nothing for the patient carries the notice or the caregiver's copy of the found page.
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert {item.type for item in page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
+    assert CardType.NOTICE not in {item.type for item in page.items}
+    assert her_learning[0].id not in {item.id for item in page.items}
+    # Delivery, not existence: his chief's own, independently resolved key actually reads
+    # both the notice and the redirected learning card back.
+    mei = await let_in(
+        sg, context, phone="+6591230098", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.MEDICINES}
+    )
+    her_page = await feed_page(sg, context=mei, engine=ENGINE)
+    her_ids = {item.id for item in her_page.items}
+    assert notice.id in her_ids and her_learning[0].id in her_ids
     assert [item.type for item in page.items][:4] == [
         CardType.NOW,
         CardType.GATE,
         CardType.STORY,  # the label photo is one of his papers
         CardType.LEARNING,
     ]
+
+
+class _TreatyFoodSearcher:
+    """A food page whose words would change treatment — a hazard/season/food job names no
+    medicine, so this is the case #231's routing must hold for the chief alone, no doctor
+    question invented from a name it does not have."""
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if kind != "food" or "food.example.sg" not in domains:
+            return []
+        return [
+            Found(
+                domain="food.example.sg",
+                url="https://food.example.sg/diabetes-meal",
+                title="A diabetes meal that skips your tablet",
+                published_at="2026-09-01",
+                text=(
+                    "Skip your diabetes tablet before this meal and see how you feel "
+                    "afterwards."
+                ),
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _TreatyFoodCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="A meal idea for diabetes",
+            body=("Skip your diabetes tablet before this meal.",),
+            why_topic="your diabetes",
+            passage=text,
+        )
+
+
+async def test_a_food_page_that_would_change_treatment_is_held_for_his_chief_alone(
+    sg: AsyncSession,
+) -> None:
+    """#231/#236: the general (non-SAFETY) `changes_treatment` reroute used to write an
+    orphaned `CardType.QUESTION`/`DeliverTo.MEMO` `FeedItem` nothing reads — the exact gap
+    #224 closed for a safety notice, left open one branch over. A food (or local, or seasonal)
+    job names no medicine, so it is held for the chief as a real card, the same card he would
+    have had, redirected — never in its own words (`items.TreatmentChangingCard`). #236: no
+    drug name to ask about is not a reason to file no question at all — a name-free one is
+    filed instead (`"ask_medicines_change"`), so this is a real, standing question for the
+    doctor, not a silent drop."""
+    context = await _pa(sg)
+    photo = await store_artifact(
+        sg,
+        context=context,
+        kind=ArtifactKind.PHOTO,
+        storage_key=f"sg/profiles/pa/onboarding-{uuid.uuid4()}.jpg",
+        content_type="image/jpeg",
+        sha256="e" * 64,
+        captured_at=MONDAY,
+        source_channel=SourceChannel.APP,
+        region=Region.SG,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject="condition",
+        attribute="diabetes",
+        value=True,
+        confidence=1.0,
+        artifact_id=photo.id,
+    )
+    source = Source(
+        name="Food Example",
+        domain="food.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_TreatyFoodSearcher(),
+        compressor=_TreatyFoodCompressor(),
+        registry=FixtureRegistry.load(),
+    )
+    _, made = await refresh(sg, context=context, engine=engine)
+    food = next(item for item in made if item.type is CardType.FOOD)
+    assert food.deliver_to is DeliverTo.CAREGIVER
+    assert CardType.QUESTION not in {item.type for item in made}, "no orphaned FeedItem question"
+    # The finding's own words never reached the card: the reroute copy did.
+    assert not changes_treatment([food.headline, *food.body])
+    assert food.why["kind"] == "needs_doctor_look"
+    # No medicine name was ever known for this job, but a question is filed all the same
+    # (#236): name-free, never invented, never dropped.
+    memos = await current_memos(sg, context=context)
+    [memo] = [one for one in memos if one.kind is MemoKind.ASK]
+    assert memo.key == "ask_medicines_change"
+    assert memo.slots == {"doctor": "your doctor"}
+    assert food.why["memo_id"] == str(memo.id)
+    # His own feed never carries it.
+    his_page = await feed_page(sg, context=context, engine=engine)
+    assert food.id not in {item.id for item in his_page.items}
+    # Delivery, not existence: his chief's own, independently resolved key reads it back.
+    mei = await let_in(
+        sg, context, phone="+6591230097", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS}
+    )
+    her_page = await feed_page(sg, context=mei, engine=engine)
+    assert food.id in {item.id for item in her_page.items}
+    # #236: rerouted for a treatment-changing finding, this KEPT_AS_WRITTEN type is sampled
+    # for the pharmacist's first fifty even though it is held for the chief, not him.
+    rows = (
+        await sg.scalars(select(ReviewItem).where(ReviewItem.card_type == CardType.FOOD.value))
+    ).all()
+    assert len(rows) == 1
 
 
 async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_card(
@@ -456,6 +604,124 @@ async def test_a_notice_is_refused_outright_if_a_caller_ever_sends_it_to_the_pat
     refusals = [e for e in trail if e.outcome is Outcome.REFUSED]
     assert refusals and refusals[-1].refused_because == "NoticeNotForPatient"
     assert not [item for item in await _items(sg, context) if item.type is CardType.NOTICE]
+
+
+async def test_treatment_changing_words_never_reach_any_card_for_any_audience(
+    sg: AsyncSession,
+) -> None:
+    """#236 (review finding on #231's own PR): the choke point holds regardless of
+    `deliver_to`. `search.run_job` addressed a treatment-changing finding to
+    `DeliverTo.CAREGIVER` in the finding's own words on the theory that her fuller words
+    (docs/plain-words.md §3) covered it; §3 is about wording, not about whether advice to
+    start, stop or change a medicine may appear on a card at all. It may not, whoever holds
+    the card — `items.create_item` refuses it before it looks at anything else
+    (`TreatmentChangingCard`), the same way `NoticeNotForPatient` refuses a notice addressed
+    to the patient before it looks at its words. Proven for every `DeliverTo` a card can name,
+    not only the caregiver: a future caller cannot route around this by picking `MEMO` either."""
+    context = await _pa(sg)
+    state = await current_state(sg, context=context)
+    lines = learning_lines(
+        "en",
+        headline="An update about your warfarin",
+        body=("Stop taking your warfarin for two days before your next blood test.",),
+        topic="your warfarin",
+        source_name="Medicine Example",
+        doctor="your doctor",
+    )
+    assert changes_treatment([lines.headline, *lines.body])
+    for n, deliver_to in enumerate(DeliverTo):
+        with pytest.raises(TreatmentChangingCard):
+            await create_item(
+                sg,
+                context=context,
+                state=state,
+                type=CardType.LEARNING,
+                lines=lines,
+                why=Why(kind="learning", plain=lines.why),
+                scope=Scope.MEDICINES,
+                deliver_to=deliver_to,
+                day="2026-09-03",
+                dedupe_key=f"treaty:{n}",
+                expires_at=MONDAY,
+                source=Source(
+                    name="Medicine Example",
+                    domain="medicine.example.sg",
+                    kind=SourceKind.HOSPITAL,
+                    regions=["SG"],
+                    languages=["en"],
+                    allowlisted=True,
+                    review_status=ReviewStatus.APPROVED,
+                ),
+            )
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.MEDICINES)
+    refusals = [e for e in trail if e.refused_because == "TreatmentChangingCard"]
+    assert len(refusals) == len(DeliverTo)
+    assert not [item for item in await _items(sg, context) if item.type is CardType.LEARNING]
+
+
+def test_the_needs_doctor_look_line_can_never_itself_fail(sg: AsyncSession) -> None:
+    """#236: a treatment-changing finding never reaches the caregiver in its own words — a
+    fixed catalogue line reaches her instead, naming that a question was filed for the doctor.
+    That line must never be able to fail the same check the words it stands in for would have
+    failed, in any of his languages, or the reroute would just move a silent drop one step
+    over."""
+    for language in ("en", "ms", "zh"):
+        lines = needs_doctor_look_lines(language, doctor="Dr Tan")
+        findings = verify(lines.headline, language, "headline")
+        for line in (*lines.body, *lines.voice, lines.why):
+            findings += verify(line, language, "line")
+        failing = [f for f in findings if f.severity == "fail"]
+        assert not failing, (language, failing)
+        assert lines.boundary is not None
+        assert lines.body[-3:] == tuple(lines.boundary.splitlines())
+        assert lines.voice[-3:] == tuple(lines.boundary.splitlines())
+        assert not changes_treatment([lines.headline, *lines.body]), (
+            "the reroute card itself must never read as treatment-changing"
+        )
+
+
+async def test_the_needs_doctor_look_card_writes_a_real_card_for_the_caregiver(
+    sg: AsyncSession,
+) -> None:
+    """The reroute content is a genuine, writable `FeedItem` — every other check `create_item`
+    runs (the boundary line, the card grammar, the source) still has to pass it, the same as
+    any other notice."""
+    context = await _pa(sg)
+    state = await current_state(sg, context=context)
+    source = Source(
+        name="Health Sciences Authority",
+        domain="hsa.gov.sg",
+        kind=SourceKind.REGULATOR,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    lines = needs_doctor_look_lines("en", doctor="Dr Tan")
+    rerouted = await create_item(
+        sg,
+        context=context,
+        state=state,
+        type=CardType.NOTICE,
+        lines=lines,
+        why=Why(
+            kind="needs_doctor_look",
+            plain=lines.why,
+            source_id=str(source.id),
+            memo_id="a-memo-id",
+        ),
+        scope=Scope.MEDICINES,
+        deliver_to=DeliverTo.CAREGIVER,
+        day="2026-09-03",
+        dedupe_key="notice:rerouted",
+        expires_at=MONDAY,
+        source=source,
+    )
+    assert rerouted.deliver_to is DeliverTo.CAREGIVER
+    assert rerouted.headline == "Nura kept this for Dr Tan"
+    assert rerouted.why["memo_id"] == "a-memo-id"
 
 
 class _TreatyNoticeSearcher:
@@ -543,6 +809,10 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
     assert notice.deliver_to is DeliverTo.CAREGIVER
     assert notice.why["suppressed"] is None, "the batch matches: this is not held back as unrelated"
     assert notice.cite is not None and notice.cite["batch"] == "240077"
+    # #236: the finding's own words ("stop taking...immediately") never reach any card, hers
+    # included — the reroute copy does, and it points at the question filed below.
+    assert not changes_treatment([notice.headline, *notice.body])
+    assert notice.why["kind"] == "needs_doctor_look"
 
     # Delivery, not existence: his chief's own key, resolved independently of Pa's, actually
     # reads it back through the real feed page.
@@ -561,6 +831,7 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
     memos = await current_memos(sg, context=context)
     [memo] = [one for one in memos if one.kind is MemoKind.ASK]
     assert memo.key == "ask_safety_notice"
+    assert notice.why["memo_id"] == str(memo.id), "the card points at the question it filed"
     assert memo.slots == {
         "doctor": "your doctor",
         "medicine": "the blood thinner tablet (warfarin)",
@@ -577,12 +848,248 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
     assert proposed.key == "ask_safety_notice" and proposed.slots == memo.slots
 
 
+class _TreatyMedicineSearcher:
+    """A page about a medicine he actually takes, found by a watch added by hand — the
+    `add_search_job` shape (`reason={"asked": ..., "by": ...}`, no `"scope"` key at all)."""
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if kind != "explainer" or "medicine.example.sg" not in domains:
+            return []
+        return [
+            Found(
+                domain="medicine.example.sg",
+                url="https://medicine.example.sg/warfarin-update",
+                title="An update about warfarin",
+                published_at="2026-09-01",
+                text="Stop taking warfarin for two days before your next blood test.",
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _TreatyMedicineCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="An update about your warfarin",
+            body=("Stop taking your warfarin for two days before your next blood test.",),
+            why_topic="your warfarin",
+            passage=text,
+        )
+
+
+async def _hand_added_warfarin_job(sg: AsyncSession, context: KeyContext) -> tuple[Engine, Any]:
+    """A watch on a medicine he takes, added the way `add_search_job` adds one — `create_job`
+    directly, never `refresh()`'s planner — against a page that would change treatment."""
+    await _label(sg, context, name="Warfarin", strength=5)
+    source = Source(
+        name="Medicine Example",
+        domain="medicine.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_TreatyMedicineSearcher(),
+        compressor=_TreatyMedicineCompressor(),
+        registry=FixtureRegistry.load(),
+    )
+    job = await create_job(
+        sg,
+        context=context,
+        kind=JobKind.EXPLAINER,
+        terms=["warfarin"],
+        # The exact shape `add_search_job` builds (feed.py:254-262): no `"scope"` key.
+        reason={"asked": "what is this pill for", "by": str(context.person_id)},
+    )
+    return engine, job
+
+
+async def test_a_hand_added_watch_on_a_medicine_he_takes_files_a_real_doctor_question(
+    sg: AsyncSession,
+) -> None:
+    """#236: `is_medicine_job`/`_scope_of` used to decide whether a real drug name was known
+    by reading `job.reason["scope"] == "medicines"` — but a watch added by hand
+    (`app.channels.api.feed.add_search_job`) builds `reason={"asked": ..., "by": ...}` with no
+    `"scope"` at all. A chief who added a watch naming a medicine he actually takes therefore
+    got no doctor question when its finding changed treatment — the record fixed for the
+    planner's own jobs (#224) stayed broken for hers. Fixed by deciding it from whether the
+    job's own first term is a medicine on his list instead (`_medicine_he_takes`), so this
+    proves it through `create_job` directly — not the auto-generated `refresh()` path, which
+    always carries a `"scope"` and so never exercised the bug."""
+    context = await _pa(sg)
+    engine, job = await _hand_added_warfarin_job(sg, context)
+    state = await current_state(sg, context=context)
+    around = await around_for(
+        sg, context=context, engine=engine, state=state, day=today_for(context)
+    )
+    made = await run_job(
+        sg,
+        context=context,
+        job=job,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    card = next(item for item in made if item.type is CardType.LEARNING)
+    assert card.deliver_to is DeliverTo.CAREGIVER, "a treatment-changing finding is never his"
+    assert card.scope is Scope.MEDICINES, "a real drug name was known, from his own list"
+    # #236: the page's own words ("Stop taking warfarin...") never reach her card either.
+    assert not changes_treatment([card.headline, *card.body])
+
+    # A real doctor question, filed through the same door #224 built for a safety notice.
+    memos = await current_memos(sg, context=context)
+    [memo] = [one for one in memos if one.kind is MemoKind.ASK]
+    assert memo.key == "ask_safety_notice"
+    assert memo.slots == {"doctor": "your doctor", "medicine": "the blood thinner tablet (warfarin)"}
+    assert card.why["memo_id"] == str(memo.id)
+
+    # Delivery, not existence: his chief's own, independently resolved key reads the card.
+    mei = await let_in(
+        sg,
+        context,
+        phone="+6591230098",
+        name="Mei",
+        role=KeyRole.CAREGIVER,
+        scopes={Scope.MEDICINES},
+    )
+    her_page = await feed_page(sg, context=mei, engine=engine)
+    assert card.id in {item.id for item in her_page.items}
+    # His own feed carries neither the card nor a question — spec §0, §9.
+    his_page = await feed_page(sg, context=context, engine=engine)
+    assert card.id not in {item.id for item in his_page.items}
+    assert CardType.QUESTION not in {item.type for item in his_page.items}
+
+
+async def test_a_failed_doctor_question_filing_still_leaves_an_audit_record(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#236: `_ask_the_doctor`'s blanket `except Exception` used to only call `log.warning` —
+    a filing failure was invisible anywhere a caregiver, an auditor or a reviewer could see
+    it. It must still never cost him the caregiver notice (the sibling test above proves that
+    path on its own); this proves the other half a forced failure of `write_memo` is written
+    to the audit trail as a refusal before it is swallowed."""
+    context = await _pa(sg)
+    engine, job = await _hand_added_warfarin_job(sg, context)
+    state = await current_state(sg, context=context)
+    around = await around_for(
+        sg, context=context, engine=engine, state=state, day=today_for(context)
+    )
+
+    async def _boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("memo store unreachable")
+
+    monkeypatch.setattr(search_module, "write_memo", _boom)
+    made = await run_job(
+        sg,
+        context=context,
+        job=job,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    # The caregiver notice never depends on the question filing: it still lands.
+    card = next(item for item in made if item.type is CardType.LEARNING)
+    assert card.deliver_to is DeliverTo.CAREGIVER
+    # No question was filed...
+    memos = await current_memos(sg, context=context)
+    assert not [one for one in memos if one.kind is MemoKind.ASK]
+    # ...but the failure did not vanish into a log line: it is on the trail.
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.VISITS)
+    refusals = [e for e in trail if e.outcome is Outcome.REFUSED]
+    assert refusals and refusals[-1].refused_because == "RuntimeError"
+
+
 async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5)
     _, first = await refresh(sg, context=context, engine=ENGINE)
     _, second = await refresh(sg, context=context, engine=ENGINE)
     assert first and second == []
+
+
+def test_the_dedupe_key_is_job_aware_so_two_jobs_cannot_race_on_one_page() -> None:
+    """#236: `_key_for` used to key only on the page, the language and the kind — never the
+    job — so two different jobs that both turn up the same page shared one dedupe slot in
+    `existing` (`compose.refresh`'s `keys`, one dict threaded through every job a run touches).
+    Whichever job ran first silently decided, for both, whether a card was made and a question
+    filed — row order, not anything about either finding, decided the outcome. The review's
+    own example: an EXPLAINER job on `("metformin",)` and one on `("diabetes",)` both finding
+    one page; only the metformin job's term is a medicine he takes
+    (`_medicine_he_takes`), so whichever ran first decided whether a doctor question existed
+    at all. Keyed on `job.id` too, each job's dedupe is independent of every other job's, so
+    running order can no longer change what gets filed, and a job stays idempotent against its
+    own earlier run (the same job, run twice, gets the same key back)."""
+    day = Day(
+        tz=ZoneInfo("Asia/Singapore"),
+        now=MONDAY,
+        local=MONDAY.astimezone(ZoneInfo("Asia/Singapore")),
+    )
+    found = Found(
+        domain="medicine.example.sg",
+        url="https://medicine.example.sg/metformin-and-diabetes",
+        title="Metformin and diabetes",
+        published_at="2026-09-01",
+        text="Metformin is a tablet for diabetes.",
+    )
+    metformin_job = SearchJob(
+        id=uuid.uuid4(),
+        kind=JobKind.EXPLAINER,
+        terms=["metformin"],
+        source_ids=[],
+        cadence="on_change",
+        reason={},
+        status=JobStatus.QUEUED,
+    )
+    diabetes_job = SearchJob(
+        id=uuid.uuid4(),
+        kind=JobKind.EXPLAINER,
+        terms=["diabetes"],
+        source_ids=[],
+        cadence="on_change",
+        reason={},
+        status=JobStatus.QUEUED,
+    )
+    metformin_key = search_module._key_for(metformin_job, found, "en", day, None)
+    diabetes_key = search_module._key_for(diabetes_job, found, "en", day, None)
+    assert metformin_key != diabetes_key, "two different jobs must never share a dedupe slot"
+    assert search_module._key_for(metformin_job, found, "en", day, None) == metformin_key, (
+        "the same job, run again, must still dedupe against its own earlier run"
+    )
+
+
+def test_a_medicine_named_by_its_brand_is_recognised_as_one_he_takes() -> None:
+    """#236: `_medicine_he_takes`'s registry fallback used to ask the register "is `written` a
+    generic?" (`LabelFields(generic=written)`) — a query `identify` narrows to products whose
+    own generic already equals `written`, so it could only ever repeat the fact the line above
+    it already checked and already returned False on: a no-op, identical to the check before
+    it, never able to resolve a brand. Asking by brand instead resolves a term written as a
+    brand name ("Marevan", the fixture register's brand for warfarin) to the generic on his
+    list — the case the docstring always described and the code never did, so a watch on a
+    brand-named medicine he takes still got no doctor question when its finding changed
+    treatment (the sibling of the bug #236 already fixed for `job.reason["scope"]`)."""
+    registry = FixtureRegistry.load()
+    day = Day(
+        tz=ZoneInfo("Asia/Singapore"),
+        now=MONDAY,
+        local=MONDAY.astimezone(ZoneInfo("Asia/Singapore")),
+    )
+    around = search_module.Around(day=day, medicines=("warfarin",))
+    assert search_module._medicine_he_takes("marevan", around, registry)
+    assert not search_module._medicine_he_takes("paracetamol", around, registry)
 
 
 # --- the parts of ranking ----------------------------------------------------------------------

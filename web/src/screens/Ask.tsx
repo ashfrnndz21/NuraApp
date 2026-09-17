@@ -14,8 +14,18 @@ import { fill, language, LOCALE, t } from "../strings";
 import { dateLine } from "../today/model";
 import { voice } from "../player/voice";
 import { Field, Header, Hear, Notice, Pill, Tile } from "../ui/components";
+import { LookedAt, MessageBubble, ThinkingTrace } from "../ui/kit";
 import { HearClip } from "../ui/Player";
 import { Shell } from "./Shell";
+
+/** One step of the trace, as the screen keeps it while an answer streams in: the backend's
+ *  key and label (`app.search.ask.STEP_KEYS`), and for Ask's own records the bare noun
+ *  (`ASK_STEP_NAMES`) the collapsed "What Nura looked at" line joins together. */
+interface Step {
+  key: string;
+  label: string;
+  name: string;
+}
 
 /** Where the ask bar looks (spec §0, mockup v2): his records — Ask, E03's recall — or the web,
  *  his providers, or videos. The web and videos are the allowlisted sources only, each page said
@@ -39,6 +49,12 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
   const [found, setFound] = useState<FindOut | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [sentQuestion, setSentQuestion] = useState<string | null>(null);
+  const [steps, setSteps] = useState<Step[]>([]);
+  // The one thing a screen reader hears while Nura works: that she started, and that the
+  // answer is there — never a line per step (docs/design-direction.md "Conversation, waiting
+  // and thinking").
+  const [announce, setAnnounce] = useState("");
   const mode = askMode(density());
   const filters = density() === "caregiver";
   // Leaving Ask: a clip stops and its recording is let go.
@@ -53,9 +69,17 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     setError(null);
     setAnswer(null);
     setFound(null);
+    setSentQuestion(text);
+    setSteps([]);
+    setAnnounce(s.feed.askThinking);
     try {
       if (where === "records") {
-        const heard = await nura.ask(bearer, papers.profile_id, text, mode, language.value);
+        // Streamed (docs/design-direction.md "Conversation, waiting and thinking"): a step
+        // the instant each real part of his record is read, the answer the instant it is
+        // ready — never held back to make the trace look slower.
+        const heard = await nura.askStream(bearer, papers.profile_id, text, mode, language.value, (key, label, name) =>
+          setSteps((was) => [...was, { key, label, name }]),
+        );
         // A red flag heard in the question went the red-flag path on the backend first: what to
         // do now, the backend's card, exactly as after a red word tapped on Today.
         if (heard.red_flag?.red_flag) {
@@ -63,13 +87,23 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
           return go({ name: "whatToDo", lines: red.card ? whatToDoLines(red.card) : red.lines, offline: null, refusal: null });
         }
         setAnswer(heard);
+        setAnnounce(s.feed.askAnswered);
         // He asked more about this card: kept for the next connection (E11-08).
         if (item) {
           const events = feedFor(bearer, papers).events;
           if (papers.standing === "owner" || papers.scopes.includes("records")) void events.add(item.item_id, "asked_more").then(() => events.flush());
         }
-      } else {
+      } else if (where === "providers") {
+        // A directory read: nothing real to trace before the results.
         setFound(await nura.find(bearer, papers.profile_id, text, where, language.value));
+        setAnnounce(s.feed.askAnswered);
+      } else {
+        setFound(
+          await nura.findStream(bearer, papers.profile_id, text, where, language.value, (key, label) =>
+            setSteps((was) => [...was, { key, label, name: label }]),
+          ),
+        );
+        setAnnounce(s.feed.askAnswered);
       }
     } catch (failure) {
       // A red word the backend heard but this key may not raise: the kept card and the refusal
@@ -119,8 +153,25 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
         </Pill>
       </Tile>
       <Notice error={error} />
+      <p class="sr-only" aria-live="polite" data-testid="ask-live">
+        {announce}
+      </p>
+      {sentQuestion && (busy || view || found) && (
+        <div class="ask-thread">
+          <MessageBubble from="me" testId="ask-question">
+            <p>{sentQuestion}</p>
+          </MessageBubble>
+          {busy && <ThinkingTrace heading={s.feed.askThinking} steps={steps} testId="ask-trace" />}
+        </div>
+      )}
       {view && (
         <Tile paper testId="answer">
+          {where === "records" && steps.length > 0 && (
+            <LookedAt
+              label={fill(s.feed.askLookedAt, { parts: steps.map((step) => step.name).join(", ") })}
+              testId="ask-looked-at"
+            />
+          )}
           <div class="lines" data-testid="answer-lines">
             {view.lines.map((line, at) => (
               <div key={at} data-testid="answer-line">
