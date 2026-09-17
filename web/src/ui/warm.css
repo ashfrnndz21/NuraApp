@@ -158,6 +158,7 @@ html {
 }
 .view-all {
   min-height: var(--target);
+  min-width: var(--target);
   padding: 0 4px;
   border: 0;
   background: none;
@@ -581,12 +582,15 @@ img.avatar {
   flex-direction: column;
   gap: 6px;
 }
-/* The wave follows the greeting's last word on its line. */
+/* The wave sits beside the greeting, and takes the next line only when the words fill this one. */
 .hero-hello {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 2px;
 }
 .hero-hello .hero-greeting {
-  display: inline;
+  min-width: 0;
 }
 .hero-greeting {
   font-size: calc(var(--text-title) * 1.25);
@@ -671,6 +675,12 @@ img.avatar {
 .action-row.report {
   background: transparent;
   border: 1.5px dashed #cfc1d9;
+}
+/* The file input is what Tab reaches: its ring is drawn round the whole card (focus-within above),
+   and the input says so itself for anything that asks. */
+.action-row input[type="file"]:focus,
+.action-row input[type="file"]:focus-visible {
+  outline: 3px solid var(--plum);
 }
 .action-row input[type="file"] {
   position: absolute;

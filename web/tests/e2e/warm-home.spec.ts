@@ -58,7 +58,7 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
     await todayReady(page);
   }
   for (const [tile, words] of [
-    ["do-activities", "Things to do"],
+    ["do-activities", "Activities"],
     ["do-care", "Care services"],
     ["do-resources", "Guides"],
   ] as const) {

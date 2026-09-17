@@ -58,6 +58,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const hero = page?.hero ?? null;
   return (
     <Shell tab="home" testId="today-screen">
+      <AskField placeholder={s.shell.askNura} />
       <Hero
         greeting={greeting(now.getHours(), name, s)}
         wave
@@ -91,10 +92,8 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
                 <VisitTile visit={nextVisit} />
               </Upcoming>
             )}
-            {/* His doses now, and Ask Nura, under what the approved board puts first
-                (docs/design/nura-concept-board.html). */}
+            {/* His doses now, under what the approved board puts first. */}
             <DoseSection v={v} />
-            <AskField placeholder={s.shell.askNura} />
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
               <TopThree items={top} />
