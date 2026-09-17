@@ -179,9 +179,9 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "zh": "这张卡不是医生的意见。",
     },
     "ec.render_issue": {
-        "en": "One line on {name}'s card could not be shown.",
-        "ms": "Satu baris pada kad {name} tidak dapat ditunjukkan.",
-        "zh": "{name}的卡上有一行无法显示。",
+        "en": "One line on {name}'s card was left out.",
+        "ms": "Satu baris pada kad {name} tertinggal.",
+        "zh": "{name}的卡上少了一行。",
     },
     "ec.render_issue_family": {
         "en": "Tell your family or the doctor.",
