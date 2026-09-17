@@ -26,7 +26,11 @@ test("the Services tab, reached from the nav: his care services, his area and hi
   const pa = await seedFeed(request);
   // Dr Tan, from the visit he has (E03-03): the "providers/clinics his own record names".
   await seedVisit(request, pa.token, pa.profileId);
-  const area = await request.put(`${API}/profiles/${pa.profileId}/area`, { ...auth(pa.token), data: { area: "Toa Payoh" } });
+  // The owner's own yes to this exact value (#184), minted then spent.
+  const yes = await request.post(`${API}/profiles/${pa.profileId}/confirmations`, { ...auth(pa.token), data: { subject: "area", area: "Toa Payoh" } });
+  expect(yes.ok(), await yes.text()).toBe(true);
+  const confirmation_id = ((await yes.json()) as { confirmation_id: string }).confirmation_id;
+  const area = await request.put(`${API}/profiles/${pa.profileId}/area`, { ...auth(pa.token), data: { area: "Toa Payoh", confirmation_id } });
   expect(area.ok(), await area.text()).toBe(true);
 
   await signInThroughTheApp(page, pa.phone, "Pa");
