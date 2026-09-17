@@ -323,25 +323,34 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "readings": "Looking at your blood pressure book.",
         "medicines": "Checking your medicines.",
         "records": "Looking at your papers.",
+        "feelings": "Checking your feelings notes.",
+        "search_online": "Looking online.",
     },
     "ms": {
         "visits": "Menyemak lawatan anda.",
         "readings": "Melihat buku tekanan darah anda.",
         "medicines": "Menyemak ubat anda.",
         "records": "Melihat surat anda.",
+        "feelings": "Menyemak nota perasaan anda.",
+        "search_online": "Melihat di web.",
     },
     "zh": {
         "visits": "正在查看您看医生的记录。",
         "readings": "正在查看您的血压本。",
         "medicines": "正在查看您的药。",
         "records": "正在查看您的文件。",
+        "feelings": "正在查看您的感受记录。",
+        "search_online": "正在网上查看。",
     },
 }
 """What Ask's trace says while it works (spec 'Conversation, waiting and thinking'), one line
 per part of the record `app.search.ask.recall_stream` actually just read — never a step that
 was not real, never held back to look slower. Keyed by `app.search.ask.STEP_KEYS`, the order
-the parts are read in. A caregiver hears the `_THEIRS` twin below (`app.channels.about_him`),
-by name, never in his voice."""
+the parts are read in, plus the two the agent asker alone can take (`app.llm.ask_agent.
+ClaudeAsker`): `feelings`, his notes off the feeling cloud, and `search_online`, the allowlisted
+web (`app.delivery.feed.claude_adapters.ClaudeSearcher`) — never a row itself, either way. A
+caregiver hears the `_THEIRS` twin below (`app.channels.about_him`), by name, never in his
+voice."""
 
 # @patient phrase
 ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
@@ -350,18 +359,24 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "readings": "blood pressure book",
         "medicines": "medicines",
         "records": "papers",
+        "feelings": "feelings notes",
+        "search_online": "online",
     },
     "ms": {
         "visits": "lawatan",
         "readings": "buku tekanan darah",
         "medicines": "ubat",
         "records": "surat",
+        "feelings": "nota perasaan",
+        "search_online": "dalam talian",
     },
     "zh": {
         "visits": "看医生的记录",
         "readings": "血压本",
         "medicines": "药",
         "records": "文件",
+        "feelings": "感受记录",
+        "search_online": "网上",
     },
 }
 """The short name for each part `ASK_STEPS` reads — a bare noun, not "your" or "his" and not a
@@ -571,18 +586,24 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "readings": "Looking at {patient}'s blood pressure book.",
         "medicines": "Checking {patient}'s medicines.",
         "records": "Looking at {patient}'s papers.",
+        "feelings": "Checking {patient}'s feelings notes.",
+        "search_online": "Looking online for {patient}.",
     },
     "ms": {
         "visits": "Menyemak lawatan {patient}.",
         "readings": "Melihat buku tekanan darah {patient}.",
         "medicines": "Menyemak ubat {patient}.",
         "records": "Melihat surat {patient}.",
+        "feelings": "Menyemak nota perasaan {patient}.",
+        "search_online": "Melihat di internet untuk {patient}.",
     },
     "zh": {
         "visits": "正在查看{patient}看医生的记录。",
         "readings": "正在查看{patient}的血压本。",
         "medicines": "正在查看{patient}的药。",
         "records": "正在查看{patient}的文件。",
+        "feelings": "正在查看{patient}的感受记录。",
+        "search_online": "正在为{patient}在网上查看。",
     },
 }
 """`ASK_STEPS`, said about him by name, for a key that is not his."""

@@ -63,6 +63,15 @@ class Settings:
     a declared demo (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process
     in SG or MY and no in-region provider exists yet (ADR 0017) — a laptop dev run stays on
     the fixture. A name this build does not have refuses to start."""
+    asker: str = "rule"
+    """NURA_ASKER: which asker answers `POST /profiles/{id}/ask/stream`
+    (`app.search.asker_provider.asker_for`). `rule` (the default) is today's behaviour,
+    unchanged — a rule-based retriever over templates (`app.search.ask.recall_stream`);
+    `claude` is the agent (`app.llm.ask_agent.ClaudeAsker`), which decides for itself what to
+    look at and only builds on a declared demo (NURA_DEMO_MODE=1) because Anthropic's
+    first-party API does not process in SG or MY and no in-region provider exists yet
+    (ADR 0017) — a laptop dev run stays on `rule`. A name this build does not have refuses to
+    start."""
     visit_fixtures: str | None = None
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
@@ -300,6 +309,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
         anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         narrator=source.get("NURA_NARRATOR", "fixture"),
+        asker=source.get("NURA_ASKER", "rule"),
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
