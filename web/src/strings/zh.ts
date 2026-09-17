@@ -224,6 +224,38 @@ export const zh = {
     // @patient
     planLead: "下次看诊需要的东西都在这里。",
   },
+  health: {
+    // @patient headline
+    title: "您的健康",
+    // @patient headline
+    titleOther: "{name}的健康",
+    // @patient headline
+    thisWeek: "本周",
+    // @patient headline
+    readingsTitle: "血压本和血糖数字",
+    // @patient
+    readingsWithheld: "这把钥匙不包括{name}的血压本。",
+    // @patient
+    readingsNone: "还没有记下任何数字。",
+    // @patient phrase
+    bloodPressure: "血压",
+    // @patient phrase
+    bloodSugar: "血糖",
+    // @patient phrase
+    readingSource: "来自您的血压本，{date}",
+    // @patient phrase
+    metricSource: "来自您记下的，{date}",
+    // @patient phrase
+    asOf: "截至{date}",
+    // @patient headline
+    dayTitle: "您的一天",
+    // @patient
+    mealNotHad: "您没有吃这一餐。",
+    // @patient
+    mealNotHadOther: "{name}没有吃这一餐。",
+    // @patient headline
+    comingUpTitle: "接下来",
+  },
   signIn: {
     // @patient headline
     title: "登录",

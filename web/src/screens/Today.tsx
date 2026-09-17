@@ -358,7 +358,7 @@ function StateCard({ v }: { v: TodayView }): JSX.Element | null {
 /** "Now": a tile for each dose the backend marks due, each with its pill, its sentence, its
  *  source and a full-width Taken; else what the day says instead (earlier today, all taken,
  *  nothing right now). A kept page lists the day and offers no Taken. */
-function DoseSection({ v }: { v: TodayView }): JSX.Element | null {
+export function DoseSection({ v }: { v: TodayView }): JSX.Element | null {
   const { s, page, fromPhone, stateAt, dose, doseSource, justTook, busy, take } = v;
   if (!page) return null;
   // A dose he tapped with no network has its own held card (below) and must not also stand here
@@ -581,7 +581,7 @@ function AskAboutPill(): JSX.Element | null {
 /** The next visit as a figure — its day and time — and where, as the logistics card says. Its
  *  date and its time are two lines, never one joined by a symbol to decode (plain words): the
  *  date a whole line on its own, the time under it in `home.atTime`. */
-function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
+export function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const s = t();
   const locale = LOCALE[language.value];
   const at = new Date(visit.scheduled_at);

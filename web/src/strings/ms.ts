@@ -224,6 +224,38 @@ export const ms = {
     // @patient
     planLead: "Semua yang perlu untuk lawatan seterusnya ada di sini.",
   },
+  health: {
+    // @patient headline
+    title: "Kesihatan anda",
+    // @patient headline
+    titleOther: "Kesihatan {name}",
+    // @patient headline
+    thisWeek: "Minggu ini",
+    // @patient headline
+    readingsTitle: "Buku tekanan darah dan nombor gula",
+    // @patient
+    readingsWithheld: "Kunci ini tidak meliputi buku tekanan darah {name}.",
+    // @patient
+    readingsNone: "Belum ada apa-apa dicatat.",
+    // @patient phrase
+    bloodPressure: "Tekanan darah",
+    // @patient phrase
+    bloodSugar: "Gula dalam darah",
+    // @patient phrase
+    readingSource: "Daripada buku tekanan darah anda, {date}",
+    // @patient phrase
+    metricSource: "Daripada apa yang anda tulis, {date}",
+    // @patient phrase
+    asOf: "Setakat {date}",
+    // @patient headline
+    dayTitle: "Hari anda",
+    // @patient
+    mealNotHad: "Anda tidak makan ini.",
+    // @patient
+    mealNotHadOther: "{name} tidak makan ini.",
+    // @patient headline
+    comingUpTitle: "Akan datang",
+  },
   signIn: {
     // @patient headline
     title: "Daftar masuk",

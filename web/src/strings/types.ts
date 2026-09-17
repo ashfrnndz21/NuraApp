@@ -85,6 +85,27 @@ export interface Strings {
     planTitle: string;
     planLead: string;
   };
+  /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his day
+   *  and Coming up. Every figure and status word beside these is the backend's own
+   *  (`health_tab.py`); these are only the screen's own headings and the few lines the backend
+   *  does not already say. */
+  health: {
+    title: string;
+    titleOther: string;
+    thisWeek: string;
+    readingsTitle: string;
+    readingsWithheld: string;
+    readingsNone: string;
+    bloodPressure: string;
+    bloodSugar: string;
+    readingSource: string;
+    metricSource: string;
+    asOf: string;
+    dayTitle: string;
+    mealNotHad: string;
+    mealNotHadOther: string;
+    comingUpTitle: string;
+  };
   signIn: {
     title: string;
     phoneLead: string;

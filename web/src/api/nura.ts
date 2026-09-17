@@ -35,7 +35,10 @@ import type {
   FindOut,
   FindStreamEvent,
   FindWhere,
+  FoodCatalogItemOut,
+  FoodEntryOut,
   HandedOverOut,
+  HealthOverviewOut,
   ItemDecision,
   JobKind,
   KeyOut,
@@ -225,6 +228,21 @@ export const medicinesNow = (token: string, profileId: string, language: string)
 /** The facts that hold now about one subject — his blood pressures, for the chief's sparkline. */
 export const facts = (token: string, profileId: string, subject: string) =>
   api<FactOut[]>(`/profiles/${profileId}/facts`, { token, query: { subject } });
+
+/** The Health Overview (design-direction.md, the Health tab): the ring — doses taken this
+ *  week — and the four metric rows, steps, heart rate, sleep and water, each already in the
+ *  backend's own plain words. */
+export const healthOverview = (token: string, profileId: string, language: string) =>
+  api<HealthOverviewOut>(`/profiles/${profileId}/health/overview`, { token, query: { language } });
+
+/** Common foods, for their labels — a tap instead of typing, and how his own words are shown
+ *  back to him when a catalogue id is all a meal carries. No token: it holds no key context. */
+export const foodCatalog = (language: string) => api<FoodCatalogItemOut[]>("/food-catalog", { query: { language } });
+
+/** What he has logged to eat, oldest first — narrowed to `[since, until)` for the Health tab's
+ *  day. "No breakfast" is an entry (`status: "skipped"`), not a missing one. */
+export const food = (token: string, profileId: string, language: string, since?: string, until?: string) =>
+  api<FoodEntryOut[]>(`/profiles/${profileId}/food`, { token, query: { language, since, until } });
 
 /** A word on the feeling strip (E17), as the phone held it while offline. */
 export const feeling = (token: string, profileId: string, word: string, language: string) =>

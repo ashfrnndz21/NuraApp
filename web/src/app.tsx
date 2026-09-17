@@ -9,6 +9,7 @@ import { AskScreen } from "./screens/Ask";
 import { CardScreen } from "./screens/Card";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { FamilyScreen } from "./screens/family/Family";
+import { HealthScreen } from "./screens/Health";
 import { FeedScreen } from "./screens/Feed";
 import { MeSheet, ProfileScreen } from "./screens/Me";
 import { SoonScreen } from "./screens/Soon";
@@ -92,6 +93,8 @@ function Route(): JSX.Element | null {
       return <AskScreen item={current.item} question={current.question} />;
     case "reading":
       return <ReadingScreen />;
+    case "health":
+      return <HealthScreen />;
     case "visit":
       return <VisitScreen appointmentId={current.appointmentId} />;
     case "visits":

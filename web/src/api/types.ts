@@ -1603,3 +1603,61 @@ export interface FindOut {
   where: string;
   results: FindResultOut[];
 }
+
+// --- the Health tab (Health Overview, lifestyle logs, food) --------------------------------
+
+/** The ring (`GET /profiles/{id}/health/overview`): a real figure of his own, never a score.
+ *  `label` and `words` are already said his way by the backend. */
+export interface RingOut {
+  kind: "doses" | "check_ins";
+  label: string;
+  words: string;
+  value: number;
+  total: number | null;
+  week_starts_on: string;
+  as_of: string;
+}
+
+export type MetricKind = "steps" | "heart_rate" | "sleep" | "water";
+export type LogStatus = "logged" | "skipped" | "not_logged";
+
+/** One metric row: steps, heart rate, sleep or water — its own words for its state, from the
+ *  backend, never worked out here (`app.channels.health_strings`). */
+export interface MetricRowOut {
+  kind: MetricKind;
+  label: string;
+  status: LogStatus;
+  value: number | null;
+  value_words: string | null;
+  unit: string;
+  last_logged_at: string | null;
+  status_words: string;
+  range_known: boolean | null;
+  range_words: string | null;
+}
+
+export interface HealthOverviewOut {
+  ring: RingOut;
+  metrics: MetricRowOut[];
+}
+
+export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface FoodCatalogItemOut {
+  id: string;
+  label: string;
+}
+
+/** One meal, as he logged it — or, `status: "skipped"`, that he said he did not have it
+ *  ("no breakfast" is an answered day, docs/recommendation-engine.md §2.7). */
+export interface FoodEntryOut {
+  event_id: string;
+  fact_id: string;
+  meal: Meal;
+  meal_label: string;
+  status: LogStatus;
+  catalog_id: string | null;
+  food: string | null;
+  amount: string | null;
+  eaten_at: string;
+}

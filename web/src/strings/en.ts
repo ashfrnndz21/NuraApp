@@ -224,6 +224,38 @@ export const en = {
     // @patient
     planLead: "Everything for the next visit is here.",
   },
+  health: {
+    // @patient headline
+    title: "Your health",
+    // @patient headline
+    titleOther: "{name}'s health",
+    // @patient headline
+    thisWeek: "This week",
+    // @patient headline
+    readingsTitle: "Blood pressure book and sugar numbers",
+    // @patient
+    readingsWithheld: "This key does not cover {name}'s blood pressure book.",
+    // @patient
+    readingsNone: "Nothing written down yet.",
+    // @patient phrase
+    bloodPressure: "Blood pressure",
+    // @patient phrase
+    bloodSugar: "Blood sugar",
+    // @patient phrase
+    readingSource: "From your blood pressure book, {date}",
+    // @patient phrase
+    metricSource: "From what you wrote down, {date}",
+    // @patient phrase
+    asOf: "As of {date}",
+    // @patient headline
+    dayTitle: "Your day",
+    // @patient
+    mealNotHad: "You did not have this.",
+    // @patient
+    mealNotHadOther: "{name} did not have this.",
+    // @patient headline
+    comingUpTitle: "Coming up",
+  },
   signIn: {
     // @patient headline
     title: "Sign in",

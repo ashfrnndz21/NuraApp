@@ -143,6 +143,7 @@ for (const [label, viewport] of [
 
       // "Ask about Pa" stays on her other screens, and asks.
       await page.getByTestId("tab-health").click();
+      await page.getByTestId("health-record-hub").click();
       await page.getByTestId("record-medicines").click();
       await expect(page.getByTestId("medicine-line").first()).toBeVisible();
       await page.locator(".shell-ask").getByTestId("ask-input").fill("When is his next visit?");
