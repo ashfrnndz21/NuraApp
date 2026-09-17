@@ -352,7 +352,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal": "{season} jatuh pada {day}.",
         "seasonal_about": "{season} bermula sekitar {day}.",
         "flag": "Ini salah satu perkara yang kita tidak pernah tunggu.",
-        "notice_fallback": "Nura tidak dapat menyusun ini dengan kata mudah, jadi ia disimpan untuk anda baca.",
+        "notice_fallback": "Nura tidak dapat menyusun ini dengan kata-kata mudah, jadi ia disimpan untuk anda baca.",
     },
     "zh": {
         "now_tablets": "您的清单上有药。",
