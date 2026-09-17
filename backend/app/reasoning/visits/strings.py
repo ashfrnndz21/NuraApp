@@ -532,7 +532,7 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     # kept, only that there is a notice to ask about.
     "ask_safety_notice": {
         "en": "Ask {doctor} about the notice on {medicine}.",
-        "ms": "Tanya {doctor} tentang notis mengenai {medicine}.",
+        "ms": "Tanya {doctor} tentang notis pada {medicine}.",
         "zh": "问一问{doctor}，关于{medicine}的通知。",
     },
     "ask_medicines_change": {
