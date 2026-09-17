@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.delivery.recommend.models import Candidate
+from app.fixtures import fixture
 from app.state.service import StateView
 
 RECENT_EVIDENCE = "recent_evidence"
@@ -120,6 +121,7 @@ class RuleRanker:
         )
 
 
+@fixture
 class FixtureRanker:
     """A `Ranker` whose scores come from a fixed table keyed by `rule_id`, for tests that
     want a slate's order to hold whatever the real `RuleRanker`'s weights do later — the same
