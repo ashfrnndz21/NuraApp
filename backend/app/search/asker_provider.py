@@ -25,6 +25,7 @@ from app.search.asker import Asker, RuleBasedAsker
 from app.settings import Settings
 
 RULE = "rule"
+FIXTURE = "fixture"  # the name every other provider's default answers to; the rule-based asker here
 CLAUDE = "claude"
 
 
@@ -38,7 +39,7 @@ class ClaudeAskerOutsideDemo(RuntimeError):
 
 
 def asker_for(settings: Settings) -> Asker:
-    if settings.asker == RULE:
+    if settings.asker in (RULE, FIXTURE):
         return RuleBasedAsker()
     if settings.asker == CLAUDE:
         allow_external_model(

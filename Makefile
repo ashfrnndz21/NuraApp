@@ -34,7 +34,7 @@ dev: export NURA_EXTRACTOR ?= fixture
 dev: export NURA_SEARCHER ?= fixture
 dev: export NURA_COMPRESSOR ?= fixture
 dev: export NURA_NARRATOR ?= fixture
-dev: export NURA_ASKER ?= fixture
+dev: export NURA_ASKER ?= rule
 # The one key every Claude-backed adapter calls the Anthropic API with, from your own shell's
 # environment — never written to this repo, never given a default here. Unused while every
 # switch above stays on `fixture`.
