@@ -247,7 +247,7 @@ async def _chief(
     deployment: Deployment, pa: dict[str, str], profile_id: str, phone: str = MEI
 ) -> dict[str, str]:
     mei = await register_by_phone(deployment, phone, "Mei")
-    await let_in(deployment, pa, profile_id, phone, EVERY_PART, "daughter")
+    await let_in(deployment, pa, profile_id, phone, EVERY_PART, "daughter", role="chief")
     key = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": "chief"},
@@ -262,7 +262,14 @@ async def _caregiver(
 ) -> dict[str, str]:
     siti = await register_by_phone(deployment, phone, "Siti")
     await let_in(
-        deployment, pa, profile_id, phone, ["records", "medicines"], "helper", holder_display_name="Siti"
+        deployment,
+        pa,
+        profile_id,
+        phone,
+        ["records", "medicines"],
+        "helper",
+        holder_display_name="Siti",
+        role="caregiver",
     )
     key = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
@@ -1384,7 +1391,7 @@ async def test_a_key_without_the_record_is_refused_on_the_queue_and_it_is_on_his
     page = await _feed(deployment, profile_id, pa["token"])
     item = page["items"][0]["item_id"]
     kit = await register_by_phone(deployment, SITI, "Kit")
-    await let_in(deployment, pa, profile_id, SITI, ["medicines"], "helper", holder_display_name="Kit")
+    await let_in(deployment, pa, profile_id, SITI, ["medicines"], "helper", holder_display_name="Kit", role="caregiver")
     key = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": SITI, "role": "caregiver", "scopes": ["medicines"]},

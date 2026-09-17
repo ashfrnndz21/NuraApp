@@ -336,7 +336,9 @@ async def test_a_key_without_the_visits_cannot_read_the_brief(sg: AsyncSession) 
     mei = await __import__("app.identity.service", fromlist=["register_person"]).register_person(
         sg, region=Region.SG, display_name="Mei", phone_e164="+6592220002"
     )
-    await agree_to_family_sharing(sg, context, mei, scopes={Scope.READINGS, Scope.RECORDS})
+    await agree_to_family_sharing(
+        sg, context, mei, scopes={Scope.READINGS, Scope.RECORDS}, role=KeyRole.CAREGIVER
+    )
     await grant_key(
         sg,
         context=context,
@@ -1314,7 +1316,9 @@ async def test_a_key_that_reads_the_visits_does_not_write_them(
     clinic = await __import__("app.identity.service", fromlist=["register_person"]).register_person(
         sg, region=Region.SG, display_name="Clinic", phone_e164="+6592220009"
     )
-    await agree_to_family_sharing(sg, context, clinic, scopes={Scope.VISITS, Scope.RECORDS})
+    await agree_to_family_sharing(
+        sg, context, clinic, scopes={Scope.VISITS, Scope.RECORDS}, role=KeyRole.CLINIC
+    )
     await grant_key(
         sg,
         context=context,
@@ -1451,7 +1455,9 @@ async def test_a_key_that_reads_the_visits_reads_the_memos_and_supersedes_none(
     clinic = await __import__("app.identity.service", fromlist=["register_person"]).register_person(
         sg, region=Region.SG, display_name="Clinic", phone_e164="+6592220019"
     )
-    await agree_to_family_sharing(sg, context, clinic, scopes={Scope.VISITS, Scope.RECORDS})
+    await agree_to_family_sharing(
+        sg, context, clinic, scopes={Scope.VISITS, Scope.RECORDS}, role=KeyRole.CLINIC
+    )
     await grant_key(
         sg,
         context=context,

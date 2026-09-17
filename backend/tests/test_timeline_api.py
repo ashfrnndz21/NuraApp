@@ -231,7 +231,7 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
 
     # Mei, his chief: a note about the place, and one that names a medicine.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",

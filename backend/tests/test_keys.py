@@ -104,7 +104,7 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
 async def test_a_key_holder_cannot_read_the_family_list(sg: AsyncSession) -> None:
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
-    await agree_to_family_sharing(sg, owner, mei)
+    await agree_to_family_sharing(sg, owner, mei, role=KeyRole.CAREGIVER)
     key = await grant_key(sg, context=owner, holder=mei, role=KeyRole.CAREGIVER)
 
     held = await resolve_key_context(
