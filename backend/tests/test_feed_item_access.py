@@ -19,7 +19,24 @@ from __future__ import annotations
 
 import ast
 import inspect
+import uuid
+from datetime import timedelta
 from pathlib import Path
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.clock import now
+from app.delivery.feed.days import today_for
+from app.delivery.feed.engagement import Queued, record_engagement, record_events
+from app.delivery.feed.items import Lines, Why, create_item
+from app.delivery.feed.models import CardType, DeliverTo, Engagement, EngagementKind, FeedItem
+from app.delivery.feed.rank import NoSuchItem
+from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.state.service import current_state
+from tests.family_support import household
+from tests.support import refused_unit
 
 APP = Path(__file__).resolve().parents[1] / "app"
 
@@ -103,3 +120,69 @@ def test_record_engagement_with_a_passed_item_still_checks_private_to() -> None:
 
     source = inspect.getsource(engagement.record_engagement)
     assert "item.private_to" in source
+
+
+async def _private_card(sg: AsyncSession, *, owner: KeyContext) -> FeedItem:
+    state = await current_state(sg, context=owner)
+    lines = Lines(
+        language="en",
+        headline="What you asked about",
+        body=["This explains your kidney number in simple words."],
+        voice=["This explains your kidney number in simple words."],
+        why="You asked about this twice.",
+    )
+    return await create_item(
+        sg,
+        context=owner,
+        state=state,
+        type=CardType.STORY,
+        lines=lines,
+        why=Why(kind="asked_topic", plain="You asked about this twice."),
+        scope=Scope.ASK,
+        deliver_to=DeliverTo.PATIENT,
+        day=today_for(owner).key,
+        dedupe_key="asked:kidney:engagement",
+        expires_at=now() + timedelta(days=7),
+        private_to=owner.person_id,
+    )
+
+
+async def test_record_engagement_refuses_a_private_card_to_another_person(
+    sg: AsyncSession,
+) -> None:
+    """The single-item route (`record_engagement`, `POST /feed/{item}/engagement`): a chief
+    holding every scope the card rests on still may not engage with a card private to him."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+    chief = await home.ctx(sg, home.mei)  # ALL_SCOPES, ASK included
+    card = await _private_card(sg, owner=owner)
+
+    async with refused_unit(sg, NoSuchItem):
+        await record_engagement(sg, context=chief, item_id=card.id, kind=EngagementKind.SEEN)
+    # He may, of course.
+    his = await record_engagement(sg, context=owner, item_id=card.id, kind=EngagementKind.SEEN)
+    assert his.item_id == card.id
+
+
+async def test_record_events_skips_a_private_card_for_another_person(sg: AsyncSession) -> None:
+    """The bulk offline-queue path (`record_events`, what a phone flushes after being
+    offline): the fifth site the leak was found in. It never raises per event — a bad event
+    is skipped and the rest of the queue still writes — so it cannot call `require_item`
+    directly; it applies the same rule, `rank._visible`, item by item instead."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+    chief = await home.ctx(sg, home.mei)
+    card = await _private_card(sg, owner=owner)
+
+    queued = Queued(client_id=uuid.uuid4(), item_id=card.id, kind=EngagementKind.SEEN, at=now())
+    flushed = await record_events(sg, context=chief, events=[queued])
+    assert flushed.written == []
+    assert flushed.skipped == [(queued.client_id, "out_of_scope")]
+    assert (
+        await sg.scalars(select(Engagement).where(Engagement.item_id == card.id))
+    ).all() == []
+
+    # The owner's own queue, naming the same card, writes.
+    his_queued = Queued(client_id=uuid.uuid4(), item_id=card.id, kind=EngagementKind.SEEN, at=now())
+    his_flushed = await record_events(sg, context=owner, events=[his_queued])
+    assert [e.item_id for e in his_flushed.written] == [card.id]
