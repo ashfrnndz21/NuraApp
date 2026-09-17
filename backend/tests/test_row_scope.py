@@ -745,6 +745,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "consent_id": [str(c.id) for c in consents],
             "upload_id": [upload_id],
             "photo_id": [shared["photo"]["photo_id"]],
+            "kind": ["steps", "heart_rate", "sleep", "water"],
         }
     return seeded
 
@@ -937,6 +938,12 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/insurance/appointments/{{appointment_id}}/claims"),
     Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
     Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
+    Walk("GET", f"{P}/calls/upcoming"),
+    Walk("GET", f"{P}/health/overview"),
+    Walk("GET", f"{P}/health/insights"),
+    Walk("GET", f"{P}/medication-reminder"),
+    Walk("GET", f"{P}/metrics/{{kind}}"),
+    Walk("GET", f"{P}/food"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
@@ -1068,6 +1075,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/insurance/policies"): "writes a policy on a yes; returns it",
     ("POST", f"{P}/insurance/claims"): "files a claim on a yes; returns it",
     ("POST", f"{P}/insurance/claims/{{claim_id}}/status"): "moves a claim on a yes; returns it",
+    ("POST", f"{P}/calls"): "puts a call on the calendar on a yes; returns it",
+    ("DELETE", f"{P}/calls/{{call_id}}"): "takes a call off the calendar; returns it",
+    ("POST", f"{P}/metrics/{{kind}}"): "logs one metric entry, or that it was skipped; returns it",
+    ("POST", f"{P}/food"): "logs one meal, or that it was skipped; returns it",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and
 answers with what the caller wrote."""

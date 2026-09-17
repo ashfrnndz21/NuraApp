@@ -6,7 +6,8 @@ never say a word that fails `docs/plain-words.md`. No live call: every test hand
 (`anthropic`), and asserts what came back — never a real API key, never a real request.
 
 `narrator_for` (`app.search.narrator_provider`) is the other half: `NURA_NARRATOR=claude` must
-refuse to build outside a declared demo (ADR 0017), mirroring `extractor_for`'s own refusal.
+refuse to build outside a declared demo or a declared dev run (ADR 0017), mirroring
+`extractor_for`'s own refusal.
 """
 
 from __future__ import annotations
@@ -304,16 +305,18 @@ def test_the_default_narrator_is_the_fixture_one() -> None:
     assert isinstance(narrator, FixtureNarrator)
 
 
-def test_claude_refuses_to_build_outside_a_declared_demo() -> None:
+def test_claude_refuses_to_build_outside_a_declared_demo_and_dev_run() -> None:
     with pytest.raises(ClaudeNarratorOutsideDemo):
         narrator_for(_settings(narrator="claude", anthropic_api_key="sk-test-not-real"))
 
 
-def test_claude_refuses_to_build_on_a_plain_dev_run_too() -> None:
-    with pytest.raises(ClaudeNarratorOutsideDemo):
-        narrator_for(
-            _settings(narrator="claude", dev_code_sender=True, anthropic_api_key="sk-test-not-real")
-        )
+def test_claude_builds_on_a_declared_dev_run() -> None:
+    """The owner's own laptop, his own key: a declared dev run alone is enough, without also
+    being a declared demo (ADR 0017 addendum)."""
+    narrator = narrator_for(
+        _settings(narrator="claude", dev_code_sender=True, anthropic_api_key="sk-test-not-real")
+    )
+    assert isinstance(narrator, ClaudeNarrator)
 
 
 def test_claude_builds_on_a_declared_demo() -> None:

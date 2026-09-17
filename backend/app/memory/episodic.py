@@ -123,14 +123,21 @@ EVENT_SCOPES: dict[EventKind, Scope] = {
     EventKind.READING: Scope.READINGS,
     EventKind.DOSE_TAKEN: Scope.MEDICINES,
     EventKind.SUPPLY: Scope.MEDICINES,
+    # The owner's call on meals (design-direction.md follow-up, 2026-09-17): whoever can see
+    # his readings can see whether he has eaten, so a food event sits with the readings, not
+    # the general record — the same part `app.keys.scopes._SUBJECT_SCOPES["food"]` puts the
+    # fact it rests on under, so a food moment and the fact it grounds are never split
+    # across two different keys' reach.
+    EventKind.FOOD: Scope.READINGS,
 }
-"""The scope `record_event` writes an event under: the record's, except a reading taken and a
-tablet taken, which are the readings' and the medicines' parts. A key that does not hold the
-part — a part marked "only me" among them — does not see the moment either. The writers
-outside `record_event` write under their own scope, which the row keeps (`RowScoped`): the
-family's message under FAMILY (`app.channels.whatsapp.inbound`), the moment of a fall said on
-WhatsApp under EMERGENCY (`app.safety.red_flags.record_the_moment`), a tablet tapped under
-MEDICINES (`app.medicines.service.record_dose_taken`)."""
+"""The scope `record_event` writes an event under: the record's, except a reading taken, a
+tablet taken and a meal, which are the readings', the medicines' and (by the owner's call
+above) the readings' parts again. A key that does not hold the part — a part marked "only me"
+among them — does not see the moment either. The writers outside `record_event` write under
+their own scope, which the row keeps (`RowScoped`): the family's message under FAMILY
+(`app.channels.whatsapp.inbound`), the moment of a fall said on WhatsApp under EMERGENCY
+(`app.safety.red_flags.record_the_moment`), a tablet tapped under MEDICINES
+(`app.medicines.service.record_dose_taken`)."""
 
 
 def scope_for_event(kind: EventKind) -> Scope:

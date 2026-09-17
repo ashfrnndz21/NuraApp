@@ -89,6 +89,17 @@ _SUBJECT_SCOPES: dict[str, Scope] = {
     # writes facts under this subject: money, the same door `app.insurance.policy` and
     # `app.insurance.claim` already read and write their own rows under, never RECORDS — a
     # clinic key holds RECORDS and must not see a policy or a claim number a chief typed.
+    "steps": Scope.READINGS,
+    "sleep": Scope.READINGS,
+    "water": Scope.READINGS,
+    # The owner's deliberate call (design-direction.md follow-up, 2026-09-17): whoever can
+    # see his readings — a helper included — can see whether he has eaten. Weighed against
+    # keeping meals under the general record so a helper could not see them; the owner chose
+    # practicality over that extra privacy line. If this ever changes, it is this one line —
+    # every reader of a meal fact goes through `scope_for_subject`, not its own scope check.
+    # Subject "meal" per docs/recommendation-engine.md §2.7 ("Meals are one fact per meal
+    # slot. Subject `meal`, attribute `breakfast | lunch | dinner | snack`").
+    "meal": Scope.READINGS,
 }
 
 
