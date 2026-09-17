@@ -60,8 +60,16 @@ class CardType(StrEnum):
     """A medicine running low (E04 works the date out; the card repeats it)."""
     NOTICE = "notice"
     """A safety notice from a regulator matching a medicine. Never his card, batch match or
-    not (#181): held for the chief, or rerouted as a `QUESTION` to the memo when its words
-    would change treatment. `app/delivery/feed/items.py` refuses one built for the patient."""
+    not (#181, #183): held for the caregiver always, or rerouted to `needs_doctor_look_lines`
+    and filed as a real question for the doctor when its words would change treatment (#224,
+    #236) — never dropped either way. `app/delivery/feed/items.py` refuses one built for the
+    patient. Where the batch on his own pack matches, he gets `RECALL_ACTION` instead — never
+    this card's own words about the notice."""
+    RECALL_ACTION = "recall_action"
+    """A safety notice whose batch matches his own pack (#183): the one card that tells him
+    what he can do about the box in his hand today, in his own words, made and reviewed the
+    way every other card of his is — never the notice's own compressed words about the
+    recall, which stay the caregiver's (`NOTICE`) and are never his to read."""
     GATE = "gate"
     """That is all that is new. Keep going?"""
     STORY = "story"
@@ -116,6 +124,7 @@ SUPPLY_OF: dict[CardType, Supply] = {
     CardType.MEMO: Supply.TODAY,
     CardType.REORDER: Supply.TODAY,
     CardType.NOTICE: Supply.TODAY,
+    CardType.RECALL_ACTION: Supply.TODAY,
     CardType.GATE: Supply.GATE,
     # The caregiver's list has no gate: the duty card is one of her today cards.
     CardType.DUTY: Supply.TODAY,
@@ -164,6 +173,7 @@ CAPS_OF: dict[CardType, CapsClass] = {
     CardType.MEMO: CapsClass.ONE,
     CardType.REORDER: CapsClass.ONE,
     CardType.NOTICE: CapsClass.ONE,
+    CardType.RECALL_ACTION: CapsClass.ONE,
     CardType.GATE: CapsClass.SUPPLY,
     CardType.DUTY: CapsClass.SUPPLY,
     # Today's local alert is one of the two new cards a day, like any other today card.

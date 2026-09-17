@@ -96,7 +96,7 @@ async def test_the_metrics_say_counts_and_nothing_about_his_health(deployment: D
             f"/profiles/{profile_id}/feelings", json={"word": word}, headers=his
         )
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["medicines", "records", "family"], "daughter")
+    await let_in(deployment, pa, profile_id, MEI, ["medicines", "records", "family"], "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={
@@ -189,7 +189,7 @@ async def test_a_tap_is_the_records_and_a_note_on_a_medicine_is_withheld_without
 
     async def key(phone: str, parts: list[str]) -> dict[str, str]:
         holder = await register_by_phone(deployment, phone, "Kit")
-        await let_in(deployment, pa, profile_id, phone, parts, "son")
+        await let_in(deployment, pa, profile_id, phone, parts, "son", role="caregiver")
         cut = await deployment.client.post(
             f"/profiles/{profile_id}/keys",
             json={"holder_phone_e164": phone, "role": "caregiver", "scopes": parts},
@@ -253,6 +253,7 @@ async def test_the_day_s_nudges_are_read_back_with_what_each_person_did(
         profile_id,
         MEI,
         ["emergency", "medicines", "visits", "readings", "records", "family", "notes"],
+        role="chief",
     )
     key = await deployment.client.post(
         f"/profiles/{profile_id}/keys",

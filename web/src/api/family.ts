@@ -57,12 +57,17 @@ export const roles = (token: string, language: string, name: string) =>
 export const grants = (token: string, profileId: string, language: string) =>
   api<GrantOut[]>(`/profiles/${profileId}/grants`, { token, query: { language } });
 
-/** Who a new key is for, by phone, and the parts it would open: what a key for them rests
- *  on (`previewSharing`, `letSomeoneIn`), and what `makeKey` narrows no wider than. */
+/** Who a new key is for, by phone, the parts it would open, and the role and the window it
+ *  would be cut as: what a key for them rests on (`previewSharing`, `letSomeoneIn`), and
+ *  what `makeKey` must match exactly (#185) — `role` here and `role` on `makeKey`'s own
+ *  body are the same choice, made once on the Family screen's role picker; `window` narrows
+ *  no wider than this either. */
 export interface SharingBody {
   holder_phone_e164: string;
   holder_display_name: string;
   scopes: Scope[];
+  role: KeyRole;
+  window: KeyWindow;
   language: string;
 }
 

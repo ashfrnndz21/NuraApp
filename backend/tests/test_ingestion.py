@@ -97,7 +97,7 @@ async def _let_in(
     session: AsyncSession, owner: KeyContext, *, scopes: set[Scope], phone: str = "+6591110002"
 ) -> KeyContext:
     holder = await register_person(session, region=SG, display_name="Mei", phone_e164=phone)
-    await agree_to_family_sharing(session, owner, holder)
+    await agree_to_family_sharing(session, owner, holder, role=KeyRole.CAREGIVER)
     await grant_key(session, context=owner, holder=holder, role=KeyRole.CAREGIVER, scopes=scopes)
     return await resolve_key_context(
         session, region=SG, person_id=holder.id, profile_id=owner.profile_id

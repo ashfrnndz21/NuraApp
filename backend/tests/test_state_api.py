@@ -118,7 +118,7 @@ async def test_a_key_to_the_record_reads_state_narrowed_and_one_without_is_refus
     )
 
     daughter = await register_by_phone(deployment, DAUGHTER, "Mei")
-    await let_in(deployment, pa, profile_id, DAUGHTER, ["readings", "records"], "daughter")
+    await let_in(deployment, pa, profile_id, DAUGHTER, ["readings", "records"], "daughter", role="caregiver")
     await _key(deployment, pa, profile_id, DAUGHTER, ["readings", "records"])
     hers = bearer(daughter["token"])
 
@@ -144,7 +144,7 @@ async def test_a_key_to_the_record_reads_state_narrowed_and_one_without_is_refus
     assert notes.json() == {"refusal": "OutOfScope", "scope": "notes"}
 
     helper = await register_by_phone(deployment, HELPER, "Auntie")
-    await let_in(deployment, pa, profile_id, HELPER, ["medicines"], "helper")
+    await let_in(deployment, pa, profile_id, HELPER, ["medicines"], "helper", role="caregiver")
     await _key(deployment, pa, profile_id, HELPER, ["medicines"])
     refused = await deployment.client.get(
         f"/profiles/{profile_id}/state", headers=bearer(helper["token"])

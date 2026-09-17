@@ -46,6 +46,7 @@ from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
 from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
+from app.search.narrator_provider import narrator_for
 from app.settings import MissingSetting, Settings, load_settings
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s")
@@ -69,6 +70,7 @@ def providers_for(settings: Settings) -> Providers:
         code_sender=code_sender_for(settings),
         object_store=object_store_for(settings),
         extractor=extractor_for(settings),
+        narrator=narrator_for(settings),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         searcher=searcher_for(settings),
         compressor=compressor_for(settings),

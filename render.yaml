@@ -27,6 +27,23 @@ services:
         sync: false
       - key: NURA_WHATSAPP_DEV_SECRET
         generateValue: true
+      # Web Push (ADR 0001): optional. Without all three the demo reaches nobody with a push
+      # (NoDevices), which is a safe, working demo; enter them to turn push on. Generate a
+      # pair with the script in docs/deploy.md §3 and docs/deploy-demo.md.
+      - key: NURA_VAPID_PUBLIC_KEY
+        sync: false
+      - key: NURA_VAPID_PRIVATE_KEY
+        sync: false
+      - key: NURA_VAPID_SUBJECT
+        sync: false
+      # The Claude-backed reader, searcher and compressor (ADR 0017) run only on a declared
+      # demo, and only when NURA_EXTRACTOR/NURA_SEARCHER/NURA_COMPRESSOR are each set to
+      # "claude" (unset here, they stay "fixture", the built-in default and the safer start
+      # for a demo open to more than one invitee). This key is asked for up front so it is
+      # ready in Render's secret store the day those three are turned on from the dashboard;
+      # until then it sits unused. See docs/deploy-demo.md "Turning on Claude features".
+      - key: NURA_ANTHROPIC_API_KEY
+        sync: false
       - key: NURA_PAPER_FIXTURES
         value: tests/fixtures/paper
       - key: NURA_VISIT_FIXTURES

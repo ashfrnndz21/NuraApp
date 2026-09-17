@@ -17,6 +17,7 @@ from sqlalchemy import JSON, BigInteger, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, as_utc, enum_column, monotonic, utcnow
+from app.keys.scopes import KeyRole, KeyWindow
 
 
 class ConsentPurpose(StrEnum):
@@ -93,7 +94,11 @@ class Consent(ProfileScoped, Base):
     `basis`. `text_version` and `wording_text` are the words they saw, `language` the
     language they saw them in. `holder_person_id` is set only for a per-holder purpose and
     names the person the agreement is about and `scopes` the parts it lets them see.
-    `basis_artifact_id` is the document behind a
+    `role` and `window` are set only for `SHARE_WITH_PERSON` (#185): the role and the
+    window the rendered words named, so a key cut under this consent can be refused when it
+    asks for a different role or a longer window than the words he read
+    (`app.keys.grants.grant_key`). Every other purpose, and every row written before this
+    was tracked, carries neither. `basis_artifact_id` is the document behind a
     documented basis, or the recording behind a spoken one; `witness_person_id` is who
     heard a spoken agreement.
 
@@ -121,6 +126,10 @@ class Consent(ProfileScoped, Base):
     # For a per-holder purpose: the parts of the record the words let that person see, as
     # scope names. A key cut under this consent is never wider than these.
     scopes: Mapped[list[str] | None] = mapped_column(JSON, default=None)
+    role: Mapped[KeyRole | None] = mapped_column(enum_column(KeyRole, "key_role"), default=None)
+    window: Mapped[KeyWindow | None] = mapped_column(
+        enum_column(KeyWindow, "key_window"), default=None
+    )
     text_version: Mapped[str] = mapped_column(String(32))
     language: Mapped[str] = mapped_column(String(16))
     wording_text: Mapped[str] = mapped_column(Text)

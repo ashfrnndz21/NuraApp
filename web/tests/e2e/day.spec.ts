@@ -16,6 +16,7 @@ import {
   shotAs,
   signInThroughTheApp,
   stand,
+  todayReady,
 } from "./helpers";
 
 /** Checkpoint 27's web half (W7): the patient's day on a phone-sized screen, against `make dev`
@@ -293,6 +294,57 @@ test("a feed refresh already on the wire before he speaks still cannot overtake 
   expect(card.kind).toBe("red_flag");
   expect(card.by_voice).toBe(true);
   releaseFeed();
+});
+
+// --- #142: a tap that starts before the restore lands must never register on whatever the
+// restore lands the screen on -----------------------------------------------------------------
+
+test("a tap in the first second after reopening lands where it was aimed, never on Today underneath it", async ({ page, request }) => {
+  test.skip(BASE_URL.includes(":5173"), "needs the built app the backend serves (the worker is not built in dev)");
+  const pa = await seedVisitDay(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  const notWell = page.getByTestId("not-well");
+  await expect(notWell).toBeVisible();
+  const box = (await notWell.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  // Hold the restore's own doors read open: the reload's `afterSignIn` (W1) does not land
+  // until this test says so — the deliberate shape of "the app has just reopened and nothing
+  // is drawn yet" (`app.tsx`'s own reason: a shared phone must never show a stale session's
+  // papers first), held open long enough to control the race by hand.
+  let releaseDoors: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    releaseDoors = resolve;
+  });
+  await page.route("**/api/doors**", async (route) => {
+    await gate;
+    await route.continue();
+  });
+
+  await page.reload();
+  await expect(page.getByTestId("today-ready")).toHaveCount(0);
+  // A finger already resting on the screen, exactly where the not-well button will be, before
+  // there is anything there to press.
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+
+  // The restore lands mid-gesture: Today fills in under the still-down finger, at the same
+  // spot, from the same data — the not-well button is exactly where the finger already is.
+  releaseDoors!();
+  await todayReady(page);
+  await expect(notWell).toBeVisible();
+  await page.mouse.up();
+
+  // Swallowed: a tap aimed at nothing must not read as a tap on the not-well button once
+  // Today happens to have put one under it. Still on Today, not the not-well screen.
+  await expect(page.locator("main h1")).not.toHaveText("Tell Nura how you feel");
+  await todayReady(page);
+
+  // No lasting side effect: a genuine tap right after works at once, with no delay to wait out.
+  await notWell.click();
+  await expect(page.locator("main h1")).toHaveText("Tell Nura how you feel");
 });
 
 // --- E17-01, E17-02: the feeling cloud ------------------------------------------------------------

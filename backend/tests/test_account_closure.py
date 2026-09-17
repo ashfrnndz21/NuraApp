@@ -458,7 +458,7 @@ async def test_a_red_word_about_a_closing_family_is_never_raised_on_another(
     )
     everything = frozenset(ds.Scope) - {ds.Scope.PROFILE}
     await ds.agree_to_family_sharing(
-        sg, ma_owner, h.mei, scopes=everything, relationship="daughter"
+        sg, ma_owner, h.mei, scopes=everything, relationship="daughter", role=ds.KeyRole.CHIEF
     )
     await ds.grant_key(sg, context=ma_owner, holder=h.mei, role=ds.KeyRole.CHIEF, scopes=everything)
     clock.set(at(9, 5))

@@ -148,10 +148,14 @@ async def home(
         session, region=Region.SG, display_name="Siti", phone_e164=SITI, language="ms"
     )
     everything = frozenset(Scope) - {Scope.PROFILE}
-    await agree_to_family_sharing(session, owner, mei, scopes=everything, relationship="daughter")
+    await agree_to_family_sharing(
+        session, owner, mei, scopes=everything, relationship="daughter", role=KeyRole.CHIEF
+    )
     await grant_key(session, context=owner, holder=mei, role=KeyRole.CHIEF, scopes=everything)
     helper = ROLE_SCOPES[KeyRole.HELPER]
-    await agree_to_family_sharing(session, owner, siti, scopes=helper, relationship="helper")
+    await agree_to_family_sharing(
+        session, owner, siti, scopes=helper, relationship="helper", role=KeyRole.HELPER
+    )
     await grant_key(session, context=owner, holder=siti, role=KeyRole.HELPER)
     if whatsapp:
         await grant_consent(

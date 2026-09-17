@@ -362,7 +362,7 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
 
     # Mei, a helper with the medicines key: reads the list and the story, cannot add.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "helper")
+    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "helper", role="helper")
     granted = await client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "helper", "scopes": ["medicines"]},
@@ -490,6 +490,18 @@ async def test_the_label_must_name_a_medicine_and_say_the_dose_one_way(
         headers=his,
     )
     assert unknown.status_code == 400 and unknown.json() == {"refusal": "NotIdentified"}
+    # warfarin is high-risk and on file at more than one strength; a label that does not say
+    # which gets its own refusal (#211), not the generic "could not find this medicine" —
+    # the register did identify the drug, only the strength is undetermined.
+    ambiguous = await deployment.client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={
+            "label": _label("warfarin", None, "1 tab OD"),  # type: ignore[arg-type]
+            "source_artifact_id": photo,
+        },
+        headers=his,
+    )
+    assert ambiguous.status_code == 400 and ambiguous.json() == {"refusal": "StrengthNotRead"}
     missing = await deployment.client.get(
         f"/profiles/{profile_id}/medicines/00000000-0000-0000-0000-000000000009/story", headers=his
     )

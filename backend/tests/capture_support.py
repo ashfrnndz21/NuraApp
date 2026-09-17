@@ -107,7 +107,7 @@ async def key_for(
     scopes: list[str],
 ) -> None:
     """The owner lets this number in to these parts and cuts a caregiver key to them."""
-    await let_in(deployment, owner, profile_id, phone, scopes, relationship="daughter")
+    await let_in(deployment, owner, profile_id, phone, scopes, relationship="daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": "caregiver", "scopes": scopes},

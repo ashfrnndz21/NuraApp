@@ -8,8 +8,8 @@ verifier and cap.
 `models` holds the shapes: `Evidence` (one id, its kind, the scope it rests on), `Candidate`
 (a rule's proposal — never without `because`, or `NoEvidence`), `OutputKind`, `SafetyClass`
 and `Audience` (RE-01: no evidence, no candidate). `topics` is the topic catalogue and the
-`TopicTagger` port (RE-04). Later stories add the rule catalogue (`rules.py`), the broker
-itself (`broker.py`) and the `Ranker` port (`rank.py`), in the pattern this package already
-sets — a port in this package, a conformance suite in `tests/`, two adapters, never a direct
-call into a library or a model.
+`TopicTagger` port (RE-04). `rules` is the rule catalogue and `rank` is the `Ranker` port
+(RE-06); `broker` is the one place they meet: `slate()`. Later stories (patterns, RE-13
+onward) add beside these, in the pattern this package already sets — a port in this package,
+a conformance suite in `tests/`, two adapters, never a direct call into a library or a model.
 """

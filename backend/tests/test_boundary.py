@@ -269,7 +269,7 @@ async def test_state_carries_the_boundary_in_the_profiles_language(deployment: D
     # "Tanya doktor anda" on her screen would mean her own doctor, which is not what the line
     # is for; on his screen it is unchanged.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["records"], "daughter")
+    await let_in(deployment, pa, profile_id, MEI, ["records"], "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "caregiver", "scopes": ["records"]},

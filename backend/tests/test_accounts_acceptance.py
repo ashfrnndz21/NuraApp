@@ -85,7 +85,7 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
         )
 
     # Pa agrees to share with his daughter (E00-02); her key rests on that and names it.
-    hers = await agree_to_family_sharing(sg, owner, daughter)
+    hers = await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
 
     key = await grant_key(
         sg,
@@ -117,13 +117,13 @@ async def test_family_accounts_attach_through_a_grant_and_reach_only_its_scope(
     siti = await register_person(
         sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
     )
-    await agree_to_family_sharing(sg, owner, siti)
+    await agree_to_family_sharing(sg, owner, siti, role=KeyRole.HELPER)
     with pytest.raises(OutOfScope):
         await grant_key(sg, context=held, holder=siti, role=KeyRole.HELPER)
 
     # A chief may cut one, but never wider than the key he holds.
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
-    await agree_to_family_sharing(sg, owner, son)
+    await agree_to_family_sharing(sg, owner, son, role=KeyRole.CHIEF)
     chief_key = await grant_key(
         sg,
         context=owner,

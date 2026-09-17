@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { BASE_URL, FROZEN_CLOCK } from "../../playwright.config";
-import { API, apiToken, backendClock, fixClock, freshPhone, seedFeed, seedVisit, signInThroughTheApp, todayReady } from "./helpers";
+import { API, apiToken, backendClock, fixClock, freshPhone, seedFeed, seedVisit, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
 import { auth, caregiverScreenOk, cutKey, ICS, openFamily, openFamilyPart, patientScreenOk, runTriggersAt, seedFamily, seedProposals, type Family, type Person } from "./familySeed";
 
 /** Checkpoint 26's web half: Family, against `make dev` serving the build, both clocks at 10 in
@@ -36,14 +36,10 @@ async function secondPhone(browser: Browser): Promise<Page> {
 
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
-/** One tab set, the same for everyone (docs/product-reset.md §6), the five the approved board
- *  draws (docs/design/nura-concept-board.html): Home, Health, Connect, Services, Profile. */
-const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"];
-
 test("the nav (D1, the reset): one tab set, the same for the owner and for a key", async ({ page, browser, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await expect(page.locator("nav.tabbar button")).toHaveText(TAB_SET);
+  await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
   // Whose papers are open is on every screen, in the header, by name — his own name on his own
   // phone; "Your own papers" is what the switcher's own label and its sheet say.
   await expect(page.getByTestId("whose-name")).toHaveText("Pa");
@@ -52,7 +48,7 @@ test("the nav (D1, the reset): one tab set, the same for the owner and for a key
   await signIn(hers, family.mei, false);
   // The same list for her: one app, one account. What differs is the density and whose papers
   // the switcher says she is in.
-  await expect(hers.locator("nav.tabbar button")).toHaveText(TAB_SET);
+  await expect(hers.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
   await expect(hers.locator("html")).toHaveAttribute("data-density", "caregiver");
   await expect(hers.getByTestId("whose-name")).toHaveText("Pa");
 });
@@ -177,6 +173,48 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   expect(asked.postDataJSON()).toMatchObject({ question: "What was my blood pressure?" });
   await expect(asking.getByTestId("answer")).toContainText("138");
   await priyaPage.context().close();
+});
+
+test("the Family Keys screen's own request names the role and the window, and a key cut for a different role than agreed is refused (#185)", async ({ page, request }) => {
+  // #185's own regression: the real client (web/src/api/family.ts's SharingBody) used to send
+  // neither role nor window on the sharing agreement, so nothing was actually bound for any
+  // real family — only tests exercised the backend's enforcement. This walks the real screen,
+  // reads the real outgoing request bodies, and then proves the backend's own refusal fires
+  // against a key asked for a role the agreement never named.
+  const pa = await seedFeed(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  const priyaPhone = freshPhone("+659778");
+  await page.getByTestId("tab-family").click();
+  await page.getByTestId("open-keys").click();
+  await page.getByLabel("Their name").fill("Priya");
+  await page.getByLabel("Their phone number").fill(priyaPhone);
+  await page.getByTestId("role-caregiver").click();
+
+  const previewUrl = /\/consents\/sharing\/preview$/;
+  const previewed = page.waitForRequest((req) => req.method() === "POST" && previewUrl.test(req.url()));
+  await page.getByTestId("see-words").click();
+  expect((await previewed).postDataJSON()).toMatchObject({ role: "caregiver", window: "always" });
+
+  const agreedUrl = /\/consents\/sharing$/;
+  const agreed = page.waitForRequest((req) => req.method() === "POST" && agreedUrl.test(req.url()));
+  const keyUrl = /\/keys$/;
+  const cut = page.waitForRequest((req) => req.method() === "POST" && keyUrl.test(req.url()));
+  await page.getByTestId("agree-key").click();
+  expect((await agreed).postDataJSON()).toMatchObject({ role: "caregiver", window: "always" });
+  expect((await cut).postDataJSON()).toMatchObject({ role: "caregiver" });
+  await expect(page.getByTestId("grant").filter({ hasText: "Priya" })).toBeVisible();
+
+  // Nobody on the real screen can ask for a mismatched role — the role picker drives both the
+  // words and the key as one choice. A caller that tries anyway, straight over the API, is the
+  // backend's own refusal: the words Pa read named caregiver, not viewer.
+  const mismatched = await request.post(`${API}/profiles/${pa.profileId}/keys`, {
+    headers: auth(pa.token),
+    data: { holder_phone_e164: priyaPhone, role: "viewer" },
+  });
+  expect(mismatched.status()).toBe(403);
+  expect((await mismatched.json()) as { refusal: string }).toEqual({ refusal: "KeyNotAsAgreed" });
 });
 
 test("changing what a key would open while the words for it are still on the wire never leaves a stale preview on screen", async ({ page, request }) => {
@@ -330,15 +368,17 @@ test.describe("the caregiver density at 360 by 640", () => {
     expect(await caregiverScreenOk(page)).toEqual([]);
     await page.getByTestId("make-key").click();
     const siti = page.getByTestId("grant").filter({ hasText: "Siti" });
-    await expect(siti).toContainText("your emergency card");
+    // Mei reads this about Pa, by name (#210): the parts a key opens are never "your"s on a
+    // screen that is not his own.
+    await expect(siti).toContainText("Pa's emergency card");
 
     await siti.getByTestId("narrow").click();
     await siti.getByTestId("narrow-part-emergency").click();
     await siti.getByTestId("narrow-part-send").click();
     expect(await caregiverScreenOk(page)).toEqual([]);
     await siti.getByTestId("narrow-yes").click();
-    await expect(siti).not.toContainText("your emergency card");
-    await expect(siti).toContainText("your medicines");
+    await expect(siti).not.toContainText("Pa's emergency card");
+    await expect(siti).toContainText("Pa's medicines");
 
     // Wider is not a change in place: the backend says no, in its words.
     await siti.getByTestId("narrow").click();

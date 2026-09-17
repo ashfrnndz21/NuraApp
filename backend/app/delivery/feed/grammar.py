@@ -48,6 +48,9 @@ class Action(StrEnum):
     ASK_TO_ORDER = "ask_to_order"
     OPEN = "open"
     ASK_THE_DOCTOR = "ask_the_doctor"
+    ASK_THE_PHARMACIST = "ask_the_pharmacist"
+    """His own pack is one of the recalled batches (#183): the one thing to do is bring it to
+    the pharmacist, never a call to the doctor and never a change made in the app."""
 
 
 COLOUR_OF: dict[Posture, Colour] = {
@@ -121,6 +124,8 @@ def action_for(type: CardType, scope: Scope, deliver_to: DeliverTo) -> Action:
         return Action.HEAR if scope is Scope.VISITS else Action.KEEP_GOING
     if type is CardType.REORDER:
         return Action.ASK_TO_ORDER
+    if type is CardType.RECALL_ACTION:
+        return Action.ASK_THE_PHARMACIST
     if type is CardType.GATE:
         return Action.KEEP_GOING
     if type is CardType.DUTY:

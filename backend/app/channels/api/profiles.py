@@ -29,7 +29,7 @@ from app.audit.access import (
 )
 from app.audit.models import Action
 from app.audit.trail import read_audit
-from app.channels.about_him import reader_of
+from app.channels.about_him import Reader, reader_of
 from app.channels.api.daily_schemas import ProposalConfirmIn, RoutineConfirmIn
 from app.channels.api.deps import (
     ClosingContext,
@@ -42,6 +42,7 @@ from app.channels.api.deps import (
 from app.channels.api.schemas import (
     WITHHELD_TARGET,
     AppointmentConfirmIn,
+    AreaConfirmIn,
     AttachConfirmIn,
     AuditOut,
     ClaimableOut,
@@ -102,6 +103,8 @@ from app.consent.service import (
 from app.consent.texts import named_words
 from app.consent.withdrawal import stop_lines, stopped_lines
 from app.db import as_utc, utcnow
+from app.delivery.feed.area import area_draft_for
+from app.delivery.strings import language_for
 from app.drafts import AppointmentDraft, AttachDraft, FactDraft, StatusChange
 from app.errors import Refusal
 from app.family.privacy import only_me_draft
@@ -317,6 +320,11 @@ async def mint_confirmation(
         return ConfirmationOut.of(
             await confirm(session, context, only_me_draft(body.scope, only_me=body.only_me))
         )
+    if isinstance(body, AreaConfirmIn):
+        # His own area (#184): the draft is recomputed from `area` the way `PUT .../area`
+        # will check it, so the yes binds to exactly the coarse value kept.
+        _, area_draft = await area_draft_for(session, context=context, area=body.area)
+        return ConfirmationOut.of(await confirm(session, context, area_draft))
     if isinstance(body, DriveConfirmIn):
         # Who drives him to a visit (E05-03): the chief's yes, recomputed from the visit and
         # the person, so it cannot be minted for a visit that has been or a stranger.
@@ -546,9 +554,26 @@ async def revoke(key_id: uuid.UUID, request: Request, context: Context, session:
 async def consents(context: ClosingContext, session: Db) -> list[ConsentOut]:
     """Every agreement ever given on this profile, withdrawn ones included, oldest first.
     Read under the family scope: the owner's and his chief's. While his account is closing
-    (#143) it stays his to read, and nobody else's."""
+    (#143) it stays his to read, and nobody else's.
+
+    Each wording's voice follows who gave it (`Consent.person_id`), not who is reading: the
+    reader's own act stays exactly the words he read, verbatim; a row someone else gave —
+    a chief acting for him on a proxy basis, or his own act read back on a key that is not
+    his — is said about that other person by name, the catalogues' `*_THEIRS` twins, never
+    left to read as if it were the reader's own (#214, "whose act was it")."""
     await only_the_owner_while_closing(session, context)
-    return [ConsentOut.of(row) for row in await all_consents(session, context=context)]
+    profile = await audited_profile_read(session, context)
+    language = language_for(profile.language)
+    heard: list[ConsentOut] = []
+    for row in await all_consents(session, context=context):
+        out = ConsentOut.of(row)
+        if row.person_id == context.person_id:
+            # His own act: the words stand exactly as he read them.
+            heard.append(out)
+            continue
+        actor_name = await person_display_name(session, context, row.person_id)
+        heard.append(Reader(his=False, name=actor_name, language=language).model(out))
+    return heard
 
 
 @router.get("/{profile_id}/consents/record.html", response_class=HTMLResponse)
@@ -747,6 +772,8 @@ async def let_someone_in(
         sharing=Sharing(
             holder=holder,
             scopes=frozenset(body.scopes) - {Scope.PROFILE},
+            role=body.role,
+            window=body.window,
             relationship=body.relationship,
             named=named or None,
         ),
@@ -786,6 +813,8 @@ async def preview_letting_in(
             name=name,
             relationship=body.relationship,
             scopes=frozenset(body.scopes) - {Scope.PROFILE},
+            role=body.role,
+            window=body.window,
         ),
         language=body.language,
     )

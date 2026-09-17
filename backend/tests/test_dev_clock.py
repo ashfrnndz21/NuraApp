@@ -93,7 +93,7 @@ async def test_a_key_closed_on_a_frozen_clock_no_longer_opens_the_papers(
     pa = await register_by_phone(deployment, "+6591110001")
     mei = await register_by_phone(deployment, "+6591110002")
     profile_id = await own_profile(deployment, pa)
-    await let_in(deployment, pa, profile_id, "+6591110002", ["medicines", "records"])
+    await let_in(deployment, pa, profile_id, "+6591110002", ["medicines", "records"], role="caregiver")
     cut = await http.post(
         f"/profiles/{profile_id}/keys",
         json={

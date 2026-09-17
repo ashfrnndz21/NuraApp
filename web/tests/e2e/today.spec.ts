@@ -200,7 +200,7 @@ test("a refused read clears the phone's copy and is said in one plain sentence",
   await seedMedicine(request, paToken, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
   await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     ...auth(paToken),
-    data: { holder_phone_e164: mei, holder_display_name: "Mei", scopes: ["medicines", "records"], relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: mei, holder_display_name: "Mei", scopes: ["medicines", "records"], role: "caregiver", window: "always", relationship: "daughter", language: "en", captured_via: "app" },
   });
   const key = await request.post(`${API}/profiles/${profileId}/keys`, {
     ...auth(paToken),
@@ -240,7 +240,7 @@ test("a key without the records scope opens Today on the medicines and the feed,
   await seedMedicine(request, paToken, profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 });
   await request.post(`${API}/profiles/${profileId}/consents/sharing`, {
     ...auth(paToken),
-    data: { holder_phone_e164: siti, holder_display_name: "Siti", scopes: ["medicines"], relationship: "helper", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: siti, holder_display_name: "Siti", scopes: ["medicines"], role: "helper", window: "always", relationship: "helper", language: "en", captured_via: "app" },
   });
   const key = await request.post(`${API}/profiles/${profileId}/keys`, {
     ...auth(paToken),

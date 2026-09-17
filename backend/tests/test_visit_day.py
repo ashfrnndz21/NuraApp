@@ -108,7 +108,7 @@ async def household(deployment: Deployment) -> House:
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",
@@ -174,7 +174,7 @@ async def household(deployment: Deployment) -> House:
 
 async def _key(house: House, phone: str, name: str, role: str, scopes: list[str]) -> dict[str, str]:
     person = await register_by_phone(house.deployment, phone, name)
-    await let_in(house.deployment, house.pa, house.profile_id, phone, scopes, relationship="son")
+    await let_in(house.deployment, house.pa, house.profile_id, phone, scopes, relationship="son", role=role)
     await _ok(
         await house.deployment.client.post(
             house.at("/keys"),
@@ -885,7 +885,7 @@ async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI)
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",
