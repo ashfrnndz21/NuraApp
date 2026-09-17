@@ -265,7 +265,7 @@ async def test_a_consent_is_stored_with_its_moment_its_scope_and_its_version(
     )
 
     clock.set(CLAIMED_AT)
-    given = await agree_to_family_sharing(sg, owner, daughter)
+    given = await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
 
     assert given.granted_at == CLAIMED_AT
     assert given.revoked_at is None
@@ -277,7 +277,9 @@ async def test_a_consent_is_stored_with_its_moment_its_scope_and_its_version(
     assert given.text_version == current_version(ConsentPurpose.SHARE_WITH_PERSON)
     assert given.language == "en"
     assert given.wording_text.startswith(
-        "You are letting Daughter see some of your record.\nDaughter can see these parts:\n"
+        "You are letting Daughter see some of your record.\n"
+        "Daughter is a family member who helps.\n"
+        "Daughter can see these parts:\n"
     )
     assert given.person_id == pa.id
     assert given.captured_via is ConsentChannel.APP
@@ -609,6 +611,7 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
         "- You said yes in the app on Saturday 24 October 2026.\n"
         "  Daughter can see these parts:\n" + parts + "  These are the words you read in English:\n"
         "  You are letting Daughter, your daughter, see some of your record.\n"
+        "  Daughter is a family member who helps.\n"
         "  Daughter can see these parts:\n"
         + parts
         + "  Daughter can see them until you say stop.\n"

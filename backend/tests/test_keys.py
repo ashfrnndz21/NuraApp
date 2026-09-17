@@ -66,7 +66,7 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
     owner = await _owner(sg)
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110002")
     clock.set(GRANTED_AT)
-    await agree_to_family_sharing(sg, owner, mei)
+    await agree_to_family_sharing(sg, owner, mei, role=KeyRole.VIEWER)
 
     clock.set(GRANTED_AT)
     first = await grant_key(
@@ -75,7 +75,10 @@ async def test_a_second_grant_to_one_person_replaces_the_first(
         holder=mei,
         role=KeyRole.VIEWER,
     )
+    # A second key, as a different role: his own yes for that role too (#185), not the one
+    # already spent on viewer.
     clock.set(GRANTED_AT + timedelta(days=1))
+    await agree_to_family_sharing(sg, owner, mei, role=KeyRole.CAREGIVER)
     second = await grant_key(
         sg,
         context=owner,

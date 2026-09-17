@@ -108,7 +108,7 @@ async def household(deployment: Deployment) -> House:
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",
@@ -885,7 +885,7 @@ async def test_a_card_is_never_refused_for_a_name_the_family_has_not_given(
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
     mei = await register_by_phone(deployment, MEI)
-    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter", role="chief")
     await _ok(
         await client.post(
             f"/profiles/{profile_id}/keys",
