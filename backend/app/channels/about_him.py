@@ -105,14 +105,32 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (medicine_words.SOURCE, medicine_words.SOURCE_THEIRS),
         (medicine_words.IF_FORGOTTEN, medicine_words.IF_FORGOTTEN_THEIRS),
         (state_words.POSTURE_LINE, state_words.POSTURE_LINE_THEIRS),
-        # The family's grant lines (#210) and the consent wording (#214): who a role is to
-        # him and the parts a key opens speak to him inside a slot ("the person who runs your
-        # care"), so the outer template needs no twin of its own — registering it here is
-        # enough for the slot it carries to be said about him (`_theirs`, below).
-        (family_words.ROLE_IS, family_words.ROLE_IS),
+        # The family's grant lines (#210): the parts a key opens.
         (family_words.WINDOW_LINES, family_words.WINDOW_LINES_THEIRS),
         (_bulleted(consent_words.SCOPE_WORDS), _bulleted(consent_words.SCOPE_WORDS_THEIRS)),
     )
+
+
+@lru_cache(maxsize=1)
+def _role_is_theirs() -> Mapping[str, Mapping[str, tuple[str, str]]]:
+    """`family_words.ROLE_IS` ("{name} is {role}.") made into one concrete pattern a role at a
+    time — "{name} is the person who runs your care.", and its five siblings — rather than
+    registered generic (`_theirs` only rewrites "your", the possessive, so a role-less "X is
+    Y." sentence elsewhere in the corpus whose Y happens to contain a bare "you" — "Nothing is
+    added until you say yes.", a consent line, found in review — would fullmatch the generic
+    pattern first, "translate" through it doing nothing, and come out unchanged with nobody
+    the wiser). Registering the six full sentences instead means only they can match."""
+    built: dict[str, dict[str, tuple[str, str]]] = {}
+    for language in LANGUAGES:
+        template = family_words.ROLE_IS[language]
+        built[language] = {
+            role.value: (
+                template.format(name="{name}", role=words),
+                template.format(name="{name}", role=theirs(words, "{patient}", language)),
+            )
+            for role, words in family_words.ROLE_WORDS[language].items()
+        }
+    return built
 
 
 def _pattern(template: str) -> re.Pattern[str] | None:
@@ -150,6 +168,7 @@ def twins(language: str) -> tuple[tuple[str, str], ...]:
         *written,
         *BOUNDARY_THEIRS.get(language, {}).values(),
         *consent_words.CONSENT_THEIRS.get(language, {}).values(),
+        *_role_is_theirs().get(language, {}).values(),
         *same,
     ]
     first: dict[str, str] = {}

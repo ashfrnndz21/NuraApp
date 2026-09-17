@@ -439,6 +439,56 @@ CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
             "You can stop this at any time.",
             "{patient} can stop this at any time.",
         ),
+        # Version 1's own words (history, not shown — see TEXTS); its twin is exempt the
+        # same way, for a caregiver who reads an agreement still open from before version 2.
+        "share_v1": (
+            (
+                "You choose who in your family can see your papers. "  # plain-words: history, not shown
+                "You can see who looked at them. "
+                "You can stop this at any time."
+            ),
+            (
+                "{patient} chooses who in {patient}'s family can see {patient}'s papers. "  # plain-words: history, not shown
+                "{patient} can see who looked at them. "
+                "{patient} can stop this at any time."
+            ),
+        ),
+        "recording_when": (
+            "When you see the doctor, Nura listens.",
+            "When {patient} sees the doctor, Nura listens.",
+        ),
+        "recording_keeps": (
+            "Nura keeps what you and the doctor say.",
+            "Nura keeps what {patient} and the doctor say.",
+        ),
+        "recording_only": (
+            "Only you and the family you let in can hear it.",
+            "Only {patient} and the family {patient} let in can hear it.",
+        ),
+        "recording_again": (
+            "You can hear it again whenever you want.",
+            "{patient} can hear it again whenever {patient} wants.",
+        ),
+        "whatsapp_sends": (
+            "Every morning, Nura sends you your Today page on WhatsApp.",
+            "Every morning, Nura sends {patient} {patient}'s Today page on WhatsApp.",
+        ),
+        "calendar_reads": (
+            "Nura reads your calendar to find visits to the doctor.",
+            "Nura reads {patient}'s calendar to find visits to the doctor.",
+        ),
+        "calendar_alone": (
+            "Everything else in your calendar is left alone.",
+            "Everything else in {patient}'s calendar is left alone.",
+        ),
+        "calendar_yes": (
+            "Nothing is added until you say yes.",
+            "Nothing is added until {patient} says yes.",
+        ),
+        "calendar_never": (
+            "Nura never writes in your calendar.",
+            "Nura never writes in {patient}'s calendar.",
+        ),
     },
     "ms": {
         "keeps": (
@@ -460,6 +510,42 @@ CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
         "share_stop": (
             "Anda boleh berhenti pada bila-bila masa.",
             "{patient} boleh berhenti pada bila-bila masa.",
+        ),
+        "recording_when": (
+            "Semasa anda berjumpa doktor, Nura mendengar.",
+            "Semasa {patient} berjumpa doktor, Nura mendengar.",
+        ),
+        "recording_keeps": (
+            "Nura menyimpan apa yang anda dan doktor katakan.",
+            "Nura menyimpan apa yang {patient} dan doktor katakan.",
+        ),
+        "recording_only": (
+            "Hanya anda dan keluarga yang anda benarkan boleh mendengarnya.",
+            "Hanya {patient} dan keluarga yang {patient} benarkan boleh mendengarnya.",
+        ),
+        "recording_again": (
+            "Anda boleh mendengarnya semula bila-bila masa.",
+            "{patient} boleh mendengarnya semula bila-bila masa.",
+        ),
+        "whatsapp_sends": (
+            "Setiap pagi, Nura menghantar halaman Hari Ini anda melalui WhatsApp.",
+            "Setiap pagi, Nura menghantar halaman Hari Ini {patient} melalui WhatsApp.",
+        ),
+        "calendar_reads": (
+            "Nura membaca kalendar anda untuk mencari lawatan ke doktor.",
+            "Nura membaca kalendar {patient} untuk mencari lawatan ke doktor.",
+        ),
+        "calendar_alone": (
+            "Yang lain dalam kalendar anda tidak disentuh.",
+            "Yang lain dalam kalendar {patient} tidak disentuh.",
+        ),
+        "calendar_yes": (
+            "Tiada apa-apa ditambah sehingga anda kata ya.",
+            "Tiada apa-apa ditambah sehingga {patient} kata ya.",
+        ),
+        "calendar_never": (
+            "Nura tidak pernah menulis dalam kalendar anda.",
+            "Nura tidak pernah menulis dalam kalendar {patient}.",
         ),
     },
     "zh": {
@@ -483,12 +569,50 @@ CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
             "您可以随时停止。",
             "{patient}可以随时停止。",
         ),
+        "recording_when": (
+            "您看医生的时候，Nura 会听。",
+            "{patient}看医生的时候，Nura 会听。",
+        ),
+        "recording_keeps": (
+            "Nura 会保存您和医生说的话。",
+            "Nura 会保存{patient}和医生说的话。",
+        ),
+        "recording_only": (
+            "只有您和您让进来的家人可以听。",
+            "只有{patient}和{patient}让进来的家人可以听。",
+        ),
+        "recording_again": (
+            "您什么时候想听，都可以再听一次。",
+            "{patient}什么时候想听，都可以再听一次。",
+        ),
+        "whatsapp_sends": (
+            "每天早上，Nura 会把您的今日页面发到您的 WhatsApp。",
+            "每天早上，Nura 会把{patient}的今日页面发到{patient}的 WhatsApp。",
+        ),
+        "calendar_reads": (
+            "Nura 会看您的日历，找出看医生的时间。",
+            "Nura 会看{patient}的日历，找出看医生的时间。",
+        ),
+        "calendar_yes": (
+            "您说好之前，什么都不会加进去。",
+            "{patient}说好之前，什么都不会加进去。",
+        ),
+        "calendar_never": (
+            "Nura 从来不会写进您的日历。",
+            "Nura 从来不会写进{patient}的日历。",
+        ),
     },
 }
-"""Consent wording that speaks to him, each with its twin about him by name
-(`app.channels.about_him`): the lines from `HOLD_HEALTH_RECORD` he reads when he opens his
-own account, and from `SHARE_WITH_PERSON` when he lets someone in. A consent record quotes
-his own words verbatim, so a key holder reading someone else's — his chief, on the Family
-consents screen — reads them about him by name instead, never as if they were her own. The
-window line ("{name} can see them until you say stop.") is shared with the family's grant
+"""Every line in `TEXTS`, every purpose and every version, that speaks to him — each with its
+twin about him by name (`app.channels.about_him`). `GET /profiles/{id}/consents` answers
+every agreement ever given on the profile, whatever its purpose, so a key holder reading
+someone else's consents — his chief, on the Family consents screen — can be shown any of
+them, current version or the ones a still-open agreement was made under. A consent record
+quotes his own words verbatim, so this is never a paraphrase: the twin says the same thing,
+about him by name instead of to him. `test_every_consent_wording_ever_shown_is_said_about_him_by_name`
+(`tests/test_about_him.py`) enumerates `TEXTS` itself — not a hand-picked list of the purposes
+and versions this dict happens to name — so a purpose or version added later without an entry
+here fails that test, not a production screen.
+
+The window line ("{name} can see them until you say stop.") is shared with the family's grant
 lines and its twin lives with them (`app.family.strings.WINDOW_LINES_THEIRS`)."""

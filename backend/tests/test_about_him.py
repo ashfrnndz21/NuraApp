@@ -5,11 +5,12 @@ own key nothing changes."""
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
 import pytest
 
 from app.channels.about_him import LANGUAGES, TO_HIM, Reader, twins
-from app.consent.texts import CONSENT_THEIRS, TEXTS
+from app.consent.texts import CONSENT_THEIRS, TEXTS, ConsentText
 from app.safety.boundary import BOUNDARY_THEIRS, Surface, boundary_line
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
@@ -110,6 +111,52 @@ def test_the_consent_twins_are_the_consent_wording_as_it_is_said(language: str) 
     said = [text.summary for text in TEXTS if text.language == language]
     for original, _twin in CONSENT_THEIRS[language].values():
         assert any(original in summary for summary in said), (language, original)
+
+
+def _lines_still_speaking_to_him(texts: Iterable[ConsentText], language: str) -> list[str]:
+    """Every line, from every entry in `texts`, that still speaks to him after the reader has
+    said it about someone reading a key that is not his. This walks the wordings themselves —
+    not a hand-picked list of the purposes and versions `CONSENT_THEIRS` happens to name — so
+    a purpose or version with no twin is found here, whether it exists today or is added
+    later (the shape of #186 and #215: a list a future member could silently fall outside)."""
+    reader = Reader(his=False, name="Pa", language=language)
+    missing: list[str] = []
+    for text in texts:
+        if text.language != language:
+            continue
+        for line in text.summary.split("\n"):
+            said = reader.says(line)
+            if TO_HIM[language].search(said):
+                missing.append(f"{text.purpose}/{text.version}: {line!r} -> {said!r}")
+    return missing
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_every_consent_wording_ever_shown_is_said_about_him_by_name(language: str) -> None:
+    """`GET /consents` answers every agreement ever given, whatever its purpose and whatever
+    version it was made under, so every one of them — not just the ones a fixture happens to
+    seed — must be safe for a chief to read about him by name. This enumerates `TEXTS` itself,
+    so a wording added to it later without a `CONSENT_THEIRS` entry fails here, not on a
+    caregiver's screen."""
+    checked = [text for text in TEXTS if text.language == language]
+    assert checked, f"no wordings recorded for {language!r}"
+    assert _lines_still_speaking_to_him(TEXTS, language) == []
+
+
+def test_the_completeness_check_is_not_vacuous() -> None:
+    """Proof the check above actually catches an uncovered wording, not just that today's
+    wordings happen to pass: a synthetic version with a "your" line and no twin is flagged."""
+    from dataclasses import replace
+
+    fixture = (
+        *TEXTS,
+        replace(TEXTS[0], version="test-only-no-twin", summary="Nura will remember your favourite colour."),
+    )
+    missing = _lines_still_speaking_to_him(fixture, "en")
+    assert any("favourite colour" in line for line in missing), missing
+    # And the real TEXTS alone, unpolluted by the fixture, still passes — the check itself
+    # is not what is broken.
+    assert _lines_still_speaking_to_him(TEXTS, "en") == []
 
 
 @pytest.mark.parametrize(
