@@ -11,3 +11,4 @@ backend/*.db-journal
 *.egg-info/
 backend/.dev.log
 backend/var/
+node_modules/
