@@ -351,6 +351,6 @@ test("the language picker changes every string and persists on the device", asyn
   await expect(page.getByTestId("sign-out")).toHaveText("Daftar keluar");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");
-  await page.getByRole("button", { name: "Hari Ini", exact: true }).click();
+  await page.getByRole("button", { name: "Utama", exact: true }).click();
   await expect(page.getByTestId("no-medicines")).toContainText("Nura belum ada ubat untuk anda.");
 });

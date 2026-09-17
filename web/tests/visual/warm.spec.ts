@@ -29,7 +29,7 @@ async function snap(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: `${OUT}${name}.png`, animations: "disabled" });
   await page.evaluate(() => document.documentElement.classList.add("shot-full"));
-  await page.screenshot({ path: `${OUT}${name}-full.png`, fullPage: true, animations: "disabled" });
+  await page.screenshot({ path: `${OUT}${name}-full.png`, fullPage: true, animations: "disabled", scale: "css" });
   await page.evaluate(() => document.documentElement.classList.remove("shot-full"));
 }
 
