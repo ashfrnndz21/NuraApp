@@ -14,7 +14,7 @@ this is not shown to anyone else (`page`).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -34,7 +34,7 @@ from app.medicines import strings as medicine_words
 from app.safety.boundary import BOUNDARY_THEIRS
 
 if TYPE_CHECKING:
-    from app.channels.api.feed_schemas import FeedPageOut
+    from app.channels.api.feed_schemas import FeedItemOut, FeedPageOut, SentOut
 
 LANGUAGES = ("en", "ms", "zh")
 
@@ -246,21 +246,29 @@ class Reader:
             return out
         return type(out).model_validate(self.about(out.model_dump(mode="json")))
 
+    def _kept(self, item: FeedItemOut) -> bool:
+        """Whether a card belongs in front of this reader: hers are hers already; one of his
+        with no twin for a line that still speaks to him is not shown to anyone else."""
+        return item.deliver_to != "patient" or not self.speaks_to_him(
+            [item.headline, item.body, item.voice, item.why.get("plain", "")]
+        )
+
     def page(self, out: FeedPageOut) -> FeedPageOut:
         """A feed page as this reader hears it: his cards about him by name, and a card of his
         with no twin for a line that speaks to him not shown (hers are hers already)."""
         if self.his:
             return out
         heard = self.model(out)
-        kept = [
-            item
-            for item in heard.items
-            if item.deliver_to != "patient"
-            or not self.speaks_to_him(
-                [item.headline, item.body, item.voice, item.why.get("plain", "")]
-            )
-        ]
-        return heard.model_copy(update={"items": kept})
+        return heard.model_copy(update={"items": [item for item in heard.items if self._kept(item)]})
+
+    def sent(self, items: Sequence[SentOut]) -> list[SentOut]:
+        """"Sent to Pa this week" as this reader hears it: the same rule `page` holds every
+        other card to — his cards about him by name, and one of his with no twin for a line
+        that still speaks to him not shown to anyone else."""
+        if self.his:
+            return list(items)
+        heard = [self.model(one) for one in items]
+        return [one for one in heard if self._kept(one.item)]
 
 
 async def reader_of(session: AsyncSession, context: KeyContext, language: str | None) -> Reader:
