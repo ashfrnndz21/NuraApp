@@ -201,6 +201,92 @@ async def test_the_reorder_date_reached_tells_the_one_on_duty_capped_the_second_
     assert again.outcome is DeliveryOutcome.SENT
 
 
+async def test_a_recipients_own_quiet_hours_override_the_profiles_default(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """#144: quiet hours differ per person. Mei sets hers to cover 10am, on her own word —
+    no family scope asked, the same self-service footing as leaving a key — and the engine
+    reads her own, not the profile's default (21:00-07:00, which 10am is outside of)."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path, quantity=2)
+    mei = await h.ctx(sg, h.mei)
+    await change(
+        sg,
+        context=mei,
+        skip_quiet_days=False,
+        quiet_from=time(9, 0),
+        quiet_until=time(12, 0),
+        channels={},
+        caps={},
+        mine=True,
+    )
+    [held] = _rows(await _run(sg, h, clock, at(10)), TriggerType.REORDER)
+    assert held.outcome is DeliveryOutcome.QUIET and held.to_person_id == h.mei.id
+    # Outside her own quiet hours the same day, it reaches her.
+    [sent] = _rows(await _run(sg, h, clock, at(13)), TriggerType.REORDER)
+    assert sent.outcome is DeliveryOutcome.SENT
+
+
+async def test_a_recipient_with_no_settings_of_her_own_gets_the_profiles_default(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The other half of #144: the profile's default is still what a recipient rests on
+    until they set their own — reading it is unchanged (`current(mine=False)`, E11-05)."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path, quantity=2)
+    from app.delivery.triggers.preferences import current
+
+    config, row = await current(sg, context=h.owner)
+    assert row is None
+    assert config.quiet_from == time(21, 0) and config.quiet_until == time(7, 0)
+    [sent] = _rows(await _run(sg, h, clock, at(10)), TriggerType.REORDER)
+    assert sent.outcome is DeliveryOutcome.SENT and sent.to_person_id == h.mei.id
+
+
+async def test_a_holder_with_no_family_scope_sets_her_own_delivery_settings(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """#144: self-service, like leaving a key — Siti the helper holds no family scope at
+    all (`ROLE_SCOPES[HELPER]`) and cannot change the profile's default, but she can still
+    set her own."""
+    from app.audit.trail import NotTheirsToRead
+    from app.delivery.triggers.preferences import change as change_settings
+
+    h = await home(sg, tmp_path)
+    siti = await h.ctx(sg, h.siti)
+    with pytest.raises(NotTheirsToRead):
+        await change_settings(
+            sg,
+            context=siti,
+            skip_quiet_days=False,
+            quiet_from=None,
+            quiet_until=None,
+            channels={},
+            caps={},
+        )
+    row = await change_settings(
+        sg,
+        context=siti,
+        skip_quiet_days=False,
+        quiet_from=time(8, 0),
+        quiet_until=time(9, 0),
+        channels={},
+        caps={},
+        mine=True,
+    )
+    assert row.for_person_id == h.siti.id
+
+    from app.delivery.triggers.preferences import current
+
+    config, own = await current(sg, context=siti, mine=True)
+    assert own is not None and own.id == row.id
+    assert config.quiet_from == time(8, 0)
+    # The profile's own default, read the ordinary way, never saw Siti's row.
+    default_config, default_row = await current(sg, context=h.owner, mine=False)
+    assert default_row is None
+    assert default_config.quiet_from == time(21, 0)
+
+
 async def test_no_one_receives_more_than_the_configured_cap_a_day(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:

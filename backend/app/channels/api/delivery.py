@@ -1,7 +1,9 @@
 """Delivery over HTTP (E00-05, E11-05, E11-06, E11-10).
 
-    GET  /profiles/{id}/delivery-settings             what the deliveries follow (any key)
+    GET  /profiles/{id}/delivery-settings             the profile's default (any key)
     PUT  /profiles/{id}/delivery-settings             change it (owner, chief)
+    GET  /profiles/{id}/delivery-settings/mine        the caller's own, over the default (any key)
+    PUT  /profiles/{id}/delivery-settings/mine        change the caller's own (any key, #144)
     GET  /profiles/{id}/deliveries?day=               every attempt and its rule (owner, chief)
     GET  /profiles/{id}/ladders?language=             the open flag ladders that reached the caller
     GET  /profiles/{id}/reach?language=               who Nura cannot message on WhatsApp (owner, chief)
@@ -85,6 +87,10 @@ class SettingsOut(BaseModel):
     caps: dict[str, int | None]
     set_by_person_id: uuid.UUID | None
     set_at: datetime | None
+    is_own: bool
+    """False on the profile's default; true only when the row read (or changed) is this
+    caller's own, never someone else's (#144) — the profile's default is `is_own=False`
+    with `for_person_id=None`, since it belongs to nobody in particular."""
 
     @classmethod
     def of(cls, config: Config, row: DeliverySettings | None) -> SettingsOut:
@@ -100,6 +106,7 @@ class SettingsOut(BaseModel):
             caps={kind.value: config.cap_for(kind) for kind in TriggerType},
             set_by_person_id=None if row is None else row.set_by_person_id,
             set_at=None if row is None else row.set_at,
+            is_own=row is not None and row.for_person_id is not None,
         )
 
 
@@ -241,6 +248,36 @@ async def settings_change(body: SettingsIn, context: Context, session: Db) -> Se
         caps=body.caps,
     )
     config, row = await current(session, context=context)
+    assert row is not None and row.id == changed.id
+    return SettingsOut.of(config, row)
+
+
+@router.get("/profiles/{profile_id}/delivery-settings/mine")
+async def settings_mine(context: Context, session: Db) -> SettingsOut:
+    """The caller's own settings (#144): quiet hours and channels differ per person — Mei's
+    weekdays, Kit's weekends — read over the profile's default, which is what stands until
+    they set one of their own. Any key holder, the same as the plain settings route."""
+    config, row = await current(session, context=context, mine=True)
+    return SettingsOut.of(config, row)
+
+
+@router.put("/profiles/{profile_id}/delivery-settings/mine")
+async def settings_change_mine(body: SettingsIn, context: Context, session: Db) -> SettingsOut:
+    """Change the caller's own settings (#144): self-service, the same footing as leaving a
+    key — no family scope is asked, because nobody else's word is needed for a person's own
+    quiet hours. An alert's cap and channel list are refused here exactly as they are on the
+    profile's own settings (#162)."""
+    changed = await change(
+        session,
+        context=context,
+        skip_quiet_days=body.skip_quiet_days,
+        quiet_from=body.quiet_from,
+        quiet_until=body.quiet_until,
+        channels=body.channels,
+        caps=body.caps,
+        mine=True,
+    )
+    config, row = await current(session, context=context, mine=True)
     assert row is not None and row.id == changed.id
     return SettingsOut.of(config, row)
 

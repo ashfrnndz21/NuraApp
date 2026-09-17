@@ -43,7 +43,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -184,6 +184,7 @@ class Run:
     _taps: tuple[list[DoseTaken], dict[uuid.UUID, str]] | None = None
     _scopes: dict[uuid.UUID, frozenset[Scope]] = field(default_factory=dict)
     _said_no: dict[uuid.UUID, bool] = field(default_factory=dict)
+    _configs: dict[uuid.UUID, Config] = field(default_factory=dict)
     said_language: str | None = None
     """His language as his settings say it (`his_language`), read once for the run."""
 
@@ -225,6 +226,29 @@ class Run:
                 for row in rows
             )
         return self._whatsapp
+
+    async def config_for(self, person: Person) -> Config:
+        """This person's own delivery settings (#144) — quiet hours and channels differ per
+        recipient, Mei's weekdays and Kit's weekends — read newest-first, falling back to
+        the profile's default (`self.config`, E11-05) when they have set none of their own.
+        His day — the routine's own clock, what a dose's window and the morning card run
+        on — is always the profile's: nobody's own settings move when his tablets are due,
+        only how and when *they* are told about it."""
+        if person.id not in self._configs:
+            rows = await audited_read(
+                self.session,
+                DeliverySettings,
+                self.acting,
+                Scope.PROFILE,
+                where=(DeliverySettings.for_person_id == person.id,),
+                order_by=(DeliverySettings.set_at.desc(),),
+                limit=1,
+                channel=Channel.SYSTEM,
+            )
+            self._configs[person.id] = (
+                replace(config_of(rows[0]), day=self.config.day) if rows else self.config
+            )
+        return self._configs[person.id]
 
     async def said_no_to_whatsapp(self, person: Person) -> bool:
         """Whether this person answered no to WhatsApp messages from Nura (#163)."""
@@ -518,9 +542,11 @@ async def deliver(
         return await hold(DeliveryOutcome.CAPPED, "once a day") if firing.per_day else None
     if rule.scope not in await run.scopes_of(to.person):
         return await hold(DeliveryOutcome.NO_SCOPE, f"key does not cover {rule.scope.value}")
-    if rule.quiet and run.config.is_quiet(run.local):
+    # This recipient's own settings (#144), the profile's default when they have none.
+    config = await run.config_for(to.person)
+    if rule.quiet and config.is_quiet(run.local):
         return await hold(DeliveryOutcome.QUIET, "quiet hours")
-    cap = run.config.cap_for(firing.type)
+    cap = config.cap_for(firing.type)
     if cap is not None:
         sent_today = [
             row
@@ -536,7 +562,7 @@ async def deliver(
     if is_alert(firing.type):
         return await _every_way(run, firing, to, message, rung=rung, ladder=ladder)
     passed: list[str] = []
-    for channel in message.channels or run.config.channels_for(firing.type):
+    for channel in message.channels or config.channels_for(firing.type):
         if channel is DeliveryChannel.APP_PUSH:
             pushed = await _by_push(run, firing, to, passed, rung=rung, ladder=ladder)
             if pushed is not None:

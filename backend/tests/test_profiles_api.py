@@ -188,6 +188,133 @@ async def test_the_owner_lists_the_keys_cut_on_his_profile(deployment: Deploymen
     assert len(after.json()) == len(before.json()) + 1
 
 
+async def test_a_holder_leaves_her_own_key_over_http(deployment: Deployment) -> None:
+    """#144: the door `revoke` cannot open for herself (it asks the family scope, and a
+    caregiver holds none); `leave` opens because the key named is hers."""
+    pa, profile_id = await _pa_with_a_note(deployment)
+    daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
+    his = bearer(pa["token"])
+    hers_bearer = bearer(daughter["token"])
+    hers = await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
+    other = await _caregiver_key(deployment, pa, profile_id, SON)
+
+    refused = await deployment.client.delete(
+        f"/profiles/{profile_id}/keys/{hers['key_id']}", headers=hers_bearer
+    )
+    assert refused.status_code == 403
+    assert refused.json() == {"refusal": "OutOfScope", "scope": "family"}
+
+    # Nobody leaves on someone else's key, while she still has one of her own to ask with.
+    stranger = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{other['key_id']}/leave", json={}, headers=hers_bearer
+    )
+    assert stranger.status_code == 403
+    assert stranger.json() == {"refusal": "NotTheirKeyToLeave"}
+
+    left = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{hers['key_id']}/leave", json={}, headers=hers_bearer
+    )
+    assert left.status_code == 200, left.text
+    assert left.json()["revoked_at"] is not None
+
+    gone = await deployment.client.get(f"/profiles/{profile_id}/medicines", headers=hers_bearer)
+    assert gone.status_code == 403 and gone.json() == {"refusal": "NoKey"}
+    # Pa still reads that she held it (the row stays), and it is on his trail.
+    still_listed = await deployment.client.get(f"/profiles/{profile_id}/keys", headers=his)
+    assert {k["key_id"] for k in still_listed.json()} == {hers["key_id"], other["key_id"]}
+    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
+    assert trail.status_code == 200 and len(trail.json()) > 0
+
+
+async def test_a_chief_names_a_successor_or_rests_on_pas_word_over_http(
+    deployment: Deployment,
+) -> None:
+    pa, profile_id = await _pa_with_a_note(deployment)
+    his = bearer(pa["token"])
+    daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
+    son = await register_by_phone(deployment, SON, "Son")
+    await let_in(deployment, pa, profile_id, DAUGHTER, list(SCOPE_NAMES), "daughter")
+    chief = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_person_id": daughter["person_id"], "role": "chief"},
+        headers=his,
+    )
+    assert chief.status_code == 201
+    chief_key = chief.json()
+    hers_bearer = bearer(daughter["token"])
+
+    # No successor, and Pa has said nothing: refused, and nothing closed.
+    blocked = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{chief_key['key_id']}/leave", json={}, headers=hers_bearer
+    )
+    assert blocked.status_code == 409
+    assert blocked.json() == {"refusal": "ChiefMustNameSuccessor"}
+    still = await deployment.client.get(f"/profiles/{profile_id}/keys", headers=his)
+    assert next(k for k in still.json() if k["key_id"] == chief_key["key_id"])["revoked_at"] is None
+
+    # A stranger cannot be named: she must already hold a key.
+    await let_in(deployment, pa, profile_id, SON, ["medicines"], "son")
+    named = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{chief_key['key_id']}/leave",
+        json={"successor_person_id": son["person_id"]},
+        headers=hers_bearer,
+    )
+    assert named.status_code == 409
+    assert named.json() == {"refusal": "SuccessorMustAlreadyHoldAKey"}
+
+    # Son holds a key now; naming him promotes him and closes her key in one call.
+    await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_person_id": son["person_id"], "role": "viewer"},
+        headers=hers_bearer,
+    )
+    left = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{chief_key['key_id']}/leave",
+        json={"successor_person_id": son["person_id"]},
+        headers=hers_bearer,
+    )
+    assert left.status_code == 200, left.text
+    assert left.json()["revoked_at"] is not None
+    now_listed = await deployment.client.get(f"/profiles/{profile_id}/keys", headers=his)
+    sons_live = next(
+        k
+        for k in now_listed.json()
+        if k["holder_person_id"] == son["person_id"] and k["revoked_at"] is None
+    )
+    assert sons_live["role"] == "chief"
+
+
+async def test_only_pa_says_there_will_be_no_next_chief_over_http(deployment: Deployment) -> None:
+    pa, profile_id = await _pa_with_a_note(deployment)
+    his = bearer(pa["token"])
+    daughter = await register_by_phone(deployment, DAUGHTER, "Daughter")
+    await let_in(deployment, pa, profile_id, DAUGHTER, list(SCOPE_NAMES), "daughter")
+    chief = await deployment.client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_person_id": daughter["person_id"], "role": "chief"},
+        headers=his,
+    )
+    chief_key = chief.json()
+    hers_bearer = bearer(daughter["token"])
+
+    not_hers = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{chief_key['key_id']}/no-successor", headers=hers_bearer
+    )
+    assert not_hers.status_code == 403
+
+    waived = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{chief_key['key_id']}/no-successor", headers=his
+    )
+    assert waived.status_code == 200, waived.text
+    assert waived.json()["successor_waived_at"] is not None
+
+    left = await deployment.client.post(
+        f"/profiles/{profile_id}/keys/{chief_key['key_id']}/leave", json={}, headers=hers_bearer
+    )
+    assert left.status_code == 200, left.text
+    assert left.json()["revoked_at"] is not None
+
+
 PROFILE_ROUTES = (
     ("GET", "/profiles/{id}"),
     ("GET", "/profiles/{id}/keys"),

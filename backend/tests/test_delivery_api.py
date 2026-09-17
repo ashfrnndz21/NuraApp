@@ -55,6 +55,42 @@ async def test_the_settings_are_read_changed_and_an_alert_is_never_capped(
     assert after.json()["channels"]["flag"] == ["whatsapp", "app_push"]
 
 
+async def test_a_recipient_sets_her_own_settings_over_http(deployment: Deployment) -> None:
+    """#144: `/delivery-settings/mine` is any key holder's own, over the profile's default —
+    a viewer, who cannot touch the plain settings route at all, can still set hers."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    await _caregiver_key(deployment, pa, profile_id, MEI, ["medicines", "visits"])
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    hers = bearer(mei["token"])
+
+    refused = await deployment.client.put(
+        f"/profiles/{profile_id}/delivery-settings",
+        json={"channels": {"reorder": ["whatsapp"]}},
+        headers=hers,
+    )
+    assert refused.status_code == 403, refused.text
+
+    before = await deployment.client.get(
+        f"/profiles/{profile_id}/delivery-settings/mine", headers=hers
+    )
+    assert before.status_code == 200, before.text
+    assert before.json()["is_own"] is False and before.json()["quiet_from"] == "21:00:00"
+
+    changed = await deployment.client.put(
+        f"/profiles/{profile_id}/delivery-settings/mine",
+        json={"quiet_from": "09:00:00", "quiet_until": "12:00:00"},
+        headers=hers,
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["is_own"] is True and changed.json()["quiet_from"] == "09:00:00"
+
+    # Pa's own default settings never moved.
+    default = await deployment.client.get(f"/profiles/{profile_id}/delivery-settings", headers=his)
+    assert default.json()["is_own"] is False and default.json()["quiet_from"] == "21:00:00"
+
+
 async def test_the_log_is_the_owners_and_his_chiefs_and_the_dev_run_fills_it(
     deployment: Deployment,
 ) -> None:
