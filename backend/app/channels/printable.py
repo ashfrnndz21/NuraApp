@@ -117,7 +117,12 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
 
     medicines = "".join(
         "<tr>"
-        f"<td>{escape(m.plain_name)}</td>"
+        f"<td>{escape(m.plain_name)}"
+        # The register's own name, as data beside his — never through a sentence, so it is
+        # on the page whether or not his plain name could stand beside it there (#222). Left
+        # out only when it *is* his plain name (no story: `_plain_medicine`'s fallback).
+        + (f' <span class="caption">({escape(m.generic)})</span>' if m.has_plain_name else "")
+        + "</td>"
         f"<td>{escape(m.strength)} {escape(m.form)}</td>"
         f"<td>{escape(m.amount)}, {escape(m.when)}</td>"
         "</tr>"
@@ -175,7 +180,7 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
         + "</section>"
         f'<section class="paper">{section("ec.allergy", "ec.no_allergy", "ec.blood_type")}</section>'
         f'<section class="paper">{section("ec.chief_who", "ec.chief", "ec.no_chief")}{contacts}{section("ec.doctor", "ec.clinic")}{clinic}{insurer}{ambulance}</section>'
-        f'<section class="paper">{section("ec.last_reading", "ec.boundary")}</section>'
+        f'<section class="paper">{section("ec.last_reading", "ec.boundary", "ec.render_issue", "ec.render_issue_family")}</section>'
         "</main></body></html>"
     )
 

@@ -11,24 +11,29 @@ Singapore says 995 and Malaysia 999.
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Outcome
+from app.channels.printable import emergency_card_html
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.drugs.registry import UnknownDrug
 from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, ProviderKind, SourceChannel
 from app.memory.spine import add_provider
 from app.regions import Region
-from app.safety.emergency_card import CARD_TARGET, emergency_card
+from app.safety.emergency_card import CARD_TARGET, _medicines, compose_lines, emergency_card
 from app.safety.models import CardFormat, EmergencyCard
 from app.state.service import StaleState, current_state
+from tests.medicines_support import add, label
 from tests.safety_support import (
     REGISTRY,
     assert_plain,
@@ -92,7 +97,10 @@ async def test_the_card_holds_what_a_stranger_needs_and_every_line_is_verified(
         "1 tablet",
         "every morning",
     )
-    assert medicine.plain_name == "the water pill (frusemide)"
+    # `plain_name` is his word alone, data (module doc); the register's name is `generic`,
+    # separate data beside it — the parenthetical below is the *sentence*'s own doing
+    # (`_medicine_label`), attempted only where the whole line still passes plain-words (#222).
+    assert medicine.plain_name == "the water pill" and medicine.has_plain_name
     assert card.contacts[0].name == "Mei" and card.contacts[0].phone_e164 == "+6592220031"
     assert card.clinic is not None and card.clinic.name == "Dr Tan"
     assert card.last_reading_at is not None
@@ -247,3 +255,112 @@ async def test_a_clinic_is_a_place_he_goes_to_and_an_old_reading_is_not_the_last
     assert "Pa goes to Bedok Clinic." in texts
     assert card.last_reading_at is None
     assert not any("blood pressure was last" in text for text in texts)
+
+
+# --- #222: no active medicine is ever withheld ----------------------------------------------
+
+
+def _synthetic_line(generic: str, *, drug_class: str = "", high_risk: bool = False):
+    """A `MedicationLine`-shaped stand-in with just what `_medicines` reads: enough to test
+    the card's naming of a medicine without the full ingestion pipeline — irrelevant here,
+    since #222 is about the sentence, not how the line got onto the record."""
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic=generic,
+        brand=None,
+        strength="",
+        form="tablet",
+        dose={"amount": 1.0, "unit": "tablet", "frequency": "od", "anchors": ["breakfast"]},
+        drug_class=drug_class,
+        high_risk=high_risk,
+    )
+
+
+def _card_lines(medicines, language: str):
+    return compose_lines(
+        name="Pa",
+        language=language,
+        spoken_language=language,
+        age=None,
+        conditions=(),
+        medicines=medicines,
+        allergies=(),
+        blood_type=None,
+        contacts=(),
+        clinic=None,
+        last_reading_at=None,
+        region=Region.SG,
+    )
+
+
+def test_every_active_medicine_on_the_whole_register_appears_on_the_card_in_every_language() -> (
+    None
+):
+    """#222: asserted over the entire register, not a hand-picked drug (the #186/#215
+    lesson) — a product added to the register later cannot fall outside this check.
+
+    Measured on `main` before the fix: 26 of the register's 50 generics vanished from the
+    English card (0 in Malay and Chinese, which never carry the register's chemical name in
+    the sentence) — every one of them a generic #202 added that `app.safety.plain_words`'s
+    glossary does not cover, so the sentence naming it failed rule 3 and was silently
+    withheld (`emergency_card.py`'s old `say`, log-and-drop). None do now."""
+    generics = sorted(REGISTRY.generics)
+    assert len(generics) >= 50, "the fixture registry shrank; the measurement above is stale"
+    lines = [_synthetic_line(generic) for generic in generics]
+    for language in ("en", "ms", "zh"):
+        medicines = _medicines(REGISTRY, lines, language)
+        assert len(medicines) == len(generics)
+        card_lines = _card_lines(medicines, language)
+        assert_plain(card_lines, language)
+        named = [one for one in card_lines if one.id == "ec.medicine"]
+        missing = len(generics) - len(named)
+        assert missing == 0, f"{language}: {missing} of {len(generics)} medicines vanished"
+        # The safety net (#222) never had to fire: every medicine's own sentence rendered.
+        assert not any(one.id.startswith("ec.render_issue") for one in card_lines)
+
+
+def test_a_high_risk_medicine_with_no_story_still_appears_with_its_marker() -> None:
+    """#222: a high-risk drug the register carries no plain-name story for (a future
+    addition — this fixture's register happens to have a story for every one it lists
+    today) is still named, by the register's own name, and still carries its marker."""
+    generic = "oxymorphone"
+    with pytest.raises(UnknownDrug):
+        REGISTRY.monograph(generic)
+    line = _synthetic_line(generic, drug_class="opioid", high_risk=True)
+    for language in ("en", "ms", "zh"):
+        medicines = _medicines(REGISTRY, [line], language)
+        medicine = medicines[0]
+        assert medicine.plain_name == "Oxymorphone" and not medicine.has_plain_name
+        assert medicine.high_risk
+        card_lines = _card_lines(medicines, language)
+        assert_plain(card_lines, language)
+        ids = [one.id for one in card_lines]
+        assert "ec.medicine" in ids and "ec.high_risk" in ids
+        named = next(one.text for one in card_lines if one.id == "ec.medicine")
+        assert "Oxymorphone" in named
+
+
+async def test_the_printable_page_and_the_live_card_show_the_same_medicines(
+    sg: AsyncSession,
+) -> None:
+    """#222: a generic #202 added — not covered by the plain-words glossary, so its sentence
+    used to be withheld — is on the live card, the printable page's sentences, and its data
+    table, the register's own name included there whether or not the sentence could carry it."""
+    owner = await pa(sg, phone="+6591110040")
+    await water_pill(sg, owner)  # frusemide: glossary-safe, the parenthetical still shows
+    await add(sg, owner, label("bisoprolol", "5 mg", "1 tab OD morning"))
+    card = await emergency_card(sg, context=owner, registry=REGISTRY, format=CardFormat.HTML)
+    assert {m.generic for m in card.medicines} == {"frusemide", "bisoprolol"}
+    texts = [line.text for line in card.lines]
+    assert "Pa takes the water pill (frusemide)." in texts
+    # bisoprolol is not one of the glossary's few chemical names: the sentence carries his
+    # plain name alone, never withheld for it.
+    assert "Pa takes Pa's blood pressure tablet." in texts
+    assert_plain(card.lines)
+    page = emergency_card_html(card)
+    assert "the water pill" in page and "(frusemide)" in page
+    assert "your blood pressure tablet" in page
+    # The register's own name for bisoprolol is on the page as data even though the sentence
+    # could not carry it (module doc: `generic` is data for the stranger).
+    assert "(bisoprolol)" in page

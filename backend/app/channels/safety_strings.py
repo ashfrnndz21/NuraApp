@@ -178,7 +178,22 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "ms": "Kad ini bukan nasihat doktor.",
         "zh": "这张卡不是医生的意见。",
     },
+    "ec.render_issue": {
+        "en": "One line on {name}'s card could not be shown.",
+        "ms": "Satu baris pada kad {name} tidak dapat ditunjukkan.",
+        "zh": "{name}的卡上有一行无法显示。",
+    },
+    "ec.render_issue_family": {
+        "en": "Tell your family or the doctor.",
+        "ms": "Beritahu keluarga anda atau doktor.",
+        "zh": "请告诉家人或医生。",
+    },
 }
+"""`ec.render_issue` and `ec.render_issue_family` are the card's own safety net (#222): if a
+line still cannot be said — for a reason other than a medicine's name, which
+`app.safety.emergency_card._medicine_label` guarantees never fails — these two say so on the
+card itself, not only in the log. Static, no clinical content, so they cannot themselves fail
+the standard and go silent a second time."""
 
 # --- the what-to-do-now card -----------------------------------------------------------------
 

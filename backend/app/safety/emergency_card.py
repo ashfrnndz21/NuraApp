@@ -130,7 +130,12 @@ class Allergy:
 @dataclass(frozen=True, slots=True)
 class Medicine:
     """One active line as the card shows it. `strength` and `generic` are the register's
-    words, data for the stranger; `plain_name`, `amount` and `when` are his."""
+    words, data for the stranger; `plain_name`, `amount` and `when` are his.
+
+    `has_plain_name` says whether `plain_name` came from his story for this generic
+    (`app.medicines.strings.PLAIN_NAME`) or is the register's own name, title-cased, because
+    the register has none (#222): either way `plain_name` is never empty and never withheld —
+    a stranger reading this card sees every active medicine, named one way or the other."""
 
     line_id: uuid.UUID
     fact_id: uuid.UUID
@@ -139,6 +144,7 @@ class Medicine:
     strength: str
     form: str
     plain_name: str
+    has_plain_name: bool
     amount: str
     when: str
     high_risk: bool
@@ -341,15 +347,22 @@ def age_band(birth_year: int, today_year: int) -> str | None:
     return f"{low} to {low + 9}"
 
 
-def _plain_medicine(registry: DrugRegistry, line: MedicationLine, language: str) -> str:
-    """His name for the medicine — "the water pill" — with the register's name small beside
-    it in English ("the water pill (frusemide)"), as the standard allows. In Malay and
-    Chinese the sentence carries his name only: the generic is in the table beside it."""
+def _plain_medicine(registry: DrugRegistry, line: MedicationLine, language: str) -> tuple[str, bool]:
+    """His name for the medicine — "the water pill" — and whether it is really his: a story
+    from the register (`True`), or, when the register has none, its own name, title-cased,
+    so a clinician still gets the register's word for it and the line is never blank (#222).
+
+    Never appends the register's name here: an English sentence that names a generic
+    (`bisoprolol`, `paracetamol` …) alongside its plain name fails the plain-words length
+    check (rule 3) for every generic outside the handful `GLOSSARY` already allows to stand
+    beside its plain name, and #202 grew the register past that handful — see
+    `_medicine_label`, which tries the parenthetical only where it can still pass, and
+    `Medicine.generic`, which carries the register's name as data regardless, beside the
+    line, the way the strength and the chief's phone number already do (module doc)."""
     try:
-        plain = PLAIN_NAME[language][registry.monograph(line.generic).plain_name_id]
+        return PLAIN_NAME[language][registry.monograph(line.generic).plain_name_id], True
     except Exception:  # noqa: BLE001 — a generic the register has no story for keeps its name
-        return line.generic.title()
-    return f"{plain} ({line.generic})" if language == "en" else plain
+        return line.generic.title(), False
 
 
 def _medicines(
@@ -361,6 +374,7 @@ def _medicines(
         danger = high_risk_class(line.generic) or (
             line.drug_class.lower() if is_high_risk(line.drug_class) else None
         )
+        plain_name, has_plain_name = _plain_medicine(registry, line, language)
         shown.append(
             Medicine(
                 line_id=line.id,
@@ -369,7 +383,8 @@ def _medicines(
                 brand=line.brand,
                 strength=line.strength,
                 form=line.form,
-                plain_name=_plain_medicine(registry, line, language),
+                plain_name=plain_name,
+                has_plain_name=has_plain_name,
                 amount=say_amount(dose.amount, dose.unit, language),
                 when=phrase(WHEN_WORDS, language, dose.frequency.value),
                 high_risk=bool(line.high_risk or danger),
@@ -377,6 +392,27 @@ def _medicines(
             )
         )
     return shown
+
+
+def _medicine_label(medicine: Medicine, language: str, name: str) -> str:
+    """The word for this medicine in his sentence: his plain name, with the register's name
+    small beside it in English ("the water pill (frusemide)") only when the whole sentence
+    still passes the plain-words standard with it there — true for the handful of chemical
+    names `GLOSSARY` already allows beside their plain name, false for most of the register
+    since #202 (measured: 26 of the register's 50 generics, `test_emergency_card.py`). The
+    parenthetical is opportunistic, never load-bearing: whichever label is chosen here, the
+    register's own name for the medicine is always on the card as `Medicine.generic`, data
+    beside the line for the stranger, exactly like the strength and the chief's phone number
+    (module doc) — so nothing a clinician needs is lost when the parenthetical cannot be said,
+    and the sentence naming the medicine is never withheld for carrying it (#222)."""
+    if language != "en" or not medicine.has_plain_name:
+        return medicine.plain_name
+    enriched = f"{medicine.plain_name} ({medicine.generic})"
+    try:
+        render("ec.medicine", language, name=name, medicine=enriched)
+    except NotPlainWords:
+        return medicine.plain_name
+    return enriched
 
 
 def compose_lines(
@@ -395,18 +431,29 @@ def compose_lines(
     region: Region,
     insurer: str | None = None,
 ) -> list[Line]:
-    """The card as sentences, in order, every one through `render` and so verified."""
+    """The card as sentences, in order, every one through `render` and so verified.
+
+    No active medicine is ever withheld (#222): `_medicine_label` never returns a name that
+    fails the standard, so `ec.medicine` and `ec.high_risk` cannot raise for a medicine's own
+    name — the one thing left to guard is everything else on the card, still withheld-and-
+    logged by `say`, and now also surfaced on the card itself when it happens, not only in
+    the log, so a stranger reading it sees that a line is missing instead of a card that
+    looks complete and is not.
+    """
     lang = language_of(language)
     zone = REGION_TZ[region]
     lines: list[Line] = []
+    withheld: list[str] = []
 
     def say(template_id: str, **slots: Any) -> None:
-        """One line, or none: a line that fails the standard is withheld and logged, so the
-        card a stranger is holding is never taken away whole for one bad template."""
+        """One line, or none: a line that fails the standard is withheld, logged, and
+        remembered, so the card a stranger is holding is never taken away whole for one bad
+        template — and never left to look complete when it is not (#222)."""
         try:
             lines.append(Line(template_id, render(template_id, lang, **slots)))
         except NotPlainWords as failed:
             log.warning("emergency card line withheld: %s", failed)
+            withheld.append(template_id)
 
     say("ec.title", name=name)
     say("ec.show")
@@ -421,11 +468,14 @@ def compose_lines(
     if medicines:
         for medicine in medicines:
             # His words for a medicine carry his possessive; on his card it is said about him.
-            say("ec.medicine", name=name, medicine=theirs(medicine.plain_name, name, lang))
+            # The label is chosen so the sentence always passes (`_medicine_label`); the
+            # register's own name is on the card regardless, as `Medicine.generic`.
+            label = theirs(_medicine_label(medicine, lang, name), name, lang)
+            say("ec.medicine", name=name, medicine=label)
             say("ec.medicine_when", name=name, amount=medicine.amount, when=medicine.when)
             if medicine.high_risk:
                 # The same name as the line above it, so the two are one tablet to him.
-                say("ec.high_risk", name=name, medicine=theirs(medicine.plain_name, name, lang))
+                say("ec.high_risk", name=name, medicine=label)
     else:
         say("ec.no_medicine", name=name)
     if allergies:
@@ -452,6 +502,12 @@ def compose_lines(
     if last_reading_at is not None:
         say("ec.last_reading", name=name, date=as_utc(last_reading_at).astimezone(zone).date())
     say("ec.boundary")
+    if withheld:
+        # Surfaced on the card, not only in the log (#222): these two lines are static and
+        # verified in every language (test_plain_words.py's catalogue check), so they cannot
+        # themselves join `withheld` and leave this silent a second time.
+        lines.append(Line("ec.render_issue", render("ec.render_issue", lang, name=name)))
+        lines.append(Line("ec.render_issue_family", render("ec.render_issue_family", lang)))
     return lines
 
 

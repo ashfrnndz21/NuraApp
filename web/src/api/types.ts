@@ -356,6 +356,7 @@ export interface EmergencyCardOut {
     strength: string;
     form: string;
     plain_name: string;
+    has_plain_name: boolean;
     amount: string;
     when: string;
     high_risk: boolean;

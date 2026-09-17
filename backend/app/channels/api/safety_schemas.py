@@ -67,6 +67,7 @@ class MedicineOut(BaseModel):
     strength: str
     form: str
     plain_name: str
+    has_plain_name: bool
     amount: str
     when: str
     high_risk: bool
@@ -166,6 +167,7 @@ class EmergencyCardOut(BaseModel):
                     strength=m.strength,
                     form=m.form,
                     plain_name=m.plain_name,
+                    has_plain_name=m.has_plain_name,
                     amount=m.amount,
                     when=m.when,
                     high_risk=m.high_risk,
