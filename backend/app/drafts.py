@@ -589,6 +589,20 @@ class CallDraft:
     @property
     def confirm_subject(self) -> ConfirmSubject:
         return ConfirmSubject.CALL
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "with_person_id": self.with_person_id,
+            "scheduled_at": self.scheduled_at,
+            "call_link": self.call_link,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class AreaDraft:
     """His area about to be set, once the graph is his (E09-07, #184): the coarse value
     `app.delivery.feed.area.set_area` will keep, exactly as `area_draft_for` checked it. The
@@ -606,11 +620,6 @@ class AreaDraft:
         return None
 
     def confirmed_content(self) -> dict[str, Any]:
-        return {
-            "with_person_id": self.with_person_id,
-            "scheduled_at": self.scheduled_at,
-            "call_link": self.call_link,
-        }
         return {"area": self.area}
 
 
