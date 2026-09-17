@@ -99,6 +99,12 @@ class WhatsAppMessage(ProfileScoped, Base):
     state_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("state_snapshot.id"), default=None
     )
+    asks_feeling: Mapped[bool] = mapped_column(Boolean, default=False)
+    """Set on an outbound row when its words put the feeling question to him (#205) — the
+    plain check-in, the day's check-in nudge, or anything later that carries the same words
+    (`app.reasoning.feelings.strings.asks_about_feeling`, read once at `send`). Never set by
+    template name: a name is a list a future asker can be written outside of, and this is
+    what his "OK" is checked against for an open feeling question (`inbound._check_in_open`)."""
 
 
 class WhatsAppGroup(ProfileScoped, Base):

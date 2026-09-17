@@ -117,6 +117,7 @@ the repo, `fly.toml` or `render.yaml`.
 | `PORT` | no | `8000` (Fly, in `fly.toml`); Render sets its own | the same | |
 | `NURA_DEV_CODE_SENDER` | — | **must be absent** | **must be absent** | A laptop's dev run: it prints login codes. It is refused alongside demo mode. |
 | `NURA_FROZEN_CLOCK` | — | **must be absent** | **must be absent** | Refused outside a dev run. |
+| `NURA_RED_FLAG_TIERS` | — | **must be absent** | **must be absent** | ADR 0010: the tiers deciding whether a red flag means the ambulance, the hospital now, or tonight. `1` turns them on; unset, every red flag's step is the ambulance, the stricter step the not-feeling-well card already gives. Set it only once a clinician has signed the tiers off (`docs/trust/clinical-sign-off.md`, item 2) — today, nowhere. Only `Makefile`'s `dev` target sets it, so the checkpoints and tests see the table; `backend/tests/test_red_flag_tiers_guard.py` holds that this file and `render.yaml` never do. |
 
 To make the VAPID pair, once per deployment (keep the private half only in the platform's
 secrets; a new pair means every phone subscribes again):
