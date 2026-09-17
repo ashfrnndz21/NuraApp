@@ -58,6 +58,7 @@ from app.reasoning.visits.models import (
 from app.reasoning.visits.questions import (
     CARD_SIZE,
     PRIORITY_PERSON,
+    NoSuchQuestion,
     change_questions,
     current_questions,
     patient_card,
@@ -541,6 +542,109 @@ async def test_a_viewer_key_reads_neither_the_feeling_note_nor_its_question(
     assert len(feeling_questions) == 1 and feeling_questions[0].written_scope is Scope.RECORDS
     his_card = await patient_card(sg, context=context, appointment_id=appointment.id)
     assert note.lines[0] in his_card
+
+
+async def test_a_key_without_medicines_cannot_remove_a_feeling_question_it_cannot_fully_read(
+    sg: AsyncSession,
+) -> None:
+    """The gap an independent safety check found in #233's own fix for B: `_may_supersede_
+    feeling` was enforced only in `questions_for`'s auto-supersede loop. `change_questions`
+    reached the row through `_current_question`, which only checks `written_scope` (RECORDS)
+    — so a caregiver key holding RECORDS and VISITS but not MEDICINES, which can already read
+    this `written_scope=RECORDS` question row but not the `new_medicine` note behind it
+    (ADR 0004, `note_scopes`), could still call `change_questions(..., remove=True)` on it and
+    silently retire it: his words about a new medicine taken down by a key never allowed to
+    read them in full. `_current_question` now raises the same not-found refusal a genuinely
+    missing id would, so the row's existence is not revealed either."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.appointment_id == appointment.id
+
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    feeling_questions = [q for q in found if q.source is QuestionSource.FEELING]
+    assert len(feeling_questions) == 1
+    question = feeling_questions[0]
+    assert question.written_scope is Scope.RECORDS
+
+    # A caregiver holding RECORDS and VISITS, but not MEDICINES: he reads the row (his key
+    # satisfies `written_scope`) but not the note's own `new_medicine` reason.
+    hana = await register_person(sg, region=Region.SG, display_name="Hana", phone_e164="+6592220003")
+    caregiver_scopes = set(ROLE_SCOPES[KeyRole.CAREGIVER]) - {Scope.MEDICINES}
+    await agree_to_family_sharing(sg, context, hana, scopes=caregiver_scopes)
+    await grant_key(sg, context=context, holder=hana, role=KeyRole.CAREGIVER, scopes=caregiver_scopes)
+    caregiver = await resolve_key_context(
+        sg, region=Region.SG, person_id=hana.id, profile_id=context.profile_id
+    )
+    assert caregiver.allows(Scope.RECORDS) and not caregiver.allows(Scope.MEDICINES)
+    caregiver_questions = await current_questions(
+        sg, context=caregiver, appointment_id=appointment.id
+    )
+    assert question.id in {q.id for q in caregiver_questions}
+
+    draft = QuestionDraft(appointment.id, "", "en", question.id, True)
+    yes = await confirm(sg, caregiver, draft)
+    async with refused_unit(sg, NoSuchQuestion):
+        await change_questions(
+            sg,
+            context=caregiver,
+            appointment_id=appointment.id,
+            confirmation_id=yes.id,
+            question_id=question.id,
+            remove=True,
+        )
+    # Only the owner (or a CHIEF key) opens the trail; read it under his own key, narrowed to
+    # what the caregiver's key just did.
+    refused = [
+        e
+        for e in await read_audit(sg, context=context, actor_person_id=hana.id)
+        if e.outcome is Outcome.REFUSED
+    ]
+    assert {e.refused_because for e in refused} == {"NoSuchQuestion"}
+
+    # Still current, under his own key: nothing was taken down.
+    still_there = await current_questions(sg, context=caregiver, appointment_id=appointment.id)
+    assert question.id in {q.id for q in still_there}
+    owner_still_there = await current_questions(sg, context=context, appointment_id=appointment.id)
+    assert question.id in {q.id for q in owner_still_there}
+    assert (await sg.get(Question, question.id)) is not None
+    assert (await sg.get(Question, question.id)).superseded_at is None  # type: ignore[union-attr]
+
+    # The owner's own key, which holds every scope the note rests on, can still remove it.
+    owner_yes = await confirm(sg, context, draft)
+    removed = await change_questions(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        confirmation_id=owner_yes.id,
+        question_id=question.id,
+        remove=True,
+    )
+    assert removed.removed and removed.supersedes_id == question.id
+    after = await current_questions(sg, context=context, appointment_id=appointment.id)
+    assert question.id not in {q.id for q in after}
 
 
 # --- the brief ------------------------------------------------------------------------------

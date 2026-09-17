@@ -615,6 +615,17 @@ async def _current_question(
     rows = await _rows(session, context=context, appointment_id=appointment_id)
     for question in _current(rows):
         if question.id == question_id:
+            if question.source is QuestionSource.FEELING and not await _may_supersede_feeling(
+                session, context=context, question=question
+            ):
+                # Same guard as `questions_for`'s auto-supersede loop (B, PR #233 review),
+                # but here it protects every change path — edit, remove, or draft — not just
+                # the refresh. `change_questions` and `question_draft_for` both resolve the
+                # question through this function, so a key that holds `written_scope`
+                # (RECORDS) but not every scope the note itself rests on cannot take his
+                # words down: it gets the same not-found refusal a genuinely missing id
+                # would, so the refusal does not itself reveal the row exists.
+                break
             return question
     raise NoSuchQuestion(f"no current question {question_id} on appointment {appointment_id}")
 
