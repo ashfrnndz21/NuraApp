@@ -320,6 +320,104 @@ export function sendAndForget(path: string, call: Call = {}): void {
   }
 }
 
+/** One event off a stream: a plain object with at least a `type`, the shape `Call.body`'s
+ *  route defines (`ask/stream`, `find/stream`). Streamed events carry the same `why`/citation
+ *  ids the final answer does and nothing else — no health data beyond the name of the part
+ *  being read (docs/design-direction.md "Conversation, waiting and thinking"). */
+export interface StreamEvent {
+  type: string;
+  [key: string]: unknown;
+}
+
+/** The same queue, for a Server-Sent Events stream: the ask bar and the feed's web and video
+ *  search (E03-05, E21). Each `data: ` line is one JSON event, handed to `onEvent` the moment
+ *  it arrives — never buffered to look like it took longer. A refusal arrives as an event too
+ *  (`{type: "refusal", refusal, scope?}`), thrown here as `Refused`, exactly as a plain call
+ *  throws it, so a caller copes with either the same way.
+ *
+ *  No single deadline covers the whole stream — a real answer may legitimately take longer
+ *  than one request — but the connection is under the same `CALL_DEADLINE_MS` as an *idle*
+ *  timeout, reset on every event received: a stream that stalls (nothing arrives, ever) still
+ *  ends in `Unreachable` within the deadline rather than spinning for ever (#193). */
+export function apiStream(path: string, call: Call, onEvent: (event: StreamEvent) => void): Promise<void> {
+  return enqueue((signal) => sendStream(path, call, onEvent, signal), call.urgent, true);
+}
+
+async function sendStream(
+  path: string,
+  call: Call,
+  onEvent: (event: StreamEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const headers: Record<string, string> = { Accept: "text/event-stream" };
+  if (call.body !== undefined) headers["Content-Type"] = "application/json";
+  if (call.token) headers.Authorization = `Bearer ${call.token}`;
+  const control = new AbortController();
+  const stop = () => control.abort();
+  if (signal.aborted) stop();
+  else signal.addEventListener("abort", stop, { once: true });
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  const resetIdle = () => {
+    if (idle !== undefined) clearTimeout(idle);
+    idle = setTimeout(stop, CALL_DEADLINE_MS);
+  };
+  resetIdle();
+  try {
+    let response: Response;
+    try {
+      response = await fetch(urlFor(path, call), {
+        method: call.method ?? "POST",
+        headers,
+        body: call.body === undefined ? null : JSON.stringify(call.body),
+        cache: "no-store",
+        credentials: "omit",
+        signal: control.signal,
+      });
+    } catch {
+      throw new Unreachable();
+    }
+    if (!response.ok || !response.body) {
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(await response.text());
+      } catch {
+        /* not JSON: not a refusal */
+      }
+      if (isRefusalBody(parsed)) throw new Refused(parsed.refusal, response.status, parsed.scope);
+      throw new Refused(response.status === 404 ? "NotFound" : bareRefusal(response.status), response.status);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch {
+        throw new Unreachable();
+      }
+      if (chunk.done) break;
+      resetIdle();
+      buffer += decoder.decode(chunk.value, { stream: true });
+      let at: number;
+      while ((at = buffer.indexOf("\n\n")) >= 0) {
+        const raw = buffer.slice(0, at);
+        buffer = buffer.slice(at + 2);
+        const line = raw.split("\n").find((one) => one.startsWith("data: "));
+        if (!line) continue;
+        const event = JSON.parse(line.slice("data: ".length)) as StreamEvent;
+        if (event.type === "refusal") {
+          throw new Refused(String(event.refusal), Number(event.status ?? 400), event.scope as string | undefined);
+        }
+        onEvent(event);
+      }
+    }
+  } finally {
+    clearTimeout(idle);
+    signal.removeEventListener("abort", stop);
+  }
+}
+
 async function answer<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
   const parsed = parseJson(await response.text());

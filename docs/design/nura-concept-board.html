@@ -1,0 +1,570 @@
+<title>Nura Concept Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<style>
+:root {
+  --board: #efe6e0;
+  --screen: #fbf6f1;
+  --card: #fffaf6;
+  --line: #eadfd7;
+  --ink: #2c2733;
+  --soft: #7b7385;
+  --plum: #4e3a78;
+  --plum-deep: #3d2d61;
+  --plum-wash: #ece6f5;
+  --peach: #f8e4d6;
+  --blush: #f6dde5;
+  --lavender: #e8e1f4;
+  --sage: #e1ece2;
+  --butter: #f6ecd3;
+  --sky: #e1e9f2;
+  --good: #3b7a57;
+  --skin: #efc9a8;
+  --skin-2: #e2b08b;
+  --hair: #e7e2dd;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--board); color: var(--ink); font: 15px/1.45 Figtree, "Segoe UI", system-ui, sans-serif; }
+.page { max-width: 1320px; margin: 0 auto; padding: 36px 24px 56px; display: grid; gap: 28px; }
+.intro { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 32px; }
+.intro .eyebrow { font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--plum); font-weight: 600; }
+.intro h1 { margin: 4px 0 0; font: 600 34px/1.1 Newsreader, Georgia, serif; text-wrap: balance; }
+.intro p { margin: 0; max-width: 56ch; color: var(--soft); }
+
+.phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(282px, 1fr)); gap: 22px; align-items: start; }
+.phone {
+  background: var(--screen); border-radius: 34px; box-shadow: 0 1px 0 #fff inset, 0 18px 40px rgba(78, 58, 120, .10), 0 2px 6px rgba(60, 40, 50, .06);
+  height: 640px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #fff;
+}
+.phone .caption { text-align: center; font-size: 12px; color: var(--soft); padding: 10px 0 0; letter-spacing: .02em; }
+.scroll { flex: 1; overflow-y: auto; padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+
+.topbar { display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; min-height: 32px; }
+.topbar .mid { text-align: center; font-weight: 600; font-size: 16px; }
+.topbar .word { font: 600 22px/1 Newsreader, Georgia, serif; color: var(--plum); text-align: center; }
+.icon { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.topbar .icon { color: var(--ink); justify-self: center; }
+
+.sec { display: flex; justify-content: space-between; align-items: baseline; }
+.sec h3 { margin: 0; font-size: 14.5px; font-weight: 700; }
+.sec a { font-size: 12px; color: var(--soft); text-decoration: none; }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px; }
+.tint-peach { background: var(--peach); border-color: transparent; }
+.tint-blush { background: var(--blush); border-color: transparent; }
+.tint-lav { background: var(--lavender); border-color: transparent; }
+.tint-sage { background: var(--sage); border-color: transparent; }
+.tint-butter { background: var(--butter); border-color: transparent; }
+.tint-sky { background: var(--sky); border-color: transparent; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: var(--plum); color: #fff; border: 0; border-radius: 999px; font: 600 12.5px Figtree, sans-serif; padding: 7px 16px; }
+.btn.big { width: 100%; padding: 14px; font-size: 15px; border-radius: 14px; }
+.muted { color: var(--soft); font-size: 12.5px; }
+
+.tabbar { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--line); background: var(--card); padding: 8px 4px 12px; }
+.tab { display: grid; justify-items: center; gap: 3px; font-size: 10.5px; color: var(--soft); }
+.tab.on { color: var(--plum); font-weight: 700; }
+.tab .icon { width: 21px; height: 21px; }
+
+.chip-icon { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; color: var(--plum); flex: none; }
+.chip-icon .icon { width: 18px; height: 18px; }
+
+/* Welcome */
+.welcome { background: linear-gradient(180deg, #f3e3d8 0%, #f8ece4 55%, var(--screen) 100%); }
+.welcome .scroll { gap: 16px; padding-top: 22px; }
+.hero-art { border-radius: 22px; overflow: hidden; background: #f6ddcc; height: 168px; position: relative; }
+.brand { font: 600 40px/1 Newsreader, Georgia, serif; color: var(--plum); margin: 2px 0 0; }
+.tagline { font: 500 25px/1.18 Newsreader, Georgia, serif; margin: 0; color: var(--plum-deep); text-wrap: balance; }
+.values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.value { background: rgba(255,250,246,.85); border-radius: 14px; padding: 10px 6px; text-align: center; display: grid; gap: 4px; justify-items: center; }
+.value b { font-size: 12.5px; }
+.value span { font-size: 10.5px; color: var(--soft); line-height: 1.25; }
+
+/* Home */
+.greet { display: grid; grid-template-columns: 1fr 118px; align-items: end; gap: 6px; }
+.greet h2 { margin: 0; font: 600 23px/1.15 Newsreader, Georgia, serif; }
+.greet p { margin: 6px 0 0; font-size: 13px; color: var(--soft); }
+.wellness { display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: 8px; }
+.wellness b { display: block; font-size: 14px; }
+.wellness .muted { margin: 2px 0 10px; }
+.grid6 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { border-radius: 14px; padding: 11px 6px 10px; display: grid; justify-items: center; text-align: center; gap: 4px; }
+.tile .icon { width: 22px; height: 22px; color: var(--plum); }
+.tile b { font-size: 12px; }
+.tile span { font-size: 10px; color: var(--soft); line-height: 1.2; }
+.row { display: flex; align-items: center; gap: 11px; }
+.row .grow { flex: 1; min-width: 0; }
+.row b { display: block; font-size: 13px; }
+.row .muted { font-size: 11.5px; }
+.report { border: 1.5px dashed #cfc1d9; background: transparent; }
+
+/* Health */
+.overview { display: grid; grid-template-columns: 104px 1fr; gap: 10px; align-items: center; }
+.ring { position: relative; width: 104px; height: 104px; }
+.ring svg { position: absolute; inset: 0; }
+.ring .num { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.ring .num b { font: 600 28px/1 Newsreader, Georgia, serif; color: var(--plum-deep); font-variant-numeric: tabular-nums; }
+.ring .num small { display: block; font-size: 10px; color: var(--soft); margin-top: 2px; }
+.metrics { display: grid; gap: 7px; }
+.metric { display: flex; gap: 8px; align-items: center; }
+.metric .chip-icon { width: 28px; height: 28px; border-radius: 9px; }
+.metric .chip-icon .icon { width: 15px; height: 15px; }
+.metric span { font-size: 10.5px; color: var(--soft); display: block; line-height: 1.1; }
+.metric b { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.insight { display: grid; grid-template-columns: 1fr 70px; align-items: center; gap: 8px; }
+.insight b { font-size: 13px; display: block; }
+.time { font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Connect */
+.people { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 5px; font: 600 18px Newsreader, Georgia, serif; color: var(--plum-deep); border: 2px solid #fff; box-shadow: 0 2px 6px rgba(60,40,80,.08); }
+.avatar.add { background: transparent; border: 1.5px dashed #c9bcd3; box-shadow: none; color: var(--plum); }
+.people b { font-size: 12px; display: block; }
+.people span { font-size: 10px; color: var(--soft); }
+.call { display: grid; grid-template-columns: 1fr 96px; gap: 8px; align-items: center; }
+.call b { font-size: 13.5px; display: block; }
+.community { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.community .tile span { font-size: 9.5px; }
+.msg { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
+.msg:first-of-type { border-top: 0; padding-top: 2px; }
+.msg .avatar { width: 34px; height: 34px; font-size: 13px; margin: 0; }
+.msg b { font-size: 12.5px; }
+.msg .muted { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg time { font-size: 10.5px; color: var(--soft); margin-left: auto; align-self: start; }
+
+/* Ask */
+.bubble { max-width: 86%; padding: 10px 13px; border-radius: 16px; font-size: 13px; line-height: 1.4; }
+.bubble.me { align-self: flex-end; background: var(--plum); color: #fff; border-bottom-right-radius: 5px; }
+.bubble.nura { align-self: flex-start; background: var(--card); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+.looked { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--soft); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.sources { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.src { font-size: 10.5px; background: var(--plum-wash); color: var(--plum); border-radius: 999px; padding: 3px 8px; font-weight: 600; }
+.boundary { font-size: 11px; color: var(--soft); margin-top: 7px; font-style: italic; }
+.trace { align-self: flex-start; width: 86%; background: var(--card); border: 1px solid var(--line); border-radius: 16px; border-bottom-left-radius: 5px; padding: 11px 13px; display: grid; gap: 8px; }
+.trace .head { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--plum); }
+.step { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.step.done { color: var(--soft); }
+.step .tick { width: 16px; height: 16px; border-radius: 50%; background: var(--sage); color: var(--good); display: grid; place-items: center; flex: none; }
+.step .tick .icon { width: 11px; height: 11px; stroke-width: 2.6; }
+.step .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--plum-wash); border-top-color: var(--plum); flex: none; animation: spin .9s linear infinite; }
+.dots { display: inline-flex; gap: 3px; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--plum); opacity: .35; animation: pulse 1.2s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+.composer { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 7px 7px 7px 14px; font-size: 13px; color: var(--soft); margin: 0 14px 10px; }
+.composer .btn { padding: 7px; border-radius: 50%; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: .3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
+
+/* Profile */
+.me { display: flex; gap: 12px; align-items: center; }
+.me .avatar { width: 58px; height: 58px; margin: 0; font-size: 22px; }
+.me b { font: 600 20px/1.1 Newsreader, Georgia, serif; }
+.list { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 2px 12px; }
+.li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.li:first-child { border-top: 0; }
+.li .val { margin-left: auto; color: var(--soft); font-size: 12px; }
+.li .icon.chev { width: 15px; height: 15px; color: #b9aec2; }
+.switch { margin-left: auto; width: 36px; height: 21px; border-radius: 999px; background: #d9d0de; position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.switch.on { background: var(--plum); }
+.switch.on::after { left: 17px; }
+
+/* Value tiles */
+.promises { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.promise { background: var(--screen); border-radius: 18px; padding: 16px; display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 18px rgba(78,58,120,.06); }
+.promise .chip-icon { width: 52px; height: 52px; border-radius: 50%; }
+.promise .chip-icon .icon { width: 24px; height: 24px; }
+.promise b { font: 600 17px/1.15 Newsreader, Georgia, serif; display: block; }
+.promise span { font-size: 12.5px; color: var(--soft); }
+.note { font-size: 12.5px; color: var(--soft); max-width: 90ch; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) { .step .spin, .dots i { animation: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5h4v5"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.5 1.1 4.6 2.7 1.1-1.6 2.6-2.7 4.6-2.7 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20Z"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.5 1.1 4.6 2.7 1.1-1.6 2.6-2.7 4.6-2.7 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20Z"/><path d="M6 11.5h3l1.5-2.5 2 5 1.5-2.5h4"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.3c2.6.1 4.4 1.8 5 4.7"/></symbol>
+    <symbol id="i-services" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8.5 7V5.5A2 2 0 0 1 10.5 3.5h3a2 2 0 0 1 2 2V7"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.9-4 3.8-6.2 7.5-6.2s6.6 2.2 7.5 6.2"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h11"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-pill" viewBox="0 0 24 24"><rect x="2.8" y="8.2" width="18.4" height="7.6" rx="3.8" transform="rotate(-40 12 12)"/><path d="m9.2 8.7 6.1 6.6"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5c-2-1.6-5-2-8-1.5v13c3-.5 6-.1 8 1.5 2-1.6 5-2 8-1.5V5c-3-.5-6-.1-8 1.5Z"/><path d="M12 6.5v13"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M12 19.5s-5-3.1-6-6.2C5.3 11 6.8 9 8.9 9c1.3 0 2.3.7 3.1 1.8C12.8 9.7 13.8 9 15.1 9c2.1 0 3.6 2 2.9 4.3-1 3.1-6 6.2-6 6.2Z"/><path d="M4 15.5 2.5 17M20 15.5l1.5 1.5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 16.5h4"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4.5 14.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-4.5"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="m12 12.5 3.5-3"/><circle cx="12" cy="12.5" r="1.2"/></symbol>
+    <symbol id="i-steps" viewBox="0 0 24 24"><path d="M8.5 3.5c-2 0-3 2.3-3 4.6 0 2 1 3.4 1.2 5h3.6c.3-1.6 1.2-3 1.2-5 0-2.3-1-4.6-3-4.6Z"/><path d="M6.8 15.4h3.4v1.4a1.7 1.7 0 0 1-3.4 0Z"/><path d="M15.5 7.5c2 0 3 2.3 3 4.6 0 2-1 3.4-1.2 5h-3.6c-.3-1.6-1.2-3-1.2-5 0-2.3 1-4.6 3-4.6Z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5s-6 6.4-6 10.6a6 6 0 0 0 12 0C18 9.9 12 3.5 12 3.5Z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 7 7l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 3.5 5.5a2 2 0 0 1 2-2Z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5 13.8 9l5.7 1.5-5.7 1.5L12 17.5 10.2 12 4.5 10.5 10.2 9Z"/><path d="M18.5 16.5 19.3 19l2.2.6-2.2.6-.8 2.3-.8-2.3-2.2-.6 2.2-.6Z"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 18 8.5 6h1L14 18M5.6 14h6.8"/><path d="M15.5 18l2.5-7h.6l2.4 7M16.3 15.8h3.8"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.6 5.2 3.6 8.5S14.5 18.2 12 20.5c-2.5-2.3-3.6-5.2-3.6-8.5S9.5 5.8 12 3.5Z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-house" viewBox="0 0 24 24"><path d="M4 11.5 12 4.5l8 7"/><path d="M6 10v9.5h12V10"/><path d="M10 19.5v-4.5h4v4.5"/></symbol>
+    <symbol id="i-bus" viewBox="0 0 24 24"><rect x="4.5" y="4" width="15" height="13" rx="3"/><path d="M4.5 11h15M8 17v2.5M16 17v2.5"/><circle cx="8.5" cy="14" r=".6"/><circle cx="15.5" cy="14" r=".6"/></symbol>
+    <symbol id="i-bowl" viewBox="0 0 24 24"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0Z"/><path d="M9 8c0-1.5 1-1.5 1-3M13 8c0-1.5 1-1.5 1-3"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <div class="intro">
+    <div>
+      <div class="eyebrow">Nura · UI concept</div>
+      <h1>Warm, clear, and on his side</h1>
+    </div>
+    <p>A design mock of Nura in the style you chose: Nura's plum brand with the warm, illustrated feel of your reference. The five tabs, real numbers instead of a made-up score, and the thinking trace. Sample content throughout.</p>
+  </div>
+
+  <div class="phones">
+
+    <!-- 1 · Welcome -->
+    <div>
+      <div class="phone welcome">
+        <div class="scroll">
+          <div class="hero-art">
+            <svg viewBox="0 0 300 168" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <rect width="300" height="168" fill="#f5dccb"/>
+              <circle cx="238" cy="42" r="30" fill="#fbe9d8"/>
+              <path d="M0 132c50-18 95-14 150-4s100 10 150-6v46H0Z" fill="#e9cbb7"/>
+              <path d="M20 168c10-40 40-62 80-62s62 22 70 62Z" fill="#8a77b6"/>
+              <path d="M40 168c6-26 26-42 60-42s50 16 56 42Z" fill="#6f5c9f"/>
+              <circle cx="100" cy="78" r="30" fill="#efc9a8"/>
+              <path d="M70 72c0-24 14-36 32-36s30 14 28 34c-8-10-22-14-38-12-8 1-16 6-22 14Z" fill="#e7e2dd"/>
+              <circle cx="90" cy="80" r="2.6" fill="#3d2d61"/><circle cx="111" cy="80" r="2.6" fill="#3d2d61"/>
+              <path d="M92 93c5 4 11 4 16 0" stroke="#3d2d61" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              <path d="M150 168c6-34 30-52 64-52s58 18 64 52Z" fill="#c9a98e"/>
+              <circle cx="214" cy="92" r="26" fill="#e2b08b"/>
+              <path d="M189 88c-2-20 10-32 26-32s28 11 25 30c-6-8-16-11-28-10-9 1-17 6-23 12Z" fill="#d8d2cb"/>
+              <circle cx="205" cy="95" r="2.4" fill="#3d2d61"/><circle cx="223" cy="95" r="2.4" fill="#3d2d61"/>
+              <path d="M207 106c4 3 9 3 13 0" stroke="#3d2d61" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+              <path d="M262 150c-6-10-2-24 8-30 4 12 0 24-8 30Z M282 156c-10-4-14-16-8-26 8 8 10 18 8 26Z" fill="#9fbf9f"/>
+            </svg>
+          </div>
+          <div>
+            <svg class="icon" style="width:30px;height:30px;color:var(--plum);stroke-width:2" aria-hidden="true"><use href="#i-heart"/></svg>
+            <div class="brand">Nura</div>
+          </div>
+          <p class="tagline">Your health, kept together. Your family, close by.</p>
+          <p class="muted" style="margin:-6px 0 0;font-size:13px">A caring companion for older adults and the family who look after them.</p>
+          <div class="values">
+            <div class="value"><div class="chip-icon tint-blush"><svg class="icon"><use href="#i-pill"/></svg></div><b>Remember</b><span>Medicines and papers</span></div>
+            <div class="value"><div class="chip-icon tint-lav"><svg class="icon"><use href="#i-people"/></svg></div><b>Share</b><span>With family you choose</span></div>
+            <div class="value"><div class="chip-icon tint-sage"><svg class="icon"><use href="#i-cal"/></svg></div><b>Prepare</b><span>For every visit</span></div>
+          </div>
+          <button class="btn big" type="button">Get started</button>
+          <div class="muted" style="text-align:center">Already have an account? <b style="color:var(--plum)">Sign in</b></div>
+        </div>
+      </div>
+      <div class="caption">Welcome</div>
+    </div>
+
+    <!-- 2 · Home -->
+    <div>
+      <div class="phone">
+        <div class="scroll">
+          <div class="topbar"><svg class="icon"><use href="#i-menu"/></svg><div class="word">Nura</div><svg class="icon"><use href="#i-bell"/></svg></div>
+          <div class="greet">
+            <div>
+              <h2>Good morning, Pa 👋</h2>
+              <p>How are you feeling today?</p>
+            </div>
+            <svg viewBox="0 0 118 96" width="118" height="96" aria-hidden="true">
+              <circle cx="84" cy="30" r="22" fill="#e1ece2"/>
+              <path d="M8 96c2-22 16-34 34-34s30 12 32 34Z" fill="#6f5c9f"/>
+              <circle cx="42" cy="44" r="17" fill="#efc9a8"/>
+              <path d="M25 42c0-13 8-21 18-21s17 8 16 19c-5-6-12-8-21-7-5 1-9 4-13 9Z" fill="#e7e2dd"/>
+              <rect x="31" y="42" width="9" height="6" rx="3" fill="none" stroke="#3d2d61" stroke-width="1.6"/><rect x="44" y="42" width="9" height="6" rx="3" fill="none" stroke="#3d2d61" stroke-width="1.6"/>
+              <path d="M38 54c3 2 6 2 9 0" stroke="#3d2d61" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+              <path d="M58 96c2-20 14-30 29-30s26 10 28 30Z" fill="#e3b58f"/>
+              <circle cx="87" cy="50" r="15" fill="#e2b08b"/>
+              <path d="M71 52c-3-14 5-23 16-23s19 8 16 21c-3-5-8-8-15-8-7 0-12 4-17 10Z" fill="#d8d2cb"/>
+              <circle cx="82" cy="52" r="1.6" fill="#3d2d61"/><circle cx="93" cy="52" r="1.6" fill="#3d2d61"/>
+              <path d="M84 59c2 1.6 5 1.6 7 0" stroke="#3d2d61" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+              <path d="M104 88c-3-7 0-15 6-18 1 8-1 14-6 18Z" fill="#9fbf9f"/>
+            </svg>
+          </div>
+          <div class="card tint-peach wellness">
+            <div>
+              <b>Daily check-in</b>
+              <div class="muted">Tell Nura how you feel today</div>
+              <button class="btn" type="button">Check in</button>
+            </div>
+            <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+              <circle cx="32" cy="32" r="30" fill="#fbe9d8"/><circle cx="32" cy="32" r="21" fill="#f6c96b"/>
+              <circle cx="25" cy="29" r="2.4" fill="#3d2d61"/><circle cx="39" cy="29" r="2.4" fill="#3d2d61"/>
+              <path d="M24 37c5 6 11 6 16 0" stroke="#3d2d61" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="sec"><h3>What would you like to do?</h3></div>
+          <div class="grid6">
+            <div class="tile tint-blush"><svg class="icon"><use href="#i-pulse"/></svg><b>Health</b><span>Track and check</span></div>
+            <div class="tile tint-sky"><svg class="icon"><use href="#i-pill"/></svg><b>Medicines</b><span>Doses and reminders</span></div>
+            <div class="tile tint-sage"><svg class="icon"><use href="#i-people"/></svg><b>Connect</b><span>Family and friends</span></div>
+            <div class="tile tint-lav"><svg class="icon"><use href="#i-book"/></svg><b>Activities</b><span>Stay busy</span></div>
+            <div class="tile tint-peach"><svg class="icon"><use href="#i-hand"/></svg><b>Care services</b><span>Help at home</span></div>
+            <div class="tile tint-butter"><svg class="icon"><use href="#i-doc"/></svg><b>Guides</b><span>Read and learn</span></div>
+          </div>
+          <div class="card report row">
+            <div class="chip-icon tint-lav"><svg class="icon"><use href="#i-upload"/></svg></div>
+            <div class="grow"><b>Add a health report</b><div class="muted">A PDF, or a photo of a paper</div></div>
+            <svg class="icon" style="width:16px;color:#b9aec2"><use href="#i-chev"/></svg>
+          </div>
+          <div class="sec"><h3>Coming up</h3><a href="#">See all</a></div>
+          <div class="card tint-peach row">
+            <div class="chip-icon" style="background:#fffaf6"><svg class="icon"><use href="#i-cal"/></svg></div>
+            <div class="grow"><b>Dr Tan, heart clinic</b><div class="muted">Wednesday 23 Sep · 10:00 AM</div></div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab on"><svg class="icon"><use href="#i-home"/></svg>Home</div>
+          <div class="tab"><svg class="icon"><use href="#i-heart"/></svg>Health</div>
+          <div class="tab"><svg class="icon"><use href="#i-people"/></svg>Connect</div>
+          <div class="tab"><svg class="icon"><use href="#i-services"/></svg>Services</div>
+          <div class="tab"><svg class="icon"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <div class="caption">Home</div>
+    </div>
+
+    <!-- 3 · Health -->
+    <div>
+      <div class="phone">
+        <div class="scroll">
+          <div class="topbar"><svg class="icon"><use href="#i-back"/></svg><div class="mid">Health</div><svg class="icon"><use href="#i-cal"/></svg></div>
+          <div class="card tint-peach">
+            <b style="font-size:14px">This week</b>
+            <div class="muted" style="margin-bottom:10px">You took most of your tablets.</div>
+            <div class="overview">
+              <div class="ring">
+                <svg viewBox="0 0 104 104" width="104" height="104" aria-hidden="true">
+                  <circle cx="52" cy="52" r="42" fill="none" stroke="#fbe9d8" stroke-width="9"/>
+                  <circle cx="52" cy="52" r="42" fill="none" stroke="#4e3a78" stroke-width="9" stroke-linecap="round" stroke-dasharray="226.2 263.9" transform="rotate(-90 52 52)"/>
+                </svg>
+                <div class="num"><div><b>12<span style="font-size:15px;color:var(--soft)">/14</span></b><small>doses taken</small></div></div>
+              </div>
+              <div class="metrics">
+                <div class="metric"><div class="chip-icon tint-blush"><svg class="icon"><use href="#i-gauge"/></svg></div><div><span>Blood pressure</span><b>132/84</b></div></div>
+                <div class="metric"><div class="chip-icon tint-sage"><svg class="icon"><use href="#i-steps"/></svg></div><div><span>Steps</span><b>3,210</b></div></div>
+                <div class="metric"><div class="chip-icon tint-lav"><svg class="icon"><use href="#i-moon"/></svg></div><div><span>Sleep</span><b>6h 40m</b></div></div>
+                <div class="metric"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-drop"/></svg></div><div><span>Water</span><b>5 of 8 cups</b></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="sec"><h3>What Nura noticed</h3><a href="#">See all</a></div>
+          <div class="card insight">
+            <div><b>Checked 6 days this week</b><div class="muted">You wrote down your blood pressure on 6 of 7 days.</div></div>
+            <svg viewBox="0 0 70 56" width="70" height="56" aria-hidden="true">
+              <rect x="8" y="14" width="46" height="34" rx="9" fill="#e8e1f4"/>
+              <path d="M16 32h8l4-8 6 14 4-6h8" stroke="#4e3a78" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="58" cy="14" r="8" fill="#f6dde5"/><path d="m54 14 3 3 5-6" stroke="#3b7a57" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="sec"><h3>Next tablet</h3><a href="#">See all</a></div>
+          <div class="card row">
+            <div class="chip-icon tint-butter"><svg class="icon"><use href="#i-bell"/></svg></div>
+            <div class="grow"><b>Blood pressure tablet</b><div class="muted">1 tablet · after breakfast</div></div>
+            <div class="time">8:00 AM</div>
+          </div>
+          <div class="card tint-sage insight">
+            <div><b>Today's tip</b><div class="muted">A short walk after dinner is a good time to talk with family.</div></div>
+            <svg viewBox="0 0 70 56" width="70" height="56" aria-hidden="true">
+              <path d="M0 50c18-6 40-6 70 0v6H0Z" fill="#c8dcc9"/>
+              <rect x="20" y="28" width="4" height="22" rx="2" fill="#a88a6c"/><circle cx="22" cy="24" r="12" fill="#8fb88f"/>
+              <rect x="46" y="34" width="3.5" height="16" rx="1.7" fill="#a88a6c"/><circle cx="48" cy="30" r="9" fill="#a9c9a3"/>
+            </svg>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><svg class="icon"><use href="#i-home"/></svg>Home</div>
+          <div class="tab on"><svg class="icon"><use href="#i-heart"/></svg>Health</div>
+          <div class="tab"><svg class="icon"><use href="#i-people"/></svg>Connect</div>
+          <div class="tab"><svg class="icon"><use href="#i-services"/></svg>Services</div>
+          <div class="tab"><svg class="icon"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <div class="caption">Health</div>
+    </div>
+
+    <!-- 4 · Connect -->
+    <div>
+      <div class="phone">
+        <div class="scroll">
+          <div class="topbar"><svg class="icon"><use href="#i-back"/></svg><div class="mid">Connect</div><svg class="icon"><use href="#i-plus"/></svg></div>
+          <div class="sec"><h3>Your family</h3><a href="#">See all</a></div>
+          <div class="people">
+            <div><div class="avatar tint-blush">M</div><b>Mei</b><span>Daughter</span></div>
+            <div><div class="avatar tint-sky">K</div><b>Kit</b><span>Son</span></div>
+            <div><div class="avatar tint-sage">S</div><b>Siti</b><span>Helper</span></div>
+            <div><div class="avatar add"><svg class="icon"><use href="#i-plus"/></svg></div><b>Add</b><span>Someone new</span></div>
+          </div>
+          <div class="card tint-peach call">
+            <div>
+              <div class="muted">Next call</div>
+              <b>Call with Mei</b>
+              <div class="muted" style="margin-bottom:8px">Saturday 19 Sep · 7:30 PM</div>
+              <button class="btn" type="button"><svg class="icon" style="width:13px;height:13px"><use href="#i-phone"/></svg>Join</button>
+            </div>
+            <svg viewBox="0 0 96 76" width="96" height="76" aria-hidden="true">
+              <rect x="6" y="8" width="84" height="54" rx="8" fill="#3d2d61"/>
+              <rect x="11" y="13" width="74" height="44" rx="5" fill="#f6dde5"/>
+              <path d="M26 57c2-12 10-18 22-18s20 6 22 18Z" fill="#8a77b6"/>
+              <circle cx="48" cy="31" r="10" fill="#efc9a8"/>
+              <path d="M37 31c-1-9 4-14 11-14s12 5 11 13c-2-4-6-6-11-6s-8 3-11 7Z" fill="#4a3a3a"/>
+              <rect x="38" y="62" width="20" height="8" rx="2" fill="#a38fc7"/>
+            </svg>
+          </div>
+          <div class="sec"><h3>Near you</h3><a href="#">See all</a></div>
+          <div class="community">
+            <div class="tile tint-blush"><svg class="icon"><use href="#i-pin"/></svg><b>Events</b><span>Things to do nearby</span></div>
+            <div class="tile tint-sage"><svg class="icon"><use href="#i-hand"/></svg><b>Volunteer</b><span>Give your time</span></div>
+            <div class="tile tint-butter"><svg class="icon"><use href="#i-people"/></svg><b>Groups</b><span>You're not alone</span></div>
+          </div>
+          <div class="sec"><h3>Messages</h3><a href="#">See all</a></div>
+          <div class="card" style="padding:10px 14px">
+            <div class="msg"><div class="avatar tint-blush">M</div><div style="min-width:0"><b>Mei</b><div class="muted">I'll bring your tablets on Sunday.</div></div><time>10:30 AM</time></div>
+            <div class="msg"><div class="avatar tint-lav" style="color:var(--plum)"><svg class="icon" style="width:15px;height:15px"><use href="#i-heart"/></svg></div><div style="min-width:0"><b>Heart clinic</b><div class="muted">Your visit on Wednesday is booked.</div></div><time>Yesterday</time></div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><svg class="icon"><use href="#i-home"/></svg>Home</div>
+          <div class="tab"><svg class="icon"><use href="#i-heart"/></svg>Health</div>
+          <div class="tab on"><svg class="icon"><use href="#i-people"/></svg>Connect</div>
+          <div class="tab"><svg class="icon"><use href="#i-services"/></svg>Services</div>
+          <div class="tab"><svg class="icon"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <div class="caption">Connect</div>
+    </div>
+
+    <!-- 5 · Ask Nura, the thinking trace -->
+    <div>
+      <div class="phone">
+        <div class="scroll">
+          <div class="topbar"><svg class="icon"><use href="#i-back"/></svg><div class="mid">Ask Nura</div><span></span></div>
+          <div class="bubble me">When did my blood pressure tablet change?</div>
+          <div class="bubble nura">
+            Dr Tan changed it from 5 mg to 10 mg on Wednesday 2 September.
+            <div class="sources"><span class="src">Medicines</span><span class="src">Visit, 2 Sep</span></div>
+            <div class="boundary">Nura does not decide what is wrong.</div>
+            <div class="looked"><svg class="icon" style="width:13px;height:13px"><use href="#i-check"/></svg>What Nura looked at: medicines, visits</div>
+          </div>
+          <div class="bubble me">Should I bring anything to my visit on Wednesday?</div>
+          <div class="trace" aria-live="polite">
+            <div class="head"><span class="dots"><i></i><i></i><i></i></span>Nura is looking</div>
+            <div class="step done"><span class="tick"><svg class="icon"><use href="#i-check"/></svg></span>Reading your medicines</div>
+            <div class="step done"><span class="tick"><svg class="icon"><use href="#i-check"/></svg></span>Checking your visits</div>
+            <div class="step"><span class="spin" aria-hidden="true"></span>Looking at your papers</div>
+          </div>
+        </div>
+        <div class="composer">Ask about your health…<button class="btn" type="button" aria-label="Send"><svg class="icon" style="width:15px;height:15px"><use href="#i-send"/></svg></button></div>
+        <div class="tabbar">
+          <div class="tab on"><svg class="icon"><use href="#i-home"/></svg>Home</div>
+          <div class="tab"><svg class="icon"><use href="#i-heart"/></svg>Health</div>
+          <div class="tab"><svg class="icon"><use href="#i-people"/></svg>Connect</div>
+          <div class="tab"><svg class="icon"><use href="#i-services"/></svg>Services</div>
+          <div class="tab"><svg class="icon"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <div class="caption">Ask Nura, with the thinking trace</div>
+    </div>
+
+    <!-- 6 · Services -->
+    <div>
+      <div class="phone">
+        <div class="scroll">
+          <div class="topbar"><svg class="icon"><use href="#i-back"/></svg><div class="mid">Services</div><span></span></div>
+          <div class="sec"><h3>Your visits</h3><a href="#">See all</a></div>
+          <div class="card tint-lav">
+            <div class="row" style="align-items:start">
+              <div class="chip-icon" style="background:#fffaf6"><svg class="icon"><use href="#i-cal"/></svg></div>
+              <div class="grow"><b>Dr Tan, heart clinic</b><div class="muted">Wednesday 23 Sep · 10:00 AM</div></div>
+            </div>
+            <div style="margin-top:10px;display:grid;gap:5px;font-size:12px">
+              <div class="row" style="gap:7px"><svg class="icon" style="width:14px;height:14px;color:var(--good)"><use href="#i-check"/></svg>3 questions ready for Dr Tan</div>
+              <div class="row" style="gap:7px"><svg class="icon" style="width:14px;height:14px;color:var(--good)"><use href="#i-check"/></svg>Bring your insurance card</div>
+            </div>
+          </div>
+          <div class="sec"><h3>Care services</h3><a href="#">See all</a></div>
+          <div class="grid6" style="grid-template-columns:repeat(2,1fr)">
+            <div class="tile tint-blush"><svg class="icon"><use href="#i-house"/></svg><b>Nursing at home</b><span>A nurse comes to you</span></div>
+            <div class="tile tint-sage"><svg class="icon"><use href="#i-steps"/></svg><b>Physio</b><span>Keep moving well</span></div>
+            <div class="tile tint-butter"><svg class="icon"><use href="#i-bowl"/></svg><b>Meals</b><span>Delivered to you</span></div>
+            <div class="tile tint-sky"><svg class="icon"><use href="#i-bus"/></svg><b>Transport</b><span>To your visits</span></div>
+          </div>
+          <div class="sec"><h3>Guides</h3><a href="#">See all</a></div>
+          <div class="list">
+            <div class="li"><div class="chip-icon tint-peach" style="width:30px;height:30px;border-radius:9px"><svg class="icon" style="width:15px;height:15px"><use href="#i-book"/></svg></div>Understanding blood pressure<svg class="icon chev" style="margin-left:auto"><use href="#i-chev"/></svg></div>
+            <div class="li"><div class="chip-icon tint-lav" style="width:30px;height:30px;border-radius:9px"><svg class="icon" style="width:15px;height:15px"><use href="#i-doc"/></svg></div>Getting ready for a hospital stay<svg class="icon chev" style="margin-left:auto"><use href="#i-chev"/></svg></div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><svg class="icon"><use href="#i-home"/></svg>Home</div>
+          <div class="tab"><svg class="icon"><use href="#i-heart"/></svg>Health</div>
+          <div class="tab"><svg class="icon"><use href="#i-people"/></svg>Connect</div>
+          <div class="tab on"><svg class="icon"><use href="#i-services"/></svg>Services</div>
+          <div class="tab"><svg class="icon"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <div class="caption">Services</div>
+    </div>
+
+    <!-- 7 · Profile -->
+    <div>
+      <div class="phone">
+        <div class="scroll">
+          <div class="topbar"><span></span><div class="mid">Profile</div><span></span></div>
+          <div class="me"><div class="avatar tint-peach">P</div><div><b>Pa</b><div class="muted">Mei looks after your record with you</div></div></div>
+          <div class="list">
+            <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-globe"/></svg>Language<span class="val">English</span></div>
+            <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-text"/></svg>Text size<span class="val">Large</span></div>
+            <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-heart"/></svg>Emergency card<svg class="icon chev" style="margin-left:auto"><use href="#i-chev"/></svg></div>
+            <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-shield"/></svg>Insurance<svg class="icon chev" style="margin-left:auto"><use href="#i-chev"/></svg></div>
+            <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-lock"/></svg>Who can see what<svg class="icon chev" style="margin-left:auto"><use href="#i-chev"/></svg></div>
+          </div>
+          <div class="sec"><h3>What Nura uses</h3></div>
+          <div class="muted" style="margin-top:-8px">Choose what Nura may use to suggest reads and videos for you.</div>
+          <div class="list">
+            <div class="li">Your medicines<span class="switch on" role="img" aria-label="On"></span></div>
+            <div class="li">Your readings<span class="switch on" role="img" aria-label="On"></span></div>
+            <div class="li">What you eat<span class="switch on" role="img" aria-label="On"></span></div>
+            <div class="li">What you ask about<span class="switch" role="img" aria-label="Off"></span></div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tab"><svg class="icon"><use href="#i-home"/></svg>Home</div>
+          <div class="tab"><svg class="icon"><use href="#i-heart"/></svg>Health</div>
+          <div class="tab"><svg class="icon"><use href="#i-people"/></svg>Connect</div>
+          <div class="tab"><svg class="icon"><use href="#i-services"/></svg>Services</div>
+          <div class="tab on"><svg class="icon"><use href="#i-user"/></svg>Profile</div>
+        </div>
+      </div>
+      <div class="caption">Profile</div>
+    </div>
+
+  </div>
+
+  <div class="promises">
+    <div class="promise"><div class="chip-icon tint-lav"><svg class="icon"><use href="#i-lock"/></svg></div><div><b>Private first</b><span>Your record stays yours.</span></div></div>
+    <div class="promise"><div class="chip-icon tint-peach"><svg class="icon"><use href="#i-spark"/></svg></div><div><b>Thinks out loud</b><span>You see what Nura is reading.</span></div></div>
+    <div class="promise"><div class="chip-icon tint-sage"><svg class="icon"><use href="#i-people"/></svg></div><div><b>Family, your way</b><span>You choose who sees what.</span></div></div>
+    <div class="promise"><div class="chip-icon tint-blush"><svg class="icon"><use href="#i-cal"/></svg></div><div><b>Ready for the doctor</b><span>Questions and papers together.</span></div></div>
+    <div class="promise"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-text"/></svg></div><div><b>Easy to read</b><span>Large text, three languages.</span></div></div>
+  </div>
+
+  <p class="note">A design concept, not the built app. Names, readings and visits are sample content. The illustrations are simple stand-ins for a finished illustration set. The ring shows doses he really took, not a made-up health score.</p>
+</div>

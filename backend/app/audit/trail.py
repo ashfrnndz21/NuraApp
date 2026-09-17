@@ -144,7 +144,14 @@ async def read_audit(
         statement = statement.where(AuditEntry.actor_person_id == actor_person_id)
     if since is not None:
         statement = statement.where(AuditEntry.at >= since)
-    found = (await session.scalars(statement.order_by(AuditEntry.at.desc()).limit(limit))).all()
+    # `.seq` breaks a tie in `at` (two lines in one request, or any frozen clock —
+    # #192/#218): the trail's whole point is telling him what happened in what order, so a
+    # merely stable-but-arbitrary tiebreaker is not enough — it needs the real one.
+    found = (
+        await session.scalars(
+            statement.order_by(AuditEntry.at.desc(), AuditEntry.seq.desc()).limit(limit)
+        )
+    ).all()
 
     # After the query, so that reading the trail never returns the line about reading it.
     await record(

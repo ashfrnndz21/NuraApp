@@ -1128,6 +1128,41 @@ async def test_web_and_videos_search_the_allowlist_only_and_say_each_page_in_his
     assert bad.status_code == 400 and bad.json()["refusal"] == "NotAFilter"
 
 
+async def test_find_results_are_sampled_for_the_pharmacists_queue_too(
+    deployment: Deployment,
+) -> None:
+    """#188: an ask-bar Web or Videos result is never a `FeedItem`, but it is still one of the
+    first fifty renderings of a learning-shaped source, sampled the same way a scheduled
+    search job's learning card is (`review.sample_find_result`) — a brand-new source is read
+    by the pharmacist whether it was found on a schedule or on demand."""
+    from app.language.models import ReviewItem, ReviewKind
+
+    pa, profile_id = await _pa(deployment)
+    context = await _context(deployment, pa["person_id"], profile_id)
+    engine = Engine(
+        searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=FixtureRegistry.load()
+    )
+    async with deployment.sessions() as session:
+        before = (
+            await session.scalars(select(ReviewItem).where(ReviewItem.card_type == "learning"))
+        ).all()
+        results = await find(
+            session, context=context, engine=engine, words="blood pressure", where="web", language="en"
+        )
+        assert results
+        after = (
+            await session.scalars(select(ReviewItem).where(ReviewItem.card_type == "learning"))
+        ).all()
+    assert len(after) == len(before) + len(results)
+    new = [row for row in after if row not in before]
+    assert all(row.kind is ReviewKind.CARD for row in new)
+    assert all(row.source_id is None for row in new), "a card's sample, not a source proposal"
+    sampled_headlines = {row.lines["headline"] for row in new}
+    assert sampled_headlines == {result.title for result in results}
+    # No name of his, no query he typed, reaches the de-identified sample.
+    assert "Pa" not in json.dumps([row.lines for row in new])
+
+
 class _Spy(FixtureSearcher):
     def __init__(self, root: Path) -> None:
         super().__init__(root)
@@ -1406,7 +1441,7 @@ async def test_a_card_about_his_medicine_says_not_to_stop_it(deployment: Deploym
     await _feed(deployment, profile_id, pa["token"])
     made = await _made(deployment, profile_id, CardType.LEARNING)
     [tablet] = [card for card in made if card.headline == "Your blood pressure tablet"]
-    keep = "Ask your doctor before you stop this medicine."
+    keep = "Ask your doctor before you stop taking it."
     assert keep in tablet.body
     assert tablet.body.index(keep) < tablet.body.index("This comes from HealthHub.")
     assert not _fails([keep], "en")
