@@ -2006,6 +2006,64 @@ export const zh = {
     // @patient phrase
     whatPaper: "什么文件",
   },
+  connect: {
+    // @patient headline
+    familyTitle: "您的家人",
+    // @patient headline
+    familyTitleOther: "{patient}的家人",
+    // @patient phrase
+    addPerson: "加一位",
+    // @patient phrase
+    addPersonLine: "新的一位",
+    // @patient line
+    noFamily: "还没有人拿到您的文件的钥匙。",
+    // @patient line
+    noFamilyOther: "还没有人拿到{patient}的文件的钥匙。",
+    // @patient headline
+    nextCallTitle: "下一通电话",
+    // @patient phrase
+    call: "打电话",
+    // @patient phrase
+    change: "更改",
+    // @patient line
+    noCall: "您的日历上还没有电话安排。",
+    // @patient line
+    noCallOther: "{patient}的日历上还没有电话安排。",
+    // @patient headline
+    nearYouTitle: "您附近",
+    // @patient headline
+    nearYouTitleOther: "{patient}附近",
+    // @patient line
+    noNearYou: "您附近还没有内容。",
+    // @patient line
+    noNearYouOther: "{patient}附近还没有内容。",
+    // @patient headline
+    messagesTitle: "消息",
+    // @patient line
+    noMessages: "还没有消息。",
+    // @patient phrase
+    seeAllFamily: "看看谁拿着钥匙",
+    // @patient phrase
+    seeAllNearYou: "看看附近的一切",
+    // @patient phrase
+    seeAllMessages: "看看所有消息",
+    // @patient headline
+    callsTitle: "电话",
+    // @patient phrase
+    scheduleCall: "安排一通电话",
+    // @patient phrase
+    cancelCallButton: "取消这通电话",
+    // @patient line
+    cancelledCall: "这通电话已经取消。",
+    // @patient phrase
+    personLabel: "跟谁",
+    // @patient phrase
+    whenLabel: "什么时候",
+    // @patient phrase
+    linkLabel: "通话链接，如果有的话",
+    // @patient phrase
+    callLabelLabel: "给这通电话取个名字",
+  },
   review: {
     // @patient headline
     title: "药剂师的清单",

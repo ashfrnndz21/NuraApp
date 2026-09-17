@@ -3,10 +3,11 @@ import type { JSX } from "preact";
 import * as family from "../../api/family";
 import type { FamilyPart } from "../../flow";
 import { go } from "../../flow";
-import { fill } from "../../strings";
+import { fill, t } from "../../strings";
 import { Notice, Pill, Tile } from "../../ui/components";
 import { Icon, type IconName, PaperTile, PillButton } from "../../ui/kit";
 import { CalendarPart } from "./Calendar";
+import { CallsPart } from "./Calls";
 import { FamilyPage, Lines, NoticeAt, s, useAct, useHere, useRead, whose } from "./common";
 import { ConsentsPart, RecordPart } from "./Consents";
 import { DeliveriesPart, SettingsPart } from "./Delivery";
@@ -43,6 +44,8 @@ export function FamilyScreen({ part }: { part: FamilyPart }): JSX.Element | null
       return <MetricsPart />;
     case "calendar":
       return <CalendarPart />;
+    case "calls":
+      return <CallsPart />;
     case "deliveries":
       return <DeliveriesPart />;
     case "settings":
@@ -60,6 +63,7 @@ export function FamilyScreen({ part }: { part: FamilyPart }): JSX.Element | null
 function FamilyHome(): JSX.Element | null {
   const here = useHere();
   const words = s();
+  const callsWord = t().connect.callsTitle;
   const circle = useRead(here ? () => family.grants(here.bearer, here.papers.profile_id, here.lang) : null, [here?.papers.profile_id, here?.lang]);
   // A red flag still climbing that reached this person (E11-06). A key without the emergency
   // card reaches no ladder, so there is nothing to show it: the read's no is not a screen.
@@ -96,6 +100,7 @@ function FamilyHome(): JSX.Element | null {
         row("consents", whose(here, words.consentsSelf, words.consentsOther), "note"),
         row("thread", words.thread, "family"),
         row("calendar", words.calendar, "visits"),
+        row("calls", callsWord, "phone"),
       ]
     : [
         row("trail", whose(here, words.trailSelf, words.trailOther), "note"),
@@ -104,6 +109,7 @@ function FamilyHome(): JSX.Element | null {
         row("messages", fill(words.messagesTitle, { name: here.papers.display_name }), "speaker"),
         row("metrics", words.metrics, "records"),
         row("calendar", words.calendar, "visits"),
+        row("calls", callsWord, "phone"),
         row("deliveries", words.deliveries, "note"),
         row("settings", words.settings, "plan"),
         row("documents", words.documents, "records"),

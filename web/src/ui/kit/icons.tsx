@@ -24,6 +24,7 @@ import {
   MessageSquare,
   Mic,
   Palette,
+  Phone,
   Pill,
   Play,
   Plus,
@@ -101,6 +102,7 @@ export const ICONS = {
   chevron: ChevronRight,
   back: ChevronLeft,
   note: MessageSquare,
+  phone: Phone,
 } as const satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

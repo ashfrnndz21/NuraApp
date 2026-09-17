@@ -845,6 +845,36 @@ export interface Strings {
     chooseDocument: string;
     whatPaper: string;
   };
+  /** The Connect tab's own overview (docs/design/nura-concept-board.html, the Connect screen):
+   *  his family, his next call, what is near him, and the family thread — one glance, then the
+   *  existing screens each row opens. `familyTitle`, `noFamily`, `noCall`, `nearYouTitle` and
+   *  `noNearYou` each have an "…Other" twin, said about him by name on a caregiver's key
+   *  (`ABOUT_HIM` in `strings/index.ts`). */
+  connect: {
+    familyTitle: string; familyTitleOther: string;
+    addPerson: string;
+    addPersonLine: string;
+    noFamily: string; noFamilyOther: string;
+    nextCallTitle: string;
+    call: string;
+    change: string;
+    noCall: string; noCallOther: string;
+    nearYouTitle: string; nearYouTitleOther: string;
+    noNearYou: string; noNearYouOther: string;
+    messagesTitle: string;
+    noMessages: string;
+    seeAllFamily: string;
+    seeAllNearYou: string;
+    seeAllMessages: string;
+    callsTitle: string;
+    scheduleCall: string;
+    cancelCallButton: string;
+    cancelledCall: string;
+    personLabel: string;
+    whenLabel: string;
+    linkLabel: string;
+    callLabelLabel: string;
+  };
   review: {
     title: string;
     tokenLabel: string;

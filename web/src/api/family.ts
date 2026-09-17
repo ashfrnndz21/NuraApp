@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import type {
   AcceptedOut,
+  CallOut,
   ConnectorOut,
   DeliveryOut,
   DeliverySettingsIn,
@@ -255,3 +256,27 @@ export const documents = (token: string, profileId: string) => api<DocumentOut[]
 
 export const addDocument = (token: string, profileId: string, body: { data: string; content_type: string; captured_at: string; tag: DocumentTag }) =>
   api<DocumentOut[]>(`/profiles/${profileId}/documents`, { method: "POST", token, body });
+
+// --- Connect's "Upcoming Call" (design-direction.md) --------------------------------------------
+
+/** Every call still ahead of now, soonest first. */
+export const upcomingCalls = (token: string, profileId: string, language: string) =>
+  api<CallOut[]>(`/profiles/${profileId}/calls/upcoming`, { token, query: { language } });
+
+/** The chief's or his own yes, recomputed from who, when and the link, so it cannot be minted
+ *  for a stranger or a link nobody was shown. */
+export const mintCall = (token: string, profileId: string, body: { with_person_id: string; scheduled_at: string; call_link: string | null }) =>
+  yes(token, profileId, { subject: "call", ...body });
+
+export const scheduleCall = (
+  token: string,
+  profileId: string,
+  body: { with_person_id: string; scheduled_at: string; call_link: string | null; label: string | null },
+  confirmation_id: string,
+  language: string,
+) => api<CallOut>(`/profiles/${profileId}/calls`, { method: "POST", token, query: { language }, body: { ...body, confirmation_id } });
+
+/** Take a call off the calendar: the owner's or his chief's, like scheduling it. No yes to
+ *  mint — the call named by its id is exactly what comes off. */
+export const cancelCall = (token: string, profileId: string, callId: string, language: string) =>
+  api<CallOut>(`/profiles/${profileId}/calls/${callId}`, { method: "DELETE", token, query: { language } });
