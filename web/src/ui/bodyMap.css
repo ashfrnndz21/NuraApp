@@ -1,0 +1,46 @@
+/* The body-systems map (#175): minimal and local on purpose — see BodySystemsMap.tsx's own
+   comment. A warm cream card (docs/design-direction.md's pastel tints), the quiet outline
+   figure, and soft Plum glows only where a real tag touches. */
+
+.body-map {
+  background: var(--cream);
+  border-radius: var(--radius-tile);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.body-map-figure {
+  width: 120px;
+  height: 192px;
+  flex: none;
+}
+
+.body-map-outline {
+  fill: none;
+  stroke: var(--plum);
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.body-map-glow {
+  fill: var(--plum);
+  opacity: 0.1;
+}
+
+.body-map-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .body-map-glow {
+    transition: opacity 0.6s ease;
+  }
+}

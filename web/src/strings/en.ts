@@ -1230,6 +1230,30 @@ export const en = {
       doctor_question: "Hear what to ask your doctor",
     },
     storyAskOther: "To ask {patient}'s doctor",
+    // @patient phrase
+    bodyMapSystems: {
+      head: "Head",
+      heart: "Heart",
+      lungs: "Lungs",
+      digestive: "Digestive",
+      kidneys: "Kidneys",
+      joints: "Joints",
+      skin: "Skin",
+      general: "Whole body",
+    },
+    // @patient
+    bodyMapShowing: {
+      head: "Showing what touches the head.",
+      heart: "Showing what touches the heart.",
+      lungs: "Showing what touches the lungs.",
+      digestive: "Showing what touches digestion.",
+      kidneys: "Showing what touches the kidneys.",
+      joints: "Showing what touches the joints.",
+      skin: "Showing what touches the skin.",
+      general: "Showing what touches the whole body.",
+    },
+    // @patient phrase
+    bodyMapShowEverything: "Show everything",
     // @patient
     addLead: "Take a photo of the label first.",
     // @patient
@@ -1986,6 +2010,9 @@ export const en = {
     OutOfRegion: "These papers are kept in another country.",
     NotTheirsToRead: "Only the owner can see this.",
     NotTheirKeyToCut: "Only the owner can share these papers.",
+    NotTheirKeyToLeave: "This is not your key to close.",
+    ChiefMustNameSuccessor: ["Nura needs the next chief named first.", "Or the owner can say there will be none."],
+    SuccessorMustAlreadyHoldAKey: "The next chief must already hold a key.",
     NoSuchHolder: "Nura does not know that person.",
     NoConsent: "The owner has not agreed to this.",
     ConsentWithheld: "The owner has not agreed to this yet.",

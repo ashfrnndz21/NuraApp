@@ -98,7 +98,13 @@ async def get_timeline(
 async def start_episode(body: EpisodeIn, context: Context, session: Db) -> EpisodeOut:
     """Something going on, from now. One of each kind open at a time."""
     return EpisodeOut.of(
-        await open_episode(session, context=context, kind=body.kind, label=body.label)
+        await open_episode(
+            session,
+            context=context,
+            kind=body.kind,
+            label=body.label,
+            body_systems=body.body_systems,
+        )
     )
 
 

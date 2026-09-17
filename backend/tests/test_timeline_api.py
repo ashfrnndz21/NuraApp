@@ -103,6 +103,47 @@ async def _visit(
     return visit
 
 
+async def test_an_episodes_body_systems_round_trip_over_http(deployment: Deployment) -> None:
+    """#175: the body-systems map's own tags, named on the way in, read back the same way
+    everywhere an episode appears — the episode route itself and the timeline it sits on."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    episode = await _ok(
+        await deployment.client.post(
+            f"/profiles/{profile_id}/episodes",
+            json={"kind": "illness", "label": "chest infection", "body_systems": ["lungs", "heart"]},
+            headers=his,
+        ),
+        201,
+    )
+    assert sorted(episode["body_systems"]) == ["heart", "lungs"]
+
+    fetched = await _ok(
+        await deployment.client.get(f"/profiles/{profile_id}/episodes/{episode['episode_id']}", headers=his)
+    )
+    assert sorted(fetched["episode"]["episode"]["body_systems"]) == ["heart", "lungs"]
+
+    untagged = await _ok(
+        await deployment.client.post(
+            f"/profiles/{profile_id}/episodes",
+            json={"kind": "travel", "label": "Penang"},
+            headers=his,
+        ),
+        201,
+    )
+    assert untagged["body_systems"] == []
+
+    timeline = await _ok(await deployment.client.get(f"/profiles/{profile_id}/timeline", headers=his))
+    on_the_timeline = {
+        item["episode"]["episode_id"]: item["episode"]["body_systems"]
+        for item in timeline["items"]
+        if item["kind"] == "episode"
+    }
+    assert sorted(on_the_timeline[episode["episode_id"]]) == ["heart", "lungs"]
+    assert on_the_timeline[untagged["episode_id"]] == []
+
+
 async def test_the_timeline_flow_over_http(deployment: Deployment, clock: FrozenClock) -> None:
     client = deployment.client
     pa = await register_by_phone(deployment, PA, "Pa")

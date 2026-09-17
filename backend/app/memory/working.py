@@ -8,7 +8,7 @@ appointments name it while it is open. Closing is the one change an episode take
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 
 from sqlalchemy import ColumnElement
@@ -23,7 +23,7 @@ from app.db import as_utc, utcnow
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
-from app.memory.models import Episode, EpisodeKind, short_label
+from app.memory.models import BodySystem, Episode, EpisodeKind, short_label
 
 
 class EpisodeAlreadyOpen(Refusal):
@@ -61,8 +61,11 @@ async def open_episode(
     kind: EpisodeKind,
     label: str,
     opened_at: datetime | None = None,
+    body_systems: Iterable[BodySystem] | None = None,
 ) -> Episode:
-    """Start an episode, refused while one of the same kind is open."""
+    """Start an episode, refused while one of the same kind is open. `body_systems` is
+    never worked out here or anywhere else (#175): it is what the person naming the
+    episode said it is about, or nothing — the body-systems map glows only on a real tag."""
     # Keeping an episode rests on the consent to hold the record (E00-02).
     await require_consent(
         session,
@@ -81,6 +84,7 @@ async def open_episode(
         kind=kind,
         label=named,
         opened_at=opened_at or utcnow(),
+        body_systems=sorted({system.value for system in body_systems or ()}),
     )
 
 

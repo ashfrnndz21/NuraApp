@@ -1228,6 +1228,30 @@ export const ms = {
       doctor_question: "Dengar apa yang perlu ditanya kepada doktor anda",
     },
     storyAskOther: "Untuk ditanya kepada doktor {patient}",
+    // @patient phrase
+    bodyMapSystems: {
+      head: "Kepala",
+      heart: "Jantung",
+      lungs: "Paru-paru",
+      digestive: "Pencernaan",
+      kidneys: "Buah pinggang",
+      joints: "Sendi",
+      skin: "Kulit",
+      general: "Seluruh badan",
+    },
+    // @patient
+    bodyMapShowing: {
+      head: "Menunjukkan apa yang berkaitan dengan kepala.",
+      heart: "Menunjukkan apa yang berkaitan dengan jantung.",
+      lungs: "Menunjukkan apa yang berkaitan dengan paru-paru.",
+      digestive: "Menunjukkan apa yang berkaitan dengan pencernaan.",
+      kidneys: "Menunjukkan apa yang berkaitan dengan buah pinggang.",
+      joints: "Menunjukkan apa yang berkaitan dengan sendi.",
+      skin: "Menunjukkan apa yang berkaitan dengan kulit.",
+      general: "Menunjukkan apa yang berkaitan dengan seluruh badan.",
+    },
+    // @patient phrase
+    bodyMapShowEverything: "Tunjukkan semua",
     // @patient
     addLead: "Ambil gambar label dahulu.",
     // @patient
@@ -1982,6 +2006,9 @@ export const ms = {
     OutOfRegion: "Surat-surat ini disimpan di negara lain.",
     NotTheirsToRead: "Hanya pemilik boleh melihat ini.",
     NotTheirKeyToCut: "Hanya pemilik boleh berkongsi surat-surat ini.",
+    NotTheirKeyToLeave: "Ini bukan kunci anda untuk ditutup.",
+    ChiefMustNameSuccessor: ["Namakan ketua seterusnya dahulu.", "Atau minta pemilik nyatakan tiada seorang pun."],
+    SuccessorMustAlreadyHoldAKey: "Ketua seterusnya perlu sudah ada kunci.",
     NoSuchHolder: "Nura tidak kenal orang itu.",
     NoConsent: "Pemilik belum setuju dengan ini.",
     ConsentWithheld: "Pemilik masih belum setuju dengan ini.",

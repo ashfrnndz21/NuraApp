@@ -10,6 +10,7 @@ import { confidenceLine, countOf, labelFromCard, lineQuestions, outcomeLine, reo
 import { density } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
+import { BrandMark } from "../../ui/kit";
 import { Capture } from "../onboarding/parts";
 import { Paged, RecordFrame, recordNote, session, takeNote, toRecord, upperFirst, useRead } from "./parts";
 
@@ -255,6 +256,7 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
                 {story.voice_parts?.includes(key) && (
                   <HearPart
                     label={s.record.hearParts[key as keyof typeof s.record.hearParts]}
+                    speaking={voice.speaking.value === key}
                     onHear={() =>
                       void voice.hear(key, {
                         // As the backend says the part: every part but what it is for ends on the boundary.
@@ -283,16 +285,23 @@ export function StoryScreen({ lineId }: { lineId: string }): JSX.Element {
 
 /** One part's Hear: the same button as every card's, naming the part it plays in one whole
  *  phrase of the catalogue a screen reader says ("Hear what to look out for"), never a
- *  label and a colon, and never assembled. */
-function HearPart({ label, onHear, testId }: { label: string; onHear: () => void; testId: string }): JSX.Element {
+ *  label and a colon, and never assembled. The brand mark, not a speaker glyph
+ *  (docs/brand/BRAND.md §8); it speaks (§7) only while this part is the one sounding. */
+function HearPart({
+  label,
+  speaking,
+  onHear,
+  testId,
+}: {
+  label: string;
+  speaking: boolean;
+  onHear: () => void;
+  testId: string;
+}): JSX.Element {
   const s = t();
   return (
     <Pill quiet onClick={onHear} label={label} testId={testId}>
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 10v4h3l4 4V6L7 10H4z" />
-        <path d="M15 9a4 4 0 0 1 0 6" />
-        <path d="M17.5 6.5a8 8 0 0 1 0 11" />
-      </svg>
+      <BrandMark size={24} speaking={speaking} />
       {s.today.hear}
     </Pill>
   );

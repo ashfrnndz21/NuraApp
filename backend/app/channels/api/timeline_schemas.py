@@ -31,6 +31,7 @@ from app.memory.models import (
     ArtifactKind,
     AttachedHow,
     Attachment,
+    BodySystem,
     Episode,
     EpisodeKind,
     Event,
@@ -53,10 +54,13 @@ PHONE = r"^\+[1-9][0-9]{7,14}$"
 
 
 class EpisodeIn(BaseModel):
-    """Something going on: its kind and a short name for it ("chest infection")."""
+    """Something going on: its kind and a short name for it ("chest infection"). `body_systems`
+    (#175) is what he — or whoever is naming it for him — says it is about, in the body-systems
+    map's own short list; never guessed, and never required."""
 
     kind: EpisodeKind
     label: str = Field(min_length=1, max_length=80)
+    body_systems: list[BodySystem] = Field(default_factory=list)
 
 
 class ProviderIn(BaseModel):
@@ -158,6 +162,9 @@ class EpisodeOut(BaseModel):
     label: str
     opened_at: datetime
     closed_at: datetime | None
+    body_systems: list[BodySystem]
+    """The body-systems map's own tags (#175), as named when the episode was opened; empty
+    means nobody said. Never worked out from the label or anything else."""
 
     @classmethod
     def of(cls, episode: Episode) -> EpisodeOut:
@@ -167,6 +174,7 @@ class EpisodeOut(BaseModel):
             label=episode.label,
             opened_at=utc(episode.opened_at),
             closed_at=None if episode.closed_at is None else utc(episode.closed_at),
+            body_systems=sorted(BodySystem(each) for each in episode.body_systems),
         )
 
 

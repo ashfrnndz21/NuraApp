@@ -78,17 +78,20 @@ export function Pill({ onClick, children, plum, coral, done, quiet, disabled, la
 
 /** The spoken twin of a card. Audio starts here and nowhere else: the tap opens the one
  *  player (E15-07) under the button — Play / Pause, his speed, the line being said — and
- *  leaving the screen stops it. */
+ *  leaving the screen stops it. The button is the brand mark, not a speaker glyph
+ *  (docs/brand/BRAND.md §8): it is Nura's own voice, and its "speaking" motion (§7) plays
+ *  while, and only while, this is the source actually sounding. */
 export function Hear({ lines }: { lines: readonly string[] }): JSX.Element {
   const key = `hear:${useId()}`;
   const open = voice.key.value === key;
+  const speaking = open && voice.status.value === "playing";
   useEffect(() => () => voice.leave(key), [key]);
   return (
     <>
       <PillButton
         variant="quiet"
         compact
-        icon="speaker"
+        mark={<BrandMark size={24} speaking={speaking} />}
         onClick={() => void voice.play({ kind: "speech", key, lines, language: language.value }).catch(() => undefined)}
         label={`${t().today.hear}: ${lines[0] ?? ""}`}
         testId="hear"

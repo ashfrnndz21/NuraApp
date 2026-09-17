@@ -788,6 +788,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/closure"),
     Walk("GET", f"{P}/whatsapp-opt-in"),
     Walk("GET", f"{P}/delivery-settings"),
+    Walk("GET", f"{P}/delivery-settings/mine"),
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
     Walk("GET", f"{P}/reach"),
@@ -860,6 +861,11 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/keys"): "cuts a key; returns the key",
     ("DELETE", f"{P}/keys/{{key_id}}"): "closes a key; returns the key",
     ("PUT", f"{P}/keys/{{key_id}}"): "narrows a key; returns the key",
+    ("POST", f"{P}/keys/{{key_id}}/leave"): "a holder closes her own key; returns it",
+    (
+        "POST",
+        f"{P}/keys/{{key_id}}/no-successor",
+    ): "Pa's word there will be no next chief; returns the key",
     ("POST", f"{P}/consents/sharing"): "writes an agreement; returns it",
     (
         "POST",
@@ -964,6 +970,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/plan/later"): "moves the first-week plan to later",
     ("POST", f"{P}/plan/{{prompt}}/skip"): "skips one prompt of the plan",
     ("PUT", f"{P}/delivery-settings"): "sets how Nura reaches him on a yes; returns them",
+    (
+        "PUT",
+        f"{P}/delivery-settings/mine",
+    ): "sets the caller's own delivery settings, self-service; returns them",
     ("PUT", f"{P}/emergency-card/insurer"): "sets his insurer on the typer's yes; returns it",
     ("POST", f"{P}/ladders/{{ladder_id}}/acknowledge"): "says I have got it; closes the ladder",
     ("POST", f"{P}/push-subscriptions"): "keeps this phone for his reminders; returns its id",

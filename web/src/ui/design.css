@@ -20,6 +20,48 @@
   fill: currentColor;
 }
 
+/* --- The brand mark's motion (docs/brand/BRAND.md §7, #176) --------------------------------
+   Idle: nothing — a bare `.brand-mark` never animates, header included. Speaking: while a
+   voice note or a clip plays, the right half's aura drifts through its two colours over 4s
+   and the dot breathes by 6%. `prefers-reduced-motion` drops both for a static opacity
+   change instead, the fallback §7 itself asks for. */
+.brand-mark-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .brand-mark[data-speaking="true"] .brand-mark-stop-a {
+    animation: brand-mark-drift-a 4s ease-in-out infinite;
+  }
+  .brand-mark[data-speaking="true"] .brand-mark-stop-b {
+    animation: brand-mark-drift-b 4s ease-in-out infinite;
+  }
+  .brand-mark[data-speaking="true"] .brand-mark-dot {
+    animation: brand-mark-breathe 4s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark[data-speaking="true"] {
+    animation: brand-mark-static-pulse 4s ease-in-out infinite;
+  }
+}
+@keyframes brand-mark-drift-a {
+  0%, 100% { stop-color: #b9a6e0; }
+  50% { stop-color: #f0c9da; }
+}
+@keyframes brand-mark-drift-b {
+  0%, 100% { stop-color: #f0c9da; }
+  50% { stop-color: #b9a6e0; }
+}
+@keyframes brand-mark-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+@keyframes brand-mark-static-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
 /* --- The shell: header, the scrolling page, the tab bar under it ---------------------------
    The page scrolls inside its own region and the tab bar is the next thing in the flow, so it
    reserves its own space: nothing ever scrolls beneath it, and it never covers a line. */

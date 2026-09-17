@@ -1,11 +1,12 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
-import type { ReviewCardOut, TimelineItemOut, TimelineOut } from "../../api/types";
+import type { BodySystem, ReviewCardOut, TimelineItemOut, TimelineOut } from "../../api/types";
 import { kindLine } from "../../onboarding/review";
-import { artifactLine, hangingLines, itemTitle, kindWord, momentLine, papersToPut, providerLines, visitStatusLine } from "../../record/model";
+import { artifactLine, bodySystemsTouched, filteredByBodySystem, hangingLines, itemTitle, kindWord, momentLine, papersToPut, providerLines, visitStatusLine } from "../../record/model";
 import { density, profile } from "../../store/session";
 import { fill, language, t } from "../../strings";
+import { BodySystemsMap } from "../../ui/BodySystemsMap";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
 import { Paged, RecordFrame, session, toRecord, useDateOf, useRead } from "./parts";
 
@@ -17,6 +18,7 @@ export function TimelineScreen(): JSX.Element {
   const [pages, setPages] = useState<TimelineOut[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [system, setSystem] = useState<BodySystem | null>(null);
   useRead(async () => {
     const { bearer, profileId } = session();
     try {
@@ -43,6 +45,7 @@ export function TimelineScreen(): JSX.Element {
   const header = pages[0]?.header ?? [];
   const items = pages.flatMap((page) => page.items);
   const patient = density() === "patient";
+  const shown = filteredByBodySystem(items, system);
   return (
     <RecordFrame title={s.record.timeline} back={{ name: "hub" }} testId="record-timeline">
       <Notice error={error} />
@@ -58,7 +61,8 @@ export function TimelineScreen(): JSX.Element {
           <Hear lines={header.map((anchor) => anchor.line)} />
         </Tile>
       )}
-      <Paged items={items} more={cursor ? older : null} render={(item) => <ItemTile key={`${item.kind}:${item.id}`} item={item} />} />
+      <BodySystemsMap systems={bodySystemsTouched(items)} active={system} onSelect={setSystem} readOnly={patient} />
+      <Paged items={shown} more={cursor ? older : null} render={(item) => <ItemTile key={`${item.kind}:${item.id}`} item={item} />} />
       {!patient && cursor && (
         <Pill onClick={() => void older()} disabled={busy} testId="older">
           {s.record.older}

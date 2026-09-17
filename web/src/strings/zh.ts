@@ -1228,6 +1228,30 @@ export const zh = {
       doctor_question: "听要问医生什么",
     },
     storyAskOther: "要问{patient}的医生",
+    // @patient phrase
+    bodyMapSystems: {
+      head: "头部",
+      heart: "心脏",
+      lungs: "肺部",
+      digestive: "肠胃",
+      kidneys: "肾脏",
+      joints: "关节",
+      skin: "皮肤",
+      general: "全身",
+    },
+    // @patient
+    bodyMapShowing: {
+      head: "显示跟头部有关的。",
+      heart: "显示跟心脏有关的。",
+      lungs: "显示跟肺部有关的。",
+      digestive: "显示跟肠胃有关的。",
+      kidneys: "显示跟肾脏有关的。",
+      joints: "显示跟关节有关的。",
+      skin: "显示跟皮肤有关的。",
+      general: "显示跟全身有关的。",
+    },
+    // @patient phrase
+    bodyMapShowEverything: "显示全部",
     // @patient
     addLead: "先拍一张标签的照片。",
     // @patient
@@ -1981,6 +2005,9 @@ export const zh = {
     OutOfRegion: "这份文件保存在另一个国家。",
     NotTheirsToRead: "只有文件的主人可以看这个。",
     NotTheirKeyToCut: "只有文件的主人可以分享这份文件。",
+    NotTheirKeyToLeave: "这把钥匙不是您的，不能由您关闭。",
+    ChiefMustNameSuccessor: ["先说好下一位总管是谁。", "或者请文件的主人说明不需要下一位。"],
+    SuccessorMustAlreadyHoldAKey: "下一位总管必须已经有一把钥匙。",
     NoSuchHolder: "Nura 不认识那个人。",
     NoConsent: "文件的主人还没有同意这件事。",
     ConsentWithheld: "文件的主人暂时还没有同意。",

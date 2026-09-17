@@ -554,6 +554,9 @@ export interface Strings {
     storyAsk: string;
     storyAskOther: string;
     hearParts: Record<"purpose" | "how_to_take" | "watch_out" | "avoid" | "if_forgotten" | "doctor_question", string>;
+    bodyMapSystems: Record<"head" | "heart" | "lungs" | "digestive" | "kidneys" | "joints" | "skin" | "general", string>;
+    bodyMapShowing: Record<"head" | "heart" | "lungs" | "digestive" | "kidneys" | "joints" | "skin" | "general", string>;
+    bodyMapShowEverything: string;
     addLead: string;
     addLead2: string;
     nameLabel: string;

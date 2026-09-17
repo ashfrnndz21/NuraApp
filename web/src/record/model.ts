@@ -1,5 +1,6 @@
 import type {
   ArtifactRefOut,
+  BodySystem,
   EpisodeViewOut,
   FeedItemOut,
   LabelIn,
@@ -175,6 +176,47 @@ export function countOf(typed: string): number | null {
 /** The visit's doctor, or the illness's own name. */
 export function itemTitle(item: Pick<TimelineItemOut, "kind" | "provider" | "episode">): string {
   return item.kind === "episode" ? (item.episode?.label ?? "") : (item.provider?.name ?? "");
+}
+
+/** The episode a Timeline item names, so a visit filters by the same tags as the illness it
+ *  belongs to (#175): its own, for an episode item; the one its `episode_id` points at, for
+ *  a visit. Never guessed — an item with neither is untagged. */
+function episodeOf(
+  item: Pick<TimelineItemOut, "kind" | "episode" | "appointment">,
+  byId: ReadonlyMap<string, readonly BodySystem[]>,
+): readonly BodySystem[] {
+  if (item.kind === "episode") return item.episode?.body_systems ?? [];
+  const linked = item.appointment?.episode_id;
+  return linked ? (byId.get(linked) ?? []) : [];
+}
+
+/** Every episode's own tags, by its id — the one place a Timeline item's body systems come
+ *  from, whichever kind of item it is. */
+export function episodeSystemsById(items: readonly Pick<TimelineItemOut, "kind" | "episode">[]): Map<string, readonly BodySystem[]> {
+  const byId = new Map<string, readonly BodySystem[]>();
+  for (const item of items) {
+    if (item.kind === "episode" && item.episode) byId.set(item.episode.episode_id, item.episode.body_systems);
+  }
+  return byId;
+}
+
+/** Every body system any of these items touches, for the map's own filter row (#175): only
+ *  what a real episode tag says, never inferred. */
+export function bodySystemsTouched(items: readonly Pick<TimelineItemOut, "kind" | "episode" | "appointment">[]): BodySystem[] {
+  const byId = episodeSystemsById(items);
+  const found = new Set<BodySystem>();
+  for (const item of items) for (const system of episodeOf(item, byId)) found.add(system);
+  return [...found];
+}
+
+/** Only the items that touch this system (#175's filter); everything, when there is none. */
+export function filteredByBodySystem<T extends Pick<TimelineItemOut, "kind" | "episode" | "appointment">>(
+  items: readonly T[],
+  active: BodySystem | null,
+): readonly T[] {
+  if (active === null) return items;
+  const byId = episodeSystemsById(items);
+  return items.filter((item) => episodeOf(item, byId).includes(active));
 }
 
 /** How much hangs off a visit or an illness, in whole lines. */

@@ -275,11 +275,30 @@ class EpisodeKind(StrEnum):
     OTHER = "other"
 
 
+class BodySystem(StrEnum):
+    """The systems the body-systems map's outline figure can glow on (#175, docs/design-system.md
+    §4). A short, fixed set — enough to highlight one region of a quiet outline figure, never a
+    diagnosis: whoever opens the episode names what it is about, in these terms, or names none."""
+
+    HEAD = "head"
+    HEART = "heart"
+    LUNGS = "lungs"
+    DIGESTIVE = "digestive"
+    KIDNEYS = "kidneys"
+    JOINTS = "joints"
+    SKIN = "skin"
+    GENERAL = "general"
+
+
 class Episode(ProfileScoped, Base):
     """The current thing going on: "chest infection, started 3 September".
 
     Events, facts and appointments name the episode they belong to. The one change it takes
     after it is written is to close.
+
+    `body_systems` is never inferred: it is what the person naming the episode said it is
+    about (a phone's-worth of taps, at most one of each system), empty when they said
+    nothing. The body-systems map glows only where a real tag says to (#175).
     """
 
     __tablename__ = "episode"
@@ -287,6 +306,7 @@ class Episode(ProfileScoped, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[EpisodeKind] = mapped_column(enum_column(EpisodeKind, "episode_kind"))
+    body_systems: Mapped[list[str]] = mapped_column(JSON, default=list)
     label: Mapped[str] = mapped_column(String(LABEL_LENGTH))
     opened_at: Mapped[datetime] = mapped_column(index=True)
     closed_at: Mapped[datetime | None] = mapped_column(default=None)

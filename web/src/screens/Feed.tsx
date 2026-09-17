@@ -15,7 +15,7 @@ import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, Pill, Tile } from "../ui/components";
-import { PillButton } from "../ui/kit";
+import { BrandMark, PillButton } from "../ui/kit";
 import { PlayerControls } from "../ui/Player";
 import { voice } from "../player/voice";
 import { Shell } from "./Shell";
@@ -489,7 +489,13 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
         {playing && <PlayerControls />}
         <div class={actions.length === 1 ? "feed-actions one" : "feed-actions"} role="group" aria-label={view.headline}>
           {actions.map((action) => (
-            <SideButton key={action} action={action} s={s} onClick={{ hear: () => onHear(view), ask: onAsk, family: onFamily, notForMe: onNotForMe }[action]} />
+            <SideButton
+              key={action}
+              action={action}
+              s={s}
+              speaking={action === "hear" && playing && voice.status.value === "playing"}
+              onClick={{ hear: () => onHear(view), ask: onAsk, family: onFamily, notForMe: onNotForMe }[action]}
+            />
           ))}
         </div>
         </div>
@@ -574,14 +580,9 @@ function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: 
   );
 }
 
-const ICONS: Record<SideAction, JSX.Element> = {
-  hear: (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 10v4h3l4 4V6L7 10H4z" />
-      <path d="M15 9a4 4 0 0 1 0 6" />
-      <path d="M17.5 6.5a8 8 0 0 1 0 11" />
-    </svg>
-  ),
+// "hear" is the brand mark, drawn separately in SideButton (it needs `speaking`, and every
+// other action's icon here is a fixed element the mark cannot share — docs/brand/BRAND.md §8).
+const ICONS: Record<Exclude<SideAction, "hear">, JSX.Element> = {
   ask: (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <rect x="9" y="3" width="6" height="11" rx="3" />
@@ -601,11 +602,21 @@ const ICONS: Record<SideAction, JSX.Element> = {
   ),
 };
 
-function SideButton({ action, s, onClick }: { action: SideAction; s: Strings; onClick: () => void }): JSX.Element {
+function SideButton({
+  action,
+  s,
+  speaking,
+  onClick,
+}: {
+  action: SideAction;
+  s: Strings;
+  speaking: boolean;
+  onClick: () => void;
+}): JSX.Element {
   const word = { hear: s.today.hear, ask: s.feed.ask, family: s.feed.family, notForMe: s.feed.notForMe }[action];
   return (
     <button type="button" onClick={onClick} data-testid={`action-${action}`}>
-      {ICONS[action]}
+      {action === "hear" ? <BrandMark size={24} speaking={speaking} /> : ICONS[action]}
       {word}
     </button>
   );

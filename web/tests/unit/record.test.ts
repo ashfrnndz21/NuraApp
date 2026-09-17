@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { EpisodeViewOut, FeedItemOut, LineOut, ReviewCardOut, ReviewFieldOut, TimelineItemOut } from "../../src/api/types";
+import type { BodySystem, EpisodeViewOut, FeedItemOut, LineOut, ReviewCardOut, ReviewFieldOut, TimelineItemOut } from "../../src/api/types";
 import {
+  bodySystemsTouched,
   confidenceLine,
   countOf,
   dayInOrder,
   dayOf,
+  filteredByBodySystem,
   hangingLines,
   hubEntries,
   labelFromCard,
@@ -111,7 +113,7 @@ const item = (artifacts: number, facts: number): TimelineItemOut => ({
   at: "2026-09-14T00:00:00Z",
   appointment: null,
   provider: null,
-  episode: { episode_id: "e", kind: "illness", label: "chest infection", opened_at: "2026-09-10T00:00:00Z", closed_at: null },
+  episode: { episode_id: "e", kind: "illness", label: "chest infection", opened_at: "2026-09-10T00:00:00Z", closed_at: null, body_systems: [] },
   visits: [],
   artifacts: Array.from({ length: artifacts }, (_, n) => ({ artifact_id: `a${n}`, kind: "photo", content_type: "image/png", captured_at: "2026-09-14T00:00:00Z", source_channel: "app" })),
   events: [],
@@ -299,5 +301,53 @@ describe("the day", () => {
     expect(dayInOrder(day)).toBe(true);
     expect(dayInOrder(withTime(day, "lunch", "06:00"))).toBe(false);
     expect(dayInOrder(withTime(day, "bed", ""))).toBe(false);
+  });
+});
+
+// --- the body-systems map (#175) -------------------------------------------------------------
+
+const episodeItem = (id: string, systems: BodySystem[]): TimelineItemOut => ({
+  ...item(0, 0),
+  kind: "episode",
+  id,
+  episode: { episode_id: id, kind: "illness", label: id, opened_at: "2026-09-10T00:00:00Z", closed_at: null, body_systems: systems },
+});
+
+const visitItem = (id: string, episodeId: string | null): TimelineItemOut => ({
+  ...item(0, 0),
+  kind: "appointment",
+  id,
+  episode: null,
+  appointment: {
+    appointment_id: id,
+    provider_id: "p",
+    scheduled_at: "2026-09-14T00:00:00Z",
+    status: "planned",
+    purpose: "check-up",
+    episode_id: episodeId,
+  },
+});
+
+describe("the body-systems map (#175)", () => {
+  it("touches only what a real episode tag says, never every system", () => {
+    const items = [episodeItem("e1", ["heart", "lungs"]), episodeItem("e2", []), episodeItem("e3", ["skin"])];
+    expect(bodySystemsTouched(items).sort()).toEqual(["heart", "lungs", "skin"]);
+  });
+
+  it("filters to items whose own episode carries the tag, and to nothing when there is none", () => {
+    const heart = episodeItem("e1", ["heart"]);
+    const untagged = episodeItem("e2", []);
+    expect(filteredByBodySystem([heart, untagged], "heart")).toEqual([heart]);
+    expect(filteredByBodySystem([heart, untagged], null)).toEqual([heart, untagged]);
+    expect(filteredByBodySystem([untagged], "heart")).toEqual([]);
+  });
+
+  it("a visit filters by the episode it belongs to, not a tag of its own", () => {
+    const episode = episodeItem("e1", ["heart"]);
+    const linkedVisit = visitItem("v1", "e1");
+    const looseVisit = visitItem("v2", null);
+    const all = [episode, linkedVisit, looseVisit];
+    expect(bodySystemsTouched(all)).toEqual(["heart"]);
+    expect(filteredByBodySystem(all, "heart")).toEqual([episode, linkedVisit]);
   });
 });

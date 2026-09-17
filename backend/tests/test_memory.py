@@ -25,6 +25,7 @@ from app.memory.models import (
     AppointmentStatus,
     Artifact,
     ArtifactKind,
+    BodySystem,
     ConfidenceState,
     Episode,
     EpisodeKind,
@@ -338,6 +339,22 @@ async def test_one_open_episode_of_a_kind_at_a_time(sg: AsyncSession) -> None:
 
     again = await open_episode(sg, context=owner, kind=EpisodeKind.ILLNESS, label="a cold")
     assert again.id != infection.id
+
+
+async def test_an_episodes_body_systems_are_only_ever_what_was_named(sg: AsyncSession) -> None:
+    """#175: never inferred, never a diagnosis — only what the person naming it said."""
+    owner = await _pa(sg)
+    tagged = await open_episode(
+        sg,
+        context=owner,
+        kind=EpisodeKind.ILLNESS,
+        label="chest infection",
+        body_systems=[BodySystem.LUNGS, BodySystem.HEART],
+    )
+    # Kept sorted, and never duplicated.
+    assert tagged.body_systems == ["heart", "lungs"]
+    untagged = await open_episode(sg, context=owner, kind=EpisodeKind.TRAVEL, label="Penang")
+    assert untagged.body_systems == []
 
 
 async def test_events_and_facts_hang_off_the_open_episode(sg: AsyncSession) -> None:

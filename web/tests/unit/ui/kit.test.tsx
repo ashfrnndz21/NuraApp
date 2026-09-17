@@ -101,6 +101,24 @@ describe("PillButton", () => {
     expect(svg!.props["aria-hidden"]).toBe("true");
     expect(text(hear)).toBe("Hear");
   });
+
+  it("takes a mark instead of a stock icon (the brand mark on Hear, #176)", () => {
+    const withMark = one(
+      <PillButton variant="quiet" compact mark={<BrandMark speaking />} onClick={() => undefined}>
+        Hear
+      </PillButton>,
+    );
+    const marks = all(withMark, hasClass("brand-mark"));
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.props["data-speaking"]).toBe("true");
+    // A mark and an icon are never both given; when there is a mark, no stock <Icon> is drawn.
+    const withIcon = one(
+      <PillButton variant="quiet" compact icon="speaker" onClick={() => undefined}>
+        Hear
+      </PillButton>,
+    );
+    expect(all(withIcon, hasClass("brand-mark"))).toHaveLength(0);
+  });
 });
 
 describe("TabBar", () => {
@@ -263,6 +281,21 @@ describe("Avatar and the brand mark", () => {
     expect(all(mark, byType("path")).length).toBe(2);
     expect(all(mark, byType("circle")).length).toBe(1);
     expect(all(mark, byType("path"))[0]!.props.stroke).toBe("#4E3A78");
+  });
+
+  it("is idle unless told it is speaking (§7, #176), and never shares a gradient id", () => {
+    const idle = one(<BrandMark />);
+    expect(idle.props["data-speaking"]).toBeUndefined();
+    const speaking = one(<BrandMark speaking />);
+    expect(speaking.props["data-speaking"]).toBe("true");
+    // Two marks on screen at once (a feed of Hear buttons) never collide on one gradient id.
+    const first = one(<BrandMark />);
+    const second = one(<BrandMark />);
+    const gradientId = (mark: typeof first) => all(mark, byType("linearGradient"))[0]!.props.id;
+    expect(gradientId(first)).not.toBe(gradientId(second));
+    // The aura path always points at its own gradient by id.
+    const aura = all(second, hasClass("brand-mark-aura"))[0]!;
+    expect(aura.props.stroke).toBe(`url(#${gradientId(second)})`);
   });
 });
 

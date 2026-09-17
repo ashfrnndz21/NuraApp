@@ -8,6 +8,8 @@ function world(options: { missing?: string[]; unplayable?: boolean } = {}) {
   const played: string[] = [];
   const stopped: string[] = [];
   const spoken: SpokenCard[] = [];
+  const audios: AudioLike[] = [];
+  const onEnds: (() => void)[] = [];
   const voice = new StoryVoice({
     fetch: async (part) => {
       fetched.push(part);
@@ -26,11 +28,15 @@ function world(options: { missing?: string[]; unplayable?: boolean } = {}) {
         },
         onended: null,
       };
+      audios.push(audio);
       return audio;
     },
-    speak: (card) => spoken.push(card),
+    speak: (card, onEnd) => {
+      spoken.push(card);
+      if (onEnd) onEnds.push(onEnd);
+    },
   });
-  return { voice, fetched, played, stopped, spoken };
+  return { voice, fetched, played, stopped, spoken, audios, onEnds };
 }
 
 const lines = (words: string): SpokenCard => ({ lines: [words], language: "en" });
@@ -75,5 +81,44 @@ describe("the story's voice notes", () => {
     expect(stopped).toHaveLength(1);
     voice.stop();
     expect(stopped).toHaveLength(2);
+  });
+
+  // --- speaking (#176): drives the brand mark's motion on the part's own Hear button --------
+
+  it("is the part sounding now, and clears when the backend's note ends", async () => {
+    const { voice, audios } = world();
+    const playing = voice.hear("purpose", lines("a"));
+    expect(voice.speaking.value).toBe("purpose"); // set before the fetch resolves
+    await playing;
+    expect(voice.speaking.value).toBe("purpose");
+    audios[0]!.onended?.();
+    expect(voice.speaking.value).toBeNull();
+  });
+
+  it("clears when the phone finishes saying a part with no note of its own", async () => {
+    const { voice, onEnds } = world({ missing: ["avoid"] });
+    await voice.hear("avoid", lines("Stay away from grapefruit."));
+    expect(voice.speaking.value).toBe("avoid");
+    onEnds[0]!();
+    expect(voice.speaking.value).toBeNull();
+  });
+
+  it("moves to the new part when another is heard, and clears on stop", async () => {
+    const { voice } = world();
+    await voice.hear("purpose", lines("a"));
+    expect(voice.speaking.value).toBe("purpose");
+    await voice.hear("how_to_take", lines("b"));
+    expect(voice.speaking.value).toBe("how_to_take");
+    voice.stop();
+    expect(voice.speaking.value).toBeNull();
+  });
+
+  it("a stale onended from a part superseded before it played never clears the new one", async () => {
+    const { voice, audios } = world();
+    await voice.hear("purpose", lines("a"));
+    await voice.hear("how_to_take", lines("b"));
+    expect(voice.speaking.value).toBe("how_to_take");
+    audios[0]!.onended?.(); // the first part's own audio, ended late
+    expect(voice.speaking.value).toBe("how_to_take");
   });
 });

@@ -16,7 +16,7 @@ export interface SpokenCard {
   language: Language;
 }
 
-export type Speaker = (card: SpokenCard) => void;
+export type Speaker = (card: SpokenCard, onEnd?: () => void) => void;
 
 export const speaking = signal(false);
 
@@ -35,7 +35,7 @@ export function pickLocalVoice<V extends VoiceLike>(voices: readonly V[], langua
   );
 }
 
-function webSpeech(card: SpokenCard): void {
+function webSpeech(card: SpokenCard, onEnd?: () => void): void {
   const synth = typeof speechSynthesis === "undefined" ? null : speechSynthesis;
   if (!synth) return;
   const voice = pickLocalVoice(synth.getVoices(), card.language);
@@ -50,8 +50,14 @@ function webSpeech(card: SpokenCard): void {
     utterance.lang = voice.lang;
     utterance.rate = 0.9;
     if (index === lines.length - 1) {
-      utterance.onend = () => (speaking.value = false);
-      utterance.onerror = () => (speaking.value = false);
+      utterance.onend = () => {
+        speaking.value = false;
+        onEnd?.();
+      };
+      utterance.onerror = () => {
+        speaking.value = false;
+        onEnd?.();
+      };
     }
     synth.speak(utterance);
   });
@@ -63,9 +69,11 @@ export function setSpeaker(next: Speaker): void {
   speaker = next;
 }
 
-/** Read this card out. Call it from a tap handler and nowhere else. */
-export function speak(card: SpokenCard): void {
-  speaker(card);
+/** Read this card out. Call it from a tap handler and nowhere else. `onEnd`, when given, is
+ *  called once the last line has been said (or on an error) — never when the phone had no
+ *  voice to say it with at all, since then nothing started. */
+export function speak(card: SpokenCard, onEnd?: () => void): void {
+  speaker(card, onEnd);
 }
 
 export function stopSpeaking(): void {

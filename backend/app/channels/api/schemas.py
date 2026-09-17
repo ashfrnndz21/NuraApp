@@ -2476,6 +2476,9 @@ class GrantOut(BaseModel):
     granted_at: datetime
     expires_at: datetime | None
     lines: list[str]
+    successor_waived_at: datetime | None = None
+    """Set only on a live chief key (#144): Pa's own word that she may leave with nobody
+    named after her."""
 
     @classmethod
     def of(cls, grant: Grant) -> GrantOut:
@@ -2489,6 +2492,7 @@ class GrantOut(BaseModel):
             granted_at=utc(grant.key.granted_at),
             expires_at=grant.expires_at,
             lines=grant.lines,
+            successor_waived_at=grant.key.successor_waived_at,
         )
 
 

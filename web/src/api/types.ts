@@ -871,12 +871,17 @@ export interface ProviderOut {
   address: string | null;
 }
 
+/** The body-systems map's own short list (#175, `app.memory.models.BodySystem`): never
+ *  inferred, only what an episode's own tags said. */
+export type BodySystem = "head" | "heart" | "lungs" | "digestive" | "kidneys" | "joints" | "skin" | "general";
+
 export interface EpisodeOut {
   episode_id: string;
   kind: string;
   label: string;
   opened_at: string;
   closed_at: string | null;
+  body_systems: BodySystem[];
 }
 
 export interface VisitOut {

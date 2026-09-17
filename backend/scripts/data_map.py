@@ -219,6 +219,7 @@ CLASSES: dict[str, str] = {
     "fact.superseded_at": OPERATIONAL,
     "fact.confirmed_by_person_id": IDENTIFIER,
     "episode.kind": HEALTH,
+    "episode.body_systems": HEALTH,
     "episode.label": HEALTH,
     "episode.opened_at": HEALTH,
     "episode.closed_at": HEALTH,

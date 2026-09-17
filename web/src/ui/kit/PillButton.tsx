@@ -10,6 +10,10 @@ interface PillButtonProps {
    *  "I'm not feeling well" and nothing else. quiet: a word in Plum, no outline. */
   variant?: PillVariant;
   icon?: IconName;
+  /** A mark in place of a stock icon — the brand mark on Hear (docs/brand/BRAND.md §8), which
+   *  is the assistant's face, not one more line-icon glyph. Takes the icon's place; a button
+   *  never carries both. */
+  mark?: ComponentChildren;
   /** As wide as its words, not the tile: Hear beside a source line. */
   compact?: boolean;
   disabled?: boolean;
@@ -27,11 +31,11 @@ const VARIANT_CLASS: Record<PillVariant, string | null> = {
 
 /** The pill button (docs/design-system.md §4). Full width in the patient's density, never
  *  under the target height. The icon, when there is one, sits beside its word. */
-export function PillButton({ onClick, children, variant = "secondary", icon, compact, disabled, label, testId, pressed }: PillButtonProps): JSX.Element {
+export function PillButton({ onClick, children, variant = "secondary", icon, mark, compact, disabled, label, testId, pressed }: PillButtonProps): JSX.Element {
   const classes = ["pill", VARIANT_CLASS[variant], compact && "compact"].filter(Boolean).join(" ");
   return (
     <button type="button" class={classes} onClick={onClick} disabled={disabled} aria-label={label} aria-pressed={pressed} data-testid={testId} data-variant={variant}>
-      {icon && <Icon name={icon} />}
+      {mark ?? (icon && <Icon name={icon} />)}
       <span class="pill-word">{children}</span>
     </button>
   );
