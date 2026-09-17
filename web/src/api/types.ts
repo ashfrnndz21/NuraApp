@@ -581,7 +581,8 @@ export type DocumentKind =
   | "insurance_letter"
   | "device_screen"
   | "not_health"
-  | "unknown";
+  | "unknown"
+  | "unsupported_file_type";
 
 /** Where an imported PDF came from, in the backend's words (E02-03). */
 export type DocumentSource = "portal" | "email" | "share";

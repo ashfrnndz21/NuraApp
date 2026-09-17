@@ -3,23 +3,38 @@ a photo or a PDF into the same shape the fixture answers with — a document kin
 fields with confidence — behind the same port (`app.ingestion.extract.Extractor`). Nothing
 above this file, or `FixtureExtractor` beside it, changes.
 
-Residency (ADR 0008). Anthropic's first-party API processes in the US or globally, never in
-SG or MY. This adapter may only run where every byte it is shown is test data by declaration:
-a demo (`NURA_DEMO_MODE=1`). `extractor_for` (`app.ingestion.extract_provider`) refuses to
-build it otherwise, and that refusal is the whole of this adapter's residency story — an
-in-region provider is a later adapter behind the same port, and this file does not need to
+Demo only (ADR 0017). Anthropic's first-party API processes in the US or globally, never in
+SG or MY, and no in-region provider exists yet. This adapter is a runtime feature that may
+only run where every byte it is shown is demo or test data: a declared demo
+(`NURA_DEMO_MODE=1`). `extractor_for` (`app.ingestion.extract_provider`) refuses to build it
+otherwise, and that refusal is the whole of this adapter's residency story — a real patient's
+bytes never reach it. ADR 0008 (demo mode) is not this adapter's residency authority: it
+authorises a deployment running on fixtures, and free text on it can still carry real
+information (ADR 0008 "Consequences"); ADR 0017 is what actually admits a US-processing
+adapter, and only for these Claude-backed runtime features, only under the demo declaration.
+An in-region provider is a later adapter behind the same port, and this file does not need to
 change for it to arrive.
 
 What the model is asked for is exactly `ExtractedField`'s shape, as a JSON schema
 (`output_config`, not the deprecated `output_format`): a document kind, an optional date on
 the paper, and a list of fields, each a subject, an attribute, a value, a unit, a confidence
-from nought to one, and whether it was seen but could not be read. `stop_reason` is checked
-before any content is read — `"refusal"` reads as the honest "could not read this page" every
-other adapter gives, `Extraction.nothing()`, the same answer for a response that does not
-parse as the schema asks. A field whose confidence the model cannot be trusted on — missing,
-out of range, or of the wrong type — is kept at confidence 0.0 rather than invented: below
-`CONFIDENCE_THRESHOLD` it is held for the person's confirmation exactly as a genuinely unsure
-read would be, never silently promoted.
+from nought to one, which page it was read on, and whether it was seen but could not be read.
+`stop_reason` is checked before any content is read: `"refusal"` reads as the honest "could
+not read this page" every other adapter gives, `Extraction.nothing()`; `"max_tokens"` is the
+same answer, logged as its own case rather than falling through to the parse failure it would
+otherwise masquerade as — a page that overran the budget was truncated mid-answer, not one
+the model declined. A response that does not parse as the schema asks reads the same way. A
+field whose confidence the model cannot be trusted on — missing, out of range, or of the
+wrong type — is kept at confidence 0.0 rather than invented: below `CONFIDENCE_THRESHOLD` it
+is held for the person's confirmation exactly as a genuinely unsure read would be, never
+silently promoted.
+
+A file of a kind this reader cannot open at all — today, `image/heic`, which the route
+accepts but the model does not — is never sent, and is not `Extraction.nothing()`: that
+answer is for a page that was looked at and not made out, and reusing it here would tell the
+person to retake a photo that will fail again in exactly the same way. It is
+`Extraction.unsupported_file_type()`, logged as its own case, so the card above can say what
+is actually true.
 
 Never logged: document bytes, the prompt, or the model's answer. A log line here says only
 that a call happened, and how it ended.
@@ -45,20 +60,31 @@ from app.ingestion.extract import (
     NotAFieldCode,
     NotAPage,
     NotAValue,
+    Span,
 )
+from app.llm.prompts import load_prompt
 
 log = logging.getLogger("nura.ingestion.claude_extract")
 
 MODEL: Final = "claude-opus-5"
-MAX_TOKENS: Final = 4096
+MAX_TOKENS: Final = 8192
+"""Enough for a full multi-page discharge letter's fields as JSON; a page that still overruns
+this is a truncated answer, handled as its own case (`stop_reason == "max_tokens"`), not a
+schema failure."""
 
 _PDF_TYPE = "application/pdf"
-_IMAGE_TYPES = frozenset({"image/jpeg", "image/png"})
+_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+"""What this reader can open, of what the route accepts (`app.ingestion.photos.
+PHOTO_CONTENT_TYPES`). `image/heic` is accepted by the route and not by this reader — see
+the module docstring — and is refused, not silently sent nowhere and not misread as a page
+that was looked at."""
+_UNOPENABLE_TYPES = frozenset({"image/heic"})
+"""Kinds the route accepts that this reader is never handed to the model at all."""
 
 _FIELD_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["subject", "attribute", "value", "unit", "confidence", "unreadable"],
+    "required": ["subject", "attribute", "value", "unit", "confidence", "unreadable", "page"],
     "properties": {
         "subject": {
             "type": "string",
@@ -90,6 +116,12 @@ _FIELD_SCHEMA: Final[dict[str, Any]] = {
             "description": "True for a field you can see is on the page but cannot make out — "
             "value must then be null. Never guess a value to avoid this.",
         },
+        "page": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Which page of the document this field was read on, counting from "
+            "1. A single photo is always 1.",
+        },
     },
 }
 
@@ -114,27 +146,9 @@ _SCHEMA: Final[dict[str, Any]] = {
     },
 }
 
-_SYSTEM_PROMPT = """You read one page of a family's health paperwork: a lab report, a \
-medicine label, a hospital discharge letter, a clinic slip, a handwritten prescription, an \
-insurance letter, or something that turns out not to be a health paper at all.
-
-Answer only with what the page itself says. Never infer, round, average or complete a value \
-you cannot actually read; a field you can see but cannot make out is `unreadable` with no \
-value, not a guess. Never give clinical advice, a diagnosis, or an instruction to start, \
-stop or change a medicine — you are reading a page, not treating anyone; that boundary is \
-enforced elsewhere and is not your concern here.
-
-Use short lower_snake_case codes for `subject` and `attribute` (English, even when the page \
-is in Malay or Chinese), the way a structured record would: a medicine's fields are subject \
-"medicine", attribute one of "name", "strength", "dose", "quantity", "dispensed_at", \
-"prescriber"; a lab panel's fields are subject the panel's name (e.g. "lipid_panel", \
-"full_blood_count"), attribute the analyte (e.g. "ldl", "hdl", "hba1c"). Keep a value short — \
-a number, a short string, an ISO date, or a small structure — never a paragraph.
-
-Give every field its own honest confidence from 0 to 1. A number you read clearly on a \
-printed line is high confidence; a handwritten or smudged value, an inference from context, \
-or anything you are not sure of is low confidence — never invent a high number to seem \
-useful. When you are not sure what confidence to give a field, give it a low one."""
+_SYSTEM_PROMPT: Final = load_prompt("extract_document")
+"""`app/llm/prompts/extract_document.txt` (`backend/CLAUDE.md`: prompts are files, not
+strings in code)."""
 
 
 def _user_prompt(hints: Hints) -> str:
@@ -179,6 +193,18 @@ def _confidence_of(entry: Mapping[str, Any]) -> float:
     return float(confidence)
 
 
+def _span_of(entry: Mapping[str, Any]) -> Span | None:
+    """The field's page, as a span (E02-03): no bounding box is asked of the model, only
+    which page — so the box is the whole page, honestly, rather than a location nobody read
+    off it. None when the model's `page` cannot be trusted as one (missing or not a positive
+    integer): the field still reaches the card, without a locator, exactly as it did before
+    this was asked."""
+    page = entry.get("page")
+    if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+        return None
+    return Span(x0=0.0, y0=0.0, x1=1.0, y1=1.0, page=page)
+
+
 def _field_from(entry: Mapping[str, Any]) -> ExtractedField | None:
     """One field of the model's answer, checked the way every extractor's fields are
     (`ExtractedField.checked`) — or None, when the model's answer for this one field cannot
@@ -196,11 +222,31 @@ def _field_from(entry: Mapping[str, Any]) -> ExtractedField | None:
             value=value,
             unit=None if unit is None else str(unit),
             confidence=_confidence_of(entry),
-            span=None,
+            span=_span_of(entry),
             unreadable=unreadable,
         ).checked()
-    except (NotAFieldCode, NotAValue, NotAConfidence, NotAPage):
+    except NotAFieldCode:
+        # No trustworthy code to label the field with at all: nothing to show a person.
         return None
+    except (NotAValue, NotAConfidence, NotAPage):
+        # `checked()` validates subject and attribute before value, confidence or page
+        # (see its body), so reaching here means those two are already good codes — the
+        # value, confidence or page is what could not be trusted. Kept as a field a person
+        # can see and type in, not dropped: a misread page must not look emptier than it
+        # is (`app.errors.Refusal` is a data problem here, not a reason to hide the line).
+        log.warning(
+            "claude extractor: a field's value, confidence or page did not check out; "
+            "kept as unreadable rather than dropped"
+        )
+        return ExtractedField(
+            subject=subject,
+            attribute=attribute,
+            value=None,
+            unit=None,
+            confidence=0.0,
+            span=None,
+            unreadable=True,
+        ).checked()
 
 
 def _extraction_from_payload(payload: Mapping[str, Any]) -> Extraction:
@@ -227,15 +273,26 @@ class ClaudeExtractor:
     """Reads a photo or a PDF with Claude. See the module docstring for the residency and
     confidence rules `extractor_for` and this class hold to."""
 
+    external_processor: str | None = "anthropic"
+    """Every call sends the page's bytes to Anthropic's first-party API (see the module
+    docstring): `app.ingestion.review.review_artifact` reads this to write the audit line
+    a fixture read never needs."""
+
     def __init__(self, client: AsyncAnthropic) -> None:
         self._client = client
 
     async def extract(self, data: bytes, content_type: str, hints: Hints) -> Extraction:
-        block = _content_block(data, content_type.strip().lower())
+        kind = content_type.strip().lower()
+        if kind in _UNOPENABLE_TYPES:
+            # Accepted by the route (`app.ingestion.photos.PHOTO_CONTENT_TYPES`), never sent
+            # here: this reader cannot open it at all, so the honest answer is "never
+            # looked", not "looked and could not read" (`Extraction.nothing()` would tell the
+            # person to retake a photo that will fail again the same way).
+            log.info("claude extractor: %s is accepted by the route, not by this reader", kind)
+            return Extraction.unsupported_file_type()
+        block = _content_block(data, kind)
         if block is None:
-            # The honest answer a real recogniser gives for a kind of file it does not
-            # handle at all — the same answer FixtureExtractor gives for bytes it does not
-            # know.
+            log.info("claude extractor: %s is not a kind this reader was ever asked to open", kind)
             return Extraction.nothing()
 
         # The SDK's `MessageParam`/content-block TypedDicts are precise unions that plain
@@ -257,6 +314,12 @@ class ClaudeExtractor:
         if message.stop_reason == "refusal":
             log.info("claude extractor: the model refused to read this page")
             return Extraction.nothing()
+        if message.stop_reason == "max_tokens":
+            # Truncated mid-answer, not declined: the honest answer is still "could not read
+            # this page" (the page was looked at), but logged as its own case rather than
+            # falling into the JSON-parse failure below, which it would only resemble.
+            log.warning("claude extractor: the model's answer was cut off at max_tokens")
+            return Extraction.nothing()
 
         try:
             text = message.content[0].text  # type: ignore[union-attr]
@@ -271,6 +334,14 @@ class ClaudeExtractor:
             ValueError,
             KeyError,
             json.JSONDecodeError,
-        ):
-            log.warning("claude extractor: the model's answer did not match the schema asked")
+        ) as malformed:
+            # Never the content, never the prompt — but the exception's own class and
+            # message name what broke (a missing key, a bad enum value), so this case
+            # stays distinguishable from a genuine bug in the ones above it in the log,
+            # rather than every unexpected shape reading as the identical silent line.
+            log.warning(
+                "claude extractor: the model's answer did not match the schema asked (%s: %s)",
+                type(malformed).__name__,
+                malformed,
+            )
             return Extraction.nothing()

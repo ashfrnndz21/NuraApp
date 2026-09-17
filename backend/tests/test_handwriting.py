@@ -239,6 +239,8 @@ async def test_typing_needs_the_record_and_is_on_the_trail(
 class _Listening:
     """The fixture extractor, remembering the hints it was given."""
 
+    external_processor: str | None = None
+
     def __init__(self) -> None:
         self.inner = FixtureExtractor(PAPER)
         self.heard: list[Hints] = []
