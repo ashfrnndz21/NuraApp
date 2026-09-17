@@ -74,7 +74,14 @@ async function showDemoBanner(page: Page): Promise<void> {
 async function notUnderTheBanner(page: Page): Promise<string[]> {
   await expect(page.locator(".demo-banner")).toBeVisible();
   return page.evaluate(() => {
+    // The shell's page scrolls in its own region (D1), not the window — the same fact
+    // `underTheTabBar` (helpers.ts) already scrolls by. A check run right before this one
+    // (`nothingDrawnOverLines`) brings each line and control to the centre of the screen in
+    // turn, and can leave that region scrolled to wherever its last control was; `window.scrollTo`
+    // never reaches it, so the top of the card can still be scrolled out of view here even
+    // though nothing is actually drawn over it.
     window.scrollTo(0, 0);
+    document.querySelector<HTMLElement>('[data-testid="shell-scroll"]')?.scrollTo(0, 0);
     const bottom = document.querySelector(".demo-banner")?.getBoundingClientRect().bottom ?? 0;
     const problems: string[] = [];
     for (const line of document.querySelectorAll<HTMLElement>("[data-testid=what-to-do-lines] p")) {

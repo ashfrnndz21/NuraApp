@@ -708,7 +708,12 @@ export async function nothingDrawnOverLines(
         problems.push(`smaller than ${minTarget} by ${minTarget}: ${name} (${Math.round(box.width)}×${Math.round(box.height)})`);
       }
     }
+    // `clear()` brings each line and control to the centre of the screen in turn, which can
+    // leave the shell's own scroll region (D1: the page scrolls in its own region, not the
+    // window) sitting wherever the last one needed. Reset both, so a check run straight after
+    // this one starts from the top the way this one did.
     window.scrollTo(0, 0);
+    document.querySelector<HTMLElement>('[data-testid="shell-scroll"]')?.scrollTo(0, 0);
     return problems;
   }, settings);
 }
