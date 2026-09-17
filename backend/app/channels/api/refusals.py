@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from app.audit.trail import NotTheirsToRead
 from app.channels.api.consent_words import NoWordsInThatLanguage
+from app.channels.api.health_tab import NoSuchMetric
 from app.channels.api.profiles import NoSuchHolder
 from app.channels.safety_strings import NotPlainWords as CatalogueNotPlainWords
 from app.channels.whatsapp.group import NoFamilyGroup, NotTheirsToOpen
@@ -44,6 +45,7 @@ from app.delivery.triggers.rules import AlertsGoEveryWay
 from app.delivery.voice import NoVoiceFor, TooLongToSay
 from app.demo import NotInTheDemo
 from app.errors import Refusal
+from app.family.calls import LinkTooLong, NoSuchCall
 from app.family.common import NotAChief, NotPlainWords
 from app.family.documents import DocumentTooLarge, NotADocument
 from app.family.photos import NoSuchPhoto, NotAPhoto, NotTheirsToTakeBack
@@ -125,6 +127,8 @@ from app.language.review import (
     NotStaff,
     SourceAlreadyListed,
 )
+from app.lifestyle.food import NotAFoodEntry
+from app.lifestyle.metrics import NotAWholeMetric
 from app.medicines.reorder import NobodyToAsk, NotACount
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange, TapNotToday
 from app.medicines.story import NoSuchStoryPart
@@ -222,6 +226,11 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (WouldWiden, 403),
     (KeyNotAsAgreed, 403),
     (NotOnThisProfile, 403),
+    # A call with a family member (design-direction.md, Connect's "Upcoming Call"): the
+    # owner's and his chief's, like the roster and the tasks; one not on the calendar.
+    (NoSuchCall, 404),
+    # A metric row or logged entry not on this profile (Health Overview, food intake).
+    (NoSuchMetric, 404),
     (NoSuchSlot, 404),
     (NoSuchTask, 404),
     (NoSuchTaskForCard, 404),
@@ -413,6 +422,12 @@ _SHAPE: tuple[type[Refusal], ...] = (
     # He said no to WhatsApp at the key-accept step (#163): Nura starts nothing with that
     # person on it, a red-flag notice included.
     SaidNoToWhatsApp,
+    # A metric he logs (steps, heart rate, sleep, water) or a meal: a number in range, at a
+    # moment not later than now, and never both a value and a skip; a call link too long to
+    # be a link.
+    NotAWholeMetric,
+    NotAFoodEntry,
+    LinkTooLong,
 )
 """Named so that a reader of this file sees every family and timeline refusal; each is a
 400."""
