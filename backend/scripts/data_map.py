@@ -97,6 +97,9 @@ CLASSES: dict[str, str] = {
     "scheduled_push.id": HEALTH,
     "document.id": HEALTH,
     "roster_slot.id": IDENTIFIER,
+    # A call with a family member (design-direction.md, Connect's "Upcoming Call"): who and
+    # when, like the roster slot it sits beside — not health content of its own.
+    "scheduled_call.id": IDENTIFIER,
     "privacy.id": CONSENT,
     "trend_card.id": HEALTH,
     "routine.id": HEALTH,
@@ -691,6 +694,13 @@ CLASSES: dict[str, str] = {
     "roster_slot.added_by_person_id": IDENTIFIER,
     "roster_slot.added_at": OPERATIONAL,
     "roster_slot.ended_at": OPERATIONAL,
+    "scheduled_call.with_person_id": IDENTIFIER,
+    "scheduled_call.scheduled_at": OPERATIONAL,
+    "scheduled_call.call_link": OPERATIONAL,
+    "scheduled_call.label": OPERATIONAL,
+    "scheduled_call.added_by_person_id": IDENTIFIER,
+    "scheduled_call.added_at": OPERATIONAL,
+    "scheduled_call.cancelled_at": OPERATIONAL,
     # A message a chief composed to him: her words, the State she composed against, and the
     # boundary column every rendered row has (empty here: her words infer nothing).
     "scheduled_push.composed_by_person_id": IDENTIFIER,

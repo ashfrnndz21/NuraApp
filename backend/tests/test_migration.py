@@ -34,7 +34,14 @@ from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
 from app.delivery.nudges.models import Nudge, NudgeResponse
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder
-from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
+from app.family.models import (
+    Document,
+    RosterSlot,
+    ScheduledCall,
+    ScheduledPush,
+    Task,
+    ThreadMessage,
+)
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.connectors.models import AppointmentProposal, Connector
 from app.ingestion.models import (
@@ -163,6 +170,7 @@ TABLES: tuple[Table, ...] = (
     ConsultSegment.__table__,
     Policy.__table__,
     InsuranceClaim.__table__,
+    ScheduledCall.__table__,
     DoseQuestion.__table__,
 )
 
