@@ -50,9 +50,9 @@ def ring_words(taken: int, total: int, *, language: str | None, theirs: bool = F
     """"12 of 14" (or its Malay and Chinese words), a plain count, never a percentage or a
     grade — the ring shows a real number he can check against what he did, never a score."""
     lang = _in(language)
-    of_ = RING_OF[lang].format(total=total)
     if lang == "zh":
-        return f"{taken}{of_}"
+        return f"{taken}次，共{total}次"
+    of_ = RING_OF[lang].format(total=total)
     return f"{taken} {of_}"
 
 
@@ -96,9 +96,9 @@ blank (docs/recommendation-engine.md, the absence rule)."""
 
 # @patient phrase
 METRIC_SKIPPED_THEIRS: Mapping[str, str] = {
-    "en": "{patient} wrote down none today",
-    "ms": "{patient} catat tiada hari ini",
-    "zh": "{patient}今天记录了没有",
+    "en": "{patient} said none today",
+    "ms": "{patient} kata tiada hari ini",
+    "zh": "{patient}今天说没有",
 }
 
 # @patient phrase
