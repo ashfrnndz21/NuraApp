@@ -110,9 +110,9 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
   await page.getByTestId("record-medicines").click();
   await page.getByTestId("add-medicine").click();
   await expect(page.getByTestId("add-photo")).toBeVisible();
-  await page.getByTestId("photo-input").setInputFiles({ name: "paracetamol.png", mimeType: "image/png", buffer: unknownPng() });
+  await page.getByTestId("photo-input").setInputFiles({ name: "metformin.png", mimeType: "image/png", buffer: unknownPng() });
   await expect(page.getByTestId("add-label")).toBeVisible();
-  await page.getByLabel("The name on the label").fill("paracetamol");
+  await page.getByLabel("The name on the label").fill("metformin");
   await page.getByLabel("How strong it is").fill("500 mg");
   await page.getByLabel("How to take it").fill("1 tab OD");
   await page.getByLabel("How many are in the box").fill("20");
@@ -125,7 +125,7 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
   const fresh = (await (await request.get(`${API}/profiles/${pa.profileId}/emergency-card?language=en`, auth(pa.token))).json()) as {
     lines: { text: string }[];
   };
-  const line = fresh.lines.map((each) => each.text).find((text) => text.toLowerCase().includes("paracetamol"));
+  const line = fresh.lines.map((each) => each.text).find((text) => text.toLowerCase().includes("metformin"));
   expect(line, JSON.stringify(fresh.lines)).toBeDefined();
 
   // Offline from here on: what the phone kept is all there is left to read.
