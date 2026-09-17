@@ -511,7 +511,7 @@ async def test_a_viewer_key_reads_neither_the_feeling_note_nor_its_question(
     assert note is not None and note.appointment_id == appointment.id
 
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6592220002")
-    await agree_to_family_sharing(sg, context, mei, scopes=set(ROLE_SCOPES[KeyRole.VIEWER]))
+    await agree_to_family_sharing(sg, context, mei, scopes=set(ROLE_SCOPES[KeyRole.VIEWER]), role=KeyRole.VIEWER)
     await grant_key(
         sg, context=context, holder=mei, role=KeyRole.VIEWER, scopes=ROLE_SCOPES[KeyRole.VIEWER]
     )
@@ -593,7 +593,7 @@ async def test_a_key_without_medicines_cannot_remove_a_feeling_question_it_canno
     # satisfies `written_scope`) but not the note's own `new_medicine` reason.
     hana = await register_person(sg, region=Region.SG, display_name="Hana", phone_e164="+6592220003")
     caregiver_scopes = set(ROLE_SCOPES[KeyRole.CAREGIVER]) - {Scope.MEDICINES}
-    await agree_to_family_sharing(sg, context, hana, scopes=caregiver_scopes)
+    await agree_to_family_sharing(sg, context, hana, scopes=caregiver_scopes, role=KeyRole.CAREGIVER)
     await grant_key(sg, context=context, holder=hana, role=KeyRole.CAREGIVER, scopes=caregiver_scopes)
     caregiver = await resolve_key_context(
         sg, region=Region.SG, person_id=hana.id, profile_id=context.profile_id

@@ -29,7 +29,7 @@ def test_signals_is_a_preference_subject() -> None:
 
 async def _grant(deployment: Deployment, owner: dict[str, str], profile_id: str, phone: str, role: str) -> dict[str, str]:
     holder = await register_by_phone(deployment, phone, "Mei")
-    await let_in(deployment, owner, profile_id, phone, EVERY_PART, relationship="daughter")
+    await let_in(deployment, owner, profile_id, phone, EVERY_PART, relationship="daughter", role=role)
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": role},
