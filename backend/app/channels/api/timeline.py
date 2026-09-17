@@ -69,7 +69,8 @@ from app.memory.timeline import MAX_PAGE, PAGE_SIZE, episode_view, language_for,
 from app.memory.working import open_episode
 from app.reasoning.feelings.service import record_tap
 from app.safety.red_flags import detect
-from app.search.ask import AskStep, recall, recall_stream
+from app.search.ask import AskStep, recall
+from app.search.asker import AnswerDelta
 from app.search.narrate import NarratedStep, Narrator
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
@@ -358,9 +359,14 @@ async def _step_event(
 async def ask_stream(body: AskIn, request: Request, context: Context) -> StreamingResponse:
     """`POST /{id}/ask`, streamed (docs/design-direction.md 'Conversation, waiting and
     thinking'): a `step` event the instant each real part of his record is read
-    (`recall_stream`), then an `answer` event — the same `AnswerOut` the plain route gives.
-    The red-flag path is unchanged and streams nothing: it is answered before any part of the
-    record is looked up, same as `ask` above, so there is nothing to trace.
+    (`outside.asker.ask_stream` — the rule-based retriever by default, or the agent asker on a
+    declared demo, `NURA_ASKER=claude`), zero or more `answer_delta` events as the agent
+    asker's own finished answer is sent (never sent by the rule-based one, whose answer has
+    always arrived whole), then an `answer` event — the same `AnswerOut` the plain route gives.
+    An older web client that has never seen `answer_delta` simply ignores it and still gets
+    every `step` and the final `answer`, unchanged. The red-flag path is unchanged and streams
+    nothing: it is answered before any part of the record is looked up, same as `ask` above,
+    so there is nothing to trace.
 
     Opens its own session (`session_scope`), never `Depends(db)`: FastAPI closes a `yield`
     dependency the moment this function returns the `StreamingResponse` object, well before
@@ -392,7 +398,7 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                 reader = await reader_of(session, context, body.language)
                 steps_so_far: list[NarratedStep] = []
                 reached_out = False
-                async for event in recall_stream(
+                async for event in outside.asker.ask_stream(
                     session,
                     context=context,
                     question=body.question,
@@ -408,7 +414,9 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                             # that sends the trace's step ids and counts outside the region,
                             # distinct from the ASK read itself (ADR 0017, mirroring
                             # `app.ingestion.review.review_artifact`'s EXTERNAL_MODEL_PROCESSOR
-                            # line for the extractor).
+                            # line for the extractor). The agent asker's own reach, when it is
+                            # the one running, writes its own line the same way, inside
+                            # `ClaudeAsker.ask_stream` itself.
                             await record_audit(
                                 session,
                                 context=context,
@@ -420,6 +428,8 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                             )
                             reached_out = True
                         yield await _step_event(outside.narrator, steps_so_far, event, lang, reader)
+                    elif isinstance(event, AnswerDelta):
+                        yield _sse({"type": "answer_delta", "text": event.text})
                     else:
                         yield _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
         except Refusal as refusal:
