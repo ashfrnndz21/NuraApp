@@ -122,7 +122,13 @@ ladder stops on the Taken tap). Both are alerts, and both lapse after `FLAG_WIND
 class DeliverySettings(ProfileScoped, Base):
     """What a profile changed of the delivery defaults (`rules.RULES`): whether a quiet day's
     morning card is skipped, the quiet hours, and per type the channel list and the cap. The
-    times of his day are E10-01's routine, not kept here. A change is a new row."""
+    times of his day are E10-01's routine, not kept here. A change is a new row.
+
+    `for_person_id` is None for the profile's own default row (the owner's, changed by him
+    or his chief, E11-05) or a recipient's own (#144): quiet hours and channels differ per
+    person — Mei's weekdays, Kit's weekends — and each key holder may set theirs, resting on
+    the profile's default until they do. `app.delivery.triggers.preferences.current` reads a
+    recipient's own newest row first, and the profile's default only when they have none."""
 
     __tablename__ = "delivery_settings"
     __table_args__ = (_row_of_profile("delivery_settings"),)
@@ -133,6 +139,9 @@ class DeliverySettings(ProfileScoped, Base):
     quiet_until: Mapped[time | None] = mapped_column(Time, default=None)
     channels: Mapped[dict[str, list[str]]] = mapped_column(JSON, default=dict)
     caps: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
+    for_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None, index=True
+    )
     set_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     set_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 

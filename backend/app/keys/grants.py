@@ -44,6 +44,21 @@ class NothingToNarrow(Refusal):
     """The key already opens exactly this, for exactly this long."""
 
 
+class NotTheirKeyToLeave(Refusal):
+    """A key closes on its own holder's word when it is his to close (#144). Nobody leaves on
+    anybody else's key, whatever role they hold."""
+
+
+class ChiefMustNameSuccessor(Refusal):
+    """A chief leaving must name who takes it up next, or rest on Pa's own word that there
+    will be none (`waive_successor`), so the family is never left without a chief silently."""
+
+
+class SuccessorMustAlreadyHoldAKey(Refusal):
+    """The next chief is someone already in the family — a key holder promoted, not a
+    stranger named in passing on the way out."""
+
+
 async def may_cut_keys(session: AsyncSession, context: KeyContext) -> None:
     """Only the owner or a chief holding the family scope. A refusal is written down.
 
@@ -245,6 +260,120 @@ async def narrow_key(
     await consume_confirmation(session, context, confirmation_id, draft)
     key.scopes = sorted(scope.value for scope in asked)
     key.expires_at = ends_at
+    await session.flush()
+    await record(
+        session,
+        context=context,
+        action=Action.WRITE,
+        scope=Scope.FAMILY,
+        target=Key.__tablename__,
+        target_id=key.id,
+        rows=1,
+    )
+    return key
+
+
+async def waive_successor(session: AsyncSession, *, context: KeyContext, key_id: uuid.UUID) -> Key:
+    """Pa's own word, before his chief leaves with nobody named after her (#144): there will
+    be no chief on this profile until he names one again.
+
+    Only the owner says this — a chief cannot waive it for herself, which is the whole
+    point — and only about a live chief key. It stands until a successor is named or this is
+    said again about a later chief; leaving with a named successor never needs it.
+    """
+    if not context.is_owner:
+        raise NotTheirKeyToCut("only Pa says there will be no next chief")
+    moment = utcnow()
+    key = await session.get(Key, key_id)
+    if key is None or key.profile_id != context.profile_id:
+        raise NoKeyToClose(f"no key {key_id} on profile {context.profile_id}")
+    if key.role is not KeyRole.CHIEF or not key.is_active(moment):
+        raise NoKeyToClose("only a live chief key needs this word")
+    key.successor_waived_at = moment
+    key.successor_waived_by_person_id = context.person_id
+    await session.flush()
+    await record(
+        session,
+        context=context,
+        action=Action.WRITE,
+        scope=Scope.FAMILY,
+        target=Key.__tablename__,
+        target_id=key.id,
+        rows=1,
+    )
+    return key
+
+
+async def leave_key(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    key_id: uuid.UUID,
+    successor_person_id: uuid.UUID | None = None,
+) -> Key:
+    """A holder closes their own key (#144): Pa let them in; they let themselves out.
+
+    Self-authorised, unlike `revoke_key`: the only thing asked of the caller is that this is
+    their own key, named in their own context, so a viewer or a caregiver with no family
+    scope at all may still leave without anybody else's say-so. The row stays, the way any
+    closed key's does, so Pa can still read that it was held; his trail carries the leaving
+    like any other write to his keys, in the leaver's own name.
+
+    A chief's key is the one exception. Closing it can leave the family's escalation ladder
+    with nobody at the top, so it takes one more thing first: another holder named as the
+    next chief — promoted here, on the leaving chief's own still-live authority, before her
+    own key closes — or Pa's own word that there will be none (`waive_successor`). Neither
+    one: the leave is refused, on the trail, and nothing closes.
+    """
+    moment = utcnow()
+    key = await session.get(Key, key_id)
+    if key is None or key.profile_id != context.profile_id:
+        raise NoKeyToClose(f"no key {key_id} on profile {context.profile_id}")
+    if context.key_id != key.id or key.holder_person_id != context.person_id:
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.FAMILY,
+            target=Key.__tablename__,
+            target_id=key.id,
+            outcome=Outcome.REFUSED,
+            refused_because=NotTheirKeyToLeave.__name__,
+        )
+        raise NotTheirKeyToLeave("a key closes on its own holder's word")
+    if not key.is_active(moment):
+        raise NoKeyToClose("this key is already closed")
+    if key.role is KeyRole.CHIEF:
+        if successor_person_id is not None:
+            if successor_person_id == context.person_id:
+                raise ChiefMustNameSuccessor("the next chief is someone other than her")
+            candidates = await audited_read(
+                session, Key, context, Scope.FAMILY, where=(Key.holder_person_id == successor_person_id,)
+            )
+            if not any(candidate.is_active(moment) for candidate in candidates):
+                raise SuccessorMustAlreadyHoldAKey(
+                    f"person {successor_person_id} holds no live key on profile {context.profile_id}"
+                )
+            successor = await session.get(Person, successor_person_id)
+            assert successor is not None, "a live key names a real person"
+            # Promoted while she is still the chief: `grant_key` asks the same authority
+            # this key is about to give up, and it is hers to spend until it closes below.
+            await grant_key(session, context=context, holder=successor, role=KeyRole.CHIEF)
+        elif key.successor_waived_at is None:
+            await record(
+                session,
+                context=context,
+                action=Action.WRITE,
+                scope=Scope.FAMILY,
+                target=Key.__tablename__,
+                target_id=key.id,
+                outcome=Outcome.REFUSED,
+                refused_because=ChiefMustNameSuccessor.__name__,
+            )
+            raise ChiefMustNameSuccessor(
+                "name the next chief, or ask Pa to say there will be none"
+            )
+    key.revoked_at = moment
     await session.flush()
     await record(
         session,

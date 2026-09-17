@@ -864,6 +864,10 @@ class KeyOut(BaseModel):
     revoked_at: datetime | None
     holder_display_name: str | None = None
     """Who holds it, by name, for the owner reading his own keys: the person to call."""
+    successor_waived_at: datetime | None = None
+    """Set only on a live chief key (#144): Pa's own word that she may leave with nobody
+    named after her. None otherwise, and None once a successor is named — leaving with one
+    never needs it."""
 
     @classmethod
     def of(cls, key: Key, holder_display_name: str | None = None) -> KeyOut:
@@ -879,7 +883,16 @@ class KeyOut(BaseModel):
             granted_at=key.granted_at,
             expires_at=key.expires_at,
             revoked_at=key.revoked_at,
+            successor_waived_at=key.successor_waived_at,
         )
+
+
+class LeaveIn(BaseModel):
+    """A holder closing their own key (#144). A chief's leave names the next chief —
+    another key holder, promoted before hers closes — unless Pa has already said there will
+    be none (`POST …/keys/{key_id}/no-successor`); nothing else needs this at all."""
+
+    successor_person_id: uuid.UUID | None = None
 
 
 # --- the audit trail ---------------------------------------------------------------------

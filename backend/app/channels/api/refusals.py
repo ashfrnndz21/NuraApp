@@ -98,7 +98,15 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
 from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
 from app.keys.context import AccountClosing, NoKey, OutOfScope
-from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
+from app.keys.grants import (
+    ChiefMustNameSuccessor,
+    NoKeyToClose,
+    NothingToNarrow,
+    NotTheirKeyToCut,
+    NotTheirKeyToLeave,
+    SuccessorMustAlreadyHoldAKey,
+    WouldWiden,
+)
 from app.language.review import (
     AlreadyReviewed,
     NoSuchReviewItem,
@@ -163,6 +171,9 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (OutOfRegion, 403),
     (NotTheirsToRead, 403),
     (NotTheirKeyToCut, 403),
+    (NotTheirKeyToLeave, 403),
+    (ChiefMustNameSuccessor, 409),
+    (SuccessorMustAlreadyHoldAKey, 409),
     (NoSuchHolder, 403),
     # A key that reads the visits does not write them; same footing as the medicines.
     (NotTheirsToChangeVisits, 403),

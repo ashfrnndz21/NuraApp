@@ -58,6 +58,7 @@ from app.channels.api.schemas import (
     KeyChangeConfirmIn,
     KeyGrant,
     KeyOut,
+    LeaveIn,
     MedicineConfirmIn,
     NoteIn,
     NoteOut,
@@ -122,7 +123,15 @@ from app.ingestion.review import review_draft_for
 from app.insurance.insurer import insurer_draft, may_set_insurer
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext, only_the_owner_while_closing, resolve_key_context
-from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
+from app.keys.grants import (
+    grant_key,
+    key_change_draft_for,
+    leave_key,
+    list_keys,
+    may_cut_keys,
+    revoke_key,
+    waive_successor,
+)
 from app.keys.scopes import Scope
 from app.medicines.reorder import count_correction_draft_for, order_draft_for
 from app.medicines.service import draft_for
@@ -537,6 +546,24 @@ async def revoke(key_id: uuid.UUID, request: Request, context: Context, session:
     # A key closed is a person out of the family's WhatsApp group, now (E11-01).
     await sync_group(session, context=context, provider=providers_of(request).whatsapp)
     return KeyOut.of(closed)
+
+
+@router.post("/{profile_id}/keys/{key_id}/leave")
+async def leave(key_id: uuid.UUID, body: LeaveIn, request: Request, context: Context, session: Db) -> KeyOut:
+    """A holder closes their own key (#144): the door `revoke` cannot open for herself, since
+    that one asks the family scope; this one asks only that the key named is hers."""
+    closed = await leave_key(
+        session, context=context, key_id=key_id, successor_person_id=body.successor_person_id
+    )
+    # Leaving is a person out of the family's WhatsApp group, the same as being closed (E11-01).
+    await sync_group(session, context=context, provider=providers_of(request).whatsapp)
+    return KeyOut.of(closed)
+
+
+@router.post("/{profile_id}/keys/{key_id}/no-successor")
+async def no_successor(key_id: uuid.UUID, context: Context, session: Db) -> KeyOut:
+    """Pa's own word that his chief may leave with nobody named after her (#144). His alone."""
+    return KeyOut.of(await waive_successor(session, context=context, key_id=key_id))
 
 
 # --- consent -----------------------------------------------------------------------------

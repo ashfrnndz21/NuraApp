@@ -34,6 +34,14 @@ class Key(ProfileScoped, Base):
     granted_at: Mapped[datetime] = mapped_column(default=utcnow)
     expires_at: Mapped[datetime | None] = mapped_column(default=None)
     revoked_at: Mapped[datetime | None] = mapped_column(default=None)
+    # Set only on a live chief key, only by the owner (`app.keys.grants.waive_successor`,
+    # #144): his own word that the family may be left with no chief when this one leaves,
+    # so her leaving does not wait on a successor being named. None on every other key, and
+    # on a chief key nobody has said this about yet.
+    successor_waived_at: Mapped[datetime | None] = mapped_column(default=None)
+    successor_waived_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
 
     @property
     def scopes_held(self) -> frozenset[Scope]:
