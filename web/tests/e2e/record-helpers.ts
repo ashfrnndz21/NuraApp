@@ -162,7 +162,7 @@ export async function signInAs(page: Page, person: Pick<Person, "phone">, name: 
 /** The Record's first screen from the tab bar. One tab set for everyone (D1, the reset): the
  *  Papers tab opens the Record's own first screen in either density. */
 export async function openRecord(page: Page): Promise<void> {
-  await page.getByTestId("tab-records").click();
+  await page.getByTestId("tab-health").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
 }
 

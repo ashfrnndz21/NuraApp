@@ -16,10 +16,10 @@ import {
   clockWords,
   lineTitle,
   dateLine,
-  dayMonthLine,
   dueCards,
   feedLines,
   greeting,
+  heroFurnitureAllowed,
   homeHero,
   nearestToRunOut,
   readingLead,
@@ -32,7 +32,9 @@ import {
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
-import { Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, PanelList, PaperTile, PillButton, SectionLabel, Sparkline, toneOf } from "../ui/kit";
+import { Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, IconBadge, PanelList, PillButton, SectionLabel, Sparkline, TintCard, toneOf } from "../ui/kit";
+import { CoupleIllustration } from "../ui/illustrations";
+import { AddReport, CheckInCard, DoGrid, HomeSkeleton, Upcoming } from "./HomeParts";
 import { AskField, Shell } from "./Shell";
 import { ChiefPanels } from "./ChiefPanels";
 
@@ -54,12 +56,19 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const locale = LOCALE[language.value];
   const name = papers?.display_name || me.value?.display_name || "";
   const hero = page?.hero ?? null;
+  // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
+  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
+  const flagged = feed.flags.length > 0;
+  const furniture = heroFurnitureAllowed({ flagged });
   return (
-    <Shell tab="today" testId="today-screen">
+    <Shell tab="home" testId="today-screen">
       <AskField placeholder={s.shell.askNura} />
       <Hero
         greeting={greeting(now.getHours(), name, s)}
+        wave={furniture}
+        ask={furniture ? s.hub.howFeeling : undefined}
         sub={dateLine(now, locale)}
+        art={furniture ? <CoupleIllustration /> : undefined}
         figure={fromPhone ? null : (hero?.count ?? null)}
         words={!fromPhone && hero?.count !== null && hero?.count !== undefined ? hero.words : null}
         testId="today-hero"
@@ -69,6 +78,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       <Held v={v} />
+      {!page && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -78,6 +88,15 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
             {stateAt === "top" && <StateCard v={v} />}
+            {furniture && <CheckInCard papers={papers} />}
+            <DoGrid papers={papers} />
+            <AddReport papers={papers} />
+            {nextVisit && !fromPhone && (
+              <Upcoming papers={papers}>
+                <VisitTile visit={nextVisit} />
+              </Upcoming>
+            )}
+            {/* His doses now, under what the approved board puts first. */}
             <DoseSection v={v} />
             <SectionLabel>{s.today.forYou}</SectionLabel>
             {!fromPhone && top.length > 0 ? (
@@ -105,7 +124,6 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
               {s.feed.askOrSearch}
             </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
-            {nextVisit && !fromPhone && <VisitTile visit={nextVisit} />}
             {!fromPhone && <FamilyNote />}
             {/* The emergency card, one tap from Today, with no network too (W4). */}
             <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
@@ -124,48 +142,68 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
  *  are missing; then the doses she may tap for him, and today's cards. */
 function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
-  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt } = v;
+  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt, now, papers } = v;
   const bearer = token.value;
   const drivers = page?.drivers ?? [];
-  const hero = page ? homeHero(page, { flagged: feed.flags.length > 0, kept: fromPhone }, s) : null;
+  // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
+  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
+  const flagged = feed.flags.length > 0;
+  const furniture = heroFurnitureAllowed({ flagged });
+  const hero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
   const locale = LOCALE[language.value];
   const supply = page ? <SupplyTile lines={page.lines} /> : null;
+  const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
   return (
-    <Shell tab="today" testId="home-screen">
+    <Shell tab="home" testId="home-screen">
       {page && <span data-testid="today-ready" hidden />}
-      {page && page.stateId !== null && page.word && hero && (
-        <Hero label={hero.word ? s.home.mostLikely : undefined} figure={hero.word} words={hero.line} testId="home-hero">
-          <Readings />
-          {hero.drivers && drivers.length > 0 && (
-            <ChipRow testId="drivers" label={s.home.mostLikely}>
-              {drivers.map((driver) => (
-                <Chip key={driver.key} tone={toneOf(driver.tone)}>
-                  {driver.text}
-                </Chip>
-              ))}
-            </ChipRow>
-          )}
-          {/* Where the State came from and when, and the boundary it is shown under: with the
-              State's word, never over a flag. */}
-          {hero.word && (
-            <>
-              <p class="hero-sub" data-testid="home-from">
-                {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
-              </p>
-              {(page.boundary ?? []).length > 0 && (
-                <div class="hero-boundary" data-testid="home-boundary">
-                  {(page.boundary ?? []).map((line, at) => (
-                    <p key={at}>{line}</p>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </Hero>
-      )}
+      {/* Her greeting is hers — her own name — and the question under it is about him, by name:
+          on a key that is not his, `t()` reads `hub.howFeeling` as its twin `howFeelingOther`
+          (strings/index.ts, ABOUT_HIM), so a caregiver's Home never speaks in his voice. */}
+      <Hero
+        greeting={greeting(now.getHours(), me.value?.display_name || "", s)}
+        wave={furniture}
+        ask={furniture ? s.hub.howFeeling : undefined}
+        art={furniture ? <CoupleIllustration /> : undefined}
+        label={state && hero?.word ? s.home.mostLikely : undefined}
+        figure={state ? hero?.word : undefined}
+        words={state ? hero?.line : undefined}
+        testId="home-hero"
+      >
+        {state && page && hero && (
+          <>
+            <Readings />
+            {hero.drivers && drivers.length > 0 && (
+              <ChipRow testId="drivers" label={s.home.mostLikely}>
+                {drivers.map((driver) => (
+                  <Chip key={driver.key} tone={toneOf(driver.tone)}>
+                    {driver.text}
+                  </Chip>
+                ))}
+              </ChipRow>
+            )}
+            {/* Where the State came from and when, and the boundary it is shown under: with the
+                State's word, never over a flag. */}
+            {hero.word && (
+              <>
+                <p class="hero-sub" data-testid="home-from">
+                  {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
+                </p>
+                {(page.boundary ?? []).length > 0 && (
+                  <div class="hero-boundary" data-testid="home-boundary">
+                    {(page.boundary ?? []).map((line, at) => (
+                      <p key={at}>{line}</p>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </Hero>
       <NotWellButton />
       <Notices v={v} saved={saved} />
       <Held v={v} />
+      {!page && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -175,18 +213,21 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
             {(stateAt === "top" || stateAt === "forYou") && <StateCard v={v} />}
+            {furniture && <CheckInCard papers={papers} />}
+            <DoGrid papers={papers} />
+            <AddReport papers={papers} />
             {/* "What changed since you last looked" belongs on her Home by the design
                 (docs/design-system.md §3), but `GET /changes` *is* the looking: it writes the
                 look down on his trail and the next read counts from it. Drawing it here would
                 burn the look on every Home open, put an entry on his trail each time, and leave
                 the Record's own "what changed" screen with nothing to say. It stays in the
                 Record until the endpoint can be read without marking. */}
-            {((nextVisit && !fromPhone) || supply) && (
-              <div class="two-up">
-                {nextVisit && !fromPhone && <NextVisitTile visit={nextVisit} />}
-                {supply}
-              </div>
+            {nextVisit && !fromPhone && (
+              <Upcoming papers={papers}>
+                <NextVisitTile visit={nextVisit} />
+              </Upcoming>
             )}
+            {supply}
             {nextVisit && !fromPhone && <GapsTile visit={nextVisit} />}
             <AskAboutPill />
             {/* The chief's Home (F1, #177): what was sent to him this week, and what Nura is
@@ -407,39 +448,34 @@ function VisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const bring = card?.lines.filter((line) => line.section === "bring") ?? [];
   const spoken = card?.lines.map((line) => line.spoken).filter(Boolean) ?? [];
   return (
-    <>
-      <SectionLabel>{s.home.nextVisit}</SectionLabel>
-      <PaperTile testId="visit-tile">
-        <div class="card-head">
-          <span class="card-icon">
-            <Icon name="visits" />
-          </span>
-          <h2 class="title">{when?.text ?? s.visit.title}</h2>
+    <TintCard tint="peach" testId="visit-tile" extra="visit-card">
+      <div class="card-row">
+        <IconBadge icon="calendar" tint="paper" />
+        <h3 class="card-title grow">{when?.text ?? s.visit.title}</h3>
+      </div>
+      {about.length > 0 && (
+        <div class="lines visit-lines">
+          {about.map((line, at) => (
+            <p key={at}>{line.text}</p>
+          ))}
         </div>
-        {about.length > 0 && (
-          <div class="lines visit-lines">
-            {about.map((line, at) => (
-              <p key={at}>{line.text}</p>
-            ))}
-          </div>
-        )}
-        {bring.length > 0 && (
-          <ChipRow testId="bring">
-            {bring.map((line, at) => (
-              <Chip key={at}>{line.text}</Chip>
-            ))}
-          </ChipRow>
-        )}
-        <PillButton onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} testId="open-visit">
-          {s.visit.open}
-        </PillButton>
-        {spoken.length > 0 && (
-          <div class="card-foot">
-            <Hear lines={spoken} />
-          </div>
-        )}
-      </PaperTile>
-    </>
+      )}
+      {bring.length > 0 && (
+        <ChipRow testId="bring">
+          {bring.map((line, at) => (
+            <Chip key={at}>{line.text}</Chip>
+          ))}
+        </ChipRow>
+      )}
+      <PillButton onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} testId="open-visit">
+        {s.visit.open}
+      </PillButton>
+      {spoken.length > 0 && (
+        <div class="card-foot">
+          <Hear lines={spoken} />
+        </div>
+      )}
+    </TintCard>
   );
 }
 
@@ -542,22 +578,28 @@ function AskAboutPill(): JSX.Element | null {
   );
 }
 
-/** The next visit as a figure — its day and time — and where, as the logistics card says. */
+/** The next visit as a figure — its day and time — and where, as the logistics card says. Its
+ *  date and its time are two lines, never one joined by a symbol to decode (plain words): the
+ *  date a whole line on its own, the time under it in `home.atTime`. */
 function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const s = t();
   const locale = LOCALE[language.value];
   const at = new Date(visit.scheduled_at);
+  // One row, as the board draws "Coming up": who and where, then the day and the time; the whole
+  // card is the way into the visit. The weekday is said once (never twice).
   return (
-    <GlassTile testId="next-visit-tile">
-      <button type="button" class="tile-link" onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} data-testid="open-visit">
-        <span class="tile-title">{s.home.nextVisit}</span>
+    <TintCard tint="peach" testId="next-visit-tile" extra="visit-card">
+      <button type="button" class="card-row card-button" onClick={() => go({ name: "visit", appointmentId: visit.appointment_id })} data-testid="open-visit">
+        <IconBadge icon="calendar" tint="paper" />
+        <span class="grow">
+          <span class="card-title">{visit.doctor || weekdayOf(at, locale)}</span>
+          <span class="card-line" data-testid="next-visit-date">{dateLine(at, locale)}</span>
+          <span class="card-line">{fill(s.home.atTime, { time: timeLine(at, locale) })}</span>
+        </span>
         <Icon name="chevron" />
       </button>
-      {/* The weekday once, large; the day and month and the time under it (never the weekday twice). */}
-      <p class="number small">{weekdayOf(at, locale)}</p>
-      <p class="source-line" data-testid="next-visit-date">{dayMonthLine(at, locale)}</p>
-      <p class="source-line">{timeLine(at, locale)}</p>
-    </GlassTile>
+      {visit.purpose && <p class="card-line">{visit.purpose}</p>}
+    </TintCard>
   );
 }
 
@@ -569,8 +611,8 @@ function SupplyTile({ lines }: { lines: readonly LineOut[] }): JSX.Element | nul
   const count = nearest?.count;
   if (!count) return null;
   return (
-    <GlassTile testId="supply-tile">
-      <button type="button" class="tile-link" onClick={() => openTab("medicines")} data-testid="open-medicines">
+    <TintCard tint="sage" testId="supply-tile">
+      <button type="button" class="tile-link" onClick={() => go({ name: "record", at: { name: "medicines" } })} data-testid="open-medicines">
         <span class="tile-title">{s.home.buyMore}</span>
         <Icon name="chevron" />
       </button>
@@ -584,7 +626,7 @@ function SupplyTile({ lines }: { lines: readonly LineOut[] }): JSX.Element | nul
           </p>
         ))}
       </div>
-    </GlassTile>
+    </TintCard>
   );
 }
 

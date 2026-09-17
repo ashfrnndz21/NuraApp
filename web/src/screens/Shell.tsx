@@ -3,9 +3,10 @@ import type { ComponentChildren, JSX } from "preact";
 import { go, openMe, openTab } from "../flow";
 import { tabsFor, type Tab } from "../nav";
 import { speak } from "../speech/speak";
-import { density, me, profile } from "../store/session";
+import { emergencyOnly } from "../offline/emergencyCache";
+import { density, profile } from "../store/session";
 import { fill, language, t } from "../strings";
-import { AskBar, Avatar, BrandMark, TabBar } from "../ui/kit";
+import { AskBar, Icon, TabBar, Wordmark } from "../ui/kit";
 import { ProfileSwitcher } from "./Switcher";
 
 /** Ask or search (docs/ui-mockup-v2.html), wired: Enter or Ask opens the answer, E03's recall
@@ -37,9 +38,10 @@ export function AskField({ placeholder, testId }: { placeholder: string; testId?
   );
 }
 
-/** The header on every screen with the tab bar: the mark; the switcher, which names whose
- *  papers are open and opens every other set this person can; and the signed-in person's own
- *  avatar, which opens Me.
+/** The header on every screen with the tab bar (docs/design-direction.md, Reference B's top
+ *  bar): the menu, which opens Me; the serif wordmark; then the switcher, which names whose
+ *  papers are open and opens every other set this person can; and the bell, which opens what is
+ *  new for him — the cards made for him, the same place "See more for you" opens.
  *
  *  The switcher is on every screen in both densities, not only the caregiver's: one app and one
  *  account (docs/product-reset.md §6), so whose record the app is in is always on screen and
@@ -47,16 +49,31 @@ export function AskField({ placeholder, testId }: { placeholder: string; testId?
 export function ShellHeader(): JSX.Element {
   const s = t();
   const papers = profile.value;
+  // A key to the emergency card alone opens nothing else, so it has no bell to ring.
+  const bell = papers !== null && !emergencyOnly(papers);
   return (
     <header class="shell-head">
-      <BrandMark />
-      {papers && <ProfileSwitcher />}
-      <button type="button" class="me-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
-        <Avatar name={me.value?.display_name || papers?.display_name || ""} />
-        <span class="me-word" aria-hidden="true">
-          {s.tabs.me}
+      <span class="head-start">
+        <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+          <Icon name="menu" />
+        </button>
+      </span>
+      <span class="head-mark">
+        <Wordmark name={s.appName} mark={false} />
+      </span>
+      <span class="head-end">
+        {bell && (
+          <button type="button" class="head-button" aria-label={s.shell.bell} onClick={() => go({ name: "feed" })} data-testid="bell">
+            <Icon name="bell" />
+          </button>
+        )}
+      </span>
+      {/* Whose papers are open, on every screen, just under the bar. */}
+      {papers && (
+        <span class="head-whose">
+          <ProfileSwitcher />
         </span>
-      </button>
+      )}
     </header>
   );
 }

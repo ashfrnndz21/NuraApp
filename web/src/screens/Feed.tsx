@@ -212,7 +212,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const keptAt = store.keptAt.value;
 
   return (
-    <Shell tab="today" fill>
+    <Shell tab="home" fill>
       <div class="feed-screen" data-density={density()} data-testid="feed-screen">
       {/* The screen's name for a screen reader, and where focus starts when the feed opens. */}
       <h1 class="sr-only">{s.feed.title}</h1>

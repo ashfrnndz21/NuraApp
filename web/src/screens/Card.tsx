@@ -9,7 +9,7 @@ import { Shell } from "./Shell";
  *  hear it. Nothing plays by itself; Today is one tap away — the back arrow, or the tab bar. */
 export function CardScreen({ item }: { item: FeedItemOut }): JSX.Element {
   return (
-    <Shell tab="today" testId="card-screen">
+    <Shell tab="home" testId="card-screen">
       <Header title={item.headline} onBack={() => go({ name: "today" })} />
       <PaperTile testId="opened-card">
         <div class="lines">

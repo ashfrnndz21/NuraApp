@@ -1,0 +1,1094 @@
+/* The warm style, as the owner's approved board draws it (docs/design/nura-concept-board.html,
+   docs/design-direction.md): Nura's plum on a cream ground; cards on a warm card colour with a
+   hairline, or on a soft pastel tint of their own; a serif for the wordmark, the greeting and the
+   welcome; line icons in Plum on tinted rounded squares; illustrations. Every value is a token
+   (tokens.css); the two densities move only type and targets. Loaded after design.css, so where
+   the two speak of one thing, this is the newer word. */
+
+/* --- The ground and the display face -------------------------------------------------------- */
+html {
+  background: var(--ground);
+}
+.hero-greeting,
+.display-title,
+.place-title,
+.wordmark-word,
+.welcome-word,
+.welcome-tagline,
+.ring-number {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+.display-title {
+  font-size: calc(var(--text-title) * 1.3);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.place-title {
+  font-size: calc(var(--text-title) * 1.25);
+  font-weight: 600;
+}
+/* A section's heading and a card's title: the body face, bold, as on the board. */
+.section-title {
+  font-size: calc(var(--text-body) * 1.05);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.card-title {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.card-line {
+  display: block;
+  font-size: var(--text-caption);
+  line-height: 1.35;
+  color: var(--ink-quiet);
+}
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* --- Tints: each card and tile its own soft colour -------------------------------------------- */
+[data-tint="blush"] { --tint: var(--tint-blush); }
+[data-tint="lavender"] { --tint: var(--tint-lavender); }
+[data-tint="sage"] { --tint: var(--tint-sage); }
+[data-tint="coral"] { --tint: var(--tint-coral); }
+[data-tint="cream"] { --tint: var(--tint-cream); }
+[data-tint="peach"] { --tint: var(--peach); }
+[data-tint="butter"] { --tint: var(--butter); }
+[data-tint="sky"] { --tint: var(--sky); }
+[data-tint="paper"] { --tint: var(--tint-paper); }
+
+.tint-card,
+.feature-tile,
+.value-tile,
+.action-row,
+.bubble,
+.trace {
+  --ink-quiet: var(--ink-on-tint);
+}
+
+/* --- Icons on a tinted rounded square ------------------------------------------------------- */
+.icon-badge {
+  flex: none;
+  width: calc(var(--icon-size) + 18px);
+  height: calc(var(--icon-size) + 18px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-badge);
+  background: var(--tint);
+  color: var(--plum);
+}
+.icon-badge[data-shape="circle"] {
+  border-radius: 50%;
+}
+.icon-badge.small {
+  width: calc(var(--icon-size) + 10px);
+  height: calc(var(--icon-size) + 10px);
+  border-radius: 11px;
+}
+.icon-badge.large {
+  width: calc(var(--icon-size) + 32px);
+  height: calc(var(--icon-size) + 32px);
+}
+.icon,
+.icon-badge .icon {
+  stroke-width: 1.8px;
+}
+
+/* --- Cards: a warm card with a hairline, or a tint with none ----------------------------------- */
+.tint-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 16px;
+  border-radius: var(--radius-tile);
+  background: var(--tint, var(--tint-paper));
+  border: 1px solid transparent;
+  color: var(--ink);
+}
+.tint-card[data-tint="paper"] {
+  border-color: var(--card-line);
+}
+.tint-card .source-line,
+.tint-card .caption {
+  color: var(--ink-quiet);
+}
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.card-button {
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.card-button > .icon {
+  color: var(--ink-quiet);
+}
+.card-button:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+/* --- Section heading with See all ------------------------------------------------------------ */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  margin: var(--space-1) 2px 0;
+}
+.view-all {
+  min-height: var(--target);
+  min-width: var(--target);
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+  cursor: pointer;
+}
+.view-all:focus-visible,
+.feature-tile:focus-visible,
+.arrow-button:focus-visible,
+.list-row:focus-visible,
+.head-button:focus-visible,
+.link-button:focus-visible,
+.action-row:focus-within {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+
+/* --- The feature tile and its grid ----------------------------------------------------------- */
+.do-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.do-section > .section-title {
+  margin: var(--space-1) 2px 0;
+}
+.do-grid {
+  display: grid;
+  /* Three across, as the board draws it; when the writing is large, as many as fit whole — a
+     tile's word is never cut or broken to keep a column. */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
+  gap: 10px;
+}
+:root[data-density="patient"] .do-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.5rem), 1fr));
+}
+.feature-tile {
+  min-width: 0;
+  min-height: var(--target);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 14px 6px 12px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--tint);
+  font: inherit;
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--settle);
+}
+.feature-tile:active {
+  transform: scale(0.98);
+}
+.feature-tile .icon {
+  width: 28px;
+  height: 28px;
+  color: var(--plum);
+  margin-bottom: 4px;
+}
+.feature-label {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.feature-caption {
+  font-size: 0.8125rem;
+  line-height: 1.25;
+  color: var(--ink-quiet);
+}
+:root[data-density="patient"] .feature-label {
+  font-size: 1.0625rem;
+}
+:root[data-density="patient"] .feature-caption {
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+/* --- Rows: a list, a metric ------------------------------------------------------------------ */
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target);
+  padding: var(--space-1) 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+}
+button.list-row {
+  cursor: pointer;
+}
+.list-row + .list-row {
+  border-top: 1px solid var(--card-line);
+}
+.list-lead {
+  flex: none;
+  display: inline-flex;
+}
+.list-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.list-title {
+  font-weight: 700;
+}
+.list-line {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.list-trailing {
+  flex: none;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+  align-self: flex-start;
+  padding-top: 4px;
+}
+.metric-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+.metric-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.metric-value {
+  flex: none;
+  font-size: var(--text-body);
+  font-weight: 700;
+  font-variant-numeric: var(--numeric);
+}
+.metric-unit {
+  font-size: var(--text-caption);
+  font-weight: 400;
+  color: var(--ink-quiet);
+}
+
+/* --- The round arrow button, the status pill -------------------------------------------------- */
+.arrow-button {
+  flex: none;
+  width: var(--target);
+  height: var(--target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tint-paper);
+  color: var(--plum);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.arrow-button .icon {
+  transform: rotate(-45deg);
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 12px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+  font-weight: 700;
+}
+.status-pill[data-tone="good"] {
+  background: var(--good-bg);
+  color: var(--good-ink);
+}
+.status-pill[data-tone="watch"] {
+  background: var(--cream);
+  color: var(--coral-pill-ink);
+}
+.status-pill[data-tone="act"] {
+  background: var(--coral-pill-bg);
+  color: var(--coral-pill-ink);
+}
+
+/* --- The progress ring ------------------------------------------------------------------------ */
+.ring {
+  position: relative;
+  width: min(100%, 8.5rem);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+.ring-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ring-track {
+  fill: none;
+  stroke: var(--tint-paper);
+  stroke-width: 9;
+}
+.ring-fill {
+  fill: none;
+  stroke: var(--plum);
+  stroke-width: 9;
+  stroke-linecap: round;
+}
+.ring-centre {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 18%;
+}
+.ring-number {
+  font-size: var(--text-tile-number);
+  font-weight: 600;
+  line-height: 1;
+  color: var(--plum-deep);
+  font-variant-numeric: var(--numeric);
+}
+.ring-label {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+  line-height: 1.2;
+}
+
+/* --- Buttons: solid Plum, small or full width; quiet ------------------------------------------ */
+.pill {
+  background: var(--tint-paper);
+}
+.pill.plum {
+  font-weight: 600;
+}
+.pill.plum.compact {
+  min-height: 44px;
+  padding: 0 20px;
+}
+:root[data-density="patient"] .pill.plum.compact {
+  min-height: var(--target);
+}
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--plum);
+  cursor: pointer;
+}
+
+/* --- The avatar: their photo, or their initial on a tint -------------------------------------- */
+.avatar.tinted {
+  background: var(--tint);
+  color: var(--plum-deep);
+  font-family: var(--font-display);
+  border: 2px solid var(--white);
+}
+.avatar.large {
+  width: 64px;
+  height: 64px;
+  font-size: 1.5rem;
+}
+img.avatar {
+  object-fit: cover;
+}
+
+/* --- The header: menu, the wordmark centred, whose papers, bell ------------------------------- */
+.shell-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1);
+}
+.head-start {
+  display: flex;
+  justify-content: flex-start;
+}
+.head-button {
+  width: var(--target);
+  height: var(--target);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.head-mark {
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.head-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+.head-whose {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-top: -4px;
+}
+.shell-head .switcher {
+  max-width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  background: var(--tint-paper);
+  border: 1px solid var(--card-line);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  font-size: var(--text-caption);
+  padding: 2px 6px 2px 2px;
+  gap: 4px;
+}
+:root[data-density="patient"] .shell-head .switcher {
+  min-height: var(--target);
+}
+.shell-head .switcher .avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 0.875rem;
+}
+.shell-head .switcher .icon {
+  width: 16px;
+  height: 16px;
+}
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--plum);
+  margin: 0;
+}
+.wordmark .brand-mark {
+  flex: none;
+}
+/* The wordmark is a logotype: a fixed size, so the page's own words get the room at 200%. */
+.wordmark.small .wordmark-word {
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1;
+}
+.wordmark.large .wordmark-word {
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1;
+}
+@media (max-width: 359px) {
+  .shell-head .wordmark-word {
+    display: none;
+  }
+}
+
+/* --- The tab bar: flat on the card colour, a line icon above each word, the one open in Plum -- */
+.tabbar {
+  margin: 0;
+  padding: 6px 4px calc(8px + env(safe-area-inset-bottom));
+  border-radius: 0;
+  background: var(--tint-paper);
+  border: 0;
+  border-top: 1px solid var(--card-line);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  gap: 0;
+}
+.tabbar button,
+.tabbar button[aria-current="page"] {
+  border-radius: 12px;
+  gap: 3px;
+  background: none;
+}
+.tabbar button[aria-current="page"] {
+  color: var(--plum);
+  font-weight: 700;
+}
+.tabbar button[aria-current="page"] .icon {
+  stroke-width: 2.2px;
+}
+
+/* --- The hero: greeting, question, illustration ----------------------------------------------- */
+.hero-block {
+  padding: var(--space-1) 2px 0;
+}
+.hero-top {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+.hero-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* The wave sits beside the greeting, and takes the next line only when the words fill this one. */
+.hero-hello {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 2px;
+}
+.hero-hello .hero-greeting {
+  min-width: 0;
+}
+.hero-greeting {
+  font-size: calc(var(--text-title) * 1.25);
+  font-weight: 600;
+  line-height: 1.15;
+}
+.hero-wave {
+  margin-inline-start: 6px;
+  font-size: var(--text-title);
+  line-height: 1;
+}
+.hero-ask {
+  font-size: var(--text-body);
+  color: var(--ink-quiet);
+  line-height: 1.35;
+}
+:root[data-density="patient"] .hero-ask {
+  color: var(--ink);
+}
+.hero-art {
+  flex: 0 0 auto;
+  width: clamp(110px, 36%, 150px);
+}
+.illo {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* At large writing the words take the row and the picture steps below them. */
+:root[data-writing="large"] .hero-top,
+:root[data-text="large"] .hero-top {
+  flex-direction: column;
+  align-items: flex-start;
+}
+@media (max-width: 359px) {
+  .hero-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+/* --- Home's parts ----------------------------------------------------------------------------- */
+.check-in {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+.check-in-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.check-in-text .pill {
+  margin-top: 10px;
+}
+.check-in-face {
+  flex: none;
+  width: clamp(64px, 22%, 88px);
+}
+:root[data-writing="large"] .check-in,
+:root[data-text="large"] .check-in {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.action-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  padding: 14px 16px;
+  border-radius: var(--radius-tile);
+  background: var(--tint, var(--tint-paper));
+  color: var(--ink);
+  cursor: pointer;
+}
+/* "Add a health report": a dashed card on the ground, as the board draws it. */
+.action-row.report {
+  background: transparent;
+  border: 1.5px dashed #cfc1d9;
+}
+/* The file input is what Tab reaches: its ring is drawn round the whole card (focus-within above),
+   and the input says so itself for anything that asks. */
+.action-row input[type="file"]:focus,
+.action-row input[type="file"]:focus-visible {
+  outline: 3px solid var(--plum);
+}
+.action-row input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.action-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.action-title {
+  font-weight: 700;
+  font-size: var(--text-body);
+  line-height: 1.25;
+}
+.action-line {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.action-go {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-quiet);
+}
+
+.upcoming {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.visit-card .icon-badge[data-tint="paper"] {
+  background: var(--tint-paper);
+}
+
+/* --- The screen a place not built yet opens --------------------------------------------------- */
+.soon-card {
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  margin-top: var(--space-2);
+}
+.soon-illo {
+  width: min(70%, 220px);
+}
+
+/* --- Welcome, as the board draws it ------------------------------------------------------------ */
+.screen.welcome {
+  min-height: 100dvh;
+  gap: 16px;
+  padding-top: calc(22px + env(safe-area-inset-top));
+  background: linear-gradient(180deg, var(--peach) 0%, var(--ground-warm) 55%, var(--ground) 100%);
+}
+.welcome-art {
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--peach);
+  height: clamp(168px, 26vh, 240px);
+}
+.welcome-illo {
+  width: 100%;
+  height: 100%;
+}
+.welcome-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  color: var(--plum);
+}
+.welcome-heart .icon {
+  width: 30px;
+  height: 30px;
+  stroke-width: 1.8px;
+}
+.welcome-word {
+  font-size: 2.75rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--plum);
+  margin: 0;
+}
+.welcome-tagline {
+  font-size: calc(var(--text-title) * 1.3);
+  font-weight: 500;
+  line-height: 1.18;
+  color: var(--plum-deep);
+  margin: 0;
+  text-wrap: balance;
+}
+.welcome-lead {
+  margin-top: -6px;
+  font-size: var(--text-body);
+  color: var(--ink-quiet);
+}
+:root[data-density="patient"] .welcome-lead {
+  color: var(--ink);
+}
+.value-tiles {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+  gap: 8px;
+}
+.value-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border-radius: 16px;
+  background: var(--tint-paper);
+}
+.value-tile .icon-badge {
+  margin-bottom: 2px;
+}
+.value-title {
+  font-weight: 700;
+  font-size: var(--text-body);
+  line-height: 1.2;
+}
+.value-line {
+  font-size: var(--text-caption);
+  line-height: 1.25;
+  color: var(--ink-quiet);
+}
+:root[data-density="patient"] .value-line,
+:root[data-density="patient"] .action-line,
+:root[data-density="patient"] .card-line {
+  color: var(--ink);
+}
+.welcome > .pill.plum {
+  border-radius: 16px;
+  min-height: calc(var(--target) + 4px);
+}
+.welcome-signin {
+  text-align: center;
+  color: var(--ink-quiet);
+}
+
+/* --- Conversation, waiting and "thinking", as the board's Ask Nura screen draws them ------------ */
+.exchange {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.bubble {
+  max-width: 86%;
+  padding: 12px 15px;
+  border-radius: 18px;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+.bubble[data-from="person"] {
+  align-self: flex-end;
+  border-bottom-right-radius: 6px;
+  background: var(--plum);
+  color: var(--white);
+}
+.bubble[data-from="nura"] {
+  align-self: flex-start;
+  border-bottom-left-radius: 6px;
+  background: var(--tint-paper);
+  border: 1px solid var(--card-line);
+  color: var(--ink);
+}
+.bubble p + p {
+  margin-top: 4px;
+}
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.source-chip {
+  font-size: var(--text-caption);
+  font-weight: 700;
+  background: var(--plum-wash);
+  color: var(--plum);
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
+}
+.answer-boundary {
+  margin-top: 8px;
+  font-size: var(--text-caption);
+  font-style: italic;
+  color: var(--ink-quiet);
+}
+.looked {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--card-line);
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.looked summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  cursor: pointer;
+  list-style: none;
+}
+.looked summary::-webkit-details-marker {
+  display: none;
+}
+.looked summary .icon {
+  width: 16px;
+  height: 16px;
+}
+.looked summary:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.looked .trace-steps {
+  margin-top: 6px;
+}
+.trace {
+  align-self: flex-start;
+  width: min(100%, 86%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 15px;
+  border-radius: 18px;
+  border-bottom-left-radius: 6px;
+  background: var(--tint-paper);
+  border: 1px solid var(--card-line);
+}
+.thinking {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: var(--plum);
+}
+.thinking-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+}
+.thinking-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+.thinking-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--plum);
+  opacity: 0.35;
+  animation: nura-pulse 1.2s ease-in-out infinite;
+}
+.thinking-dots i:nth-child(2) { animation-delay: 0.15s; }
+.thinking-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes nura-pulse {
+  0%, 100% { opacity: 0.3; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-2px); }
+}
+.trace-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.trace-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--ink);
+}
+.trace-step[data-done="true"] {
+  color: var(--ink-quiet);
+}
+.trace-tick,
+.trace-spin {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 0.15em;
+  border-radius: 50%;
+}
+.trace-tick {
+  display: grid;
+  place-items: center;
+  background: var(--tint-sage);
+  color: var(--good);
+}
+.trace-tick .icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.8px;
+}
+.trace-spin {
+  border: 2px solid var(--plum-wash);
+  border-top-color: var(--plum);
+  animation: nura-spin 0.9s linear infinite;
+}
+@keyframes nura-spin {
+  to { transform: rotate(360deg); }
+}
+.trace-text {
+  min-width: 0;
+}
+.exchange-note {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  color: var(--ink);
+}
+
+/* --- Skeletons -------------------------------------------------------------------------------- */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--radius-tile);
+  background: var(--tint-paper);
+  border: 1px solid var(--card-line);
+}
+.skeleton[data-shape="tile"] {
+  min-height: 6.5rem;
+  border-radius: 18px;
+}
+.skeleton[data-shape="row"] {
+  padding: 12px 16px;
+}
+.skeleton-bar {
+  display: block;
+  height: 0.9rem;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--ground-warm) 0%, var(--ground) 50%, var(--ground-warm) 100%);
+  background-size: 200% 100%;
+  animation: nura-shimmer 1.6s ease-in-out infinite;
+}
+.skeleton-bar.title {
+  width: 55%;
+  height: 1.3rem;
+}
+@keyframes nura-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+.home-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tile-gap);
+}
+.home-skeleton .skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
+  gap: 10px;
+}
+
+/* --- Reduce Motion: nothing pulses, turns or shimmers ----------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dots i {
+    animation: none;
+    opacity: 0.7;
+    transform: none;
+  }
+  .trace-spin,
+  .skeleton-bar {
+    animation: none;
+  }
+  .feature-tile,
+  .feature-tile:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* In a page's column, a warm block is as tall as what is in it: a `min-height` never lets the
+   column squeeze it shorter than its words at a large text size (they would spill over the next). */
+.tint-card,
+.action-row,
+.do-section,
+.upcoming,
+.section-head,
+.home-skeleton,
+.skeleton,
+.exchange,
+.hero-block,
+.welcome-art,
+.value-tiles {
+  flex-shrink: 0;
+}
+
+/* At large writing a tab's word is whole, on one row: the word steps down only as far as the
+   phone's width needs, so the bar never grows a second row that would squeeze the page above it. */
+:root[data-writing="large"] .tabbar[data-count="5"] button,
+:root[data-text="large"] .tabbar[data-count="5"] button {
+  font-size: min(var(--text-tab), 3.9vw);
+}
+:root[data-writing="large"] .tabbar .tab-word,
+:root[data-text="large"] .tabbar .tab-word {
+  text-overflow: clip;
+}
