@@ -140,8 +140,16 @@ def _order_key(item: FeedItem) -> tuple[int, int, datetime]:
 
 
 def _visible_to(items: Sequence[FeedItem], context: KeyContext) -> list[FeedItem]:
-    """Only the cards built from parts of the record the key covers."""
-    return [item for item in items if context.allows(item.scope)]
+    """Only the cards built from parts of the record the key covers, and a card `private_to`
+    someone only for that one person (RE-01, docs/recommendation-engine.md §2.4, §3.5): his
+    own search history is his alone, and no scope a caregiver holds is an exception — `ASK`
+    included. Never reaches the caregiver's list, "Sent to Pa this week" or the memo."""
+    return [
+        item
+        for item in items
+        if context.allows(item.scope)
+        and (item.private_to is None or item.private_to == context.person_id)
+    ]
 
 
 async def _without_photos_taken_back(

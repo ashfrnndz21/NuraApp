@@ -406,6 +406,7 @@ CLASSES: dict[str, str] = {
     "feed_item.direction": HEALTH,
     "feed_item.colour": HEALTH,
     "feed_item.action": OPERATIONAL,
+    "feed_item.private_to": IDENTIFIER,
     # --- delivery (E11): the settings, every attempt to reach someone, the ladder -------------
     "delivery_settings.id": OPERATIONAL,
     "delivery_settings.skip_quiet_days": OPERATIONAL,

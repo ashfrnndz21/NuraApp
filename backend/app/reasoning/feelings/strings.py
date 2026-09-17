@@ -352,21 +352,29 @@ and the pharmacist's sign-off (docs/trust/clinical-wording-sign-off.md)."""
 THEN: Mapping[str, Mapping[str, str]] = {
     "en": {
         "for_the_doctor": "Nura will keep this for your visit to {doctor}.",
-        "for_the_next_visit": "Nura will keep this for your next visit.",
+        "for_the_next_visit": "Nura has kept this for you to tell {doctor}.",
         "watch": "Nura will ask you again in a week.",
     },
     "ms": {
         "for_the_doctor": "Nura akan simpan ini untuk lawatan anda ke {doctor}.",
-        "for_the_next_visit": "Nura akan simpan ini untuk lawatan anda yang akan datang.",
+        "for_the_next_visit": "Nura sudah simpan ini untuk anda beritahu {doctor}.",
         "watch": "Nura akan tanya anda lagi dalam seminggu.",
     },
     "zh": {
         "for_the_doctor": "Nura 会把这个留到您看{doctor}的时候。",
-        "for_the_next_visit": "Nura 会把这个留到您下次看医生的时候。",
+        "for_the_next_visit": "Nura 已经保存这个，方便您告诉{doctor}。",
         "watch": "一个星期后，Nura 会再问您。",
     },
 }
-"""Who does the next thing, and when (docs/plain-words.md rule 7)."""
+"""Who does the next thing, and when (docs/plain-words.md rule 7).
+
+`for_the_doctor` names a visit on the spine: the brief and the questions for that visit read
+this note (`app.reasoning.visits.questions.feeling_notes_for`, RE-02), so the promise is kept
+by code, not just by these words. `for_the_next_visit` is the honest line for when there is no
+visit yet to attach the note to — nothing reads an unattached note onto a visit later, so it
+never promises one; it says who does the next thing instead (rule 7): he does, when he next
+sees a doctor. Changing this promise to match what the code does, rather than building the
+code to match an old promise, is RE-02's own finding."""
 
 
 def catalogue() -> list[tuple[str, str]]:

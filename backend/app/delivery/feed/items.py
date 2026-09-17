@@ -182,6 +182,7 @@ async def create_item(
     number: str | None = None,
     direction: Direction | None = None,
     action: CardAction | None = None,
+    private_to: uuid.UUID | None = None,
 ) -> FeedItem:
     """Write one card, or refuse it.
 
@@ -191,6 +192,9 @@ async def create_item(
     a card that infers nothing carries none. The row is rendered from `state`, so a snapshot
     the record has moved past is refused too. Every refusal here is written down under the
     card's own scope.
+
+    `private_to`, when set, is his alone (RE-01): `rank._visible_to` drops the row for every
+    other person, whatever her scopes — the one exception a `Scope` cannot express.
     """
     async with audited_guard(session, context, Action.WRITE, scope, FEED_TARGET):
         if deliver_to is DeliverTo.PATIENT:
@@ -242,6 +246,7 @@ async def create_item(
             direction=None if grammar.direction is None else grammar.direction.value,
             colour=grammar.colour.value,
             action=grammar.action.value,
+            private_to=private_to,
         )
     await _sample(session, item)
     return item

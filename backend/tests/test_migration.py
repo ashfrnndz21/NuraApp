@@ -238,7 +238,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0039_feeling_question_marker"]
+    assert heads == ["0040_feed_item_private_to"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(

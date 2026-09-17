@@ -35,7 +35,6 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.models import Appointment, AppointmentStatus, Provider
 from app.reasoning.feelings.models import FeelingNote, NoteOutcome
-from app.reasoning.feelings.service import note_scopes
 from app.reasoning.visits.gaps import Gap, GapKind, NoSuchAppointment, find_gaps
 from app.reasoning.visits.guard import may_change_visits, may_render_brief
 from app.reasoning.visits.memos import current_memos
@@ -295,6 +294,12 @@ async def feeling_notes_for(
     appointment, that this key may read in full — the record's own scope, and any other scope
     its reason rests on (ADR 0004). A key without `Scope.RECORDS` sees none: the notes are the
     record's, the way the symptom log is (`app.safety.symptom_log`)."""
+    # A local import: `feelings.service` reaches, through the delivery engine and the API's
+    # own deps, back to this module (`summary.py` imports from here too), so importing it at
+    # module level would be a cycle — the same shape as `build_brief`'s own late import of
+    # `symptom_log.symptoms_since`.
+    from app.reasoning.feelings.service import note_scopes
+
     if not context.allows(Scope.RECORDS):
         return ()
     found = await audited_read(

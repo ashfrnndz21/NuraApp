@@ -234,6 +234,13 @@ class FeedItem(RenderedFromState, ProfileScoped, Base):
     direction: Mapped[str | None] = mapped_column(String(8), default=None)
     colour: Mapped[str | None] = mapped_column(String(16), default=None)
     action: Mapped[str | None] = mapped_column(String(24), default=None)
+    private_to: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("person.id"), default=None)
+    """His alone (RE-01, docs/recommendation-engine.md §2.4): set on a card resting on search
+    history or anything else that is one person's private curiosity, never his family's to
+    see. Not a `Scope` — a scope narrows a *part of the record*, and every key that reaches
+    him at all reaches `Scope.ASK`, so no scope check can hide this from a caregiver holding
+    it. `rank._visible_to` drops the row for anyone whose `person_id` does not match, however
+    wide her scopes: the one exception a scope check cannot express."""
 
 
 frozen(FeedItem)

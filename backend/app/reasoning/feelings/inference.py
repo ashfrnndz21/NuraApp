@@ -164,10 +164,14 @@ def compose_note(
     lines = tuple(shown)
     if found:
         outcome = NoteOutcome.FOR_THE_DOCTOR
+        # A visit on the spine: the brief and the questions for it read this note (RE-02), so
+        # the promise it is kept "for" that visit is true by construction. With no visit to
+        # attach it to, nothing reads it there later, so the words say what actually happens
+        # instead — he tells the doctor himself, not Nura for him.
         then = (
             THEN[code]["for_the_doctor"].format(doctor=who)
             if visit is not None
-            else THEN[code]["for_the_next_visit"]
+            else THEN[code]["for_the_next_visit"].format(doctor=who)
         )
     else:
         outcome = NoteOutcome.WATCH

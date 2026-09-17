@@ -46,7 +46,7 @@ from app.memory.models import Appointment, AppointmentStatus, Fact
 from app.reasoning.visits.gaps import find_gaps
 from app.reasoning.visits.guard import can_render_brief, may_render_brief
 from app.reasoning.visits.memos import current_memos
-from app.reasoning.visits.models import Brief, MemoKind
+from app.reasoning.visits.models import Brief, MemoKind, QuestionSource
 from app.reasoning.visits.questions import (
     Visit,
     feeling_notes_for,
@@ -458,6 +458,10 @@ async def build_brief(
             one.source_ids,
         )
         for one in proposed
+        # A feeling note is listed beside the symptom log (RE-02, below), in its own words,
+        # not a second time in the questions section: it is already his own account of how he
+        # feels, not a gap or a flag the record raised.
+        if one.source is not QuestionSource.FEELING
     ]
     symptoms: list[list[Line]] = []
     feeling_notes: Sequence[Any] = ()

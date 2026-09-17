@@ -156,7 +156,9 @@ async def test_without_a_visit_the_doctor_on_the_label_is_named(sg: AsyncSession
     assert note is not None
     assert note.headline == "Things to tell Dr Tan"
     assert note.lines[0] == "Tell Dr Tan about your swollen ankles today."
-    assert note.then == "Nura will keep this for your next visit."
+    # No visit is booked yet, so nothing reads this note onto one later (RE-02): the words say
+    # who tells the doctor — he does — rather than promising a delivery nothing performs.
+    assert note.then == "Nura has kept this for you to tell Dr Tan."
 
 
 async def test_the_same_word_as_yesterday_asks_whether_it_is_more(

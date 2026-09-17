@@ -36,6 +36,9 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact, current_facts, supersede_fact
 from app.memory.spine import upcoming_appointments
+from app.reasoning.feelings.models import FeelingNote, NoteOutcome
+from app.reasoning.feelings.service import answer_tap, record_tap
+from app.reasoning.feelings.words import Answer
 from app.reasoning.visits import strings
 from app.reasoning.visits.brief import brief_for, build_brief
 from app.reasoning.visits.gaps import GapKind, find_gaps
@@ -53,6 +56,7 @@ from app.reasoning.visits.models import (
 )
 from app.reasoning.visits.questions import (
     CARD_SIZE,
+    PRIORITY_PERSON,
     change_questions,
     patient_card,
     question_draft_for,
@@ -89,8 +93,9 @@ from app.reasoning.visits.summary import (
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.plain_words import verify
-from app.safety.red_flags import Flag, FlagKind, write_red_flag
+from app.safety.red_flags import Feeling, Flag, FlagKind, write_red_flag
 from app.state.service import current_state
+from tests.feelings_support import STORE, TRANSCRIBER, VIA
 from tests.medicines_support import REGISTRY
 from tests.support import agree_to_family_sharing, refused_unit
 from tests.visits import (
@@ -237,6 +242,111 @@ async def test_an_interaction_the_licensed_data_flagged_is_a_gap_naming_both_lin
         "Ask Dr Tan if the aspirin and the blood thinner tablet (warfarin) are OK together."
     ]
     assert str(flag.id) in asked[0].source_ids
+
+
+# --- the feeling note reaches the visit (RE-02) ----------------------------------------------
+
+
+async def test_a_feeling_note_reaches_the_visits_questions_and_the_brief(
+    sg: AsyncSession,
+) -> None:
+    """The promise the feeling cloud makes — "Nura will keep this for your visit to Dr Tan" —
+    is kept by code, not just by words: a cloud tap read against a new medicine appears on
+    that visit's questions and its brief, citing the note
+    (docs/recommendation-engine.md §1.1, RE-02)."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.outcome is NoteOutcome.FOR_THE_DOCTOR
+    assert note.appointment_id == appointment.id
+    # The words he was shown promised this visit, by name — and the promise is kept below.
+    assert note.then == "Nura will keep this for your visit to Dr Tan."
+
+    # The visit's questions: a new source, citing the note and its tap.
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    feeling_questions = [q for q in found if q.source is QuestionSource.FEELING]
+    assert len(feeling_questions) == 1
+    question = feeling_questions[0]
+    assert question.text == note.lines[0] == "Tell Dr Tan you feel dizzy today."
+    assert question.source_ids == [str(note.id), str(note.tap_id)]
+    # His own card — the first three questions by priority — carries it too.
+    card = await patient_card(sg, context=context, appointment_id=appointment.id)
+    assert note.lines[0] in card
+
+    # Refreshing again does not write the same note twice: the note's own id is its identity.
+    again = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    assert len([q for q in again if q.source is QuestionSource.FEELING]) == 1
+
+    # The brief: beside the symptom log, in his own already-verified words, citing the note —
+    # every line of it, not only the first (the medicine it names keeps its DO_NOT_STOP pair).
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    feeling_lines = [line for line in brief.lines if line["key"] == "feeling_note"]
+    assert len(note.lines) > 1  # the medicine reason brings its DO_NOT_STOP lines with it
+    assert [line["text"] for line in feeling_lines] == list(note.lines)
+    assert all(line["sources"] == [str(note.id)] for line in feeling_lines)
+    assert brief.sources["feeling_note_ids"] == [str(note.id)]
+    # Not doubled into the brief's own questions preview: it is his account of how he feels,
+    # listed once, beside the symptom log.
+    assert note.lines[0] not in [
+        line["text"] for line in brief.lines if line["section"] == "questions"
+    ]
+
+
+async def test_without_a_visit_the_promise_says_who_tells_the_doctor(sg: AsyncSession) -> None:
+    """No visit is booked, so nothing reads this note onto one later: the words must not
+    promise a delivery the code does not perform (RE-02)."""
+    context = await pa(sg, language="en")
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.outcome is NoteOutcome.FOR_THE_DOCTOR
+    assert note.appointment_id is None
+    assert note.then == "Nura has kept this for you to tell Dr Tan."
+    assert "next visit" not in note.then
+    assert (await sg.scalars(select(FeelingNote))).all() == [note]
 
 
 # --- the brief ------------------------------------------------------------------------------
@@ -427,7 +537,7 @@ async def test_a_person_adds_edits_and_removes_a_question_with_a_yes(sg: AsyncSe
         sg, context=context, appointment_id=appointment.id, confirmation_id=yes.id, text=text
     )
     assert added.source is QuestionSource.PERSON and added.added_by_person_id == context.person_id
-    assert added.priority == 2
+    assert added.priority == PRIORITY_PERSON
 
     # A yes for other words is refused.
     other = await confirm(
