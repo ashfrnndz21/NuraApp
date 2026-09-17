@@ -90,6 +90,28 @@ let sending = false;
  *  arriving behind it can still reach past it (see `enqueue`). */
 let current: Job | null = null;
 
+/** Held while a screen that may end in a red word is open (the not-feeling-well flow):
+ *  `holdBackground`/`releaseBackground`, called from that screen's own mount and unmount.
+ *  A background read already on the wire when the hold starts is left to finish — it is not
+ *  urgent yet, and aborting it for no reason wastes it — but no *further* one is dispatched
+ *  while held, whatever is still waiting. This does not replace the urgent-arrival abort in
+ *  `enqueue` (a read can still be on the wire the instant he actually sends his words, and
+ *  that is still caught there); it only closes the much likelier gap: a background read that
+ *  starts and finishes on its own schedule in the seconds between opening the screen and
+ *  speaking, which no abort can undo once the response is already back on the wire (a real
+ *  CI race, `tests/e2e/day.spec.ts`'s "a red word said out loud"). Held reads resume the
+ *  moment the hold is released, in the order they were queued. */
+let held = false;
+
+export function holdBackground(): void {
+  held = true;
+}
+
+export function releaseBackground(): void {
+  held = false;
+  void pump();
+}
+
 /** How long an urgent call may take from the tap before it is given up as unreachable, whatever
  *  is on the wire: the red-flag path shows the backend's offline card then, never a page that
  *  waits (W7, ADR 0012). A call still waiting then is taken out of the queue and never sent; one
@@ -161,11 +183,19 @@ async function fetchWithin(url: URL, init: RequestInit, signal: AbortSignal, wit
   }
 }
 
+/** The next job to send: none, while held, unless a red word has actually reached the queue
+ *  (`held` never blocks an urgent call — only ever what is still merely waiting). */
+function next(): Job | undefined {
+  if (!held) return waiting.shift();
+  const at = waiting.findIndex((one) => one.urgent);
+  return at < 0 ? undefined : waiting.splice(at, 1)[0];
+}
+
 async function pump(): Promise<void> {
   if (sending) return;
   sending = true;
   try {
-    for (let job = waiting.shift(); job; job = waiting.shift()) {
+    for (let job = next(); job; job = next()) {
       current = job;
       await job.run();
     }

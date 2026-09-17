@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
+import { holdBackground, releaseBackground } from "../api/client";
 import type { Said } from "../api/types";
 import { keptCards } from "../day/offline";
 import { offlineLines, whatToDoLines } from "../day/model";
@@ -28,6 +29,15 @@ export function NotWellScreen(): JSX.Element {
   const [noMic, setNoMic] = useState(false);
   const recorder = useMemo(() => voiceRecorder(), []);
   useEffect(() => () => recorder.discard(), [recorder]);
+  // He may say a red word on this screen (W7, E13-02): no background read is dispatched from
+  // the moment it opens, so nothing of Today's own loading is still finishing on its own
+  // schedule in the window between now and the tap that sends his words — the far likelier
+  // gap than the one already caught at the moment of that tap itself (`api/client.ts`'s
+  // urgent-arrival abort, `enqueue`). Released the moment he leaves, whether or not he sent.
+  useEffect(() => {
+    holdBackground();
+    return releaseBackground;
+  }, []);
 
   const send = async (said: Said) => {
     if (!bearer || !papers) {

@@ -2091,6 +2091,10 @@ export const ms = {
     NoSuchProvider: "Doktor itu tiada dalam senarai anda.",
     StaleState: ["Nura masih mengemas kini.", "Sila cuba lagi."],
     NotIdentified: "Nura tidak dapat mencari ubat ini.",
+    StrengthNotRead: [
+      "Nura tahu ubat ini tetapi tidak tahu berapa kuat ubat ini.",
+      "Ambil gambar label sekali lagi supaya nampak berapa kuat ubat ini.",
+    ],
     DoseNotRead: "Sila taip cara mengambilnya, seperti pada label.",
     NotADose: "Nura tidak faham cara mengambilnya.",
     WouldWiden: ["Nura tidak boleh meluaskan ini.", "Pemilik perlu setuju dengan lebih dahulu."],
