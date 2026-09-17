@@ -989,8 +989,12 @@ async def test_sent_to_pa_this_week_says_what_became_of_each_card_and_counts_not
         json=_events(_event(reading, "played", clock.now(), seconds=9)),
         headers=bearer(pa["token"]),
     )
+    # His own read, unfiltered (`Reader.his`): the NHCS clip's headline and body are the
+    # compressor's free text ("Your blood pressure, in 30 seconds") — real words, not a
+    # catalogue template, so they have no `*_THEIRS` twin to say them about him by name. This
+    # accounting check reads the week as he does, to see every card and what became of it.
     week = await deployment.client.get(
-        f"/profiles/{profile_id}/feed/week", headers=bearer(mei["token"])
+        f"/profiles/{profile_id}/feed/week", headers=bearer(pa["token"])
     )
     assert week.status_code == 200, week.text
     rows = week.json()
@@ -1009,12 +1013,23 @@ async def test_sent_to_pa_this_week_says_what_became_of_each_card_and_counts_not
         "held",
         "generated",
     }
+    # His chief still reads the week (#210): the reading card, which has a catalogue twin,
+    # comes to her about him by name; the clip, whose only words are the compressor's and speak
+    # to him with none, is silently left off her list rather than shown to her in his voice.
+    hers = await deployment.client.get(
+        f"/profiles/{profile_id}/feed/week", headers=bearer(mei["token"])
+    )
+    assert hers.status_code == 200, hers.text
+    her_rows = hers.json()
+    her_by_id = {row["item"]["item_id"]: row["item"] for row in her_rows}
+    assert her_by_id[reading]["status"] == "played"
+    assert not any(row["item"]["type"] == "clip" for row in her_rows)
     # A caregiver who is not his chief does not read the engine's week.
     siti = await _caregiver(deployment, pa, profile_id)
-    hers = await deployment.client.get(
+    hers_refused = await deployment.client.get(
         f"/profiles/{profile_id}/feed/week", headers=bearer(siti["token"])
     )
-    assert hers.status_code == 403 and hers.json()["refusal"] == "NotTheirsToManage"
+    assert hers_refused.status_code == 403 and hers_refused.json()["refusal"] == "NotTheirsToManage"
 
 
 async def test_watching_for_pa_lists_each_watch_with_its_sources_and_cadence_and_she_adds_and_pauses(
