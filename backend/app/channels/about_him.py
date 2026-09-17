@@ -234,7 +234,7 @@ class Reader:
             for item in heard.items
             if item.deliver_to != "patient"
             or not self.speaks_to_him(
-                [item.headline, item.body, item.voice, item.why.get("plain", "")]
+                [item.headline, item.body, item.voice, item.why.get("plain", ""), item.why.get("lines", [])]
             )
         ]
         return heard.model_copy(update={"items": kept})
