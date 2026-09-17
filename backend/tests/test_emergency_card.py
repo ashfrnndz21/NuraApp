@@ -11,24 +11,40 @@ Singapore says 995 and Malaysia 999.
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Outcome
+from app.channels.printable import emergency_card_html
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.delivery.strings import theirs
+from app.drugs.registry import UnknownDrug
 from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, ProviderKind, SourceChannel
 from app.memory.spine import add_provider
 from app.regions import Region
-from app.safety.emergency_card import CARD_TARGET, emergency_card
+from app.safety.emergency_card import (
+    CARD_TARGET,
+    Card,
+    Line,
+    Medicine,
+    _medicine_label,
+    _medicines,
+    compose_lines,
+    emergency_card,
+)
 from app.safety.models import CardFormat, EmergencyCard
+from app.safety.plain_words import verify
 from app.state.service import StaleState, current_state
+from tests.medicines_support import add, label
 from tests.safety_support import (
     REGISTRY,
     assert_plain,
@@ -92,7 +108,10 @@ async def test_the_card_holds_what_a_stranger_needs_and_every_line_is_verified(
         "1 tablet",
         "every morning",
     )
-    assert medicine.plain_name == "the water pill (frusemide)"
+    # `plain_name` is his word alone, data (module doc); the register's name is `generic`,
+    # separate data beside it — the parenthetical below is the *sentence*'s own doing
+    # (`_medicine_label`), attempted only where the whole line still passes plain-words (#222).
+    assert medicine.plain_name == "the water pill" and medicine.has_plain_name
     assert card.contacts[0].name == "Mei" and card.contacts[0].phone_e164 == "+6592220031"
     assert card.clinic is not None and card.clinic.name == "Dr Tan"
     assert card.last_reading_at is not None
@@ -247,3 +266,302 @@ async def test_a_clinic_is_a_place_he_goes_to_and_an_old_reading_is_not_the_last
     assert "Pa goes to Bedok Clinic." in texts
     assert card.last_reading_at is None
     assert not any("blood pressure was last" in text for text in texts)
+
+
+# --- #222: no active medicine is ever withheld ----------------------------------------------
+
+
+def _synthetic_line(generic: str, *, drug_class: str = "", high_risk: bool = False):
+    """A `MedicationLine`-shaped stand-in with just what `_medicines` reads: enough to test
+    the card's naming of a medicine without the full ingestion pipeline — irrelevant here,
+    since #222 is about the sentence, not how the line got onto the record."""
+    return SimpleNamespace(
+        id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic=generic,
+        brand=None,
+        strength="",
+        form="tablet",
+        dose={"amount": 1.0, "unit": "tablet", "frequency": "od", "anchors": ["breakfast"]},
+        drug_class=drug_class,
+        high_risk=high_risk,
+    )
+
+
+def _card_lines(medicines, language: str):
+    return compose_lines(
+        name="Pa",
+        language=language,
+        spoken_language=language,
+        age=None,
+        conditions=(),
+        medicines=medicines,
+        allergies=(),
+        blood_type=None,
+        contacts=(),
+        clinic=None,
+        last_reading_at=None,
+        region=Region.SG,
+    )
+
+
+def test_every_active_medicine_on_the_whole_register_appears_on_the_card_in_every_language() -> (
+    None
+):
+    """#222: asserted over the entire register, not a hand-picked drug (the #186/#215
+    lesson) — a product added to the register later cannot fall outside this check.
+
+    Measured on `main` before the fix: 26 of the register's 50 generics vanished from the
+    English card (0 in Malay and Chinese, which never carry the register's chemical name in
+    the sentence) — every one of them a generic #202 added that `app.safety.plain_words`'s
+    glossary does not cover, so the sentence naming it failed rule 3 and was silently
+    withheld (`emergency_card.py`'s old `say`, log-and-drop). None do now."""
+    generics = sorted(REGISTRY.generics)
+    assert len(generics) >= 50, "the fixture registry shrank; the measurement above is stale"
+    lines = [_synthetic_line(generic) for generic in generics]
+    for language in ("en", "ms", "zh"):
+        medicines = _medicines(REGISTRY, lines, language)
+        assert len(medicines) == len(generics)
+        card_lines = _card_lines(medicines, language)
+        assert_plain(card_lines, language)
+        named = [one for one in card_lines if one.id == "ec.medicine"]
+        missing = len(generics) - len(named)
+        assert missing == 0, f"{language}: {missing} of {len(generics)} medicines vanished"
+        # The safety net (#222) never had to fire: every medicine's own sentence rendered.
+        assert not any(one.id.startswith("ec.render_issue") for one in card_lines)
+
+
+def test_a_high_risk_medicine_with_no_story_still_appears_with_its_marker() -> None:
+    """#222: a high-risk drug the register carries no plain-name story for (a future
+    addition — this fixture's register happens to have a story for every one it lists
+    today) is still named, by the register's own name, and still carries its marker."""
+    generic = "oxymorphone"
+    with pytest.raises(UnknownDrug):
+        REGISTRY.monograph(generic)
+    line = _synthetic_line(generic, drug_class="opioid", high_risk=True)
+    for language in ("en", "ms", "zh"):
+        medicines = _medicines(REGISTRY, [line], language)
+        medicine = medicines[0]
+        assert medicine.plain_name == "Oxymorphone" and not medicine.has_plain_name
+        assert medicine.high_risk
+        card_lines = _card_lines(medicines, language)
+        assert_plain(card_lines, language)
+        ids = [one.id for one in card_lines]
+        assert "ec.medicine" in ids and "ec.high_risk" in ids
+        named = next(one.text for one in card_lines if one.id == "ec.medicine")
+        assert "Oxymorphone" in named
+
+
+def test_ec_high_risk_is_probed_too_not_only_ec_medicine() -> None:
+    """#229 (review on #222's own PR): `_medicine_label` must probe every template the label
+    fills, not only `ec.medicine` — `ec.high_risk` wraps the same label in more words
+    ("{name}'s doctor watches {medicine} closely.") and sits closer to rule 3's 15-word hard
+    fail. The enriched label below passes `ec.medicine`'s probe (12 words: under it) but fails
+    `ec.high_risk`'s (16 words: over it) on word count alone — nothing to do with the chemical
+    name or the glossary. Before this was fixed, `ec.high_risk` — the marker a paramedic most
+    needs — could fail silently while `ec.medicine` still rendered, with no trace in
+    `withheld` and so no `ec.render_issue` either.
+
+    A long, realistic (multi-word Malaysian) patient name is used throughout, deliberately:
+    `theirs()` runs on it and the label before the probe now (not after, as it used to), and
+    the probe itself always checks word-count against a short stand-in name (`NAME_STAND_IN`,
+    "Ash") — a repo-wide property of `render()`, not specific to this fix — so the fallback
+    label (plain name alone, no parenthetical) is sized here to still pass both templates with
+    the *real* long name substituted in, not just the stand-in: that's what "never dropped"
+    means when a real person's card is actually rendered, not just when it's probed."""
+    plain = "the special morning tablet for weak tired hearts"
+    generic = "abc def ghi jkl"  # a synthetic multi-word "chemical name": only its word
+    # count matters here, not any real drug — it exists purely to push the *enriched* label
+    # over ec.high_risk's threshold without a single long word tripping rule 3 for the wrong
+    # reason (a real long generic name would trigger the same collision differently).
+    medicine = Medicine(
+        line_id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic=generic,
+        brand=None,
+        strength="5 mg",
+        form="tablet",
+        plain_name=plain,
+        has_plain_name=True,
+        amount="1 tablet",
+        when="every morning",
+        high_risk=True,
+        high_risk_class="anticoagulant",
+    )
+    long_name = "Muhammad Firdaus Abdullah"
+    label = _medicine_label(medicine, "en", long_name)
+    assert label == plain, "the enriched label must fail ec.high_risk for this test to mean anything"
+    card_lines = compose_lines(
+        name=long_name,
+        language="en",
+        spoken_language="en",
+        age=None,
+        conditions=(),
+        medicines=[medicine],
+        allergies=(),
+        blood_type=None,
+        contacts=(),
+        clinic=None,
+        last_reading_at=None,
+        region=Region.SG,
+    )
+    assert_plain(card_lines)
+    ids = [one.id for one in card_lines]
+    # The point of the fix: ec.high_risk is never dropped, and the general safety net never
+    # had to fire for it — the label was chosen so both sentences always pass, real name and
+    # all, not just the "Ash" stand-in the probe itself checks against.
+    assert "ec.medicine" in ids and "ec.high_risk" in ids
+    assert not any(one.id.startswith("ec.render_issue") for one in card_lines)
+    medicine_text = next(one.text for one in card_lines if one.id == "ec.medicine")
+    high_risk_text = next(one.text for one in card_lines if one.id == "ec.high_risk")
+    assert medicine_text == f"{long_name} takes {plain}."
+    assert high_risk_text == f"{long_name}'s doctor watches {plain} closely."
+
+
+def test_the_fallback_label_is_probed_too_not_only_the_enriched_one() -> None:
+    """A1 (clinical-safety review on #229's own PR): `_medicine_label`'s fallback branch —
+    `language != "en"`, or `has_plain_name` is false — used to hand its label straight back
+    to the caller with no probe at all, unlike the enriched label a few lines below it. His
+    plain name, or the register's bare name when the register has none, is not automatically
+    safe just because it is the plain form: a value with two sentences run together fails
+    rule 2 (`_check_one_idea`) in every language the same way — unlike rule 3's word-count
+    check, which `_check_length` skips entirely for Chinese, rule 2 is the one failure shape
+    that is not language-dependent, so it proves the probe now runs for `ms` and `zh` too,
+    not only `en`. Before this was fixed, a medicine could vanish from the card in exactly
+    this shape, in English whenever a generic had no story and not only when the language
+    was not English."""
+    # A Chinese full stop, not an ASCII one: `_sentences()` only reads a language's own
+    # sentence-enders (rule 5's lesson, module doc), so an ASCII "." mid-string splits `en`
+    # and `ms` but not `zh` — this is the one punctuation mark rule 2 reads as an ending in
+    # every language at once, which is what makes the failure land the same way in all three.
+    plain = "the special morning tablet。 Ask your doctor first"
+    for language in ("en", "ms", "zh"):
+        # Sanity: the raw fallback really does fail plain-words on its own here, or the rest
+        # of this test proves nothing about the probe.
+        assert any(f.severity == "fail" for f in verify(plain, language))
+        medicine = Medicine(
+            line_id=uuid.uuid4(),
+            fact_id=uuid.uuid4(),
+            generic="paracetamol",
+            brand=None,
+            strength="500 mg",
+            form="tablet",
+            plain_name=plain,
+            has_plain_name=False,
+            amount="1 tablet",
+            when="every morning",
+            high_risk=True,
+            high_risk_class="opioid",
+        )
+        label = _medicine_label(medicine, language, "Pa")
+        assert label != theirs(plain, "Pa", language), (
+            "the fallback must be probed and replaced when it fails, not returned unchecked"
+        )
+        card_lines = _card_lines([medicine], language)
+        assert_plain(card_lines, language)
+        ids = [one.id for one in card_lines]
+        # The point of the fix: neither sentence naming the medicine is dropped, and the
+        # general safety net never had to fire for either of them.
+        assert "ec.medicine" in ids and "ec.high_risk" in ids
+        assert not any(one.id.startswith("ec.render_issue") for one in card_lines)
+
+
+async def test_the_printable_page_and_the_live_card_show_the_same_medicines(
+    sg: AsyncSession,
+) -> None:
+    """#222: a generic #202 added — not covered by the plain-words glossary, so its sentence
+    used to be withheld — is on the live card, the printable page's sentences, and its data
+    table, the register's own name included there whether or not the sentence could carry it."""
+    owner = await pa(sg, phone="+6591110040")
+    await water_pill(sg, owner)  # frusemide: glossary-safe, the parenthetical still shows
+    await add(sg, owner, label("bisoprolol", "5 mg", "1 tab OD morning"))
+    card = await emergency_card(sg, context=owner, registry=REGISTRY, format=CardFormat.HTML)
+    assert {m.generic for m in card.medicines} == {"frusemide", "bisoprolol"}
+    texts = [line.text for line in card.lines]
+    assert "Pa takes the water pill (frusemide)." in texts
+    # bisoprolol is not one of the glossary's few chemical names: the sentence carries his
+    # plain name alone, never withheld for it.
+    assert "Pa takes Pa's blood pressure tablet." in texts
+    assert_plain(card.lines)
+    page = emergency_card_html(card)
+    assert "the water pill" in page and "(frusemide)" in page
+    assert "your blood pressure tablet" in page
+    # The register's own name for bisoprolol is on the page as data even though the sentence
+    # could not carry it (module doc: `generic` is data for the stranger).
+    assert "(bisoprolol)" in page
+
+
+def test_the_printable_page_pairs_the_english_twin_by_medicine_not_position() -> None:
+    """A2 (clinical-safety review on #229's own PR): the printable page used to pair a
+    medicine's English twin by where it fell in the list of `ec.medicine` lines, not by
+    which medicine the line is about. The patient-language and English lines are two
+    separate passes over the same medicines (`emergency_card.lines_in`), and nothing keeps
+    the two the same length — here, with two medicines and only the second's plain name
+    (a shape A1 on its own used to be able to produce, and not the only one that can),
+    only the second medicine's sentence survives in his own language while both survive in
+    English: position-based pairing attached the *first* medicine's English sentence to the
+    row for the *second*. Built directly against `Card`/`Line`, not through `compose_lines`,
+    so the test is about the join in `printable.py`, not about how the mismatch arose."""
+    first = Medicine(
+        line_id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic="firstgeneric",
+        brand=None,
+        strength="5 mg",
+        form="tablet",
+        plain_name="the first tablet",
+        has_plain_name=False,
+        amount="1 tablet",
+        when="every morning",
+        high_risk=False,
+        high_risk_class=None,
+    )
+    second = Medicine(
+        line_id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic="secondgeneric",
+        brand=None,
+        strength="10 mg",
+        form="tablet",
+        plain_name="the second tablet",
+        has_plain_name=True,
+        amount="1 tablet",
+        when="every evening",
+        high_risk=False,
+        high_risk_class=None,
+    )
+    # His own language: only the second medicine's sentence survives.
+    lines = [Line("ec.medicine", "Pa makan ubat kedua.", second.line_id)]
+    # English: both survive, first then second, in list order — the shape that broke
+    # position-based pairing once the two lists no longer had the same length.
+    english_lines = [
+        Line("ec.medicine", "Pa takes the first tablet.", first.line_id),
+        Line("ec.medicine", "Pa takes the second tablet (secondgeneric).", second.line_id),
+    ]
+    card = Card(
+        card_id=uuid.uuid4(),
+        profile_id=uuid.uuid4(),
+        state_id=uuid.uuid4(),
+        rendered_at=utcnow(),
+        name="Pa",
+        language="ms",
+        spoken_language="ms",
+        age_band=None,
+        conditions=[],
+        medicines=[first, second],
+        allergies=[],
+        blood_type=None,
+        high_risk=[],
+        contacts=[],
+        clinic=None,
+        last_reading_at=None,
+        emergency_number="999",
+        lines=lines,
+        english_lines=english_lines,
+    )
+    page = emergency_card_html(card)
+    assert "Pa makan ubat kedua." in page
+    # The twin of the surviving sentence must be the second medicine's own English sentence.
+    assert "Pa takes the second tablet (secondgeneric)." in page
+    # Never the first medicine's — the bug this test guards against.
+    assert "Pa takes the first tablet." not in page

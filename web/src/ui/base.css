@@ -142,6 +142,24 @@ body {
   padding-top: var(--space-1);
   border-top: 1px solid rgba(43, 39, 51, 0.08);
 }
+/* The emergency card's medicine data (#222/#229): the register's chemical name and strength,
+   as data beside the sentences above, in the same quiet caption style as .provenance, so it
+   reads as supplementary to a stranger without competing with his own words. */
+.tile .medicine-data {
+  margin-top: 4px;
+  padding-top: var(--space-1);
+  border-top: 1px solid rgba(43, 39, 51, 0.08);
+}
+.tile .medicine-data p {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.tile .medicine-data p + p {
+  margin-top: 4px;
+}
+.tile .medicine-data strong {
+  color: var(--act);
+}
 .tile.settled {
   transition: opacity var(--settle);
   opacity: 0.92;

@@ -19,10 +19,19 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
+from app.db import Base, ProfileScoped, enum_column, frozen, monotonic, utcnow
 from app.keys.scopes import Scope
 from app.memory.models import _row_of_profile, _tied_to_profile
 from app.state.models import RenderedFromState
@@ -50,8 +59,9 @@ class CardType(StrEnum):
     REORDER = "reorder"
     """A medicine running low (E04 works the date out; the card repeats it)."""
     NOTICE = "notice"
-    """A safety notice from a regulator matching a medicine. Sent to him only when it matches
-    the batch on his pack and there is something to do; otherwise held for the caregiver."""
+    """A safety notice from a regulator matching a medicine. Never his card, batch match or
+    not (#181): held for the chief, or rerouted as a `QUESTION` to the memo when its words
+    would change treatment. `app/delivery/feed/items.py` refuses one built for the patient."""
     GATE = "gate"
     """That is all that is new. Keep going?"""
     STORY = "story"
@@ -391,11 +401,13 @@ class Engagement(ProfileScoped, Base):
 frozen(Engagement)
 
 
+@monotonic
 class FeedPage(ProfileScoped, Base):
     """The last page rendered for one person: what the app keeps for an offline launch.
 
     A list of item ids in the order they were shown, the cursor it was shown under and the
-    next one, and whether the quiet hours held anything back. `GET …/feed/cached` reads it.
+    next one, and whether the quiet hours held anything back. `GET …/feed/cached` reads the
+    newest row — `rendered_at`, tied by `seq` (#192/#218) — as the one cached page.
     """
 
     __tablename__ = "feed_page"
@@ -410,6 +422,7 @@ class FeedPage(ProfileScoped, Base):
     quiet: Mapped[bool] = mapped_column(Boolean, default=False)
     held_by_caps: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
     rendered_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 frozen(FeedPage)

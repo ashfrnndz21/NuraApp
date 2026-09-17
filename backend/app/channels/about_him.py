@@ -97,6 +97,7 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (feed_words.WHY, feed_words.WHY_THEIRS),
         (timeline_strings.CHANGED, timeline_strings.CHANGED_THEIRS),
         (timeline_strings.ANCHORS, timeline_strings.ANCHORS_THEIRS),
+        (timeline_strings.ASK_STEPS, timeline_strings.ASK_STEPS_THEIRS),
         (medicine_words.DOSE_CARD, medicine_words.DOSE_CARD_THEIRS),
         (medicine_words.TAKEN, medicine_words.TAKEN_THEIRS),
         (medicine_words.COUNT, medicine_words.COUNT_THEIRS),

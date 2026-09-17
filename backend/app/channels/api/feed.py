@@ -28,16 +28,19 @@ The feeling cloud's tap is in `app.channels.api.feelings`, with the rest of E17.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
 from app.channels.about_him import reader_of
-from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
     AreaOut,
@@ -56,10 +59,12 @@ from app.channels.api.feed_schemas import (
     SentOut,
     SourceOut,
 )
+from app.channels.api.refusals import refused
 from app.delivery.feed.area import read_area, set_area
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
 from app.delivery.feed.compose import around_for, today_for
 from app.delivery.feed.engagement import record_engagement, record_events
+from app.delivery.feed.find import FindStep, find_stream
 from app.delivery.feed.find import find as find_pages
 from app.delivery.feed.models import SearchJob
 from app.delivery.feed.rank import (
@@ -73,7 +78,8 @@ from app.delivery.feed.rank import (
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
 from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
-from app.delivery.strings import language_for, watch_label
+from app.delivery.strings import FIND_STEPS, language_for, watch_label
+from app.errors import Refusal
 from app.keys.context import KeyContext
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
@@ -379,6 +385,42 @@ async def find(body: FindIn, request: Request, context: Context, session: Db) ->
         language=body.language,
     )
     return FindOut(where=body.where, results=[ResultOut.of(one) for one in found])
+
+
+def _sse(payload: dict[str, object]) -> bytes:
+    """One Server-Sent Event: a `data:` line of JSON (`app.channels.api.timeline._sse`, the
+    same shape — kept local so this route does not import the timeline router)."""
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+@router.post("/{profile_id}/find/stream")
+async def find_pages_stream(body: FindIn, request: Request, context: Context) -> StreamingResponse:
+    """`POST /{id}/find`, streamed, for the Web and Videos filters (docs/design-direction.md
+    'Conversation, waiting and thinking'): one `step` event the instant the allowlisted
+    search is actually running (`find_stream`), then a `results` event — the same list
+    `POST /{id}/find` gives. Providers is a directory read and streams straight to its
+    results, no step: there is no real stage to say is still in progress.
+
+    Opens its own session (`session_scope`), never `Depends(db)` — see `app.channels.api.
+    timeline.ask_stream` for why a stream cannot use a `yield` dependency."""
+    code = language_for(body.language)
+
+    async def events() -> AsyncIterator[bytes]:
+        try:
+            async with session_scope(request) as session:
+                async for event in find_stream(
+                    session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
+                ):
+                    if isinstance(event, FindStep):
+                        yield _sse({"type": "step", "key": event.key, "label": FIND_STEPS[code][body.where]})
+                    else:
+                        yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
+        except Refusal as refusal:
+            response = await refused(request, refusal)
+            body_ = json.loads(bytes(response.body))
+            yield _sse({"type": "refusal", "status": response.status_code, **body_})
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @router.get("/{profile_id}/feed/{item_id}")

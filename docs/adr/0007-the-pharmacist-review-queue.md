@@ -26,6 +26,7 @@ The first fifty cards are rendered for real people: they carry names ("Mei can s
 - In the PDPA data map (`scripts/data_map.py`, `docs/trust/pdpa-data-map.md`) the queue's words — `review_item.lines`, `.proposed` and `.reason` — are **health, de-identified**: a sample keeps his readings, days and plain names for medicines, a rewrite proposes such lines, and a reason is free text a pharmacist may quote a line into. They are handled as health data: in region, never to an analytics vendor, nothing trains on them. The rest of the row — kind, card type, ids, digest, verdict, the staff handle, times — is operational.
 - The residual risk of de-identification is in the values kept on purpose — a number, a day, a medicine's plain name. Alone they identify nobody; together, on one card, a determined reader with other data might narrow it down. The queue is operator scope, in region, and read by the pharmacist only; a per-language balance of samples and a shorter retention after the first fifty are decided are follow-ups.
 - When a staff identity provider exists (SSO), it replaces the token list behind the same `staff` dependency; nothing else changes.
+- The queue is served on the patient app's own origin for now (`/app/review/`, W6 #137) — fine while nothing behind either surface is real. Before real data it moves to its own origin, `NURA_REVIEW_ORIGIN` (#145, ADR 0008 "Before real data", `docs/deploy.md`).
 
 ## The clinical-safety review (2026-09-15)
 

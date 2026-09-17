@@ -178,6 +178,9 @@ export interface Strings {
     sourceMedicines: string;
     sourceVisits: string;
     askWithheld: string;
+    askThinking: string;
+    askAnswered: string;
+    askLookedAt: string;
     back: string;
     statusHeld: string;
     statusSent: string;
@@ -684,6 +687,7 @@ export interface Strings {
     threadEarlier: string;
     messageLabel: string;
     sendMessage: string;
+    sendingMessage: string;
     keys: string;
     newKey: string;
     holderName: string;

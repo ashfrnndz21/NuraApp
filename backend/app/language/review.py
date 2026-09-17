@@ -13,10 +13,17 @@ nothing from a new source reaches a patient before review. Approving it allowlis
 rejecting it (with a reason) keeps it off. A source put in the table any other way while
 pending gets its review item the next time the queue is read.
 
-**Cards.** `sample_card` runs as each card for a patient is written (`items.create_item`):
-until fifty renderings of that card type are queued, it keeps one more — de-identified
-(`deidentify`), and only when that rendering is not already queued. A card type whose first
-fifty are not all decided shows `flag: true` in `status`.
+**Cards.** `sample_card` runs as each card is written (`items.create_item`): for a patient's
+card, or for a safety notice, whoever it is held for — a notice can reach the chief with a
+clinical claim no pharmacist has read (#181), so it is sampled like the cards he reads, not
+skipped the way the rest of a caregiver's or the memo's cards are. `sample_find_result` runs
+the same first-fifty-then-a-flag against the same `CardType.LEARNING` budget for the ask bar's
+on-demand Web and Videos results (#188, `feed.find.find`), which are never a `FeedItem` at
+all — a new source's first pages are read by a pharmacist once, whether a search job found
+them or a caregiver typed a word for them. Until fifty renderings of a card type are queued
+(by either door), one more is kept — de-identified (`deidentify`), and only when that
+rendering is not already queued. A card type whose first fifty are not all decided shows
+`flag: true` in `status`.
 
 **Decisions.** `decide` approves, rejects with a reason, or rewrites. A rewrite is a proposal:
 the lines as the reviewer would have them, each checked by the plain-words verifier, with the
@@ -79,8 +86,14 @@ REVIEWED_TYPES: tuple[CardType, ...] = (
     CardType.SEASONAL,
     CardType.FOOD,
 )
-"""The card types a patient is shown. The doctor questions held for the memo never reach him,
-so they are not his cards to review here; the caregiver's duty card is hers, not his.
+"""The card types a patient is shown, plus one that is never his: the safety notice. The
+doctor questions held for the memo never reach anyone unreviewed — E05 reads them off the
+memo, not the feed — so they are not here; the caregiver's duty card is hers, not his, and
+carries no clinical claim, so it is not here either. A safety notice (`CardType.NOTICE`) is
+neither shown to him nor a duty card: it is held for the chief instead (#181,
+docs/health-feed-spec.md §0 and §9), but it is still a clinical claim reaching a person, so it
+stays in this list on purpose — `sample_card` sends it here however it is held, not only when
+`deliver_to` is the patient's.
 
 Every other type that `SUPPLY_OF` puts in a section the patient reads belongs here, the
 feed's richer formats among them (F1): a clip, a local bulletin, a season coming and the
@@ -359,30 +372,85 @@ async def _count(session: AsyncSession, card_type: CardType) -> int:
 
 async def sample_card(session: AsyncSession, item: FeedItem) -> ReviewItem | None:
     """Queue this card for review if it is one of the first fifty of its type, de-identified.
-    A card for the caregiver or the memo, a type he is never shown, and a rendering already
-    queued are left alone."""
-    if item.deliver_to is not DeliverTo.PATIENT or item.type not in REVIEWED_TYPES:
+    A card of a type he is never shown, and a rendering already queued, are left alone. A card
+    for the caregiver or the memo is left alone too — unless its words are compressed from an
+    outside page (`KEPT_AS_WRITTEN`): a safety notice, held for the chief though it is, still
+    carries a clinical claim reaching a person, so it is sampled whoever it is held for (#181).
+
+    #236: the same is true of a learning, clip, local, seasonal or food card rerouted to the
+    chief because its finding would change treatment (`app.delivery.feed.search.run_job`,
+    `items.TreatmentChangingCard`) — it too is compressed from an outside page and reaches a
+    person, so gating the queue on `DeliverTo.PATIENT` alone left every one of those rerouted
+    cards unreviewed, the same hole #181 closed for the notice on its own branch. A card of his
+    own record's words held for her (`REORDER`, `MEMO`, the caregiver's `DUTY`, which is not
+    even in `REVIEWED_TYPES`) carries nothing compressed from outside, so it stays out.
+    """
+    if item.type not in REVIEWED_TYPES:
         return None
-    count = await _count(session, item.type)
-    if count >= FIRST:
+    if item.deliver_to is not DeliverTo.PATIENT and item.type not in KEPT_AS_WRITTEN:
         return None
     why = item.why.get("plain", "") if isinstance(item.why, dict) else ""
-    sample = deidentify(
-        item.type,
-        item.language,
+    return await _sample(
+        session,
+        card_type=item.type,
+        language=item.language,
         headline=item.headline,
         body=item.body,
         voice=item.voice,
         why=str(why),
     )
-    digest = _digest("card", item.type.value, item.language, sample.lines)
+
+
+async def sample_find_result(
+    session: AsyncSession,
+    *,
+    language: str,
+    headline: str,
+    body: Sequence[str],
+    why: str,
+) -> ReviewItem | None:
+    """Queue one of the ask bar's Web or Videos results for review (#188): the same first
+    fifty, the same de-identified sample, the same `CardType.LEARNING` budget a scheduled
+    search job's learning cards queue against — a new source's first pages are read by a
+    pharmacist once, whether a search job found them or a caregiver typed a word for them.
+    A result is never a `FeedItem` (nothing here is capped, ranked or shown again), so there
+    is no `deliver_to` to gate on; the ask bar is caregiver-only already (`find.find`,
+    `Scope.ASK`), which is exactly the audience a safety notice or a caregiver-delivered card
+    would otherwise be skipped for — this is sampled on purpose, not despite that.
+    """
+    return await _sample(
+        session,
+        card_type=CardType.LEARNING,
+        language=language,
+        headline=headline,
+        body=body,
+        voice=(),
+        why=why,
+    )
+
+
+async def _sample(
+    session: AsyncSession,
+    *,
+    card_type: CardType,
+    language: str,
+    headline: str,
+    body: Sequence[str],
+    voice: Sequence[str],
+    why: str,
+) -> ReviewItem | None:
+    count = await _count(session, card_type)
+    if count >= FIRST:
+        return None
+    sample = deidentify(card_type, language, headline=headline, body=body, voice=voice, why=why)
+    digest = _digest("card", card_type.value, language, sample.lines)
     if await session.scalar(select(ReviewItem.id).where(ReviewItem.digest == digest)):
         return None
     row = ReviewItem(
         kind=ReviewKind.CARD,
-        card_type=item.type.value,
+        card_type=card_type.value,
         sample_number=count + 1,
-        language=item.language,
+        language=language,
         lines=sample.lines,
         catalogue_ids=list(sample.catalogue_ids),
         digest=digest,
