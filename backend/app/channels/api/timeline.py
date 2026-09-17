@@ -29,6 +29,8 @@ from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import AwareDatetime
 
+from app.audit.models import Action
+from app.audit.trail import record as record_audit
 from app.channels.about_him import Reader, reader_of
 from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope
@@ -57,6 +59,8 @@ from app.channels.api.timeline_schemas import (
 from app.db import utcnow
 from app.delivery.timeline_strings import ASK_STEP_NAMES, ASK_STEPS
 from app.errors import Refusal
+from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
+from app.keys.scopes import Scope
 from app.memory.attach import attach_to_appointment, attach_to_episode
 from app.memory.changes import last_look, mark_looked, what_changed
 from app.memory.providers import directory, provider_history, write_chief_note
@@ -66,6 +70,7 @@ from app.memory.working import open_episode
 from app.reasoning.feelings.service import record_tap
 from app.safety.red_flags import detect
 from app.search.ask import AskStep, recall, recall_stream
+from app.search.narrate import NarratedStep, Narrator
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
 
@@ -313,16 +318,37 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
     return AnswerOut.of(answer)
 
 
-def _step_event(step: AskStep, lang: str, reader: Reader) -> bytes:
+async def _step_event(
+    narrator: Narrator,
+    steps_so_far: list[NarratedStep],
+    step: AskStep,
+    lang: str,
+    reader: Reader,
+) -> bytes:
     """One `AskStep` off `recall_stream`, in his words (or the caregiver's twin, by his
     name): the label the trace shows while it works, and the short name the collapsed "What
     Nura looked at" line joins. `key` is a part of `app.search.ask.STEP_KEYS` — never a row,
-    never a value off his record, so a step carries nothing beyond which part was read."""
+    never a value off his record, so a step carries nothing beyond which part was read and how
+    many things it held (`step.count`).
+
+    `narrator` may rephrase that label livelier, the way the owner wants the trace to feel in
+    the demo (`app.search.narrate.Narrator`); on the fixture narrator, or on any doubt a
+    Claude-backed one has, it stays the catalogue's own words, unchanged — nothing here ever
+    waits on the narrator, it only ever changes which words are already on the wire.
+    `steps_so_far` is every step already streamed this ask, oldest first, appended to here, so
+    a narrator sees the whole trace so far, not just the newest step; only the line for this
+    step is used, so words already sent for an earlier step never change under it."""
+    label = reader.says(ASK_STEPS[lang][step.key])
+    steps_so_far.append(NarratedStep(key=step.key, label=label, count=step.count))
+    text = label
+    async for line in narrator.narrate(steps_so_far, language=lang, reader=reader):
+        if line.key == step.key:
+            text = line.text
     return _sse(
         {
             "type": "step",
             "key": step.key,
-            "label": reader.says(ASK_STEPS[lang][step.key]),
+            "label": text,
             "name": ASK_STEP_NAMES[lang][step.key],
         }
     )
@@ -364,6 +390,8 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                     return
                 lang = await language_for(session, context, body.language)
                 reader = await reader_of(session, context, body.language)
+                steps_so_far: list[NarratedStep] = []
+                reached_out = False
                 async for event in recall_stream(
                     session,
                     context=context,
@@ -375,7 +403,23 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                     language=body.language,
                 ):
                     if isinstance(event, AskStep):
-                        yield _step_event(event, lang, reader)
+                        if outside.narrator.external_processor is not None and not reached_out:
+                            # Written before the first narration call, once per ask: a reach
+                            # that sends the trace's step ids and counts outside the region,
+                            # distinct from the ASK read itself (ADR 0017, mirroring
+                            # `app.ingestion.review.review_artifact`'s EXTERNAL_MODEL_PROCESSOR
+                            # line for the extractor).
+                            await record_audit(
+                                session,
+                                context=context,
+                                action=Action.SHARE,
+                                scope=Scope.ASK,
+                                target=EXTERNAL_MODEL_PROCESSOR,
+                                rows=1,
+                                shared_with_label=outside.narrator.external_processor,
+                            )
+                            reached_out = True
+                        yield await _step_event(outside.narrator, steps_so_far, event, lang, reader)
                     else:
                         yield _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
         except Refusal as refusal:
