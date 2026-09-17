@@ -8,6 +8,7 @@ import { Tile } from "../../ui/components";
 import { ChangesScreen, EpisodeScreen, ProviderScreen, ProvidersScreen, TimelineScreen } from "./Timeline";
 import { AddMedicineScreen, MedicinesScreen, MoreScreen, StoryScreen } from "./Medicines";
 import { BuilderScreen, RoutineScreen, TrendsScreen } from "./Day";
+import { LedgerScreen } from "./Ledger";
 import { PaperScreen, PapersScreen } from "./Papers";
 import { RecordFrame, toRecord } from "./parts";
 
@@ -46,6 +47,8 @@ export function RecordScreen({ at }: { at: RecordAt }): JSX.Element {
       return <RoutineScreen />;
     case "builder":
       return <BuilderScreen />;
+    case "ledger":
+      return <LedgerScreen />;
   }
 }
 
@@ -57,6 +60,7 @@ const PLACE: Record<HubEntry, RecordAt> = {
   trends: { name: "trends" },
   providers: { name: "providers" },
   changes: { name: "changes" },
+  ledger: { name: "ledger" },
 };
 
 /** The Record's first screen: one big button a part. In his density his medicines, his
@@ -70,6 +74,7 @@ const PLACE_ICON: Partial<Record<string, IconName>> = {
   trends: "records",
   providers: "visits",
   changes: "note",
+  ledger: "ledger",
 };
 
 function Hub(): JSX.Element {

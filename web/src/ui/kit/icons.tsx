@@ -30,6 +30,7 @@ import {
   Pill,
   Play,
   Plus,
+  Receipt,
   Search,
   ShieldCheck,
   Smile,
@@ -104,6 +105,7 @@ export const ICONS = {
   chevron: ChevronRight,
   back: ChevronLeft,
   note: MessageSquare,
+  ledger: Receipt,
   phone: Phone,
   // Profile (docs/design/nura-concept-board.html, the Profile screen).
   language: Globe,

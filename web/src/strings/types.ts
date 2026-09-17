@@ -737,6 +737,17 @@ export interface Strings {
     tableTime: string;
     tableMedicines: string;
     tableReadings: string;
+    ledger: string;
+    ledgerOther: string;
+    ledgerWithheld: string;
+    ledgerWithheldOther: string;
+    ledgerTotals: string;
+    ledgerClaimedLabel: string;
+    ledgerInsurerPaidLabel: string;
+    ledgerPatientPaidLabel: string;
+    ledgerPatientPaidLabelOther: string;
+    ledgerNone: string;
+    ledgerOn: string;
   };
   /** Family (W6): chrome only. Every line about his record on these screens is the backend's. */
   family: {

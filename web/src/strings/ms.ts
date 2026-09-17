@@ -1423,6 +1423,14 @@ export const ms = {
     providersOther: "Doktor dan klinik {patient}",
     // @patient headline
     changes: "Apa yang berubah",
+    // @patient headline
+    ledger: "Wang insurans anda",
+    // @patient headline
+    ledgerOther: "Wang insurans {patient}",
+    // @patient
+    ledgerWithheld: "Ini disimpan untuk anda sahaja.",
+    // @patient
+    ledgerWithheldOther: "Ini disimpan untuk {patient} sahaja.",
     // @patient phrase
     back: "Kembali ke surat anda",
     // @patient phrase
@@ -1751,6 +1759,20 @@ export const ms = {
     tableMedicines: "Ubat",
     // @patient headline
     tableReadings: "Apa yang perlu diperiksa",
+    // @patient phrase
+    ledgerTotals: "Jumlah untuk {year}",
+    // @patient phrase
+    ledgerClaimedLabel: "Dituntut",
+    // @patient phrase
+    ledgerInsurerPaidLabel: "Syarikat insurans bayar",
+    // @patient phrase
+    ledgerPatientPaidLabel: "Anda bayar",
+    // @patient phrase
+    ledgerPatientPaidLabelOther: "{patient} bayar",
+    // @patient
+    ledgerNone: "Belum ada tuntutan lagi.",
+    // @patient phrase
+    ledgerOn: "Pada {date}",
   },
   family: {
     // @patient headline

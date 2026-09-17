@@ -1423,6 +1423,14 @@ export const zh = {
     providersOther: "{patient}的医生和诊所",
     // @patient headline
     changes: "有什么变化",
+    // @patient headline
+    ledger: "您的保险赔付",
+    // @patient headline
+    ledgerOther: "{patient}的保险赔付",
+    // @patient
+    ledgerWithheld: "这部分只保留给您。",
+    // @patient
+    ledgerWithheldOther: "这部分只保留给{patient}。",
     // @patient phrase
     back: "回到您的文件",
     // @patient phrase
@@ -1750,6 +1758,20 @@ export const zh = {
     tableMedicines: "药",
     // @patient headline
     tableReadings: "要量什么",
+    // @patient phrase
+    ledgerTotals: "{year}年总额",
+    // @patient phrase
+    ledgerClaimedLabel: "已申报",
+    // @patient phrase
+    ledgerInsurerPaidLabel: "保险公司支付了",
+    // @patient phrase
+    ledgerPatientPaidLabel: "您支付了",
+    // @patient phrase
+    ledgerPatientPaidLabelOther: "{patient}支付了",
+    // @patient
+    ledgerNone: "目前还没有理赔。",
+    // @patient phrase
+    ledgerOn: "在{date}",
   },
   family: {
     // @patient headline
