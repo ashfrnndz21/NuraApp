@@ -45,7 +45,7 @@ async def let_in(
     scopes: set[Scope],
 ) -> KeyContext:
     holder = await register_person(session, region=Region.SG, display_name=name, phone_e164=phone)
-    await agree_to_family_sharing(session, owner, holder, scopes=scopes)
+    await agree_to_family_sharing(session, owner, holder, scopes=scopes, role=role)
     await grant_key(session, context=owner, holder=holder, role=role, scopes=scopes)
     return await resolve_key_context(
         session, region=Region.SG, person_id=holder.id, profile_id=owner.profile_id
