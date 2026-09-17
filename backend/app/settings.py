@@ -41,6 +41,19 @@ class Settings:
     """NURA_PAPER_FIXTURES: the directory of paper fixtures the fixture extractor answers
     from (`app.ingestion.extract.FixtureExtractor`). Set on a laptop; the real extractor is
     a later adapter, and without either the process refuses to start."""
+    extractor: str = "fixture"
+    """NURA_EXTRACTOR: which reader answers `POST /profiles/{id}/imports` and the photo
+    capture route (`app.ingestion.extract_provider.extractor_for`). `fixture` (the default)
+    answers from NURA_PAPER_FIXTURES; `claude` is the Claude-backed reader
+    (`app.ingestion.claude_extract.ClaudeExtractor`), which only builds on a declared demo
+    (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process in SG or MY and
+    no in-region provider exists yet (ADR 0017) — a laptop dev run stays on the fixture. A
+    name this build does not have refuses to start."""
+    anthropic_api_key: str | None = None
+    """NURA_ANTHROPIC_API_KEY: the key the Claude extractor calls the Anthropic API with,
+    from the platform's secrets, never the repo, never a log. Unset, the SDK's own
+    ANTHROPIC_API_KEY is used if the environment has it; with neither, the extractor refuses
+    to build."""
     visit_fixtures: str | None = None
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
@@ -251,6 +264,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         red_flag_tiers=source.get("NURA_RED_FLAG_TIERS", "") == "1",
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
+        extractor=source.get("NURA_EXTRACTOR", "fixture"),
+        anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or None,
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
