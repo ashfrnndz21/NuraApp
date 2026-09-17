@@ -50,7 +50,8 @@ class Settings:
     no in-region provider exists yet (ADR 0017) — a laptop dev run stays on the fixture. A
     name this build does not have refuses to start."""
     anthropic_api_key: str | None = None
-    """NURA_ANTHROPIC_API_KEY: the key the Claude extractor calls the Anthropic API with,
+    """NURA_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY): the one key every Claude-backed adapter —
+    the extractor, `NURA_SEARCHER=claude`, `NURA_COMPRESSOR=claude` — calls the Anthropic API with,
     from the platform's secrets, never the repo, never a log. Unset, the SDK's own
     ANTHROPIC_API_KEY is used if the environment has it; with neither, the extractor refuses
     to build."""
@@ -84,10 +85,6 @@ class Settings:
     answers from NURA_FEED_FIXTURES; `claude` grounds a plain-words card on the fetched page
     through Claude's structured output (`app.delivery.feed.claude_adapters`), gated the same
     way as NURA_SEARCHER=claude. Any other name refuses to start."""
-    anthropic_api_key: str | None = None
-    """ANTHROPIC_API_KEY: the key `NURA_SEARCHER=claude`/`NURA_COMPRESSOR=claude` call the
-    Claude API with. From the platform's secrets, never the repo, never a log — read here and
-    passed down as a parameter, the way every other secret in this file is."""
     drug_registry: str = "fixture"
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
@@ -281,13 +278,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
-        anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or None,
+        anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
         searcher=source.get("NURA_SEARCHER", "fixture"),
         compressor=source.get("NURA_COMPRESSOR", "fixture"),
-        anthropic_api_key=source.get("ANTHROPIC_API_KEY") or None,
         speaker_fixtures=source.get("NURA_SPEAKER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
         web_dist=source.get("NURA_WEB_DIST") or None,
