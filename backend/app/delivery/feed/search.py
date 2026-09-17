@@ -444,9 +444,12 @@ async def run_job(
                 and engine.clips.excerpts,
             }
         if job.kind is JobKind.SAFETY:
-            # A notice is checked against the batch on his pack. One that does not match is
-            # held for the caregiver and never sent to him (spec §9); one that does is a
-            # card for today, capped like any other.
+            # A notice is never his card, batch match or not (spec §0, §9; #181): it is held
+            # for the chief, capped like any other of hers, unless its words would start,
+            # stop or change a medicine, in which case it is a question for the doctor and
+            # goes to the memo instead — the same reroute every other found page gets, just
+            # ahead of it, because a safety notice never reaches `create_item` with
+            # `DeliverTo.PATIENT` (that door is shut there too, `NoticeNotForPatient`).
             matches = found.batch is not None and found.batch.strip().lower() in _batches_on_record(
                 state
             )
@@ -458,6 +461,48 @@ async def run_job(
                 source_name=source.name,
                 doctor=doctor or YOUR_DOCTOR[code],
             )
+            if changes_treatment([notice_lines.headline, *notice_lines.body]):
+                question = await create_item(
+                    session,
+                    context=context,
+                    state=state,
+                    type=CardType.QUESTION,
+                    lines=Lines(
+                        language=code,
+                        headline=f"Ask about: {found.title}",
+                        body=tuple(compressed.body),
+                        voice=(),
+                        why=(
+                            f"A safety notice on {found.domain} about his medicine could change "
+                            "treatment, so it is a question for his doctor, not a card."
+                        ),
+                    ),
+                    why=Why(
+                        kind="question",
+                        plain="",
+                        source_id=str(source.id),
+                        gap=job.terms[0],
+                        fact_ids=tuple(_fact_ids_about(state, job.terms)),
+                    ),
+                    scope=Scope.MEDICINES,
+                    deliver_to=DeliverTo.MEMO,
+                    day=day.key,
+                    dedupe_key=key,
+                    expires_at=moment + LEARNING_LIFETIME,
+                    source=source,
+                    cite={**cite, "batch": found.batch},
+                    search_job_id=job.id,
+                )
+                existing.add(key)
+                questions.append(question)
+                rejected.append(
+                    {
+                        "url": found.url,
+                        "because": "treatment_change_rerouted_as_question",
+                        "item_id": str(question.id),
+                    }
+                )
+                continue
             try:
                 notice = await create_item(
                     session,
@@ -474,7 +519,7 @@ async def run_job(
                         suppressed=None if matches else "batch_does_not_match_the_pack",
                     ),
                     scope=Scope.MEDICINES,
-                    deliver_to=DeliverTo.PATIENT if matches else DeliverTo.CAREGIVER,
+                    deliver_to=DeliverTo.CAREGIVER,
                     day=day.key,
                     dedupe_key=key,
                     expires_at=moment + LEARNING_LIFETIME,

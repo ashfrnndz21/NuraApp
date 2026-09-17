@@ -2,15 +2,19 @@
 
 A card names its State or is not written; a card with a failing line is not written and the
 refusal is on the trail; a learning card from outside the allowlist is not written; a
-medicine on the list starts an explainer and a daily safety job, and a notice that does not
-match the batch on his pack is held for the caregiver and never delivered to him.
+medicine on the list starts an explainer and a daily safety job, and a notice — whether or
+not it matches the batch on his pack — is held for the caregiver, or rerouted to the memo as
+a doctor question, and never delivered to him (#181; `items.NoticeNotForPatient` refuses one
+built for `DeliverTo.PATIENT` outright).
 """
 
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -21,11 +25,13 @@ from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.delivery.feed.compose import Day, plain_day, refresh, today_for
 from app.delivery.feed.compress import (
+    Compressed,
     FixtureCompressor,
     FixtureSearcher,
+    Found,
     changes_treatment,
 )
-from app.delivery.feed.items import SURFACE_OF, NotPlainWords, Why, create_item
+from app.delivery.feed.items import SURFACE_OF, NoticeNotForPatient, NotPlainWords, Why, create_item
 from app.delivery.feed.models import (
     CardType,
     DeliverTo,
@@ -390,17 +396,136 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     ]
 
 
-async def test_a_notice_that_matches_the_batch_on_his_pack_is_a_card_for_today(
+async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_card(
     sg: AsyncSession,
 ) -> None:
+    """#181: a batch match no longer earns a notice a place in his feed (spec §0, §9). It is
+    still hers to act on — `Supply.TODAY`, same as before — and still not suppressed (a match
+    is relevant, just never a card he reads); it is simply never `DeliverTo.PATIENT`."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
     notice = next(item for item in made if item.type is CardType.NOTICE)
-    assert notice.deliver_to is DeliverTo.PATIENT and notice.supply is Supply.TODAY
+    assert notice.deliver_to is DeliverTo.CAREGIVER and notice.supply is Supply.TODAY
+    assert notice.why["suppressed"] is None
     assert notice.body[1] == "Look for the batch number 240077 on your box."
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert [item.type for item in page.items][:3] == [CardType.NOW, CardType.NOTICE, CardType.GATE]
+    assert CardType.NOTICE not in {item.type for item in page.items}
+    assert [item.type for item in page.items][:4] == [
+        CardType.NOW,
+        CardType.GATE,
+        CardType.STORY,  # the label photo is one of his papers
+        CardType.LEARNING,
+    ]
+
+
+async def test_a_notice_is_refused_outright_if_a_caller_ever_sends_it_to_the_patient(
+    sg: AsyncSession,
+) -> None:
+    """The choke point holds even if a future job or caller gets the routing wrong: `create_item`
+    refuses a `CardType.NOTICE` built for `DeliverTo.PATIENT` before it looks at its words."""
+    context = await _pa(sg)
+    state = await current_state(sg, context=context)
+    lines = learning_lines(
+        "en",
+        headline="A notice about one batch of your blood thinner",
+        body=("Look for the batch number 240077 on your box.",),
+        topic="your blood thinner",
+        source_name="Health Sciences Authority",
+        doctor="your doctor",
+    )
+    with pytest.raises(NoticeNotForPatient):
+        await create_item(
+            sg,
+            context=context,
+            state=state,
+            type=CardType.NOTICE,
+            lines=lines,
+            why=Why(kind="notice", plain=lines.why),
+            scope=Scope.MEDICINES,
+            deliver_to=DeliverTo.PATIENT,
+            day="2026-09-03",
+            dedupe_key="notice:refused",
+            expires_at=MONDAY,
+        )
+    trail = await read_audit(sg, context=context, action=Action.WRITE, scope=Scope.MEDICINES)
+    refusals = [e for e in trail if e.outcome is Outcome.REFUSED]
+    assert refusals and refusals[-1].refused_because == "NoticeNotForPatient"
+    assert not [item for item in await _items(sg, context) if item.type is CardType.NOTICE]
+
+
+class _TreatyNoticeSearcher:
+    """A safety notice whose words would change treatment — never the fixture data other
+    tests share, so this scenario cannot leak into theirs."""
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if kind != "safety" or "notices.example.sg" not in domains:
+            return []
+        return [
+            Found(
+                domain="notices.example.sg",
+                url="https://notices.example.sg/warfarin-stop-240077",
+                title="Stop taking this batch of warfarin",
+                published_at="2026-09-01",
+                text=(
+                    "Stop taking tablets from batch 240077 of warfarin immediately and "
+                    "return them to your pharmacy."
+                ),
+                batch="240077",
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _TreatyNoticeCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="A notice about your blood thinner",
+            body=(
+                "Stop taking tablets from this batch immediately.",
+                "Return them to your pharmacy.",
+            ),
+            why_topic="your blood thinner",
+            passage=text,
+        )
+
+
+async def test_a_safety_notice_that_would_change_treatment_is_a_question_not_a_card(
+    sg: AsyncSession,
+) -> None:
+    """spec §0, §9 and the note under §2: where a regulator's notice reads as a reason to
+    start, stop or change a medicine, it is not held as a notice at all — it is rerouted as a
+    question for the doctor, to the memo, the same door every other found page uses
+    (`changes_treatment`), never a `CardType.NOTICE`."""
+    context = await _pa(sg)
+    await _label(sg, context, name="Warfarin", strength=5, batch="240077")
+    source = Source(
+        name="Notices Example",
+        domain="notices.example.sg",
+        kind=SourceKind.REGULATOR,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_TreatyNoticeSearcher(),
+        compressor=_TreatyNoticeCompressor(),
+        registry=FixtureRegistry.load(),
+    )
+    _, made = await refresh(sg, context=context, engine=engine)
+    assert CardType.NOTICE not in {item.type for item in made}
+    question = next(item for item in made if item.type is CardType.QUESTION)
+    assert question.deliver_to is DeliverTo.MEMO
+    assert question.scope is Scope.MEDICINES
+    page = await feed_page(sg, context=context, engine=engine)
+    assert {item.type for item in page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
 
 
 async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:
