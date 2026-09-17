@@ -51,8 +51,12 @@ export function EmergencyCard({ kept }: { kept: KeptCard }): JSX.Element {
           {card.medicines.map((medicine) => (
             <p key={medicine.line_id} class="caption" data-testid="medicine-chemical-name">
               {medicine.generic}{medicine.strength ? `, ${medicine.strength}` : ""}
-              {medicine.high_risk && (
-                <strong data-testid="medicine-high-risk"> · high-risk</strong>
+              {medicine.high_risk_label && (
+                // The word itself is the backend's (A3, clinical-safety review on #229's
+                // own PR): catalogued, plain-words checked, in his language — never typed
+                // into this screen outside the verified `render()` path the rest of the
+                // card already goes through. Only the separating dot is ours.
+                <strong data-testid="medicine-high-risk"> · {medicine.high_risk_label}</strong>
               )}
             </p>
           ))}

@@ -23,6 +23,7 @@ from app.audit.models import Outcome
 from app.channels.printable import emergency_card_html
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.delivery.strings import theirs
 from app.drugs.registry import UnknownDrug
 from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
@@ -32,6 +33,8 @@ from app.memory.spine import add_provider
 from app.regions import Region
 from app.safety.emergency_card import (
     CARD_TARGET,
+    Card,
+    Line,
     Medicine,
     _medicine_label,
     _medicines,
@@ -39,6 +42,7 @@ from app.safety.emergency_card import (
     emergency_card,
 )
 from app.safety.models import CardFormat, EmergencyCard
+from app.safety.plain_words import verify
 from app.state.service import StaleState, current_state
 from tests.medicines_support import add, label
 from tests.safety_support import (
@@ -414,6 +418,54 @@ def test_ec_high_risk_is_probed_too_not_only_ec_medicine() -> None:
     assert high_risk_text == f"{long_name}'s doctor watches {plain} closely."
 
 
+def test_the_fallback_label_is_probed_too_not_only_the_enriched_one() -> None:
+    """A1 (clinical-safety review on #229's own PR): `_medicine_label`'s fallback branch —
+    `language != "en"`, or `has_plain_name` is false — used to hand its label straight back
+    to the caller with no probe at all, unlike the enriched label a few lines below it. His
+    plain name, or the register's bare name when the register has none, is not automatically
+    safe just because it is the plain form: a value with two sentences run together fails
+    rule 2 (`_check_one_idea`) in every language the same way — unlike rule 3's word-count
+    check, which `_check_length` skips entirely for Chinese, rule 2 is the one failure shape
+    that is not language-dependent, so it proves the probe now runs for `ms` and `zh` too,
+    not only `en`. Before this was fixed, a medicine could vanish from the card in exactly
+    this shape, in English whenever a generic had no story and not only when the language
+    was not English."""
+    # A Chinese full stop, not an ASCII one: `_sentences()` only reads a language's own
+    # sentence-enders (rule 5's lesson, module doc), so an ASCII "." mid-string splits `en`
+    # and `ms` but not `zh` — this is the one punctuation mark rule 2 reads as an ending in
+    # every language at once, which is what makes the failure land the same way in all three.
+    plain = "the special morning tablet。 Ask your doctor first"
+    for language in ("en", "ms", "zh"):
+        # Sanity: the raw fallback really does fail plain-words on its own here, or the rest
+        # of this test proves nothing about the probe.
+        assert any(f.severity == "fail" for f in verify(plain, language))
+        medicine = Medicine(
+            line_id=uuid.uuid4(),
+            fact_id=uuid.uuid4(),
+            generic="paracetamol",
+            brand=None,
+            strength="500 mg",
+            form="tablet",
+            plain_name=plain,
+            has_plain_name=False,
+            amount="1 tablet",
+            when="every morning",
+            high_risk=True,
+            high_risk_class="opioid",
+        )
+        label = _medicine_label(medicine, language, "Pa")
+        assert label != theirs(plain, "Pa", language), (
+            "the fallback must be probed and replaced when it fails, not returned unchecked"
+        )
+        card_lines = _card_lines([medicine], language)
+        assert_plain(card_lines, language)
+        ids = [one.id for one in card_lines]
+        # The point of the fix: neither sentence naming the medicine is dropped, and the
+        # general safety net never had to fire for either of them.
+        assert "ec.medicine" in ids and "ec.high_risk" in ids
+        assert not any(one.id.startswith("ec.render_issue") for one in card_lines)
+
+
 async def test_the_printable_page_and_the_live_card_show_the_same_medicines(
     sg: AsyncSession,
 ) -> None:
@@ -437,3 +489,79 @@ async def test_the_printable_page_and_the_live_card_show_the_same_medicines(
     # The register's own name for bisoprolol is on the page as data even though the sentence
     # could not carry it (module doc: `generic` is data for the stranger).
     assert "(bisoprolol)" in page
+
+
+def test_the_printable_page_pairs_the_english_twin_by_medicine_not_position() -> None:
+    """A2 (clinical-safety review on #229's own PR): the printable page used to pair a
+    medicine's English twin by where it fell in the list of `ec.medicine` lines, not by
+    which medicine the line is about. The patient-language and English lines are two
+    separate passes over the same medicines (`emergency_card.lines_in`), and nothing keeps
+    the two the same length — here, with two medicines and only the second's plain name
+    (a shape A1 on its own used to be able to produce, and not the only one that can),
+    only the second medicine's sentence survives in his own language while both survive in
+    English: position-based pairing attached the *first* medicine's English sentence to the
+    row for the *second*. Built directly against `Card`/`Line`, not through `compose_lines`,
+    so the test is about the join in `printable.py`, not about how the mismatch arose."""
+    first = Medicine(
+        line_id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic="firstgeneric",
+        brand=None,
+        strength="5 mg",
+        form="tablet",
+        plain_name="the first tablet",
+        has_plain_name=False,
+        amount="1 tablet",
+        when="every morning",
+        high_risk=False,
+        high_risk_class=None,
+    )
+    second = Medicine(
+        line_id=uuid.uuid4(),
+        fact_id=uuid.uuid4(),
+        generic="secondgeneric",
+        brand=None,
+        strength="10 mg",
+        form="tablet",
+        plain_name="the second tablet",
+        has_plain_name=True,
+        amount="1 tablet",
+        when="every evening",
+        high_risk=False,
+        high_risk_class=None,
+    )
+    # His own language: only the second medicine's sentence survives.
+    lines = [Line("ec.medicine", "Pa makan ubat kedua.", second.line_id)]
+    # English: both survive, first then second, in list order — the shape that broke
+    # position-based pairing once the two lists no longer had the same length.
+    english_lines = [
+        Line("ec.medicine", "Pa takes the first tablet.", first.line_id),
+        Line("ec.medicine", "Pa takes the second tablet (secondgeneric).", second.line_id),
+    ]
+    card = Card(
+        card_id=uuid.uuid4(),
+        profile_id=uuid.uuid4(),
+        state_id=uuid.uuid4(),
+        rendered_at=utcnow(),
+        name="Pa",
+        language="ms",
+        spoken_language="ms",
+        age_band=None,
+        conditions=[],
+        medicines=[first, second],
+        allergies=[],
+        blood_type=None,
+        high_risk=[],
+        contacts=[],
+        clinic=None,
+        last_reading_at=None,
+        emergency_number="999",
+        lines=lines,
+        english_lines=english_lines,
+    )
+    page = emergency_card_html(card)
+    assert "Pa makan ubat kedua." in page
+    # The twin of the surviving sentence must be the second medicine's own English sentence.
+    assert "Pa takes the second tablet (secondgeneric)." in page
+    # Never the first medicine's — the bug this test guards against.
+    assert "Pa takes the first tablet." not in page

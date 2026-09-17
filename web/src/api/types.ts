@@ -361,6 +361,7 @@ export interface EmergencyCardOut {
     when: string;
     high_risk: boolean;
     high_risk_class: string | null;
+    high_risk_label: string | null;
   }[];
   allergies: { code: string; words: string; fact_id: string }[];
   blood_type: string | null;

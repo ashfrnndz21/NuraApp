@@ -24,7 +24,7 @@ from typing import Any
 
 from app.channels.strings import DEMO_HEADLINE, DEMO_LINES
 from app.consent.export import PlainTextRenderer
-from app.safety.emergency_card import Card
+from app.safety.emergency_card import Card, Line
 
 TOKENS: dict[str, str] = {
     "mist": "#F5F1F4",
@@ -95,24 +95,38 @@ def _demo_banner(language: str) -> str:
 def emergency_card_html(card: Card, *, demo: bool = False) -> str:
     """The card as one HTML page. Sentences from the card's lines; data in the tables. On a
     demo the banner comes first, so a printed demo card cannot pass for a real one."""
-    by_id: dict[str, list[str]] = {}
+    by_id: dict[str, list[Line]] = {}
     for line in card.lines:
-        by_id.setdefault(line.id, []).append(line.text)
-    english: dict[str, list[str]] = {}
+        by_id.setdefault(line.id, []).append(line)
+    english: dict[str, list[Line]] = {}
     for line in card.english_lines:
-        english.setdefault(line.id, []).append(line.text)
+        english.setdefault(line.id, []).append(line)
 
-    def twin(one: str, index: int) -> str:
+    def twin(one: str, said_line: Line, index: int) -> str:
+        """His twin for `said_line`, the English line naming the same medicine — joined by
+        `medicine_line_id`, not by position (A2, clinical-safety review on #229's own PR):
+        the patient-language and English lines are two separate passes over the medicines
+        (`emergency_card.lines_in`) and nothing keeps them the same length or order, a
+        withheld line (A1) among other things. `said_line.medicine_line_id` is `None` for
+        every line that is not one of `_MEDICINE_TEMPLATES`'s — those keep the old
+        position pairing, which is exact for them (one line per template, never repeated)."""
         said = english.get(one, [])
-        if index >= len(said):
+        if said_line.medicine_line_id is not None:
+            match = next(
+                (s for s in said if s.medicine_line_id == said_line.medicine_line_id), None
+            )
+            text = match.text if match is not None else None
+        else:
+            text = said[index].text if index < len(said) else None
+        if text is None:
             return ""
-        return f'<p class="twin" lang="en">{escape(said[index])}</p>'
+        return f'<p class="twin" lang="en">{escape(text)}</p>'
 
     def section(*ids: str) -> str:
         return "".join(
-            f"<p>{escape(text)}</p>{twin(one, index)}"
+            f"<p>{escape(said_line.text)}</p>{twin(one, said_line, index)}"
             for one in ids
-            for index, text in enumerate(by_id.get(one, []))
+            for index, said_line in enumerate(by_id.get(one, []))
         )
 
     medicines = "".join(
@@ -165,14 +179,16 @@ def emergency_card_html(card: Card, *, demo: bool = False) -> str:
         f'<span class="number"><a href="{_tel(card.emergency_number)}">{escape(card.emergency_number)}</a></span>'
         "</div>"
     )
-    title = by_id.get("ec.title", [card.name])[0]
+    title_line = by_id.get("ec.title", [None])[0]
+    title = card.name if title_line is None else title_line.text
+    title_twin = "" if title_line is None else twin("ec.title", title_line, 0)
     return (
         "<!doctype html>\n"
         f'<html lang="{escape(card.language)}"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>{escape(title)}</title><style>{_style()}</style></head><body><main>"
         + (_demo_banner(card.language) if demo else "")
-        + f'<section class="paper"><h1>{escape(title)}</h1>{twin("ec.title", 0)}'
+        + f'<section class="paper"><h1>{escape(title)}</h1>{title_twin}'
         f'{section("ec.show", "ec.language", "ec.age")}</section>'
         f'<section class="paper">{section("ec.condition", "ec.no_condition")}</section>'
         f'<section class="paper">{section("ec.medicine", "ec.medicine_when", "ec.high_risk", "ec.no_medicine")}'

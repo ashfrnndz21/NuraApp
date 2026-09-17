@@ -947,6 +947,14 @@ YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh"
 # @patient phrase
 YOUR_MEDICINE: Mapping[str, str] = {"en": "your medicine", "ms": "ubat anda", "zh": "您的药"}
 
+# @patient phrase
+HIGH_RISK_LABEL_WORDS: Mapping[str, str] = {"en": "high-risk", "ms": "berisiko tinggi", "zh": "高风险"}
+"""The short tag beside a high-risk medicine's data (`Medicine.high_risk_label`, A3): not a
+sentence of its own, so it is not `render`ed against `ec.medicine`/`ec.high_risk` — a phrase
+like `YOUR_MEDICINE`, one word or a short run of them, catalogued and checked in every
+language the same way, never typed into a screen as a bare English literal (web/src/screens
+carried the word "high-risk" outside this catalogue and outside the verified render path)."""
+
 
 TEMPLATES: Mapping[str, Mapping[str, str]] = {
     **EMERGENCY_CARD,
