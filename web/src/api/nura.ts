@@ -277,13 +277,13 @@ export function askStream(
   question: string,
   mode: AskMode,
   language: string,
-  onStep: (key: string, label: string) => void,
+  onStep: (key: string, label: string, name: string) => void,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
     apiStream(`/profiles/${profileId}/ask/stream`, { method: "POST", token, body: { question, mode, language } }, (event) => {
       const streamed = event as unknown as AskStreamEvent;
-      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
       else if (streamed.type === "answer") {
         settled = true;
         resolve(streamed.answer);

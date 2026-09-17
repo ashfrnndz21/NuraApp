@@ -23,6 +23,16 @@ const DEMO_CODE = process.env.NURA_E2E_DEMO_CODE;
  *  and a run hands out about a hundred — often enough for two to meet. */
 const handedOut = new Set<string>();
 
+/** A stream's body (`ask/stream`, `find/stream`), read back as its events, in the order the
+ *  backend sent them (docs/design-direction.md "Conversation, waiting and thinking"): one
+ *  `data:` line per event, each real, never invented. */
+export function streamedEvents(body: string): { type: string; [key: string]: unknown }[] {
+  return body
+    .split("\n\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => JSON.parse(line.slice("data: ".length)) as { type: string; [key: string]: unknown });
+}
+
 export function freshPhone(prefix = "+659777"): string {
   for (;;) {
     const phone = DEMO_CODE

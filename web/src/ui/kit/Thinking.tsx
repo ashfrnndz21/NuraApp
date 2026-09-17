@@ -71,9 +71,12 @@ export function TraceStep({ label, done, testId }: { label: string; done: boolea
 
 /** The trace itself while an answer is still streaming: "Nura is looking", the pulsing dots
  *  (a static dot under `prefers-reduced-motion`, in CSS), and every step heard so far — the
- *  latest one still spinning, every one before it ticked. `aria-live="polite"` announces only
- *  the head once, on mount, never a line per step (the caller controls that by mounting this
- *  once per question, not re-announcing on every step it is handed). */
+ *  latest one still spinning, every one before it ticked.
+ *
+ *  Carries no `aria-live` of its own: a screen reader must hear that Nura started and that the
+ *  answer is there, never a line every time a step ticks over — so the one announcement is the
+ *  caller's own `aria-live="polite"` region, made once when the question is sent, not this
+ *  element's changing content (spec 'Conversation, waiting and thinking'). */
 export function ThinkingTrace({
   heading,
   steps,
@@ -84,7 +87,7 @@ export function ThinkingTrace({
   testId?: string;
 }): JSX.Element {
   return (
-    <div class="ask-trace" data-testid={testId ?? "ask-trace"} role="status">
+    <div class="ask-trace" data-testid={testId ?? "ask-trace"}>
       <div class="ask-trace-head">
         <span class="ask-dots" aria-hidden="true">
           <i />

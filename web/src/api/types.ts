@@ -261,6 +261,8 @@ export interface AskStepEvent {
   type: "step";
   key: string;
   label: string;
+  /** The bare noun for the collapsed "What Nura looked at: {name}, {name}" line. */
+  name: string;
 }
 
 /** The stream's last event: the finished answer, exactly `POST /profiles/{id}/ask` returns. */
