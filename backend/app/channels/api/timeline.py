@@ -50,6 +50,7 @@ from app.channels.api.timeline_schemas import (
     StatusIn,
     TimelineOut,
 )
+from app.db import utcnow
 from app.memory.attach import attach_to_appointment, attach_to_episode
 from app.memory.changes import last_look, mark_looked, what_changed
 from app.memory.providers import directory, provider_history, write_chief_note
@@ -219,11 +220,19 @@ async def note_on_provider(
 
 @router.get("/{profile_id}/changes")
 async def changes(
-    request: Request, context: Context, session: Db, language: str | None = Language
+    request: Request,
+    context: Context,
+    session: Db,
+    language: str | None = Language,
+    peek: bool = Query(default=False),
 ) -> ChangesOut:
     """What changed since the caller last looked — or everything, on a first look — and what
     is still waiting. Reading it is looking: the look is written down, on the trail, and the
-    next read counts from it."""
+    next read counts from it — unless `peek=true` (#207), for a tile that draws itself every
+    time a screen renders (her Home) rather than a screen she came to read this on (the
+    Record's own "what changed"). A peek answers the same question with the same words, under
+    the same scope, but writes nothing: it marks no look, so it leaves no entry on his trail,
+    and the next marking read still counts from wherever it last did."""
     last = await last_look(session, context=context)
     found = await what_changed(
         session,
@@ -233,8 +242,11 @@ async def changes(
         registry=providers_of(request).drug_registry,
         language=language,
     )
-    look = await mark_looked(session, context=context)
-    return (await reader_of(session, context, language)).model(ChangesOut.of(found, look.looked_at))
+    if peek:
+        looked_at = utcnow() if last is None else last.looked_at
+    else:
+        looked_at = (await mark_looked(session, context=context)).looked_at
+    return (await reader_of(session, context, language)).model(ChangesOut.of(found, looked_at))
 
 
 @router.post("/{profile_id}/ask")

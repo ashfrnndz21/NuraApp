@@ -531,9 +531,11 @@ export const provider = (token: string, profileId: string, providerId: string) =
 export const noteOnProvider = (token: string, profileId: string, providerId: string, text: string) =>
   api<PlaceNoteOut>(`/profiles/${profileId}/providers/${providerId}/notes`, { method: "POST", token, body: { text } });
 
-/** What changed since this reader last looked; reading it is looking (E03-04). */
-export const changes = (token: string, profileId: string, language: string) =>
-  api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language } });
+/** What changed since this reader last looked; reading it is looking (E03-04) — unless
+ *  `peek`, for a tile that draws itself every time (Home) rather than a screen she came to
+ *  read this on: the same words, marking no look and leaving no entry on his trail (#207). */
+export const changes = (token: string, profileId: string, language: string, peek?: boolean) =>
+  api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language, peek: peek ? "true" : undefined } });
 
 /** One analyte's results against his ranges, the direction in words, the boundary last (E09-01). */
 export const trend = (token: string, profileId: string, analyte: string, language: string) =>

@@ -421,8 +421,7 @@ CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
     "en": {
         "keeps": (
             "Nura keeps your papers, your medicines and your blood pressure book.",
-            "Nura keeps {patient}'s papers, {patient}'s medicines and {patient}'s blood "
-            "pressure book.",
+            "Nura keeps {patient}'s papers, {patient}'s medicines and {patient}'s blood pressure book.",
         ),
         "stop_record": (
             "You can tell Nura to stop at any time.",
@@ -444,8 +443,7 @@ CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
     "ms": {
         "keeps": (
             "Nura menyimpan surat-surat anda, ubat anda dan buku tekanan darah anda.",
-            "Nura menyimpan surat-surat {patient}, ubat {patient} dan buku tekanan darah "
-            "{patient}.",
+            "Nura menyimpan surat-surat {patient}, ubat {patient} dan buku tekanan darah {patient}.",
         ),
         "stop_record": (
             "Anda boleh minta Nura berhenti pada bila-bila masa.",
