@@ -1222,7 +1222,7 @@ export const en = {
       // @patient
       typeIt: "Please type what the paper says.",
       // @patient
-      fromPage: "From page {page} of this paper.",
+      fromPage: "Nura read this from page {page} of the paper.",
       // @patient
       kindUnknown: "Nura could not read this page.",
       // @patient
@@ -1330,7 +1330,7 @@ export const en = {
         total_cholesterol: "The total cholesterol",
         hdl: "The good cholesterol",
         ldl: "The bad cholesterol",
-        ldl_reference_range: "The bad cholesterol's normal range",
+        ldl_reference_range: "The normal range for the bad cholesterol",
         triglycerides: "The blood fats",
         vldl: "Another blood fat number",
         tc_hdl_ratio: "The cholesterol ratio",
@@ -1356,7 +1356,7 @@ export const en = {
         facility: "Where it was tested",
         remark: "What the report says beside the numbers",
         patient_name: "The name on the report",
-        patient_id: "The ID on the report",
+        patient_id: "The patient number on the report",
         ordering_doctor: "Which doctor asked for it",
       },
       person: { birth_year: "The year of birth", sex: "Male or female" },

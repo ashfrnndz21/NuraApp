@@ -1354,7 +1354,7 @@ export const ms = {
         facility: "Tempat ia diuji",
         remark: "Apa yang laporan itu kata selain nombor",
         patient_name: "Nama pada laporan",
-        patient_id: "ID pada laporan",
+        patient_id: "Nombor pesakit pada laporan",
         ordering_doctor: "Doktor mana yang memintanya",
       },
       person: { birth_year: "Tahun lahir", sex: "Lelaki atau perempuan" },
