@@ -12,6 +12,22 @@ export const ONLY_ME_PARTS: readonly Scope[] = PARTS.filter((part) => part !== "
 
 export const ROLES: readonly KeyRole[] = ["chief", "caregiver", "viewer", "helper", "emergency", "clinic"];
 
+/** Each role's own default parts and window, mirrored from the backend's source of truth
+ *  (`ROLE_SCOPES`, `DEFAULT_WINDOW` in `app/keys/scopes.py`, less `profile`, which every key
+ *  holds). The Family Keys screen reads the backend's own preset over `GET /family/roles` so
+ *  its words are never guessed here — but a role is already chosen the moment the screen
+ *  opens, before that request can have answered, and "See the words" must never sit disabled
+ *  waiting on it. This is only ever the seed a role starts with; the backend's own answer,
+ *  once it lands, is what is actually shown and sent (`Keys.tsx`). */
+export const ROLE_DEFAULTS: Readonly<Record<KeyRole, { parts: readonly Scope[]; window: KeyWindow }>> = {
+  chief: { parts: PARTS, window: "always" },
+  caregiver: { parts: ["medicines", "visits", "readings", "records", "emergency", "ask", "send"], window: "always" },
+  viewer: { parts: ["medicines", "visits", "readings", "emergency"], window: "thirty_days" },
+  helper: { parts: ["medicines", "emergency", "send"], window: "always" },
+  emergency: { parts: ["emergency"], window: "always" },
+  clinic: { parts: ["medicines", "visits", "readings", "records"], window: "seventy_two_hours" },
+};
+
 /** From the longest to the shortest: narrowing moves right. */
 export const WINDOWS: readonly KeyWindow[] = ["always", "thirty_days", "seventy_two_hours", "one_day"];
 
