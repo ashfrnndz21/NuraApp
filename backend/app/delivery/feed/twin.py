@@ -15,19 +15,23 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_guard, audited_read
+from app.audit.access import audited_guard
 from app.audit.models import Action
 from app.db import utcnow
-from app.delivery.feed.engagement import NoSuchItem
 from app.delivery.feed.models import CardType, DeliverTo, FeedItem, Supply
-from app.delivery.feed.rank import _without_photos_taken_back, audience_of
+from app.delivery.feed.rank import (
+    FEED_TARGET,
+    NoSuchItem,
+    _without_photos_taken_back,
+    audience_of,
+    require_item,
+)
 from app.delivery.voice import Voice, Voiced, voice_language, voiced
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
 
-FEED_TARGET = FeedItem.__tablename__
+__all__ = ["NoSuchItem", "NotInThatLanguage", "one_card", "spoken_twin"]
 
 
 class NotInThatLanguage(Refusal):
@@ -45,15 +49,9 @@ async def spoken_twin(
 ) -> Voiced:
     """The twin of one card, said in its language: under thirty seconds, from the cache when
     it has been said before."""
-    found = await audited_read(
-        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id,)
-    )
-    if not found:
-        raise NoSuchItem(f"no card {item_id} on this profile")
-    item = found[0]
-    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
-        context.require(item.scope)
-        if language is not None and voice_language(language) != voice_language(item.language):
+    item = await require_item(session, context=context, item_id=item_id)
+    if language is not None and voice_language(language) != voice_language(item.language):
+        async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
             raise NotInThatLanguage(f"this card is in {item.language}; its twin is too")
     return await voiced(
         store,
@@ -80,20 +78,11 @@ def _open_to(item: FeedItem, context: KeyContext) -> bool:
 
 async def one_card(session: AsyncSession, *, context: KeyContext, item_id: uuid.UUID) -> FeedItem:
     """One card by its id: what a push opens (#143). A card outside this key's scope is
-    refused, on the trail; one not on this profile, expired, not one this key's feed shows
-    (its audience), or a photo taken back is `NoSuchItem`."""
-    found = await audited_read(
-        session,
-        FeedItem,
-        context,
-        Scope.PROFILE,
-        where=(FeedItem.id == item_id, FeedItem.expires_at > utcnow()),
+    refused, on the trail; one not on this profile, expired, `private_to` someone else, not
+    one this key's feed shows (its audience), or a photo taken back is `NoSuchItem`."""
+    item = await require_item(
+        session, context=context, item_id=item_id, where=(FeedItem.expires_at > utcnow(),)
     )
-    if not found:
-        raise NoSuchItem(f"no card {item_id} on this profile")
-    item = found[0]
-    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
-        context.require(item.scope)
     if not _open_to(item, context) or not await _without_photos_taken_back(
         session, context, [item]
     ):

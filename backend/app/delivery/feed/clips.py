@@ -32,7 +32,7 @@ from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_guard, audited_read
+from app.audit.access import audited_guard
 from app.audit.models import Action
 from app.delivery.feed.models import CardFormat, FeedItem
 from app.delivery.voice import seconds_to_say, voice_language
@@ -40,7 +40,6 @@ from app.errors import Refusal
 from app.fixtures import fixture
 from app.ingestion.objects import NoSuchObject, ObjectStore, check_key
 from app.keys.context import KeyContext
-from app.keys.scopes import Scope
 from app.language.voice_script import script_for
 from app.regions import guard_region
 
@@ -187,17 +186,14 @@ def clip_key(item: FeedItem) -> str:
 
 
 async def _clip_item(session: AsyncSession, *, context: KeyContext, item_id: uuid.UUID) -> FeedItem:
-    from app.delivery.feed.engagement import NoSuchItem
+    # A local import: `rank.py` imports `compose.py`, whose own chain reaches back to this
+    # module (`search.py` imports `clips.py` for `ClipRenderer`), so importing `require_item`
+    # at module level here would be a cycle.
+    from app.delivery.feed.rank import require_item
 
-    found = await audited_read(
-        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id,)
-    )
-    if not found:
-        raise NoSuchItem(f"no card {item_id} on this profile")
-    item = found[0]
-    async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
-        context.require(item.scope)
-        if not is_clip(item):
+    item = await require_item(session, context=context, item_id=item_id)
+    if not is_clip(item):
+        async with audited_guard(session, context, Action.READ, item.scope, FEED_TARGET):
             raise NotAClipCard(f"card {item_id} is a {item.type.value} card, not a clip")
     return item
 
