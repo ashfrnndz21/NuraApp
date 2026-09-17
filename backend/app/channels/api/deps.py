@@ -38,6 +38,7 @@ from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.reasoning.ranges import FixtureRanges, ReferenceRanges
 from app.reasoning.visits.summary import Summariser
 from app.regions import OutOfRegion
+from app.search.asker import Asker, RuleBasedAsker
 from app.search.narrate import FixtureNarrator, Narrator
 from app.search.retrieve import KeywordRetriever, Retriever
 from app.settings import Settings
@@ -97,6 +98,10 @@ class Providers:
     """What says Ask's and Find's trace steps aloud (the narrated-trace story): the fixture
     label, unchanged, until a Claude-backed narrator is chosen on a declared demo
     (`app.search.narrator_provider.narrator_for`); the tests pass the fixture one."""
+    asker: Asker = field(default_factory=RuleBasedAsker)
+    """What answers `POST /{id}/ask/stream` (Ask as an agent): the rule-based retriever,
+    unchanged, until the agent asker is chosen on a declared demo
+    (`app.search.asker_provider.asker_for`); the tests pass the rule-based one."""
 
 
 def settings_of(request: Request) -> Settings:

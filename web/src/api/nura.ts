@@ -282,10 +282,12 @@ export const ask = (token: string, profileId: string, question: string, mode: As
   api<AnswerOut>(`/profiles/${profileId}/ask`, { method: "POST", token, body: { question, mode, language } });
 
 /** The same question, streamed (docs/design-direction.md "Conversation, waiting and
- *  thinking"): `onStep` for each real part of his record read as it happens, resolving with
- *  the finished answer — the same `AnswerOut` `ask` returns, so a caller can treat the two the
- *  same once the promise settles. A refusal (`OutOfScope`, a malformed question) throws
- *  `Refused`, exactly as `ask` throws it. */
+ *  thinking"): `onStep` for each real part of his record read as it happens, `onDelta` (when
+ *  given) for each chunk of the agent asker's own answer text as it is sent — the rule-based
+ *  asker never calls it, its answer arriving whole — resolving with the finished answer, the
+ *  same `AnswerOut` `ask` returns, so a caller can treat the two the same once the promise
+ *  settles. A refusal (`OutOfScope`, a malformed question) throws `Refused`, exactly as `ask`
+ *  throws it. */
 export function askStream(
   token: string,
   profileId: string,
@@ -293,12 +295,14 @@ export function askStream(
   mode: AskMode,
   language: string,
   onStep: (key: string, label: string, name: string) => void,
+  onDelta?: (text: string) => void,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
     apiStream(`/profiles/${profileId}/ask/stream`, { method: "POST", token, body: { question, mode, language } }, (event) => {
       const streamed = event as unknown as AskStreamEvent;
       if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
+      else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
       else if (streamed.type === "answer") {
         settled = true;
         resolve(streamed.answer);
