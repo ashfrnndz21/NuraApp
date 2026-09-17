@@ -313,6 +313,64 @@ async def test_the_timeline_flow_over_http(deployment: Deployment, clock: Frozen
     assert len([e for e in trail if e["target"] == "last_looked" and e["action"] == "write"]) == 2
 
 
+async def test_a_peek_at_what_changed_marks_no_look_and_writes_no_trail_entry(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """#207: `?peek=true` is for a tile that draws itself every time a screen renders (her
+    Home), not a screen she came to read this on. It answers the same question, twice over,
+    without writing a look down — his trail gains no `last_looked` write for it — and a
+    marking read afterwards still starts from wherever the last marking read left off."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await let_in(deployment, pa, profile_id, MEI, EVERY_PART, relationship="daughter")
+    await _ok(
+        await client.post(
+            f"/profiles/{profile_id}/keys",
+            json={"holder_phone_e164": MEI, "role": "chief"},
+            headers=his,
+        ),
+        201,
+    )
+    hers = bearer(mei["token"])
+
+    def written_looks(entries: list[dict[str, Any]]) -> int:
+        return len([e for e in entries if e["target"] == "last_looked" and e["action"] == "write"])
+
+    # Her Home renders twice (a peek each time): the first look is still there to have, and
+    # his trail gains nothing for either glance.
+    first_peek = await _ok(await client.get(f"/profiles/{profile_id}/changes?peek=true", headers=hers))
+    assert first_peek["first_look"]
+    second_peek = await _ok(await client.get(f"/profiles/{profile_id}/changes?peek=true", headers=hers))
+    assert second_peek["first_look"], "a peek does not spend the first look"
+    trail = await _ok(await client.get(f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his))
+    assert written_looks(trail) == 0
+
+    # She opens the Record's own "what changed" screen: that is a look, and it is the one
+    # that marks it.
+    marking = await _ok(await client.get(f"/profiles/{profile_id}/changes", headers=hers))
+    assert marking["first_look"]
+    trail = await _ok(await client.get(f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his))
+    assert written_looks(trail) == 1
+
+    # Home renders again: the tile still answers, from the marking read's baseline, and still
+    # writes nothing — the Record's screen still has something to say next time she opens it.
+    clock.step(timedelta(minutes=1))
+    third_peek = await _ok(await client.get(f"/profiles/{profile_id}/changes?peek=true", headers=hers))
+    assert not third_peek["first_look"]
+    assert third_peek["since"] == marking["looked_at"]
+    trail = await _ok(await client.get(f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his))
+    assert written_looks(trail) == 1, "a peek after a marking read still writes nothing"
+
+    still_marking = await _ok(await client.get(f"/profiles/{profile_id}/changes", headers=hers))
+    assert not still_marking["first_look"]
+    assert still_marking["since"] == marking["looked_at"]
+    trail = await _ok(await client.get(f"/profiles/{profile_id}/audit", params={"limit": 500}, headers=his))
+    assert written_looks(trail) == 2
+
+
 async def test_the_new_yeses_are_bound_to_what_they_say(deployment: Deployment) -> None:
     client = deployment.client
     pa = await register_by_phone(deployment, PA, "Pa")
