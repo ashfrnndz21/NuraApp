@@ -104,6 +104,7 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
 
   const priyaPhone = freshPhone("+659777");
   await page.getByTestId("tab-connect").click();
+  await page.getByTestId("connect-family-all").click();
   const rolePresets = page.waitForResponse((res) => res.url().includes("/family/roles") && res.ok());
   await page.getByTestId("open-keys").click();
   await rolePresets; // the role's own preset parts and window, before a role is chosen
@@ -153,6 +154,7 @@ test("changing what a key would open while the words for it are still on the wir
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await page.getByTestId("tab-connect").click();
+  await page.getByTestId("connect-family-all").click();
   const rolePresets = page.waitForResponse((res) => res.url().includes("/family/roles") && res.ok());
   await page.getByTestId("open-keys").click();
   await rolePresets;

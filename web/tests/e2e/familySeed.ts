@@ -146,9 +146,15 @@ export async function caregiverScreenOk(page: Page): Promise<string[]> {
   return problems;
 }
 
-/** Family: the chief's tab; on his phone, the Me sheet's "Family" (D1). */
+/** Family (family-home): the chief's tab, then Connect's own "Your family" → "See all" (the
+ *  Connect overview, docs/design/nura-concept-board.html, sits in front of it now); on his
+ *  phone, the Me sheet's "Family" (D1) still opens it directly. */
 export async function openFamily(page: Page): Promise<void> {
-  if ((await page.getByTestId("tab-connect").count()) > 0) return page.getByTestId("tab-connect").click();
+  if ((await page.getByTestId("tab-connect").count()) > 0) {
+    await page.getByTestId("tab-connect").click();
+    await page.getByTestId("connect-screen").waitFor();
+    return page.getByTestId("connect-family-all").click();
+  }
   await page.getByTestId("open-me").click();
   await page.getByTestId("me-family").click();
 }

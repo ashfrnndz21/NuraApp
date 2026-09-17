@@ -3,9 +3,9 @@ import * as family from "../api/family";
 import * as nura from "../api/nura";
 import type { DigestEntryOut, GrantOut } from "../api/familyTypes";
 import type { FeedItemOut } from "../api/types";
+import { freshMessages, localFeedItems, nextCall, telHref } from "../connect/model";
 import { useRead } from "./family/common";
 import { startOfHisDay } from "../family/model";
-import { variantOf } from "../feed/model";
 import { go } from "../flow";
 import { profile, token } from "../store/session";
 import { language, LOCALE, t } from "../strings";
@@ -70,7 +70,7 @@ function FamilySection({ bearer, profileId, lang }: { bearer: string; profileId:
   );
 }
 
-function PersonTile({ grant, onClick }: { grant: GrantOut; onClick: () => void }): JSX.Element {
+export function PersonTile({ grant, onClick }: { grant: GrantOut; onClick: () => void }): JSX.Element {
   const s = t();
   return (
     <button type="button" class="person-tile" onClick={onClick} data-testid="connect-family-member">
@@ -87,7 +87,7 @@ function PersonTile({ grant, onClick }: { grant: GrantOut; onClick: () => void }
 function NextCallSection({ bearer, profileId, lang, locale }: { bearer: string; profileId: string; lang: string; locale: string }): JSX.Element {
   const s = t();
   const read = useRead(() => family.upcomingCalls(bearer, profileId, lang), [profileId, lang]);
-  const next = (read.value ?? [])[0] ?? null;
+  const next = nextCall(read.value ?? []);
   return (
     <section class="do-section" data-testid="connect-next-call">
       <SectionHeader title={s.connect.nextCallTitle} />
@@ -107,7 +107,7 @@ function NextCallSection({ bearer, profileId, lang, locale }: { bearer: string; 
                 compact
                 icon="phone"
                 onClick={() => {
-                  window.location.href = `tel:${next.with_person_phone_e164}`;
+                  window.location.href = telHref(next.with_person_phone_e164 ?? "");
                 }}
                 testId="connect-call-button"
               >
@@ -130,7 +130,7 @@ function NextCallSection({ bearer, profileId, lang, locale }: { bearer: string; 
 function NearYouSection({ bearer, profileId }: { bearer: string; profileId: string }): JSX.Element {
   const s = t();
   const read = useRead(() => nura.feed(bearer, profileId), [profileId]);
-  const items = (read.value?.items ?? []).filter((item) => variantOf(item) === "local").slice(0, 3);
+  const items = localFeedItems(read.value?.items ?? []);
   return (
     <section class="do-section" data-testid="connect-near-you">
       <SectionHeader title={s.connect.nearYouTitle} action={{ word: s.hub.seeAll, label: s.connect.seeAllNearYou, onClick: () => go({ name: "feed" }), testId: "connect-near-all" }} />
@@ -148,7 +148,7 @@ function NearYouSection({ bearer, profileId }: { bearer: string; profileId: stri
   );
 }
 
-function NearYouTile({ item }: { item: FeedItemOut }): JSX.Element {
+export function NearYouTile({ item }: { item: FeedItemOut }): JSX.Element {
   return <FeatureTile icon="place" tint="sage" label={item.headline} caption={item.body[0] ?? ""} onClick={() => go({ name: "card", item })} testId="connect-near-item" />;
 }
 
@@ -158,7 +158,7 @@ function MessagesSection({ bearer, profileId, lang, locale }: { bearer: string; 
   const s = t();
   const since = startOfHisDay(Date.now(), 0);
   const read = useRead(() => family.digest(bearer, profileId, since, lang), [profileId, lang]);
-  const entries = (read.value?.entries ?? []).filter((entry) => entry.lines.length > 0).slice(0, 2);
+  const entries = freshMessages(read.value?.entries ?? []);
   const openThread = () => go({ name: "family", part: "thread" });
   return (
     <section class="do-section" data-testid="connect-messages">
@@ -177,7 +177,7 @@ function MessagesSection({ bearer, profileId, lang, locale }: { bearer: string; 
   );
 }
 
-function MessageRow({ entry, locale, onClick }: { entry: DigestEntryOut; locale: string; onClick: () => void }): JSX.Element {
+export function MessageRow({ entry, locale, onClick }: { entry: DigestEntryOut; locale: string; onClick: () => void }): JSX.Element {
   return (
     <ListRow
       lead={<IconBadge icon="speaker" tint="lavender" shape="circle" />}
