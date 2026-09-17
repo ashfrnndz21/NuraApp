@@ -147,7 +147,7 @@ async def set_area(
         raise
     if context.is_owner:
         if confirmation_id is None:
-            refusal = AreaNotConfirmed("setting his area, once it is his, takes his own yes")
+            unconfirmed = AreaNotConfirmed("setting his area, once it is his, takes his own yes")
             await record(
                 session,
                 context=context,
@@ -155,10 +155,10 @@ async def set_area(
                 scope=Scope.PROFILE,
                 target=AREA_TARGET,
                 outcome=Outcome.REFUSED,
-                refused_because=type(refusal).__name__,
+                refused_because=type(unconfirmed).__name__,
             )
-            refusal.written_down = True
-            raise refusal
+            unconfirmed.written_down = True
+            raise unconfirmed
         try:
             await consume_confirmation(session, context, confirmation_id, AreaDraft(area=kept))
         except Refusal as refused:

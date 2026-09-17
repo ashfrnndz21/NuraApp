@@ -184,6 +184,25 @@ async def _reading(
     return reading
 
 
+async def _set_area(
+    deployment: Deployment, token: str, profile_id: str, area: str | None
+) -> Any:
+    """`PUT .../area` on the owner's own yes (#184): mint the confirmation for exactly this
+    area first, the way the Me screen's two steps do, then spend it. A steward's write (his
+    key, before the patient's claim) takes no confirmation; this helper is for the owner."""
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={"subject": "area", "area": area},
+        headers=bearer(token),
+    )
+    assert minted.status_code == 201, minted.text
+    return await deployment.client.put(
+        f"/profiles/{profile_id}/area",
+        json={"area": area, "confirmation_id": minted.json()["confirmation_id"]},
+        headers=bearer(token),
+    )
+
+
 async def _feed(deployment: Deployment, profile_id: str, token: str) -> dict[str, Any]:
     answer = await deployment.client.get(f"/profiles/{profile_id}/feed", headers=bearer(token))
     assert answer.status_code == 200, answer.text
@@ -517,9 +536,7 @@ async def test_dengue_near_his_area_reaches_him_only_once_his_area_is_set_and_a_
     # No area yet: the bulletin names his district, and nobody knows he lives there.
     assert await _made(penang, profile_id, CardType.LOCAL) == []
 
-    set_area = await penang.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "air itam"}, headers=bearer(his)
-    )
+    set_area = await _set_area(penang, his, profile_id, "air itam")
     assert set_area.status_code == 200, set_area.text
     assert set_area.json()["area"] == "Air Itam" and set_area.json()["may_set"] is True
     clock.step(timedelta(days=1))
@@ -559,9 +576,7 @@ async def test_no_relevant_condition_no_local_alert_whatever_the_bulletin_says(
 ) -> None:
     pa, profile_id = await _pa(penang, PA_MY)
     await _told(penang, pa, profile_id, "joints")
-    await penang.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "Air Itam"}, headers=bearer(pa["token"])
-    )
+    await _set_area(penang, pa["token"], profile_id, "Air Itam")
     await _feed(penang, profile_id, pa["token"])
     clock.step(timedelta(days=1))
     await _feed(penang, profile_id, pa["token"])
@@ -583,9 +598,7 @@ async def test_a_blood_thinner_makes_dengue_relevant(
 ) -> None:
     pa, profile_id = await _pa(penang, PA_MY)
     await _took(penang, pa, profile_id, "Warfarin")
-    await penang.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "11"}, headers=bearer(pa["token"])
-    )
+    await _set_area(penang, pa["token"], profile_id, "11")
     await _feed(penang, profile_id, pa["token"])
     [local] = await _made(penang, profile_id, CardType.LOCAL)
     # Made relevant by a medicine alone: the card is under the medicines' part of the record.
@@ -614,9 +627,7 @@ async def test_an_area_is_coarse_and_his_to_set(deployment: Deployment) -> None:
             f"/profiles/{profile_id}/area", json={"area": refused}, headers=bearer(pa["token"])
         )
         assert answer.status_code == 400 and answer.json()["refusal"] == "NotACoarseArea", refused
-    kept = await deployment.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "56"}, headers=bearer(pa["token"])
-    )
+    kept = await _set_area(deployment, pa["token"], profile_id, "56")
     assert kept.status_code == 200 and kept.json()["area"] == "56"
     # His chief reads it — so she can see why a local card came — and does not set it.
     read = await deployment.client.get(f"/profiles/{profile_id}/area", headers=bearer(mei["token"]))
@@ -626,9 +637,7 @@ async def test_an_area_is_coarse_and_his_to_set(deployment: Deployment) -> None:
         f"/profiles/{profile_id}/area", json={"area": "Bedok"}, headers=bearer(mei["token"])
     )
     assert hers.status_code == 403 and hers.json()["refusal"] == "OnlyHeSetsHisArea"
-    cleared = await deployment.client.put(
-        f"/profiles/{profile_id}/area", json={"area": None}, headers=bearer(pa["token"])
-    )
+    cleared = await _set_area(deployment, pa["token"], profile_id, None)
     assert cleared.status_code == 200 and cleared.json()["area"] is None
     assert check_area("toa  payoh", Region.SG) == "Toa Payoh"
 
@@ -651,9 +660,7 @@ async def test_his_trail_says_who_set_his_area_and_when_it_was_refused(
         headers=bearer(pa["token"]),
     )
     assert refused.status_code == 400 and refused.json()["refusal"] == "NotACoarseArea"
-    kept = await deployment.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "Bedok"}, headers=bearer(pa["token"])
-    )
+    kept = await _set_area(deployment, pa["token"], profile_id, "Bedok")
     assert kept.status_code == 200, kept.text
     async with deployment.sessions() as session:
         trail = await read_audit(
@@ -1144,9 +1151,7 @@ async def test_what_a_search_sends_is_the_words_typed_and_the_allowlist_nothing_
     deployment: Deployment,
 ) -> None:
     pa, profile_id = await _pa(deployment)
-    await deployment.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "Bedok"}, headers=bearer(pa["token"])
-    )
+    await _set_area(deployment, pa["token"], profile_id, "Bedok")
     spy = _Spy(FEED)
     engine = Engine(searcher=spy, compressor=FixtureCompressor(FEED), registry=FixtureRegistry.load())
     context = await _context(deployment, pa["person_id"], profile_id)
@@ -1247,9 +1252,7 @@ async def test_a_bulletin_is_one_card_not_one_every_day(
 ) -> None:
     pa, profile_id = await _pa(penang, PA_MY)
     await _told(penang, pa, profile_id, "diabetes")
-    await penang.client.put(
-        f"/profiles/{profile_id}/area", json={"area": "Air Itam"}, headers=bearer(pa["token"])
-    )
+    await _set_area(penang, pa["token"], profile_id, "Air Itam")
     await _feed(penang, profile_id, pa["token"])
     assert len(await _made(penang, profile_id, CardType.LOCAL)) == 1
     # The same bulletin tomorrow: it does not take one of his two new cards again.

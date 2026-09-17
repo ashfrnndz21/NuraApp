@@ -98,7 +98,13 @@ from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
 from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
 from app.keys.context import AccountClosing, NoKey, OutOfScope
-from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
+from app.keys.grants import (
+    KeyNotAsAgreed,
+    NoKeyToClose,
+    NothingToNarrow,
+    NotTheirKeyToCut,
+    WouldWiden,
+)
 from app.language.review import (
     AlreadyReviewed,
     NoSuchReviewItem,
@@ -196,6 +202,7 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheOwner, 403),
     (NotTheDoer, 403),
     (WouldWiden, 403),
+    (KeyNotAsAgreed, 403),
     (NotOnThisProfile, 403),
     (NoSuchSlot, 404),
     (NoSuchTask, 404),

@@ -95,6 +95,15 @@ SHIPPED_WORDS: dict[tuple[str, str, str, str | None], str] = {
     ("share_with_family", "2", "zh", None): (
         "939138cd82fb2d96f9197f221f4a960785d235556908a86e384d6a8c4020bc25"
     ),
+    ("share_with_family", "3", "en", None): (
+        "f9d77a31e2d3313880d992caf6c5f3646e7a765aae59d9a41d808c3cd5d03464"
+    ),
+    ("share_with_family", "3", "ms", None): (
+        "61f6dd3fa0e43f63c55e3e557138031437503cefd0be208a35ac5c58a27d3ac4"
+    ),
+    ("share_with_family", "3", "zh", None): (
+        "04311f36d040d104e666602f210d89cba383597b851a473273303cbf0ea248eb"
+    ),
     ("recording", "1", "en", None): (
         "198f6e974300bd444db2daac51b432a39ddf297f6367cca507712040fb2387dc"
     ),

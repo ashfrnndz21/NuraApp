@@ -151,13 +151,15 @@ class SharingWords:
     consent both render from this through `words_for`, so what he reads first and what is
     kept cannot differ. `role` and `window` name what the key cut under this agreement will
     be cut as (#185): the words say so, so the trail can show he agreed to them, and
-    `app.keys.grants.grant_key` refuses a key that asks for anything else."""
+    `app.keys.grants.grant_key` refuses a key that asks for anything else. `POST
+    /consents/sharing` always states both; None is for a consent that names neither — every
+    row written before #185, and a caller that does not care to constrain the key at all."""
 
     name: str
     relationship: str | None
     scopes: frozenset[Scope]
-    role: KeyRole
-    window: KeyWindow
+    role: KeyRole | None = None
+    window: KeyWindow | None = None
 
 
 def words_for(
@@ -187,12 +189,14 @@ def words_for(
 class Sharing:
     """Who is being let in, to which parts, as what role and for how long, and — only if the
     granter says — who they are to him ("your daughter", "the clinic"). The words the
-    patient reads are rendered from this."""
+    patient reads are rendered from this. `role` and `window` are None for a caller that
+    does not name them — the consent then constrains neither (#185); `POST /consents/sharing`
+    always gives both."""
 
     holder: Person
     scopes: frozenset[Scope]
-    role: KeyRole
-    window: KeyWindow
+    role: KeyRole | None = None
+    window: KeyWindow | None = None
     relationship: str | None = None
     """Who they are to him, in the language of the words, or nothing. The words decide how
     to say it (`app.consent.texts.named_words`); nothing is baked into the name."""
