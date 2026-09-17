@@ -145,7 +145,10 @@ body {
 /* "Why am I seeing this?" (RE-08): a plain-text link under the card's own why line, opening
    the Why sheet — never a colour beyond the app's accent, never drawn as a button. */
 .why-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-height: var(--target); /* the same 56px every tap target keeps (a11y.spec, "smaller than 56 by 56") */
+  width: 100%;
   margin-top: 4px;
   padding: var(--space-1) 0;
   border: 0;

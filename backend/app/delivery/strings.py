@@ -38,6 +38,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "logistics_tomorrow": "Getting to {doctor} tomorrow",
         "memo": "What {doctor} said",
         "reorder": "{medicine} is running low",
+        "recall_action": "{medicine} was recalled",
         "gate": "That is all that is new",
         "story_reading": "From your blood pressure book",
         "story_paper": "From your papers",
@@ -60,6 +61,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "logistics_tomorrow": "Pergi jumpa {doctor} esok",
         "memo": "Apa yang {doctor} kata",
         "reorder": "{medicine} hampir habis",
+        "recall_action": "{medicine} ditarik balik",
         "gate": "Itu sahaja yang baru",
         "story_reading": "Dari buku tekanan darah anda",
         "story_paper": "Dari surat-surat anda",
@@ -82,6 +84,7 @@ HEADLINES: Mapping[str, Mapping[str, str]] = {
         "logistics_tomorrow": "明天去看{doctor}",
         "memo": "{doctor}说的话",
         "reorder": "您的{medicine}快用完了",
+        "recall_action": "{medicine}被召回了",
         "gate": "新的就这些了",
         "story_reading": "来自您的血压本",
         "story_paper": "来自您的文件",
@@ -164,6 +167,12 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         # caution against acting without asking — is the opposite of that, not a false one of
         # its own kind.
         "learning_keep_taking": ("Ask {doctor} before you stop taking it.",),
+        # His own pack matched a recall (#183): what he can act on, not the notice's own
+        # words about the recall — those are never his to read (spec §0, §2).
+        "recall_action": (
+            "Take {medicine} to the pharmacist today.",
+            "The pharmacist will tell you what to do next.",
+        ),
         "recap_intro": ("This is your week, from your blood pressure book.",),
         "flag_family": (
             "You told Nura about {feeling}.",
@@ -245,6 +254,10 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_photo": ("{who} berkongsi gambar ini pada {day}.",),
         "learning_source": ("Ini datang dari {source_name}.",),
         "learning_keep_taking": ("Tanya {doctor} sebelum anda berhenti mengambilnya.",),
+        "recall_action": (
+            "Bawa {medicine} kepada ahli farmasi hari ini.",
+            "Ahli farmasi akan beritahu anda apa yang perlu dibuat seterusnya.",
+        ),
         "recap_intro": ("Ini minggu anda, dari buku tekanan darah anda.",),
         "flag_family": (
             "Anda beritahu Nura tentang {feeling}.",
@@ -295,6 +308,7 @@ LINES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         "story_photo": ("{who}在{day}分享了这张照片。",),
         "learning_source": ("这来自{source_name}。",),
         "learning_keep_taking": ("停用它以前，先问一问{doctor}。",),
+        "recall_action": ("今天把{medicine}带去给药剂师。", "药剂师会告诉您接下来要怎么做。"),
         "recap_intro": ("这些是您这一周的血压，来自您的血压本。",),
         "flag_family": (
             "您告诉Nura您{feeling}。",
@@ -319,6 +333,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "memo": "You saw {doctor} on {day}.",
         "reorder": "You have about {days} days of {medicine} left.",
         "reorder_one": "You have about 1 day of {medicine} left.",
+        "recall_action": "{medicine} was named in a safety notice.",
         "gate": "You have seen everything new for today.",
         "story_reading": "This is from your own blood pressure book.",
         "story_paper": "This is one of your own papers.",
@@ -345,6 +360,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "memo": "Anda berjumpa {doctor} pada {day}.",
         "reorder": "{medicine} anda tinggal lebih kurang {days} hari lagi.",
         "reorder_one": "{medicine} anda tinggal lebih kurang 1 hari lagi.",
+        "recall_action": "{medicine} disebut dalam satu notis keselamatan.",
         "gate": "Anda sudah lihat semua yang baru hari ini.",
         "story_reading": "Ini dari buku tekanan darah anda sendiri.",
         "story_paper": "Ini salah satu surat anda sendiri.",
@@ -371,6 +387,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "memo": "您{day}看了{doctor}。",
         "reorder": "{medicine}大概还够{days}天。",
         "reorder_one": "{medicine}大概还够1天。",
+        "recall_action": "一个安全通知提到了{medicine}。",
         "gate": "今天新的您都看过了。",
         "story_reading": "这来自您自己的血压本。",
         "story_paper": "这是您自己的一份文件。",
@@ -637,6 +654,32 @@ def learning_lines(
     )
 
 
+def recall_action_lines(language: str | None, *, medicine: str, doctor: str) -> Lines:
+    """His own card for the one case a safety notice needs him at all (#183): his own pack is
+    one of the recalled batches. In his own words, from the catalogue, like every other card
+    of his — never the notice's own compressed words about the recall, which stay
+    `learning_lines`' and are his chief's alone. It says what is true (`{medicine}` was
+    recalled) and who to ask today (the pharmacist), never that he should stop taking it: no
+    line here or in `LINES[*]["recall_action"]` may say to start, stop or change a medicine.
+
+    Ends on the same boundary line a learning card carries (`Surface.LEARNING_CARD`,
+    E16-01): this card exists because State surfaced a regulator's notice, even though its
+    own words never do."""
+    code = language_for(language)
+    filled = {"medicine": medicine, "doctor": doctor}
+    body = tuple(_fill(line, filled) for line in LINES[code]["recall_action"])
+    boundary = boundary_line(Surface.LEARNING_CARD, code, doctor=doctor)
+    lines = (*body, *boundary.splitlines())
+    return Lines(
+        language=code,
+        headline=_fill(HEADLINES[code]["recall_action"], filled),
+        body=lines,
+        voice=lines,
+        why=_fill(WHY[code]["recall_action"], filled),
+        boundary=boundary,
+    )
+
+
 def needs_doctor_look_lines(language: str | None, *, doctor: str) -> Lines:
     """The fixed line for a finding that would start, stop or change a medicine (#236): never
     the finding's own words — `items.create_item` refuses any card that carries them, for any
@@ -839,6 +882,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_change": "How {patient}'s blood pressure moved",
         "story_trend": "{patient}'s blood test over time",
         "needs_doctor_look": "Nura kept this about {patient} for {doctor}",
+        "recall_action": "{patient}'s {medicine} was recalled",
     },
     "ms": {
         "recap": "Minggu {patient}, dalam 30 saat",
@@ -851,6 +895,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_change": "Bagaimana tekanan darah {patient} berubah",
         "story_trend": "Ujian darah {patient} dari masa ke masa",
         "needs_doctor_look": "Nura simpan ini tentang {patient} untuk {doctor}",
+        "recall_action": "{medicine} {patient} ditarik balik",
     },
     "zh": {
         "recap": "30秒看{patient}的这一周",
@@ -863,6 +908,7 @@ HEADLINES_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_change": "{patient}的血压有什么变化",
         "story_trend": "{patient}的验血结果",
         "needs_doctor_look": "Nura 为{doctor}留下了关于{patient}的这个",
+        "recall_action": "{patient}的{medicine}被召回了",
     },
 }
 """A card's headline said about him by name."""
@@ -928,6 +974,10 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nura found something about {patient} that needs {doctor}'s look.",
             "Nura already saved a question for {doctor}.",
         ),
+        "recall_action": (
+            "Take {patient}'s {medicine} to the pharmacist today.",
+            "The pharmacist will tell {patient} what to do next.",
+        ),
     },
     "ms": {
         "now_quiet": ("Tiada yang baru menunggu {patient} hari ini.", "Leret ke atas untuk dengar lagi."),
@@ -980,6 +1030,10 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nura jumpa sesuatu tentang {patient} yang perlu dilihat {doctor}.",
             "Nura sudah simpan soalan untuk {doctor}.",
         ),
+        "recall_action": (
+            "Bawa {medicine} {patient} kepada ahli farmasi hari ini.",
+            "Ahli farmasi akan beritahu {patient} apa yang perlu dibuat seterusnya.",
+        ),
     },
     "zh": {
         "now_quiet": ("今天没有新的事情等着{patient}。", "想多看的时候，请向上滑。"),
@@ -1026,6 +1080,7 @@ LINES_THEIRS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
             "Nura 发现了关于{patient}、需要{doctor}查看的事。",
             "Nura 已经给{doctor}留了一个问题。",
         ),
+        "recall_action": ("今天把{patient}的{medicine}带去给药剂师。", "药剂师会告诉{patient}接下来要怎么做。"),
     },
 }
 """A card's lines said about him by name, place for place with `LINES`."""
@@ -1052,6 +1107,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "learning": "This is about {topic}, which is on {patient}'s papers.",
         "needs_doctor_look": "Nura found something about {patient} to ask {doctor} about.",
         "withheld": "Part of {patient}'s papers is not shown here.",
+        "recall_action": "{patient}'s {medicine} was named in a safety notice.",
     },
     "ms": {
         "gate": "Semua yang baru hari ini sudah dilihat.",
@@ -1073,6 +1129,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "learning": "Ini tentang {topic}, yang ada dalam surat-surat {patient}.",
         "needs_doctor_look": "Nura jumpa sesuatu tentang {patient} untuk ditanya kepada {doctor}.",
         "withheld": "Sebahagian surat {patient} tidak ditunjukkan di sini.",
+        "recall_action": "{medicine} {patient} disebut dalam satu notis keselamatan.",
     },
     "zh": {
         "gate": "今天新的都看过了。",
@@ -1094,6 +1151,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "learning": "这是关于{topic}的，它在{patient}的文件里。",
         "needs_doctor_look": "Nura 发现了关于{patient}、需要问{doctor}的事。",
         "withheld": "{patient}的文件有一部分不会显示在这里。",
+        "recall_action": "一个安全通知提到了{patient}的{medicine}。",
     },
 }
 """Why a card is there, said about him by name."""

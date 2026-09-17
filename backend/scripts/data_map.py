@@ -411,6 +411,7 @@ CLASSES: dict[str, str] = {
     "feed_item.direction": HEALTH,
     "feed_item.colour": HEALTH,
     "feed_item.action": OPERATIONAL,
+    "feed_item.private_to": IDENTIFIER,
     # --- delivery (E11): the settings, every attempt to reach someone, the ladder -------------
     "delivery_settings.id": OPERATIONAL,
     "delivery_settings.skip_quiet_days": OPERATIONAL,
@@ -557,6 +558,7 @@ CLASSES: dict[str, str] = {
     "question.supersedes_id": HEALTH,
     "question.superseded_at": OPERATIONAL,
     "question.created_at": OPERATIONAL,
+    "question.written_scope": CONSENT,
     "memo.id": HEALTH,
     "memo.state_id": HEALTH,
     "memo.boundary": HEALTH,
@@ -987,6 +989,7 @@ CLASSES: dict[str, str] = {
     "feeling_note.answer": HEALTH,
     "feeling_note.language": OPERATIONAL,
     "feeling_note.headline": HEALTH,
+    "feeling_note.said": HEALTH,
     "feeling_note.lines": HEALTH,
     "feeling_note.then": HEALTH,
     "feeling_note.voice": HEALTH,

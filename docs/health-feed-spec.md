@@ -41,6 +41,7 @@ Held items never reach the patient: doctor questions go to the memo; notices wit
 | Local alert | Environmental or outbreak bulletin matching address and conditions | What to do today | Text card |
 | Food and habit | Weekly, by conditions and season | One concrete choice | Text card |
 | Safety notice | Regulator or manufacturer notice matching a medicine | Checked against pack batch; **never a card in his feed** — held for the chief, and for the memo where it is a question for the doctor | Held |
+| Recall action | A safety notice whose batch matches his own pack (#183) | What he can do about the box in his hand today, in his own words, ending on the boundary line — never the notice's own words | Text card + voice |
 | Worth knowing | Guideline change, formulary addition, new option | Framed as a question for the doctor | Held → Doctor Memo |
 | Seasonal | Fasting month, festive food, travel | Timing and food adjustments | Text card |
 
@@ -55,21 +56,29 @@ every other card of his is made and read by the pharmacist's first fifty before 
 (`REVIEWED_TYPES`, `app/language/review.py`). "Your pack is one of the batches; bring it to the
 pharmacy" is his card, because it is his to act on. "This batch was recalled" is not.
 
-**The code does this now** (#181, 2026-09-17). `app/delivery/feed/search.py` holds every
-safety notice for the chief, batch match or not, and reroutes one whose words would start,
-stop or change a medicine to the memo as a question instead — never `DeliverTo.PATIENT`
-either way. `app/delivery/feed/items.py`'s `create_item` refuses a `NOTICE` built for the
-patient outright (`NoticeNotForPatient`), the one place every card is written, so no later
-job or caller can send one to him by mistake. It is still sampled for the pharmacist's first
-fifty like every other reviewed type, whoever it is held for (`app/language/review.py`).
+**The code does this now** (#181, #183, #224, #236). `app/delivery/feed/search.py` holds
+every safety notice for the chief, batch match or not — unconditionally, so a notice never
+reaches nobody (#224 review finding: a `continue` used to skip the caregiver notice whenever
+its words also changed treatment). One whose words would start, stop or change a medicine is
+never sent in its own words to any audience, hers included: `app/delivery/feed/items.py`'s
+`create_item` refuses a `TreatmentChangingCard` outright, the same choke point that refuses a
+`NOTICE` built for the patient (`NoticeNotForPatient`), so no later job or caller can send
+either by mistake. Instead her card is rerouted to a fixed line
+(`app/delivery/strings.py:needs_doctor_look_lines`) and a real question is filed for the
+doctor through `reasoning.visits.memos.write_memo` (`search._ask_the_doctor`) — the same door
+the post-visit summary uses, never a `FeedItem` nothing reads. It is still sampled for the
+pharmacist's first fifty like every other reviewed type, whoever it is held for
+(`app/language/review.py`).
 
-**The "something you must do" card is not built.** Taking his batch-match card away was safe
-to do now because it was never anything but a recall notice read back to him; the card
-described above — his own words, made from a pharmacist-reviewed pattern, saying what *he*
-must do — is a separate feature, not yet designed or built. Until it exists, a batch that
-matches his own box reaches his chief (and, where it is a question for the doctor, the memo)
-and he is told nothing in the feed. That is accepted, not fixed here: a silent chief beats an
-unreviewed claim in his own feed.
+**Built** (#183). `CardType.RECALL_ACTION` is his own card, independent of whether the
+notice above was rerouted: only where the batch on his own pack matches, `search.py`'s
+`JobKind.SAFETY` branch additionally writes a `RECALL_ACTION` card to `DeliverTo.PATIENT`
+(`app/delivery/strings.py:recall_action_lines`) — in his own words, from the catalogue,
+ending on the boundary line, never a word of the notice's own. `tests/test_feed.py` asserts
+all of it: a matching recall gives him the action card and his chief the notice; a recall
+that needs nothing of him reaches only his chief; and a recall that both matches his batch
+and changes treatment still gives him the action card even though the notice itself is
+rerouted to a doctor question.
 
 
 Every card carries: `headline`, `body` (plain words), `why` (one sentence, plain), `source` (name, URL, date), `profileRefs` (facts it was built from), `format`, `language`, `audioURL`, `mediaURL`, `expiresAt`, `deliverTo` (patient / caregiver / memo).

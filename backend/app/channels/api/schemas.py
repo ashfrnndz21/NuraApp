@@ -1030,7 +1030,9 @@ class MedicineIn(BaseModel):
 class DrugMatchOut(BaseModel):
     """The product the licensed register identified, and how sure it is (#206): never a
     guess dressed up as a match — below `CONFIDENCE_THRESHOLD` this is not reached at all,
-    `NotIdentified` answers first (`app.medicines.service._one_product`)."""
+    `NotIdentified` answers first (`app.medicines.service._one_product`); for a high-risk
+    generic matched at more than one strength, with no strength on the label to choose
+    between them, `StrengthNotRead` answers instead (#211)."""
 
     registration_no: str
     brand: str

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
+import { Unreachable } from "../api/client";
 import type { FeedItemOut } from "../api/types";
 import { go } from "../flow";
+import { hold, tapId } from "../offline/queue";
 import { bindingOf, zoneOf } from "../offline/todayCache";
 import { density, profile, token } from "../store/session";
-import { language, t } from "../strings";
-import { feedLines, whyLine } from "../today/model";
+import { fill, language, t } from "../strings";
+import { clockWords, feedLines, whyLine } from "../today/model";
 import { Card, Notice, Pill, Tile } from "../ui/components";
 
 import { ClipCard, FeelingStrip, NudgeTile } from "./components";
@@ -38,6 +40,9 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
   const [said, setSaid] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // A non-red word tapped with no network: held on the phone with the moment he tapped it,
+  // in place of the note or question a live tap gets (#171).
+  const [heldAt, setHeldAt] = useState<string | null>(null);
   const owner = papers?.standing === "owner";
   const records = papers?.scopes.includes("records") ?? false;
 
@@ -78,6 +83,7 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
     if (!bearer || !papers || busy) return;
     setBusy(true);
     setError(null);
+    setHeldAt(null);
     try {
       const felt = await nura.tapFeeling(bearer, papers.profile_id, word.word, language.value);
       // A word on the cloud is the check-in's answer: the hidden check-in is answered with it.
@@ -92,6 +98,17 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
       if (word.red) {
         const kept = await keptCards(papers.profile_id, bindingOf(papers));
         return go({ name: "whatToDo", ...whenNotReached("red_flag", failure, kept?.cards ?? null, papers.region, s, language.value) });
+      }
+      if (failure instanceof Unreachable) {
+        // No network: held on the phone with the moment he tapped, the same way Taken is
+        // (W4, #171) — carrying its own time, so a replay after the phone's midnight is
+        // dropped by the queue itself rather than written under the wrong day. Sent once,
+        // in order, by `useToday`'s own replay, the next time the network is back.
+        const at = new Date().toISOString();
+        await hold(papers.profile_id, { id: tapId(), kind: "feeling", word: word.word, language: language.value, at }, bindingOf(papers), new Date(), zoneOf(papers.region));
+        setCloud(null);
+        setHeldAt(at);
+        return;
       }
       setError(failure);
     } finally {
@@ -133,6 +150,13 @@ export function DayOnToday({ stateId, live }: { stateId: string | null; live: bo
               <p key={at}>{line}</p>
             ))}
           </div>
+        </Tile>
+      )}
+      {/* A word tapped with no network: held on the phone, with when he tapped (W4, #171). */}
+      {heldAt && (
+        <Tile paper role="status" testId="held-feeling">
+          <p>{fill(s.held.tapped, { time: clockWords(new Date(heldAt), language.value, zoneOf(papers?.region)) })}</p>
+          <p>{s.held.held}</p>
         </Tile>
       )}
       {/* A check-in nudge asks what the cloud asks, and a word on the cloud is its answer: while

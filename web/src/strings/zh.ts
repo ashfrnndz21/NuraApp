@@ -2094,6 +2094,7 @@ export const zh = {
     NoSuchProvider: "这位医生不在您的名单上。",
     StaleState: ["Nura 还在更新。", "请再试一次。"],
     NotIdentified: "Nura 找不到这个药。",
+    StrengthNotRead: ["Nura 找到了这个药，但不知道它有多强。", "请再拍一张照片，清楚拍到它有多强。"],
     DoseNotRead: "请照标签打怎么吃。",
     NotADose: "Nura 看不懂怎么吃。",
     WouldWiden: ["Nura 不能把这个放宽。", "文件的主人要先同意更多。"],
