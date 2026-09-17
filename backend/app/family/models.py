@@ -299,12 +299,44 @@ class Document(ProfileScoped, Base):
     added_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+class ScheduledCall(ProfileScoped, Base):
+    """A call on the calendar with one family member (design-direction.md, Connect's
+    "Upcoming Call"): who, when, and how to join.
+
+    `with_person_id` is a family member — someone who holds a key on this profile — never a
+    provider; a call with a doctor is a visit (`app.memory.models.Appointment`), not this. Set
+    up by the chief or by him, on the setter's own yes (`app.drafts.CallDraft`), the same way
+    booking a visit or asking someone to drive is. `call_link` is what the family provides
+    (E: in-app video calling needs a video provider Nura does not have; a family member's own
+    Zoom or Google Meet link is what "Join" opens); with none, "Join" rings `with_person_id`'s
+    own phone. The one change the row takes is its cancelling.
+    """
+
+    __tablename__ = "scheduled_call"
+    __table_args__ = (_row_of_profile("scheduled_call"),)
+    # `with_person_id`, `added_by_person_id`: plain foreign keys to `person`, like every other
+    # person reference on a family row (`Document.added_by_person_id`,
+    # `ScheduledPush.composed_by_person_id`) — a person is a global account, never
+    # profile-scoped, so there is no `(profile_id, id)` pair on it to tie against.
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    with_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
+    scheduled_at: Mapped[datetime] = mapped_column(index=True)
+    call_link: Mapped[str | None] = mapped_column(String(300), default=None)
+    label: Mapped[str | None] = mapped_column(String(LABEL_LENGTH), default=None)
+    added_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
+    added_at: Mapped[datetime] = mapped_column(default=utcnow)
+    cancelled_at: Mapped[datetime | None] = mapped_column(default=None)
+
+
 # What was said was said; a card names the State it named; a push is what was previewed.
 frozen(ThreadMessage)
 # A shared photo is what was shared; the one who shared it may only take it back.
 frozen(ThreadPhoto, except_for=frozenset({"withdrawn_at"}))
 frozen(ScheduledPush)
 frozen(Document)
+# A call takes its cancelling; everything else about it is what was scheduled.
+frozen(ScheduledCall, except_for=frozenset({"cancelled_at"}))
 # A slot takes its ending; a task takes its close, by the doer, through the service only.
 frozen(RosterSlot, except_for=frozenset({"ended_at"}))
 frozen(

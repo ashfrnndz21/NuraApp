@@ -157,6 +157,9 @@ class EventKind(StrEnum):
     SUPPLY = "supply"
     """A person said there are more of a medicine at home (E04-05, "I have more at home"):
     the moment the count correction's fact rests on, under the medicines' part."""
+    FOOD = "food"
+    """He (or a key-holder for him) said what he ate: the moment a food-intake fact rests
+    on (`app.lifestyle.food`). Under the record's part, like a symptom said in words."""
 
 
 class Event(ProfileScoped, RowScoped, Base):

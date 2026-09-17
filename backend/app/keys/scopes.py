@@ -83,6 +83,15 @@ _SUBJECT_SCOPES: dict[str, Scope] = {
     "oxygen": Scope.READINGS,
     "temperature": Scope.READINGS,
     "weight": Scope.READINGS,
+    "steps": Scope.READINGS,
+    "sleep": Scope.READINGS,
+    "water": Scope.READINGS,
+    # The owner's deliberate call (design-direction.md follow-up, 2026-09-17): whoever can
+    # see his readings — a helper included — can see whether he has eaten. Weighed against
+    # keeping meals under the general record so a helper could not see them; the owner chose
+    # practicality over that extra privacy line. If this ever changes, it is this one line —
+    # every reader of a food fact goes through `scope_for_subject`, not its own scope check.
+    "food": Scope.READINGS,
 }
 
 

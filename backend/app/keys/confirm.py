@@ -32,6 +32,7 @@ from app.audit.trail import record
 from app.db import Base, ProfileScoped, as_utc, enum_column, frozen, utcnow
 from app.drafts import (
     AttachDraft,
+    CallDraft,
     ClaimDraft,
     CloseDraft,
     ConfirmSubject,
@@ -78,9 +79,9 @@ def scope_of(draft: Draft) -> Scope:
         return Scope.PROFILE
     if isinstance(draft, ReviewDraft | AttachDraft):
         return Scope.RECORDS
-    if isinstance(draft, KeyChangeDraft | OnlyMeDraft | DriveDraft | OrderDraft):
-        # Who drives him, and who orders more of a medicine, is a task on the family list
-        # (E05-03, E04-05, E12-03).
+    if isinstance(draft, KeyChangeDraft | OnlyMeDraft | DriveDraft | OrderDraft | CallDraft):
+        # Who drives him, who orders more of a medicine, and a call with a family member, are
+        # all the family list's (E05-03, E04-05, E12-03, design-direction.md "Upcoming Call").
         return Scope.FAMILY
     if isinstance(draft, TaskDoneDraft):
         return Scope.PROFILE
