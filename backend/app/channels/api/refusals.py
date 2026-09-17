@@ -28,10 +28,10 @@ from app.consent.service import (
 )
 from app.delivery.feed.area import OnlyHeSetsHisArea
 from app.delivery.feed.clips import NoClipRenderer, NoExcerpt, NotAClipCard
-from app.delivery.feed.engagement import NoSuchItem, SecondsOnlyOnAPlay
+from app.delivery.feed.engagement import SecondsOnlyOnAPlay
 from app.delivery.feed.find import NotAFilter, NothingToFind
 from app.delivery.feed.local import NotACoarseArea, NotAHazard, NotASeason
-from app.delivery.feed.rank import NoCachedPage
+from app.delivery.feed.rank import NoCachedPage, NoSuchItem
 from app.delivery.feed.search import FastingIsHisToSay, NoSuchSearchJob, NotACadence
 from app.delivery.feed.sources import NotTheirsToManage
 from app.delivery.feed.twin import NotInThatLanguage

@@ -553,6 +553,7 @@ CLASSES: dict[str, str] = {
     "question.supersedes_id": HEALTH,
     "question.superseded_at": OPERATIONAL,
     "question.created_at": OPERATIONAL,
+    "question.written_scope": CONSENT,
     "memo.id": HEALTH,
     "memo.state_id": HEALTH,
     "memo.boundary": HEALTH,

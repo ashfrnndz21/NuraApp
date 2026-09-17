@@ -462,7 +462,7 @@ async def questions_for(
                 session,
                 context=context,
                 action=Action.WRITE,
-                scope=Scope.VISITS,
+                scope=question.written_scope,
                 target=QUESTION,
                 target_id=question.id,
                 rows=1,
@@ -496,11 +496,19 @@ async def _write(
         if proposed.source_kind == GapKind.INTERACTION_FLAGGED.value
         else Surface.QUESTIONS
     )
+    # Every question is written under the visits' own scope but one: a question from a
+    # feeling note rests on the record (RE-02, ADR 0004 decision 10), so it is written under
+    # `Scope.RECORDS` — the row's `written_scope` (`RowScoped`, #120) — and `scoped_select`
+    # then narrows every read of it, `current_questions`/`patient_card` included, to a key
+    # that holds the record. Writing it here always succeeds: `feeling_notes_for` (the only
+    # source of a `QuestionSource.FEELING` proposal) already refuses to read the note at all
+    # for a context without `Scope.RECORDS`, so this write is never reached without it.
+    written_under = Scope.RECORDS if proposed.source is QuestionSource.FEELING else Scope.VISITS
     return await render_from_state(
         session,
         Question,
         context,
-        Scope.VISITS,
+        written_under,
         state=state,
         surface=surface,
         boundary=boundary_line(surface, visit.language, doctor=visit.doctor),
@@ -624,7 +632,7 @@ async def change_questions(
             session,
             context=context,
             action=Action.WRITE,
-            scope=Scope.VISITS,
+            scope=old.written_scope,
             target=QUESTION,
             target_id=old.id,
             rows=1,

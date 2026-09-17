@@ -22,11 +22,12 @@ from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.db import ImmutableRow, as_utc, utcnow
 from app.drafts import QuestionDraft
+from app.identity.service import register_person
 from app.ingestion.objects import LocalObjectStore
 from app.keys.confirm import NotWhatWasConfirmed, confirm
 from app.keys.context import OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.medicines.models import MedicationLine
 from app.memory.models import (
     AppointmentStatus,
@@ -40,7 +41,7 @@ from app.reasoning.feelings.models import FeelingNote, NoteOutcome
 from app.reasoning.feelings.service import answer_tap, record_tap
 from app.reasoning.feelings.words import Answer
 from app.reasoning.visits import strings
-from app.reasoning.visits.brief import brief_for, build_brief
+from app.reasoning.visits.brief import brief_for, build_brief, lines_for
 from app.reasoning.visits.gaps import GapKind, find_gaps
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card, write_memo
 from app.reasoning.visits.models import (
@@ -58,6 +59,7 @@ from app.reasoning.visits.questions import (
     CARD_SIZE,
     PRIORITY_PERSON,
     change_questions,
+    current_questions,
     patient_card,
     question_draft_for,
     questions_for,
@@ -347,6 +349,73 @@ async def test_without_a_visit_the_promise_says_who_tells_the_doctor(sg: AsyncSe
     assert note.then == "Nura has kept this for you to tell Dr Tan."
     assert "next visit" not in note.then
     assert (await sg.scalars(select(FeelingNote))).all() == [note]
+
+
+async def test_a_viewer_key_reads_neither_the_feeling_note_nor_its_question(
+    sg: AsyncSession,
+) -> None:
+    """The one leak independent review found in #233: `Question.written_scope` (RowScoped,
+    #120) holds a feeling-derived question to `Scope.RECORDS`, the same part of the record
+    the note itself and the brief's own lines about it are already held to — so a `VIEWER`
+    key (`VISITS`, no `RECORDS`) reads the visit's brief and its questions and finds neither
+    his words nor a question built from them, and a key that holds `RECORDS` finds both."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.appointment_id == appointment.id
+
+    mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6592220002")
+    await agree_to_family_sharing(sg, context, mei, scopes=set(ROLE_SCOPES[KeyRole.VIEWER]))
+    await grant_key(
+        sg, context=context, holder=mei, role=KeyRole.VIEWER, scopes=ROLE_SCOPES[KeyRole.VIEWER]
+    )
+    viewer = await resolve_key_context(
+        sg, region=Region.SG, person_id=mei.id, profile_id=context.profile_id
+    )
+    assert viewer.allows(Scope.VISITS) and not viewer.allows(Scope.RECORDS)
+
+    # The owner renders the brief once; every key that holds the visits reads the same row,
+    # narrowed to what it may see at read time (`lines_for`), never re-rendered per reader.
+    brief = await brief_for(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    his_shown, his_missing = lines_for(brief, context)
+    assert note.lines[0] in [line["text"] for line in his_shown] and his_missing == []
+    her_shown, her_missing = lines_for(brief, viewer)
+    assert note.lines[0] not in [line["text"] for line in her_shown]
+    assert "feeling_note" not in {line["key"] for line in her_shown}
+    assert Scope.RECORDS in her_missing
+
+    # The questions card: the same story, on `current_questions`/`patient_card`, narrowed by
+    # `written_scope` (`RowScoped`) rather than by a second, separate filter.
+    her_questions = await current_questions(sg, context=viewer, appointment_id=appointment.id)
+    assert all(q.source is not QuestionSource.FEELING for q in her_questions)
+    her_card = await patient_card(sg, context=viewer, appointment_id=appointment.id)
+    assert note.lines[0] not in her_card
+
+    his_questions = await current_questions(sg, context=context, appointment_id=appointment.id)
+    feeling_questions = [q for q in his_questions if q.source is QuestionSource.FEELING]
+    assert len(feeling_questions) == 1 and feeling_questions[0].written_scope is Scope.RECORDS
+    his_card = await patient_card(sg, context=context, appointment_id=appointment.id)
+    assert note.lines[0] in his_card
 
 
 # --- the brief ------------------------------------------------------------------------------

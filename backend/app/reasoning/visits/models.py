@@ -24,6 +24,7 @@ from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
+from app.keys.rows import RowScoped
 from app.memory.models import _row_of_profile, _tied_to_profile
 from app.state.models import RenderedFromState
 
@@ -86,13 +87,22 @@ class QuestionSource(StrEnum):
     visit it named (RE-02), instead of being kept and never read."""
 
 
-class Question(RenderedFromState, ProfileScoped, Base):
+class Question(RenderedFromState, ProfileScoped, RowScoped, Base):
     """One question to ask the doctor at one visit.
 
     Generated ones come from a gap, a memo or a flag, through a template; a person's own
     comes typed, with his yes. Rows are immutable: an edit is a new row naming the one it
     supersedes, a removal is a new row with `removed` set, and the old row takes the one
     change of being superseded. The current list is the unsuperseded rows not removed.
+
+    `written_scope` (RowScoped, #120) is `Scope.VISITS` for every question but one kind: a
+    question from a feeling note (`QuestionSource.FEELING`) is written under `Scope.RECORDS`,
+    the note's own scope, so `scoped_select` — every read of this table, including
+    `current_questions` and `patient_card` — narrows it to a key that holds the record, the
+    same way the brief already narrows the note's own lines (`app.reasoning.visits.brief`,
+    `SYMPTOM_KEYS`). A `VIEWER` key holds `VISITS` but not `RECORDS`: without this, she read
+    his feeling note word for word through the questions list, the one place the brief's own
+    narrowing did not reach.
     """
 
     __tablename__ = "question"
