@@ -167,6 +167,52 @@ One consistent **line icon** set throughout, matching Reference B's thin rounded
 accent colour on a pastel-tinted rounded square or circle. Use a permissively licensed library
 (for example Lucide, ISC) rather than hand-drawing icons, and record its licence in the repo.
 
+## Conversation, waiting and "thinking"
+
+**The owner's instruction:** every chat, search and ask interaction shows it is working, with a
+loading state and a **"thinking" trace**, so it feels like a conversation rather than a form that
+has gone quiet. For an older person, a blank pause after they ask something reads as "it's
+broken".
+
+**Where:** the ask bar (natural-language questions over his record), the feed's web and video
+search, the family thread and any message composer, the recommendation "why" screen, and
+anything else where he waits for Nura to answer.
+
+**What it looks like**
+- **While he waits:** a calm animated indicator (soft pulsing dots, or the brand mark's
+  speaking motion from #176) beside a plain line of what is happening, with the question he
+  asked shown above it as his own message, chat-style.
+- **The trace:** a short list of steps that appear as they happen — "Reading your medicines…",
+  "Checking your visits…", "Looking at your readings…" — each ticking over to done. Collapsed
+  to one line when the answer arrives, and expandable: **"What Nura looked at"**.
+- **The answer** arrives as a message from Nura, with the parts of his record it rests on linked
+  underneath.
+- **Skeleton cards** (soft shimmering placeholders in the card's own shape) wherever a screen's
+  content is loading, instead of a spinner on a blank page.
+
+**The rule that makes it honest: the trace shows what Nura is really doing.**
+- **Every step is a real step.** A step appears because the backend actually did it: searched
+  that part of his record, ran that search. The steps are streamed from the backend as they
+  happen, never scripted in the client.
+- **No invented steps and no artificial delay.** The ask is rule-based and often fast. If the
+  answer is ready in 200ms, show it. Do not hold it back to let a "thinking" animation play. A
+  fake delay is a small lie on screen and a slower app for someone already waiting. The trace
+  earns its place when real work takes real time, and will matter more once model-backed
+  retrieval arrives behind its port.
+- **"What Nura looked at" names only what it actually read,** under his key's scope. A caregiver's
+  trace never names a part of his record their key does not open.
+
+**Accessibility**
+- Announce progress through an `aria-live="polite"` region: one announcement for the start and one
+  for the answer. Never one per animation frame or per step, so a screen reader is not flooded.
+- Respect `prefers-reduced-motion`: no pulsing or shimmer. A static indicator and the text of the
+  step instead.
+- At 200% text, the trace wraps and never overlaps the answer or the input.
+- If it takes long or fails, say so plainly and offer to try again. Never spin for ever. The call
+  deadline (#193) applies.
+
+Plain words and all three languages apply to every step line.
+
 ## What does not change
 
 Accessibility (contrast, 200% text with nothing drawn over a line, reduced motion, the axe
