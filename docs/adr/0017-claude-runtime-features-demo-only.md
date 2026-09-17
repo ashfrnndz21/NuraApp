@@ -74,6 +74,53 @@ the extractor's and the searcher's own module docstrings cite it, not ADR 0008.
   features, beside the questions counsel still has open for the speech and model providers a
   real deployment will use.
 
+## Addendum — 2026-09-17: a declared dev run, on the owner's own laptop
+
+**Decided by** the owner.
+
+A dev run (`NURA_DEV_CODE_SENDER=1`) is now admitted alongside a declared demo, for the same
+four Claude-backed adapters and no others. The reasoning in "Decision" above — "every byte or
+word it is shown is demo or test data" — is one way to be safe about whose data leaves the
+region. A declared dev run is the other: the owner runs the app on his own laptop, on his own
+documents, with his own Anthropic key. He is the data subject, choosing for himself to send his
+own bytes outside the region; there is no third party's data in the room to protect from that
+choice the way `pdpa-data-map.md` §5 protects a real family's papers on a real deployment.
+
+1. **The public deployment is unchanged.** Nothing about this addendum touches a deployment
+   that is not a declared dev run. `NURA_DEMO_MODE=1` remains the only declaration a hosted
+   deployment can make, `pdpa-data-map.md` §5 still holds without exception there, and a
+   deployment that is neither a demo nor a laptop dev run still refuses to build any of these
+   four adapters, exactly as "Decision" above already said.
+2. **One shared gate, not four copies.** `app.llm.residency.allow_external_model` is the single
+   place this OR (`demo_mode or dev_run`) is written; every adapter's construction site
+   (`extractor_for`, `narrator_for`, `searcher_for`, `compressor_for`) calls it rather than
+   holding its own copy of the check, so the two declarations that admit the exception cannot
+   drift out of step between adapters the way point 1 of "Decision" already worried about for
+   demo mode alone.
+3. **A dev run is never silent about it.** A declared demo says nothing extra at the point of
+   the call — ADR 0008's own banner already says it plainly, on every screen. A dev run has no
+   such banner, so `allow_external_model` logs a line naming the adapter and stating plainly
+   that these bytes go to the Anthropic API outside the region, by the owner's own choice, every
+   time it permits one. The refusal message, on a build that is neither, says the same: a dev
+   run would have been enough.
+4. **This does not reopen `pdpa-data-map.md` §5.** As with the original decision, this is a
+   runtime-feature exception, not a residency policy: it exists because there is no third
+   party's data at risk on a declared dev run, the same way the original exception existed
+   because a demo, by declaration, holds nothing real. Neither the standing rule nor its
+   audit trail (point 3 of "Decision") changes; a dev run's reach is audited the same way a
+   demo's already is.
+
+### Alternatives considered (addendum)
+
+- **A new env var just for this.** `Settings` already has a dev-run declaration
+  (`NURA_DEV_CODE_SENDER`) that exists for exactly this purpose — telling the process it is a
+  laptop, not a deployment. A second flag meaning the same thing would only be another name to
+  keep in step with it. Rejected.
+- **Silence, the way a demo is silent.** A demo's silence rests on ADR 0008's own banner
+  already saying it on every screen; a dev run has no equivalent banner, so silence here would
+  be the only place a real reach outside the region was not said anywhere. Rejected; a dev run
+  logs every time.
+
 ## Alternatives considered
 
 - **Read ADR 0008 as covering this.** It does not name a residency exception, and its own
