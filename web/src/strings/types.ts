@@ -36,6 +36,10 @@ export interface Strings {
     prepare: string;
     prepareLine: string;
     start: string;
+    /** Demo/dev only (`GET /deployment`): sign in at once as the seeded Pa or Mei
+     *  (`app.demo_seed`), no phone number or code typed. */
+    tryAsPa: string;
+    tryAsMei: string;
   };
   /** Conversation and waiting (docs/design-direction.md): the words every ask, search and
    *  message composer uses while Nura works. The steps themselves are the backend's lines. */
@@ -214,6 +218,7 @@ export interface Strings {
     open: string;
     story: string;
     learning: string;
+    didYouKnow: string;
     ask: string;
     family: string;
     notForMe: string;
@@ -855,6 +860,36 @@ export interface Strings {
     addDocument: string;
     chooseDocument: string;
     whatPaper: string;
+  };
+  /** The Connect tab's own overview (docs/design/nura-concept-board.html, the Connect screen):
+   *  his family, his next call, what is near him, and the family thread — one glance, then the
+   *  existing screens each row opens. `familyTitle`, `noFamily`, `noCall`, `nearYouTitle` and
+   *  `noNearYou` each have an "…Other" twin, said about him by name on a caregiver's key
+   *  (`ABOUT_HIM` in `strings/index.ts`). */
+  connect: {
+    familyTitle: string; familyTitleOther: string;
+    addPerson: string;
+    addPersonLine: string;
+    noFamily: string; noFamilyOther: string;
+    nextCallTitle: string;
+    call: string;
+    change: string;
+    noCall: string; noCallOther: string;
+    nearYouTitle: string; nearYouTitleOther: string;
+    noNearYou: string; noNearYouOther: string;
+    messagesTitle: string;
+    noMessages: string;
+    seeAllFamily: string;
+    seeAllNearYou: string;
+    seeAllMessages: string;
+    callsTitle: string;
+    scheduleCall: string;
+    cancelCallButton: string;
+    cancelledCall: string;
+    personLabel: string;
+    whenLabel: string;
+    linkLabel: string;
+    callLabelLabel: string;
   };
   review: {
     title: string;

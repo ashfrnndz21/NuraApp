@@ -274,6 +274,15 @@ export interface AskAnswerEvent {
   answer: AnswerOut;
 }
 
+/** Zero or more, only from the agent asker (`NURA_ASKER=claude`): one chunk of its finished
+ *  answer's own text, already past every check, sent as it is put together. The rule-based
+ *  asker never sends one — its answer has always arrived whole, as `AskAnswerEvent` alone. An
+ *  older client that has never seen this type simply ignores it. */
+export interface AskAnswerDeltaEvent {
+  type: "answer_delta";
+  text: string;
+}
+
 /** A refusal heard mid-stream — a scope the key does not hold, a malformed question — in the
  *  same shape `apiStream` turns into a thrown `Refused`, so a caller need not special-case it. */
 export interface AskRefusalEvent {
@@ -283,7 +292,7 @@ export interface AskRefusalEvent {
   scope?: string;
 }
 
-export type AskStreamEvent = AskStepEvent | AskAnswerEvent | AskRefusalEvent;
+export type AskStreamEvent = AskStepEvent | AskAnswerDeltaEvent | AskAnswerEvent | AskRefusalEvent;
 
 /** The feed's web/video search, streamed the same way (`POST /profiles/{id}/find/stream`):
  *  one step while the search runs, then the results `POST /profiles/{id}/find` would return. */

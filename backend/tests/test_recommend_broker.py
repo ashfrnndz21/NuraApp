@@ -20,6 +20,7 @@ from app.delivery.recommend.models import Candidate, Evidence, OutputKind, Safet
 from app.delivery.recommend.rank import RuleRanker
 from app.delivery.recommend.rules import (
     CATALOGUE,
+    RULE_DID_YOU_KNOW,
     RULE_FEELING_AFTER_NEW_MEDICINE,
     RULE_NEW_MEDICINE_EXPLAINER,
     RULE_TEST_COMING,
@@ -55,6 +56,7 @@ RULE_IDS = {
     RULE_FEELING_AFTER_NEW_MEDICINE,
     RULE_VISIT_TOPIC_WEEK,
     RULE_TEST_COMING,
+    RULE_DID_YOU_KNOW,
 }
 
 
@@ -192,6 +194,16 @@ async def test_golden_slate_matches_the_fixture_profile(
     assert [c.output for c in test_coming_candidates] == [OutputKind.CLIP]
     assert test_coming_candidates[0].topic == "condition.diabetes"
 
+    # did_you_know: one topic a day from what rests on his record today — his own new
+    # medicine, or the lab visit's own tagged topic (RE-09-style curiosity nudge, brief).
+    did_you_know_candidates = by_rule[RULE_DID_YOU_KNOW]
+    assert len(did_you_know_candidates) == 1
+    assert did_you_know_candidates[0].output is OutputKind.READ
+    assert did_you_know_candidates[0].topic in {
+        "medicine.blood_pressure_tablet",
+        "condition.diabetes",
+    }
+
     # Deterministic ordering: the same inputs rank the same way on a second read...
     again = await slate(sg, context=owner, state=state, registry=REGISTRY)
 
@@ -287,3 +299,81 @@ async def test_a_switched_off_family_produces_no_candidate_from_it(
     assert not any(c.rule_id == "fixture_food_rule" for c in off.candidates)
     # Every other rule keeps working: switching one family off never touches another.
     assert {c.rule_id for c in off.candidates} & RULE_IDS
+
+
+async def test_did_you_know_is_skipped_when_its_own_switch_is_off(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """`did_you_know` names `signal_family="did_you_know"` for real (`rules.CATALOGUE`, not a
+    fixture stand-in): "What Nura uses" turns it off the same way any other family is turned
+    off, before the rule is ever called — never a candidate filtered out afterwards."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+    await new_medicine(sg, owner)  # gives did_you_know a topic to pick from
+
+    state = await current_state(sg, context=owner)
+    on = await slate(sg, context=owner, state=state, registry=REGISTRY)
+    assert any(c.rule_id == RULE_DID_YOU_KNOW for c in on.candidates)
+
+    await _switch_signal(sg, owner, family="did_you_know", on=False)
+
+    off = await slate(sg, context=owner, state=state, registry=REGISTRY)
+    assert not any(c.rule_id == RULE_DID_YOU_KNOW for c in off.candidates)
+    # Every other rule keeps working: switching this family off never touches another.
+    assert {c.rule_id for c in off.candidates} & (RULE_IDS - {RULE_DID_YOU_KNOW})
+
+
+async def test_did_you_know_never_picks_a_topic_he_has_said_not_for_me_to(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """The broker reads the same thirty-day `declined_topic` fact `_broker_wanted` already
+    filters on downstream (`app.delivery.feed.compose`), so `did_you_know` rotates past a
+    topic he declined rather than silently producing nothing for the day it would have
+    picked it."""
+    home = await household(sg)
+    owner = await home.ctx(sg, home.pa)
+    await new_medicine(sg, owner)  # amlodipine: medicine.blood_pressure_tablet
+
+    told = await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.ONBOARDING,
+        occurred_at=utcnow(),
+        label="the conditions he told",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=owner,
+        subject="condition",
+        attribute="diabetes",
+        value=True,
+        confidence=1.0,
+        event_id=told.id,
+    )
+
+    now = utcnow()
+    declined = await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.ENGAGEMENT,
+        occurred_at=now,
+        label="not for me: a topic",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=owner,
+        subject="declined_topic",
+        attribute="medicine.blood_pressure_tablet",
+        value={"item_id": "test"},
+        confidence=1.0,
+        event_id=declined.id,
+        valid_from=now,
+        valid_to=now + timedelta(days=30),
+    )
+
+    state = await current_state(sg, context=owner)
+    result = await slate(sg, context=owner, state=state, registry=REGISTRY)
+    [candidate] = [c for c in result.candidates if c.rule_id == RULE_DID_YOU_KNOW]
+    assert candidate.topic == "condition.diabetes"

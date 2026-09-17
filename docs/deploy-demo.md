@@ -33,15 +33,40 @@ Choose **Apply**. Render creates the database, builds the image, then runs the p
 command, `alembic upgrade heads`, against the new database before the service takes any
 traffic. The service starts taking traffic once `/health/ready` answers 200.
 
-**Nothing is seeded.** There is no `make seed` and no seed script in this repo — a fresh
-database starts empty, schema only. The demo's people, Pa and Mei among them, are not rows
-waiting in a fixture: they are created live, the same way any real sign-up is, by whoever
-signs in with a test number (`+65 0…`) and the demo code. `docs/checkpoints.md` is itself a
-script for populating a fresh demo this way: each checkpoint's walk (see §4) leaves behind
-the accounts, facts and cards it created, which is how the demo comes to have something in
-it to look at. Walking checkpoints 2–6, 14, 16–18 and 21 against a fresh deploy is the
-closest thing to a seed this repo has. Everything it creates is wiped at 03:00 Singapore
-time regardless (ADR 0008), so re-walking after a wipe is normal, not a repair.
+## 3a. Seed a living record: Pa and Mei
+
+Set `NURA_DEMO_SEED=1` (plain configuration in `render.yaml`, not a secret) and the demo
+opens onto a living record from the moment it first serves, instead of an empty one. At
+startup — and again every morning after the 03:00 wipe (ADR 0008) empties the tables —
+`app.demo_seed.seed_demo` creates two people, idempotently, through the same services every
+real sign-up writes through (`grant_consent`, `grant_key`, the medicines and readings
+services, `audited_write`, under Pa's own key), so the audit trail, consents and scopes are
+exactly what they would be for a real family:
+
+- **Pa** (`+65 0000 1111`) owns the profile. He has four medicines with a dose taken today —
+  his blood pressure tablet, his cholesterol tablet, his sugar tablet, and warfarin, which is
+  high-risk and carries its label photo; a blood pressure book with two weeks of readings; one
+  visit ten days ago with a memo ("Every evening, eat a lighter dinner.") and one booked a
+  week from now; a note that he is tired; two papers, a hospital discharge letter and the
+  warfarin label; his area (Ang Mo Kio); and a week's dose history on the sugar tablet, so the
+  count reads 12 of 14.
+- **Mei** (`+65 0000 2222`) holds a chief key: every scope, the same window as any chief's.
+
+A Malaysian deployment (`NURA_REGION=MY`) seeds the same two people on Malaysian numbers
+(`+60000011111` and `+60000022222`) instead.
+
+Given without `NURA_DEMO_MODE=1` or a declared dev run, the process refuses to start — the
+same gate every other fixture on this deployment is held to.
+
+On the Welcome screen, under **Get started**, two more buttons show whenever the deployment
+answers `demo` or `dev` on `GET /deployment`: **Try it as Pa** and **Try it as Mei**, which
+sign in at once, no phone number or code typed. They never show on a deployment without
+`NURA_DEMO_SEED=1`, and never on one that is neither a demo nor a dev run.
+
+`docs/checkpoints.md` still walks its own accounts on top of whatever `NURA_DEMO_SEED` seeded
+— each checkpoint registers fresh numbers of its own, so the two never collide. Walking
+checkpoints 2–6, 14, 16–18 and 21 against a fresh deploy is still how the rest of the demo
+gets exercised end to end (see §4).
 
 ## 4. Verify
 

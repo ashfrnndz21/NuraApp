@@ -63,6 +63,15 @@ class Settings:
     a declared demo (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process
     in SG or MY and no in-region provider exists yet (ADR 0017) — a laptop dev run stays on
     the fixture. A name this build does not have refuses to start."""
+    asker: str = "rule"
+    """NURA_ASKER: which asker answers `POST /profiles/{id}/ask/stream`
+    (`app.search.asker_provider.asker_for`). `rule` (the default) is today's behaviour,
+    unchanged — a rule-based retriever over templates (`app.search.ask.recall_stream`);
+    `claude` is the agent (`app.llm.ask_agent.ClaudeAsker`), which decides for itself what to
+    look at and only builds on a declared demo (NURA_DEMO_MODE=1) because Anthropic's
+    first-party API does not process in SG or MY and no in-region provider exists yet
+    (ADR 0017) — a laptop dev run stays on `rule`. A name this build does not have refuses to
+    start."""
     visit_fixtures: str | None = None
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
@@ -136,6 +145,12 @@ class Settings:
     """NURA_DEMO_LOGIN_CODE: six digits, a secret in the platform's store. On a demo it is the
     code that signs a test number in (`app.identity.providers.DemoCodeSender`); the operator
     gives it to the people he invites. Required with NURA_DEMO_MODE=1, refused without it."""
+    demo_seed: bool = False
+    """NURA_DEMO_SEED=1: at startup, and again after the night's wipe, Pa's profile and Mei as
+    his chief are seeded from the fixtures (`app.demo_seed.seed_demo`), so a fresh sign-in
+    opens onto a living record. Runs only on a declared demo (NURA_DEMO_MODE=1) or a declared
+    dev run (NURA_DEV_CODE_SENDER=1); given without either, the process refuses to start, the
+    same gate every other fixture is held to (`app.fixtures.fixtures_allowed`)."""
     object_bucket_url: str | None = None
     """NURA_OBJECT_BUCKET_URL: the bucket artefact bytes go to, as its https base URL
     (`https://<bucket>.s3.ap-southeast-1.amazonaws.com`, or path-style
@@ -267,6 +282,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise MissingSetting("NURA_DEMO_MODE=1 needs NURA_DEMO_LOGIN_CODE: six digits, a secret")
     if not demo_mode and demo_login_code is not None:
         raise MissingSetting("NURA_DEMO_LOGIN_CODE is for a demo only (NURA_DEMO_MODE=1)")
+    demo_seed = source.get("NURA_DEMO_SEED", "") == "1"
+    if demo_seed and not (demo_mode or dev_code_sender):
+        raise MissingSetting(
+            "NURA_DEMO_SEED=1 runs only on a declared dev run (NURA_DEV_CODE_SENDER=1) "
+            "or demo (NURA_DEMO_MODE=1)"
+        )
     vapid = {name: source.get(f"NURA_VAPID_{name}") or None for name in VAPID}
     if any(vapid.values()) and not all(vapid.values()):
         raise MissingSetting(
@@ -288,6 +309,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
         anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         narrator=source.get("NURA_NARRATOR", "fixture"),
+        asker=source.get("NURA_ASKER", "rule"),
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
@@ -304,6 +326,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         frozen_clock=frozen_clock,
         demo_mode=demo_mode,
         demo_login_code=demo_login_code,
+        demo_seed=demo_seed,
         object_bucket_url=source.get("NURA_OBJECT_BUCKET_URL") or None,
         object_bucket_region=source.get("NURA_OBJECT_BUCKET_REGION") or None,
         object_access_key_id=source.get("NURA_OBJECT_ACCESS_KEY_ID") or None,
