@@ -264,11 +264,17 @@ export const zh = {
     // @patient phrase
     readingSource: "来自您的血压本，{date}",
     // @patient phrase
+    readingSourceOther: "来自{name}的血压本，{date}",
+    // @patient phrase
     metricSource: "来自您记下的，{date}",
+    // @patient phrase
+    metricSourceOther: "来自{name}记下的，{date}",
     // @patient phrase
     asOf: "截至{date}",
     // @patient headline
     dayTitle: "您的一天",
+    // @patient headline
+    dayTitleOther: "{name}的一天",
     // @patient
     mealNotHad: "您没有吃这一餐。",
     // @patient

@@ -108,9 +108,12 @@ export interface Strings {
     bloodPressure: string;
     bloodSugar: string;
     readingSource: string;
+    readingSourceOther: string;
     metricSource: string;
+    metricSourceOther: string;
     asOf: string;
     dayTitle: string;
+    dayTitleOther: string;
     mealNotHad: string;
     mealNotHadOther: string;
     comingUpTitle: string;

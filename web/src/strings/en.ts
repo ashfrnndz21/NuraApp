@@ -264,11 +264,17 @@ export const en = {
     // @patient phrase
     readingSource: "From your blood pressure book, {date}",
     // @patient phrase
+    readingSourceOther: "From {name}'s blood pressure book, {date}",
+    // @patient phrase
     metricSource: "From what you wrote down, {date}",
+    // @patient phrase
+    metricSourceOther: "From what {name} wrote down, {date}",
     // @patient phrase
     asOf: "As of {date}",
     // @patient headline
     dayTitle: "Your day",
+    // @patient headline
+    dayTitleOther: "{name}'s day",
     // @patient
     mealNotHad: "You did not have this.",
     // @patient

@@ -264,11 +264,17 @@ export const ms = {
     // @patient phrase
     readingSource: "Daripada buku tekanan darah anda, {date}",
     // @patient phrase
+    readingSourceOther: "Daripada buku tekanan darah {name}, {date}",
+    // @patient phrase
     metricSource: "Daripada apa yang anda tulis, {date}",
+    // @patient phrase
+    metricSourceOther: "Daripada apa yang {name} tulis, {date}",
     // @patient phrase
     asOf: "Setakat {date}",
     // @patient headline
     dayTitle: "Hari anda",
+    // @patient headline
+    dayTitleOther: "Hari {name}",
     // @patient
     mealNotHad: "Anda tidak makan ini.",
     // @patient

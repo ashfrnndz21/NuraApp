@@ -53,7 +53,7 @@ function useMealsToday(): { entries: FoodEntryOut[]; catalog: FoodCatalogItemOut
 /** "This week": the ring — doses taken this week, never a score — and steps, heart rate, sleep
  *  and water, each already in the backend's own plain words, each grounded by when it was
  *  said (`ProgressRing`, `MetricRow`: neither draws without its source line). */
-function ThisWeek({ overview, locale }: { overview: HealthOverviewOut | null; locale: string }): JSX.Element {
+function ThisWeek({ overview, locale, owner, name }: { overview: HealthOverviewOut | null; locale: string; owner: boolean; name: string }): JSX.Element {
   const s = t();
   return (
     <TintCard tint="peach" testId="health-week">
@@ -74,7 +74,11 @@ function ThisWeek({ overview, locale }: { overview: HealthOverviewOut | null; lo
           tint={METRIC_TINT[row.kind]}
           label={row.label}
           value={row.status === "logged" ? (row.value_words ?? "") : ""}
-          source={row.status === "logged" && row.last_logged_at ? fill(s.health.metricSource, { date: dateLine(new Date(row.last_logged_at), locale) }) : row.status_words}
+          source={
+            row.status === "logged" && row.last_logged_at
+              ? fill(owner ? s.health.metricSource : s.health.metricSourceOther, { date: dateLine(new Date(row.last_logged_at), locale), name })
+              : row.status_words
+          }
           testId={`metric-${row.kind}`}
         />
       ))}
@@ -85,7 +89,7 @@ function ThisWeek({ overview, locale }: { overview: HealthOverviewOut | null; lo
 /** His readings — blood pressure and blood sugar, from his blood pressure book, the newest
  *  first — or, for a key whose scope does not cover them, the block named and said withheld
  *  (never left off the screen in silence). */
-function Readings({ scopes, name }: { scopes: readonly string[]; name: string }): JSX.Element {
+function Readings({ scopes, owner, name }: { scopes: readonly string[]; owner: boolean; name: string }): JSX.Element {
   const s = t();
   const locale = LOCALE[language.value];
   const { bp, sugar } = useReadings(scopes);
@@ -108,10 +112,10 @@ function Readings({ scopes, name }: { scopes: readonly string[]; name: string })
   return (
     <TintCard tint="blush" testId="readings">
       {bpRows[0] && (
-        <MetricRow icon="gauge" tint="blush" label={s.health.bloodPressure} value={bpRows[0].words} unit="mmHg" source={fill(s.health.readingSource, { date: dateLine(new Date(bpRows[0].at), locale) })} testId="reading-bp" />
+        <MetricRow icon="gauge" tint="blush" label={s.health.bloodPressure} value={bpRows[0].words} unit="mmHg" source={fill(owner ? s.health.readingSource : s.health.readingSourceOther, { date: dateLine(new Date(bpRows[0].at), locale), name })} testId="reading-bp" />
       )}
       {sugarRows[0] && (
-        <MetricRow icon="gauge" tint="coral" label={s.health.bloodSugar} value={sugarRows[0].words} unit="mmol/L" source={fill(s.health.readingSource, { date: dateLine(new Date(sugarRows[0].at), locale) })} testId="reading-sugar" />
+        <MetricRow icon="gauge" tint="coral" label={s.health.bloodSugar} value={sugarRows[0].words} unit="mmol/L" source={fill(owner ? s.health.readingSource : s.health.readingSourceOther, { date: dateLine(new Date(sugarRows[0].at), locale), name })} testId="reading-sugar" />
       )}
     </TintCard>
   );
@@ -128,7 +132,7 @@ function DayLogs({ owner, name }: { owner: boolean; name: string }): JSX.Element
   if (meals.length === 0) return null;
   return (
     <>
-      <SectionHeader title={s.health.dayTitle} />
+      <SectionHeader title={owner ? s.health.dayTitle : fill(s.health.dayTitleOther, { name })} />
       <TintCard tint="butter" testId="day-logs">
         {meals.map((meal) => {
           const entry = byMeal[meal]!;
@@ -165,10 +169,10 @@ export function HealthScreen(): JSX.Element {
 
       <SectionHeader title={s.health.thisWeek} />
       <Notice error={error} />
-      <ThisWeek overview={overview} locale={locale} />
+      <ThisWeek overview={overview} locale={locale} owner={owner} name={name} />
 
       <SectionHeader title={s.health.readingsTitle} />
-      <Readings scopes={scopes} name={name} />
+      <Readings scopes={scopes} owner={owner} name={name} />
 
       <DayLogs owner={owner} name={name} />
 
