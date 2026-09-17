@@ -174,4 +174,12 @@ describe("the kinds of paper since E02 capture", () => {
     expect(kindLine("insurance_letter", en)).toBe(en.onboarding.records.kindInsuranceLetter);
     expect(readable(card([tg], "not_health"))).toBe(false);
   });
+
+  it("treats a kind of photo Nura never opened at all as nothing to say yes to, too", () => {
+    expect(kindLine("unsupported_file_type", en)).toBe(en.onboarding.records.kindUnknown);
+    expect(readable(card([], "unsupported_file_type"))).toBe(false);
+    // Even if the backend ever sent fields alongside it, the card still has nothing to
+    // confirm: this kind was never read, so there is nothing genuine to say yes to.
+    expect(readable(card([tg], "unsupported_file_type"))).toBe(false);
+  });
 });

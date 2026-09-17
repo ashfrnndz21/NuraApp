@@ -22,6 +22,8 @@ dependencies = [
     "cryptography==50.0.1",
     "http-ece==1.2.1",
     "py-vapid==1.9.4",
+    # The Claude-backed extractor (NURA_EXTRACTOR=claude, demo only — ADR 0017).
+    "anthropic==1.6.0",
 ]
 [project.optional-dependencies]
 # aiosqlite is tests only: it is how the regional stores run in memory, one database per region.

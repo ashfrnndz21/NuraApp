@@ -372,13 +372,22 @@ async def _count(session: AsyncSession, card_type: CardType) -> int:
 
 async def sample_card(session: AsyncSession, item: FeedItem) -> ReviewItem | None:
     """Queue this card for review if it is one of the first fifty of its type, de-identified.
-    A card for the caregiver or the memo, a type he is never shown, and a rendering already
-    queued are left alone — except a safety notice, held for the chief though it is: it still
+    A card of a type he is never shown, and a rendering already queued, are left alone. A card
+    for the caregiver or the memo is left alone too — unless its words are compressed from an
+    outside page (`KEPT_AS_WRITTEN`): a safety notice, held for the chief though it is, still
     carries a clinical claim reaching a person, so it is sampled whoever it is held for (#181).
+
+    #236: the same is true of a learning, clip, local, seasonal or food card rerouted to the
+    chief because its finding would change treatment (`app.delivery.feed.search.run_job`,
+    `items.TreatmentChangingCard`) — it too is compressed from an outside page and reaches a
+    person, so gating the queue on `DeliverTo.PATIENT` alone left every one of those rerouted
+    cards unreviewed, the same hole #181 closed for the notice on its own branch. A card of his
+    own record's words held for her (`REORDER`, `MEMO`, the caregiver's `DUTY`, which is not
+    even in `REVIEWED_TYPES`) carries nothing compressed from outside, so it stays out.
     """
     if item.type not in REVIEWED_TYPES:
         return None
-    if item.deliver_to is not DeliverTo.PATIENT and item.type is not CardType.NOTICE:
+    if item.deliver_to is not DeliverTo.PATIENT and item.type not in KEPT_AS_WRITTEN:
         return None
     why = item.why.get("plain", "") if isinstance(item.why, dict) else ""
     return await _sample(

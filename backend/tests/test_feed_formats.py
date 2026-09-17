@@ -1441,7 +1441,7 @@ async def test_a_card_about_his_medicine_says_not_to_stop_it(deployment: Deploym
     await _feed(deployment, profile_id, pa["token"])
     made = await _made(deployment, profile_id, CardType.LEARNING)
     [tablet] = [card for card in made if card.headline == "Your blood pressure tablet"]
-    keep = "Ask your doctor before you stop this medicine."
+    keep = "Ask your doctor before you stop taking it."
     assert keep in tablet.body
     assert tablet.body.index(keep) < tablet.body.index("This comes from HealthHub.")
     assert not _fails([keep], "en")

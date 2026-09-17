@@ -38,6 +38,30 @@ export function EmergencyCard({ kept }: { kept: KeptCard }): JSX.Element {
           <p key={at}>{line}</p>
         ))}
       </div>
+      {card.medicines.length > 0 && (
+        // The register's own name and strength for every active medicine, as data beside
+        // the lines above — never through a sentence, so it does not depend on whether his
+        // plain name could stand beside it there (`_medicine_label`, #222/#229). A stranger
+        // reading this on the phone, not only on the printed page, needs "frusemide 40 mg",
+        // not only "the water pill": these values are the register's, the same in every
+        // language, so this is not `@patient` text and is not run through plain-words —
+        // exactly the principle `emergency_card.py:132-133` already states for `strength`
+        // and `generic`.
+        <div class="medicine-data" data-testid="medicine-data">
+          {card.medicines.map((medicine) => (
+            <p key={medicine.line_id} class="caption" data-testid="medicine-chemical-name">
+              {medicine.generic}{medicine.strength ? `, ${medicine.strength}` : ""}
+              {medicine.high_risk_label && (
+                // The word itself is the backend's (A3, clinical-safety review on #229's
+                // own PR): catalogued, plain-words checked, in his language — never typed
+                // into this screen outside the verified `render()` path the rest of the
+                // card already goes through. Only the separating dot is ours.
+                <strong data-testid="medicine-high-risk"> · {medicine.high_risk_label}</strong>
+              )}
+            </p>
+          ))}
+        </div>
+      )}
       {callable.map((contact) => (
         <a key={contact.person_id} class="pill" href={`tel:${contact.phone_e164}`} data-testid="call-contact">
           {fill(s.emergency.callChief, { name: contact.name })}

@@ -739,6 +739,12 @@ class Walk:
     button: bool = False
     """The not-feeling-well button and the symptom log: the safety rules read the record as
     the system (`red_flags._system_read`), and nothing they read reaches the caller."""
+    stream: bool = False
+    """Server-Sent Events (docs/design-direction.md 'Conversation, waiting and thinking'): the
+    body is every `data:` line, parsed, as one list — the trace's steps and the final answer or
+    results, so a leak in a streamed step's label is caught exactly as one in the answer is.
+    The 200 already went out before a refusal mid-stream can raise, so a `refusal` event among
+    them is this walk's equivalent of a non-2xx status: skipped, not checked."""
 
 
 P = "/profiles/{profile_id}"
@@ -784,6 +790,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/area"),
     # The ask bar's filters: a read, sent as a POST so his words stay out of the URL.
     Walk("POST", f"{P}/find", json={"q": "blood pressure", "where": "web"}),
+    Walk("POST", f"{P}/find/stream", json={"q": "blood pressure", "where": "web"}, stream=True),
     Walk("GET", f"{P}/feed/{{item_id}}"),
     Walk("GET", f"{P}/closure"),
     Walk("GET", f"{P}/whatsapp-opt-in"),
@@ -809,6 +816,12 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/providers/{{provider_id}}"),
     Walk("GET", f"{P}/changes"),
     Walk("POST", f"{P}/ask", json={"question": "what papers do I have", "mode": "text"}),
+    Walk(
+        "POST",
+        f"{P}/ask/stream",
+        json={"question": "what papers do I have", "mode": "text"},
+        stream=True,
+    ),
     Walk("GET", f"{P}/grants"),
     Walk("GET", f"{P}/helpers"),
     Walk("GET", f"{P}/thread"),
@@ -1196,6 +1209,19 @@ async def _walk(
                     problems.append(f"{holder.name} {where}: {response.status_code}")
                 elif response.status_code < 300 and response.content:
                     kind = response.headers.get("content-type", "")
+                    if walk.stream and kind.startswith("text/event-stream"):
+                        events = [
+                            json.loads(line.removeprefix("data: "))
+                            for line in response.text.split("\n\n")
+                            if line.startswith("data: ")
+                        ]
+                        # The 200 is already on the wire by the time a refusal can raise
+                        # (SSE has no later chance at a status code), so a `refusal` event is
+                        # this walk's version of the non-2xx status every other route skips on.
+                        if any(event.get("type") == "refusal" for event in events):
+                            continue
+                        _check(where, holder, events, seeded, seen, problems, walk)
+                        continue
                     # Audio names nothing: a spoken twin answers for the card it speaks, a clip
                     # (E03-05) for the recording it is cut from.
                     body = (

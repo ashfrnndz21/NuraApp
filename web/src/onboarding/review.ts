@@ -120,13 +120,20 @@ export function kindLine(kind: ReviewCardOut["document_kind"], s: Strings): stri
       return r.kindDeviceScreen;
     case "not_health":
     case "unknown":
+    case "unsupported_file_type":
       return r.kindUnknown;
   }
 }
 
-/** A card Nura could not read, or a page that is not a health paper, has nothing to say yes to. */
+/** A card Nura could not read, a page that is not a health paper, or a kind of photo Nura
+ *  never opened at all, has nothing to say yes to. */
 export function readable(card: ReviewCardOut): boolean {
-  return card.document_kind !== "unknown" && card.document_kind !== "not_health" && card.fields.length > 0;
+  return (
+    card.document_kind !== "unknown" &&
+    card.document_kind !== "not_health" &&
+    card.document_kind !== "unsupported_file_type" &&
+    card.fields.length > 0
+  );
 }
 
 /** The spoken twin of one line of the card, in the patient density: what the line is, what
