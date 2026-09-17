@@ -36,11 +36,11 @@ export const en = {
     // @patient headline
     health: "Health",
     // @patient headline
-    connect: "Family",
+    connect: "Connect",
     // @patient headline
-    services: "Visits",
+    services: "Services",
     // @patient headline
-    profile: "Me",
+    profile: "Profile",
   },
   shell: {
     // @patient phrase
@@ -107,6 +107,8 @@ export const en = {
     howFeelingOther: "How is {patient} feeling today?",
     // @patient headline
     checkTitle: "How you feel today",
+    // @patient headline
+    checkTitleOther: "How {patient} feels today",
     // @patient line
     checkLine: "Tell Nura how you feel today.",
     // @patient phrase
@@ -115,18 +117,26 @@ export const en = {
     checkIn: "Tell Nura",
     // @patient
     doTitle: "What would you like to do?",
+    // @patient
+    doTitleOther: "What to do for {patient}.",
     // @patient headline
     health: "Health",
     // @patient line
     healthLine: "Your blood pressure book and your papers.",
+    // @patient line
+    healthLineOther: "{patient}'s blood pressure book and papers.",
     // @patient headline
     medicines: "Medicines",
     // @patient line
     medicinesLine: "Your tablets, and when to take them.",
+    // @patient line
+    medicinesLineOther: "{patient}'s tablets, and when to take them.",
     // @patient headline
     connect: "Connect",
     // @patient line
     connectLine: "See your family and friends.",
+    // @patient line
+    connectLineOther: "See {patient}'s family and friends.",
     // @patient headline
     activities: "Things to do",
     // @patient line
@@ -135,6 +145,8 @@ export const en = {
     care: "Help at home",
     // @patient line
     careLine: "Someone can come and help you at home.",
+    // @patient line
+    careLineOther: "Someone can come and help {patient} at home.",
     // @patient headline
     resources: "Things to read",
     // @patient line
@@ -144,7 +156,11 @@ export const en = {
     // @patient line
     reportLine: "Take a photo of it, or choose the one your doctor sent you.",
     // @patient line
+    reportLineOther: "Take a photo of it, or choose the one {patient}'s doctor sent.",
+    // @patient line
     reportNote: "Nura will read it and show you what it found.",
+    // @patient line
+    reportNoteOther: "Nura will read it and show what it found.",
     // @patient line
     reportReady: "Nura will not send this until you say so.",
     // @patient phrase
@@ -163,6 +179,8 @@ export const en = {
     soonLine2: "We are still making it.",
     // @patient phrase
     backHome: "Back to your Today page",
+    // @patient phrase
+    backHomeOther: "Back to {patient}'s Today page",
   },
   home: {
     // @patient headline

@@ -36,11 +36,11 @@ export const ms = {
     // @patient headline
     health: "Kesihatan",
     // @patient headline
-    connect: "Keluarga",
+    connect: "Hubungi",
     // @patient headline
-    services: "Lawatan",
+    services: "Perkhidmatan",
     // @patient headline
-    profile: "Saya",
+    profile: "Profil",
   },
   shell: {
     // @patient phrase
@@ -107,6 +107,8 @@ export const ms = {
     howFeelingOther: "Apa khabar {patient} hari ini?",
     // @patient headline
     checkTitle: "Apa yang anda rasa hari ini",
+    // @patient headline
+    checkTitleOther: "Apa yang {patient} rasa hari ini",
     // @patient line
     checkLine: "Beritahu Nura apa yang anda rasa hari ini.",
     // @patient phrase
@@ -115,18 +117,26 @@ export const ms = {
     checkIn: "Beritahu Nura",
     // @patient
     doTitle: "Apa yang anda mahu buat?",
+    // @patient
+    doTitleOther: "Apa yang perlu dibuat untuk {patient}.",
     // @patient headline
     health: "Kesihatan",
     // @patient line
     healthLine: "Buku tekanan darah dan surat anda.",
+    // @patient line
+    healthLineOther: "Buku tekanan darah dan surat {patient}.",
     // @patient headline
     medicines: "Ubat",
     // @patient line
     medicinesLine: "Ubat anda, dan bila hendak makan.",
+    // @patient line
+    medicinesLineOther: "Ubat {patient}, dan bila hendak makan.",
     // @patient headline
     connect: "Hubungi",
     // @patient line
     connectLine: "Lihat keluarga dan kawan anda.",
+    // @patient line
+    connectLineOther: "Lihat keluarga dan kawan {patient}.",
     // @patient headline
     activities: "Perkara untuk dibuat",
     // @patient line
@@ -135,6 +145,8 @@ export const ms = {
     care: "Bantuan di rumah",
     // @patient line
     careLine: "Seseorang boleh datang membantu anda di rumah.",
+    // @patient line
+    careLineOther: "Seseorang boleh datang membantu {patient} di rumah.",
     // @patient headline
     resources: "Bahan bacaan",
     // @patient line
@@ -144,7 +156,11 @@ export const ms = {
     // @patient line
     reportLine: "Ambil gambarnya, atau pilih yang doktor hantar kepada anda.",
     // @patient line
+    reportLineOther: "Ambil gambarnya, atau pilih yang doktor {patient} hantar.",
+    // @patient line
     reportNote: "Nura akan membacanya dan tunjuk apa yang dijumpainya.",
+    // @patient line
+    reportNoteOther: "Nura akan membacanya dan tunjuk apa yang dijumpainya.",
     // @patient line
     reportReady: "Nura tidak akan hantar ini sehingga anda kata boleh.",
     // @patient phrase
@@ -163,6 +179,8 @@ export const ms = {
     soonLine2: "Kami masih membuatnya.",
     // @patient phrase
     backHome: "Kembali ke halaman Hari Ini",
+    // @patient phrase
+    backHomeOther: "Kembali ke halaman Hari Ini {patient}",
   },
   home: {
     // @patient headline

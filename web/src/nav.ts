@@ -31,7 +31,7 @@ const NEEDS: Partial<Record<Tab, string>> = {
 
 export function tabsFor(density: Density, s: Strings, scopes: readonly string[] = [], owner = true): TabItem[] {
   const all: TabItem[] = [
-    { id: "home", label: s.tabs.today, icon: "home" },
+    { id: "home", label: s.tabs.home, icon: "home" },
     { id: "health", label: s.tabs.health, icon: "health" },
     { id: "connect", label: s.tabs.connect, icon: "connect" },
     { id: "services", label: s.tabs.services, icon: "services" },

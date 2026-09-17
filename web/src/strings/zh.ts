@@ -36,11 +36,11 @@ export const zh = {
     // @patient headline
     health: "健康",
     // @patient headline
-    connect: "家人",
+    connect: "联系",
     // @patient headline
-    services: "看诊",
+    services: "服务",
     // @patient headline
-    profile: "我",
+    profile: "我的",
   },
   shell: {
     // @patient phrase
@@ -107,6 +107,8 @@ export const zh = {
     howFeelingOther: "{patient}今天感觉怎么样？",
     // @patient headline
     checkTitle: "您今天的感觉",
+    // @patient headline
+    checkTitleOther: "{patient}今天的感觉",
     // @patient line
     checkLine: "告诉 Nura 您今天的感觉。",
     // @patient phrase
@@ -115,18 +117,26 @@ export const zh = {
     checkIn: "告诉 Nura",
     // @patient
     doTitle: "您想做什么？",
+    // @patient
+    doTitleOther: "要为{patient}做什么。",
     // @patient headline
     health: "健康",
     // @patient line
     healthLine: "您的血压本和文件。",
+    // @patient line
+    healthLineOther: "{patient}的血压本和文件。",
     // @patient headline
     medicines: "药",
     // @patient line
     medicinesLine: "您的药，和什么时候吃。",
+    // @patient line
+    medicinesLineOther: "{patient}的药，和什么时候吃。",
     // @patient headline
     connect: "联系",
     // @patient line
     connectLine: "看看您的家人和朋友。",
+    // @patient line
+    connectLineOther: "看看{patient}的家人和朋友。",
     // @patient headline
     activities: "可以做的事",
     // @patient line
@@ -135,6 +145,8 @@ export const zh = {
     care: "上门帮忙",
     // @patient line
     careLine: "有人可以上门帮您。",
+    // @patient line
+    careLineOther: "有人可以上门帮{patient}。",
     // @patient headline
     resources: "可以读的东西",
     // @patient line
@@ -144,7 +156,11 @@ export const zh = {
     // @patient line
     reportLine: "拍张照片，或者选医生发给您的那一份。",
     // @patient line
+    reportLineOther: "拍张照片，或者选医生发给{patient}的那一份。",
+    // @patient line
     reportNote: "Nura 会读一读，再告诉您它看到了什么。",
+    // @patient line
+    reportNoteOther: "Nura 会读一读，再说说它看到了什么。",
     // @patient line
     reportReady: "您说可以之前，Nura 不会发这个。",
     // @patient phrase
@@ -163,6 +179,8 @@ export const zh = {
     soonLine2: "我们还在做。",
     // @patient phrase
     backHome: "回到“今天”页面",
+    // @patient phrase
+    backHomeOther: "回到{patient}的“今天”页面",
   },
   home: {
     // @patient headline

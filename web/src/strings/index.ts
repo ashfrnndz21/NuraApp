@@ -36,7 +36,7 @@ const ABOUT_HIM = {
   today: ["stateStable", "stateWatch", "callFamily", "offlineSub", "asOf", "cannotReach", "emergencySoon", "todayList", "fromToday", "tookMorning", "allTaken", "readingTitle", "emergencyOpen"],
   day: ["notWell", "symptomsOpen", "notWellTitle", "wordsLabel", "symptomsLead", "briefOpen", "questionsOpen"],
   places: ["visitsOwn"],
-  hub: ["howFeeling", "checkLine", "reportReady"],
+  hub: ["howFeeling", "checkTitle", "checkLine", "doTitle", "healthLine", "medicinesLine", "connectLine", "careLine", "reportLine", "reportNote", "reportReady", "backHome"],
   record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes", "notSet", "setDay", "dayAsk"],
   reading: ["title"],
   visit: ["open"],

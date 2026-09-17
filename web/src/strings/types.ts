@@ -44,25 +44,25 @@ export interface Strings {
    *  places, adding a health report, and what is coming up. `…Other`: said about him by name. */
   hub: {
     howFeeling: string; howFeelingOther: string;
-    checkTitle: string;
+    checkTitle: string; checkTitleOther: string;
     checkLine: string; checkLineOther: string;
     checkIn: string;
-    doTitle: string;
+    doTitle: string; doTitleOther: string;
     health: string;
-    healthLine: string;
+    healthLine: string; healthLineOther: string;
     medicines: string;
-    medicinesLine: string;
+    medicinesLine: string; medicinesLineOther: string;
     connect: string;
-    connectLine: string;
+    connectLine: string; connectLineOther: string;
     activities: string;
     activitiesLine: string;
     care: string;
-    careLine: string;
+    careLine: string; careLineOther: string;
     resources: string;
     resourcesLine: string;
     report: string;
-    reportLine: string;
-    reportNote: string;
+    reportLine: string; reportLineOther: string;
+    reportNote: string; reportNoteOther: string;
     /** Before the file he picked goes: its name (raw, not this line) plus this line, and the
      *  "Send it" button — his one yes, so a chosen file is never sent on its own. */
     reportReady: string;
@@ -73,7 +73,7 @@ export interface Strings {
     seeAllVisits: string;
     soonLine1: string;
     soonLine2: string;
-    backHome: string;
+    backHome: string; backHomeOther: string;
   };
   /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
   home: { mostLikely: string; whatChanged: string; nextVisit: string; atTime: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };

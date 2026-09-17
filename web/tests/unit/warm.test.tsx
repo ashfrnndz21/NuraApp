@@ -13,9 +13,9 @@ afterEach(() => {
 });
 
 describe("the five tabs (docs/design-direction.md)", () => {
-  it("are Today, Health, Family, Visits and Me for the owner, in either density", () => {
+  it("are Home, Health, Connect, Services and Profile for the owner, in either density", () => {
     for (const density of ["patient", "caregiver"] as const) {
-      expect(tabsFor(density, en).map((tab) => tab.label)).toEqual(["Today", "Health", "Family", "Visits", "Me"]);
+      expect(tabsFor(density, en).map((tab) => tab.label)).toEqual(["Home", "Health", "Connect", "Services", "Profile"]);
     }
   });
 
