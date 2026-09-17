@@ -174,7 +174,7 @@ async def household(deployment: Deployment) -> House:
 
 async def _key(house: House, phone: str, name: str, role: str, scopes: list[str]) -> dict[str, str]:
     person = await register_by_phone(house.deployment, phone, name)
-    await let_in(house.deployment, house.pa, house.profile_id, phone, scopes, relationship="son")
+    await let_in(house.deployment, house.pa, house.profile_id, phone, scopes, relationship="son", role=role)
     await _ok(
         await house.deployment.client.post(
             house.at("/keys"),
