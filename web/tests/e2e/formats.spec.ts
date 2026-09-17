@@ -108,7 +108,9 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   await openFeed(page);
   await pageUntil(page, "clip");
   const card = page.locator("article.feed-card[data-type=clip]").first();
-  await expect(card.locator("h2.title")).toHaveText("Your blood pressure, in 30 seconds");
+  // RE-07: the broker leads the learning supply with the new medicine's own clip that week, so
+  // the first clip is the tablet's, not the general blood-pressure one.
+  await expect(card.locator("h2.title")).toHaveText("Your blood pressure tablet, in 30 seconds");
   const still = card.getByTestId("clip-poster");
   await expect(still).toBeVisible();
   expect(await still.getAttribute("src")).toMatch(/^blob:/);
@@ -119,7 +121,7 @@ test("a clip: its still from Nura's own server, Play on a tap only, the line bei
   // The whole video is on the heart centre's own site: a link he taps, in a tab of its own.
   const link = card.getByTestId("watch-whole");
   await expect(link).toHaveText("Watch the whole video at National Heart Centre Singapore");
-  await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/understanding-high-blood-pressure");
+  await expect(link).toHaveAttribute("href", "https://www.nhcs.com.sg/patient-care/videos/amlodipine-in-brief");
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   // Every card keeps Hear and Not for me.

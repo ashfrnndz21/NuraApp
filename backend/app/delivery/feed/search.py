@@ -641,7 +641,25 @@ async def run_job(
             )
         )
         scope = _scope_of(job, reasons, around, engine.registry)
+        # RE-07: a job the broker's slate proposed (`compose._broker_wanted`) carries its
+        # rule id, boosts and topic in its own `reason` — never guessed back from the words,
+        # which the broker never writes (module doc). A job the state's own gaps proposed
+        # carries none of these, and `Why.rule`/`Why.topic` are `None` for it, as before.
+        rule = job.reason.get("rule")
+        boosts = tuple(job.reason.get("boosts") or ())
+        topic = job.reason.get("topic")
+        # Independent safety review, item 2: a candidate resting on his own private search
+        # history names `Candidate.private_to` (§3.5), and `_broker_wanted` now carries it
+        # here, JSON-stringified. Read back to a `uuid.UUID` (or `None` for a plain `_gaps`
+        # job, which never sets it) and passed to `create_item` below so the card it becomes
+        # holds the same `private_to` its candidate did — `rank.require_item`/`_visible`
+        # refuse it to every key but his own, whatever her scopes (RE-01).
+        private_to_raw = job.reason.get("private_to")
+        private_to = uuid.UUID(private_to_raw) if private_to_raw else None
         if treatment_changing:
+            # `private_to` is deliberately left off the card below: #224 already overrides
+            # privacy here on purpose — a treatment-changing finding always reaches the
+            # caregiver as a question for the doctor, private search topic or not.
             memo_id = await _ask_the_doctor(
                 session,
                 context=context,
@@ -673,6 +691,8 @@ async def run_job(
                     gap=job.terms[0],
                     fact_ids=fact_ids,
                     memo_id=memo_id,
+                    rule=rule,
+                    topic=topic,
                 ),
                 scope=scope,
                 deliver_to=DeliverTo.CAREGIVER,
@@ -698,6 +718,9 @@ async def run_job(
                         source_id=str(source.id),
                         gap=job.terms[0],
                         fact_ids=fact_ids,
+                        boosts=boosts,
+                        rule=rule,
+                        topic=topic,
                     ),
                     scope=scope,
                     deliver_to=DeliverTo.PATIENT,
@@ -708,6 +731,7 @@ async def run_job(
                     source=source,
                     cite=cite,
                     search_job_id=job.id,
+                    private_to=private_to,
                 )
             except NotPlainWords as failed:
                 rejected.append(
