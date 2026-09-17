@@ -8,11 +8,18 @@ way `app.reasoning.feelings.record.read_situation` does. What the key does not h
 out of the series and named in `SeriesSet.withheld` — never silently empty and never guessed.
 
 `answered_days` is the correctness rule §2.7 sets: a day is "answered" when he said
-something on it, even a "no". None of the six families read here yet carry an explicit "no"
-entry of their own — that is the in-flight lifestyle and food logs' job (RE-10) — so every
-point already written is itself an answer, and `answered_days` is simply the days a point
-falls on. A day nobody wrote anything down for is not in the set, and a rule must not treat
-it as either side of a comparison.
+something on it, even a "no". Every point already written is itself an answer, and
+`answered_days` is simply the days a point falls on. A day nobody wrote anything down for is
+not in the set, and a rule must not treat it as either side of a comparison.
+
+RE-10 adds the six lifestyle and food readers: steps, sleep and water (`app.lifestyle.
+metrics`) and the four meal slots (`app.lifestyle.food`). Heart rate needs no reader of its
+own — `app.lifestyle.metrics.log_metric` writes it in the exact shape a typed blood-pressure
+machine's pulse already takes (subject `heart_rate`, attribute `reading`), so the existing
+`PULSE` reading series already reads it. A skip ("no water today", "did not walk") is a real
+answer under §2.7, never a blank: a skipped cumulative metric is a point of value `0.0`
+(a logged zero is exactly what "none" means for steps and water), and a skipped meal is a
+point of value `False` — both land in `answered_days` the same as a logged one.
 """
 
 from __future__ import annotations
@@ -30,6 +37,8 @@ from app.audit.access import audited_read
 from app.db import as_utc, utcnow
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
+from app.lifestyle.food import Meal, food_log
+from app.lifestyle.metrics import LogStatus, MetricKind, metric_series
 from app.medicines.models import DoseTaken
 from app.memory.episodic import fact_cites_only_what_is_held_here
 from app.memory.models import Appointment, ConfidenceState, Event, EventKind, Fact
@@ -45,14 +54,20 @@ SYMPTOM_SCOPE = scope_for_subject(SYMPTOM)
 
 
 class SeriesKind(StrEnum):
-    """The families this module reads. RE-10 adds the lifestyle-log kinds (meals, steps,
-    sleep, water) once those logs exist; this story reads what already does."""
+    """The families this module reads."""
 
     BP_SYSTOLIC = "bp_systolic"
     BP_DIASTOLIC = "bp_diastolic"
     SUGAR = "sugar"
     WEIGHT = "weight"
     PULSE = "pulse"
+    STEPS = "steps"
+    SLEEP_MINUTES = "sleep_minutes"
+    WATER_CUPS = "water_cups"
+    MEAL_BREAKFAST = "meal_breakfast"
+    MEAL_LUNCH = "meal_lunch"
+    MEAL_DINNER = "meal_dinner"
+    MEAL_SNACK = "meal_snack"
     DOSE_ON_TIME = "dose_on_time"
     SYMPTOM = "symptom"
     FEELING = "feeling"
@@ -191,6 +206,92 @@ async def reading_series(
                     ids=(Evidence("fact", fact.id, Scope.READINGS),),
                 )
             )
+    return _series(kind, Scope.READINGS, points)
+
+
+# --- lifestyle logs (RE-10, docs/recommendation-engine.md §2.7) --------------------------
+
+_LOG_METRIC_SERIES: tuple[tuple[SeriesKind, MetricKind], ...] = (
+    (SeriesKind.STEPS, MetricKind.STEPS),
+    (SeriesKind.SLEEP_MINUTES, MetricKind.SLEEP),
+    (SeriesKind.WATER_CUPS, MetricKind.WATER),
+)
+"""Heart rate is not here: `app.lifestyle.metrics.log_metric` writes it in the same shape a
+typed blood-pressure machine's pulse already takes, so `reading_series(kind=PULSE)` already
+reads it — a second reader over the same facts would double them, not add to them."""
+
+
+async def lifestyle_metric_series(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    kind: SeriesKind,
+    now: datetime | None = None,
+    window_days: int = WINDOW_DAYS,
+) -> Series:
+    """Steps, sleep or water, under READINGS: one point per entry he logged
+    (`app.lifestyle.metrics.metric_series`). A skip is a point of value `0.0` — "no water
+    today" is a logged zero, a real answer under §2.7 — so it lands in `answered_days` the
+    same as a number does."""
+    found = next((row for row in _LOG_METRIC_SERIES if row[0] is kind), None)
+    if found is None:
+        raise ValueError(f"{kind} is not a lifestyle metric series")
+    _, metric_kind = found
+    if not context.allows(Scope.READINGS):
+        return _series(kind, Scope.READINGS, ())
+    since, until = _window(now, window_days)
+    entries = await metric_series(session, context=context, kind=metric_kind, since=since, until=until)
+    points: list[Point] = []
+    for entry in entries:
+        value = 0.0 if entry.value is None else entry.value
+        points.append(
+            Point(
+                day=local_date(entry.taken_at, context),
+                at=entry.taken_at,
+                value=value,
+                ids=(Evidence("fact", entry.fact_id, Scope.READINGS),),
+            )
+        )
+    return _series(kind, Scope.READINGS, points)
+
+
+_MEAL_SERIES: tuple[tuple[SeriesKind, Meal], ...] = (
+    (SeriesKind.MEAL_BREAKFAST, Meal.BREAKFAST),
+    (SeriesKind.MEAL_LUNCH, Meal.LUNCH),
+    (SeriesKind.MEAL_DINNER, Meal.DINNER),
+    (SeriesKind.MEAL_SNACK, Meal.SNACK),
+)
+
+
+async def meal_series(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    kind: SeriesKind,
+    now: datetime | None = None,
+    window_days: int = WINDOW_DAYS,
+) -> Series:
+    """One meal slot, under READINGS (the owner's call, 2026-09-17: whoever checks on him day
+    to day can see whether he has eaten). One point per entry logged for that slot
+    (`app.lifestyle.food.food_log`), valued `True` when he had it, `False` when he said he did
+    not — "no breakfast" is an entry, not a missing one (§2.7), so it counts as answered."""
+    found = next((row for row in _MEAL_SERIES if row[0] is kind), None)
+    if found is None:
+        raise ValueError(f"{kind} is not a meal series")
+    _, meal = found
+    if not context.allows(Scope.READINGS):
+        return _series(kind, Scope.READINGS, ())
+    since, until = _window(now, window_days)
+    entries = await food_log(session, context=context, meal=meal, since=since, until=until)
+    points = [
+        Point(
+            day=local_date(entry.eaten_at, context),
+            at=entry.eaten_at,
+            value=entry.status is LogStatus.LOGGED,
+            ids=(Evidence("fact", entry.fact_id, Scope.READINGS),),
+        )
+        for entry in entries
+    ]
     return _series(kind, Scope.READINGS, points)
 
 
@@ -390,6 +491,14 @@ async def read_series(
     if context.allows(Scope.READINGS):
         for kind, _, _ in _READING_SERIES:
             series[kind] = await reading_series(
+                session, context=context, kind=kind, now=now, window_days=window_days
+            )
+        for kind, _ in _LOG_METRIC_SERIES:
+            series[kind] = await lifestyle_metric_series(
+                session, context=context, kind=kind, now=now, window_days=window_days
+            )
+        for kind, _ in _MEAL_SERIES:
+            series[kind] = await meal_series(
                 session, context=context, kind=kind, now=now, window_days=window_days
             )
     else:

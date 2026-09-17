@@ -35,6 +35,7 @@ from app.family.models import (
     DocumentTag,
     PushChannel,
     RosterSlot,
+    ScheduledCall,
     ScheduledPush,
     Task,
     ThreadMessage,
@@ -637,6 +638,16 @@ class DriveConfirmIn(BaseModel):
     person_id: uuid.UUID
 
 
+class CallConfirmIn(BaseModel):
+    """A yes to putting a call with a family member on the calendar (design-direction.md,
+    Connect's "Upcoming Call"): who, when, and the link if the family gave one."""
+
+    subject: Literal[ConfirmSubject.CALL]
+    with_person_id: uuid.UUID
+    scheduled_at: AwareDatetime
+    call_link: str | None = Field(default=None, min_length=1, max_length=300)
+
+
 class InsurerConfirmIn(BaseModel):
     """A yes to his insurer on the emergency card exactly as typed (E13-01); no name takes it
     off the card. The typer's own yes: his, the steward's or his chief's."""
@@ -745,14 +756,16 @@ ConfirmIn = Annotated[
     | RoutineConfirmIn
     | ProposalConfirmIn
     | DriveConfirmIn
-    | InsurerConfirmIn,
+    | InsurerConfirmIn
+    | CallConfirmIn,
     Field(discriminator="subject"),
 ]
 """What `POST /profiles/{id}/confirmations` takes, by subject: the claim (E01), a review card
 with its decisions (E02), a medicine label against the list (E04), a visit booking, a question
 for a visit and a post-visit summary (E05), and the family's yeses (E12): narrowing a key,
 marking a part only me, a task done, a message to him; the day's routine (E10) and a
-visit a calendar proposed (E18); his insurer on the emergency card (E13-01)."""
+visit a calendar proposed (E18); his insurer on the emergency card (E13-01); a call with a
+family member on the calendar (design-direction.md, Connect's "Upcoming Call")."""
 
 
 class ConfirmationOut(BaseModel):
@@ -2714,6 +2727,51 @@ class TaskOut(BaseModel):
             done_by_person_id=task.done_by_person_id,
             appointment_id=task.appointment_id,
             errand=None if task.errand is None else task.errand.value,
+        )
+
+
+class CallScheduleIn(BaseModel):
+    """A yes to putting one call with a family member on the calendar: exactly what the
+    minted confirmation was for."""
+
+    with_person_id: uuid.UUID
+    scheduled_at: AwareDatetime
+    confirmation_id: uuid.UUID
+    call_link: str | None = Field(default=None, min_length=1, max_length=300)
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+
+
+class CallOut(BaseModel):
+    """One call on Connect's "Upcoming Call": with whom, when, how to join, and who put it
+    on the calendar. `join_words` is the line "Join" opens: ringing the number, or opening
+    the link the family gave, already in his words and his language."""
+
+    call_id: uuid.UUID
+    with_person_id: uuid.UUID
+    with_person_name: str
+    scheduled_at: datetime
+    call_link: str | None
+    label: str | None
+    join_words: str
+    added_by_person_id: uuid.UUID
+    added_at: datetime
+    cancelled_at: datetime | None = None
+
+    @classmethod
+    def of(
+        cls, call: ScheduledCall, *, with_person_name: str, join_words: str
+    ) -> CallOut:
+        return cls(
+            call_id=call.id,
+            with_person_id=call.with_person_id,
+            with_person_name=with_person_name,
+            scheduled_at=utc(call.scheduled_at),
+            call_link=call.call_link,
+            label=call.label,
+            join_words=join_words,
+            added_by_person_id=call.added_by_person_id,
+            added_at=utc(call.added_at),
+            cancelled_at=None if call.cancelled_at is None else utc(call.cancelled_at),
         )
 
 
