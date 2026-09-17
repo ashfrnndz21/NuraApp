@@ -1765,6 +1765,17 @@ async def _broker_wanted(
                     "rule": candidate.rule_id,
                     "boosts": list(candidate.boosts),
                     "topic": candidate.topic,
+                    # The gap the independent safety review found (item 2): a candidate
+                    # resting on his own private curiosity (§3.5) named it on `Candidate.
+                    # private_to`, but nothing carried it past this dict — `run_job` below
+                    # never read it back onto `create_item`, so the card it becomes would
+                    # have shown to every key that holds its scope, private or not. `job.
+                    # reason` is JSON (`SearchJob.reason`), so the id is a string here and
+                    # `run_job` parses it back to a `uuid.UUID`, the same shape `rule`/
+                    # `topic` already travel in.
+                    "private_to": str(candidate.private_to)
+                    if candidate.private_to is not None
+                    else None,
                 },
             )
         )

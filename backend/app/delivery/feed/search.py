@@ -603,7 +603,18 @@ async def run_job(
         rule = job.reason.get("rule")
         boosts = tuple(job.reason.get("boosts") or ())
         topic = job.reason.get("topic")
+        # Independent safety review, item 2: a candidate resting on his own private search
+        # history names `Candidate.private_to` (§3.5), and `_broker_wanted` now carries it
+        # here, JSON-stringified. Read back to a `uuid.UUID` (or `None` for a plain `_gaps`
+        # job, which never sets it) and passed to `create_item` below so the card it becomes
+        # holds the same `private_to` its candidate did — `rank.require_item`/`_visible`
+        # refuse it to every key but his own, whatever her scopes (RE-01).
+        private_to_raw = job.reason.get("private_to")
+        private_to = uuid.UUID(private_to_raw) if private_to_raw else None
         if treatment_changing:
+            # `private_to` is deliberately left off the card below: #224 already overrides
+            # privacy here on purpose — a treatment-changing finding always reaches the
+            # caregiver as a question for the doctor, private search topic or not.
             memo_id = await _ask_the_doctor(
                 session,
                 context=context,
@@ -675,6 +686,7 @@ async def run_job(
                     source=source,
                     cite=cite,
                     search_job_id=job.id,
+                    private_to=private_to,
                 )
             except NotPlainWords as failed:
                 rejected.append(

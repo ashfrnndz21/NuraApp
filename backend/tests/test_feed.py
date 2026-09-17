@@ -67,15 +67,18 @@ from app.delivery.feed.models import (
 )
 from app.delivery.feed.rank import (
     PAGE_SIZE,
+    NoSuchItem,
     NotACursor,
     _endless,
     decode_cursor,
     encode_cursor,
     feed_page,
     in_quiet_hours,
+    require_item,
 )
 from app.delivery.feed.search import Engine, create_job, list_jobs, run_job
 from app.delivery.feed.sources import SourceNotAllowlisted
+from app.delivery.recommend import broker as broker_module
 from app.delivery.recommend.rules import RULE_NEW_MEDICINE_EXPLAINER
 from app.delivery.strings import Lines, learning_lines, needs_doctor_look_lines, render
 from app.drugs.fixture import FixtureRegistry
@@ -1171,6 +1174,76 @@ async def test_a_candidate_on_a_withheld_scope_never_becomes_a_card_for_that_key
         sg, context=kit, engine=ENGINE, state=state, around=around, moment=day.now
     )
     assert not wanted, "the withheld scope leaves the broker nothing to propose to her"
+
+
+async def test_a_private_candidates_card_is_unreadable_to_his_chief_and_readable_to_him(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Independent safety review, item 2: `Candidate.private_to` (RE-06, §3.5) never reached
+    the card `_broker_wanted`/`run_job` made for it — the day a rule marks a topic private
+    (his own search history), the card would still show to his chief. It now travels
+    candidate -> `wanted` entry -> `job.reason` -> `create_item(private_to=...)`, so the card
+    holds the same `private_to` `FeedItem.private_to` already enforces for every other card
+    (RE-01, `rank.require_item`).
+
+    No rule sets `private_to` yet (the search-topic rule is a later story), so this wraps the
+    real `RULE_NEW_MEDICINE_EXPLAINER` candidate the way one eventually will: same evidence,
+    same topic, `private_to` added."""
+    context = await _pa(sg)
+    chief = await let_in(
+        sg,
+        context,
+        phone="+6591230077",
+        name="Chief",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
+    )
+    await new_medicine(sg, context)  # amlodipine — fires RULE_NEW_MEDICINE_EXPLAINER
+
+    real_slate = broker_module.slate
+
+    async def _privately(*args: Any, **kwargs: Any) -> broker_module.Slate:
+        result = await real_slate(*args, **kwargs)
+        private = tuple(replace(one, private_to=context.person_id) for one in result.candidates)
+        return broker_module.Slate(private, result.withheld)
+
+    monkeypatch.setattr(broker_module, "slate", _privately)
+
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+    cards = [item for item in made if item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER]
+    assert cards, "the medicine's explainer and clip are still made, now privately"
+    for card in cards:
+        assert card.private_to == context.person_id
+
+        seen = await require_item(sg, context=context, item_id=card.id)
+        assert seen.id == card.id
+
+        with pytest.raises(NoSuchItem):
+            await require_item(sg, context=chief, item_id=card.id)
+
+
+async def test_a_candidate_without_private_to_is_unchanged(sg: AsyncSession) -> None:
+    """The other half of the same gap: a candidate that never names `private_to` (every rule
+    on `main` today) still makes a card every key with the scope can read, exactly as before
+    this fix — carrying `None` through `job.reason` must not narrow anything."""
+    context = await _pa(sg)
+    chief = await let_in(
+        sg,
+        context,
+        phone="+6591230066",
+        name="Chief",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
+    )
+    await new_medicine(sg, context)  # amlodipine — fires RULE_NEW_MEDICINE_EXPLAINER
+
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+    cards = [item for item in made if item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER]
+    assert cards
+    for card in cards:
+        assert card.private_to is None
+        seen = await require_item(sg, context=chief, item_id=card.id)
+        assert seen.id == card.id
 
 
 def test_the_dedupe_key_is_job_aware_so_two_jobs_cannot_race_on_one_page() -> None:
