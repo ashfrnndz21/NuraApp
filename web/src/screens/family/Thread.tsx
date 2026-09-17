@@ -50,8 +50,11 @@ export function ThreadPart(): JSX.Element | null {
           <textarea class="field" name="family-message" maxLength={280} rows={3} value={text} onInput={(event) => setText((event.target as HTMLTextAreaElement).value)} />
         </label>
         <Pill plum onClick={() => void send()} disabled={a.busy || !text.trim()} testId="send-message">
-          {words.sendMessage}
+          {a.busy ? words.sendingMessage : words.sendMessage}
         </Pill>
+        <p class="sr-only" aria-live="polite">
+          {a.busy ? words.sendingMessage : ""}
+        </p>
         <NoticeAt act={a} where="post" />
       </Tile>
     </FamilyPage>

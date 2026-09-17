@@ -12,6 +12,7 @@ import hashlib
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Annotated
 
@@ -103,14 +104,24 @@ def providers_of(request: Request) -> Providers:
     return providers
 
 
-async def db(request: Request) -> AsyncIterator[AsyncSession]:
-    """One session for the request, and what becomes of it.
+@asynccontextmanager
+async def session_scope(request: Request) -> AsyncIterator[AsyncSession]:
+    """One session, and what becomes of it: the request boundary `db` (below) wraps as a
+    FastAPI dependency, for a route whose whole response is computed before it is sent.
 
     The request is one `app.db.unit_of_work`: a savepoint that is released on success and
     rolled back on a `Refusal`, after which the boundary replays what a refusal keeps — the
     refused audit lines, the wrong try counted against a code — and this commits them. So a
     refused request leaves the record of the reaching and nothing it wrote on the way. Any
     other failure rolls the whole request back.
+
+    A stream calls this directly, itself, inside the body it streams — never through `Depends
+    (db)` — because FastAPI closes a `yield` dependency's exit stack the moment the endpoint
+    function *returns*, which for a `StreamingResponse` is the moment the (unread) generator
+    is handed back, well before Starlette actually drives that generator to send the body.
+    A session from `Depends(db)` would already be closed by the time a streamed step tried to
+    read with it. See `app.channels.api.timeline.ask_stream`, `app.channels.api.feed.
+    find_pages_stream`.
     """
     async with request.app.state.session_factory() as session:
         try:
@@ -124,6 +135,13 @@ async def db(request: Request) -> AsyncIterator[AsyncSession]:
             raise
         else:
             await session.commit()
+
+
+async def db(request: Request) -> AsyncIterator[AsyncSession]:
+    """One session per request (see `session_scope`), as a FastAPI dependency: every route
+    but a stream, whose whole response is computed while the dependency is still open."""
+    async with session_scope(request) as session:
+        yield session
 
 
 Db = Annotated[AsyncSession, Depends(db)]

@@ -20,6 +20,7 @@ Records is Ask (`POST /profiles/{id}/ask`, E03-05), unchanged. The other three a
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -70,7 +71,17 @@ class Result:
     next_visit_at: str | None = None
 
 
-async def find(
+@dataclass(frozen=True, slots=True)
+class FindStep:
+    """The one real stage `find_stream` streams before its results: the allowlisted search
+    (`engine.searcher.find`, then each page's compression) is genuinely running. `providers`
+    streams nothing — a directory read is over before there is anything to say is in
+    progress, so `find_stream` goes straight to its results for that filter."""
+
+    key: str = "searching"
+
+
+async def find_stream(
     session: AsyncSession,
     *,
     context: KeyContext,
@@ -78,7 +89,10 @@ async def find(
     words: str,
     where: str,
     language: str | None,
-) -> list[Result]:
+) -> AsyncIterator[FindStep | list[Result]]:
+    """`find`, streamed: `FindStep` the instant the search is actually running, then the
+    results — the last item. `find` (below) is this, drained, so the two can never drift
+    apart."""
     if where not in WHERE:
         raise NotAFilter(f"{where!r} is not a filter of the ask bar")
     wanted = [word for word in words.lower().split() if word.strip()]
@@ -90,7 +104,7 @@ async def find(
             for summary in await directory(session, context=context)
             if all(word in summary.provider.name.lower() for word in wanted)
         ]
-        return [
+        yield [
             Result(
                 title=summary.provider.name,
                 provider_id=str(summary.provider.id),
@@ -100,8 +114,10 @@ async def find(
             )
             for summary in found
         ]
+        return
     async with audited_guard(session, context, Action.READ, Scope.ASK, FIND_TARGET):
         context.require(Scope.ASK)
+    yield FindStep()
     code = language_for(language)
     sources = await usable_sources(session, region=context.region)
     domains = [source.domain for source in sources]
@@ -154,7 +170,28 @@ async def find(
         target=FIND_TARGET,
         rows=len(results),
     )
-    return results
+    yield results
+
+
+async def find(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    engine: Engine,
+    words: str,
+    where: str,
+    language: str | None,
+) -> list[Result]:
+    """`find_stream`, drained: the results alone, for a caller that does not stream (the
+    existing `POST /profiles/{id}/find` route, unchanged)."""
+    result: list[Result] | None = None
+    async for event in find_stream(
+        session, context=context, engine=engine, words=words, where=where, language=language
+    ):
+        if isinstance(event, list):
+            result = event
+    assert result is not None
+    return result
 
 
 async def _sample(
