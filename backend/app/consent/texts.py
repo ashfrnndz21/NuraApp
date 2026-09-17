@@ -9,9 +9,11 @@ do not exist.
 
 Letting one person in is agreed to in words that name that person and what they will see:
 the wording for `SHARE_WITH_PERSON` is a template with `{named}` (the person, with who they
-are to him if the granter said), `{name}` (the person again) and `{parts}` (one line per
-part of the record, in his words — `SCOPE_WORDS`), rendered at the moment of agreement and
-kept on the row as rendered, one line per idea.
+are to him if the granter said), `{name}` (the person again), `{parts}` (one line per
+part of the record, in his words — `SCOPE_WORDS`) and, from version 3 (#185), `{role_line}`
+and `{window_line}` (what they are cut a key as, and for how long, in the family screen's
+own words — `app.family.strings.ROLE_IS`, `WINDOW_LINES`) — rendered at the moment of
+agreement and kept on the row as rendered, one line per idea.
 
 The summaries are what the patient reads, so they follow `docs/plain-words.md`: whole
 sentences, one idea per line, his words for things ("your papers", "your blood pressure
@@ -27,7 +29,8 @@ from dataclasses import dataclass
 
 from app.consent.models import ConsentPurpose
 from app.family.relationships import relationship_words
-from app.keys.scopes import Scope
+from app.family.strings import ROLE_IS, ROLE_WORDS, WINDOW_LINES
+from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.regions import Region
 
 # @patient phrase
@@ -77,6 +80,49 @@ SCOPE_WORDS: Mapping[str, Mapping[Scope, str]] = {
 """The parts of the record, in his words, one line each, in the order the page lists them.
 `PROFILE` is not a part of the record — it is whose record it is — so it is never a thing
 to see."""
+
+# @patient phrase
+SCOPE_WORDS_THEIRS: Mapping[str, Mapping[Scope, str]] = {
+    "en": {
+        Scope.MEDICINES: "{patient}'s medicines",
+        Scope.VISITS: "{patient}'s visits to the doctor",
+        Scope.READINGS: "{patient}'s blood pressure book and {patient}'s sugar numbers",
+        Scope.RECORDS: "{patient}'s papers",
+        Scope.NOTES: "{patient}'s private notes",
+        Scope.MONEY: "{patient}'s insurance letters",
+        Scope.EMERGENCY: "{patient}'s emergency card",
+        Scope.FAMILY: "{patient}'s family list",
+        Scope.ASK: "{patient}'s questions to Nura",
+        Scope.SEND: "the messages Nura sends",
+    },
+    "ms": {
+        Scope.MEDICINES: "ubat {patient}",
+        Scope.VISITS: "lawatan {patient} ke doktor",
+        Scope.READINGS: "buku tekanan darah dan bacaan gula {patient}",
+        Scope.RECORDS: "surat-surat {patient}",
+        Scope.NOTES: "nota peribadi {patient}",
+        Scope.MONEY: "surat insurans {patient}",
+        Scope.EMERGENCY: "kad kecemasan {patient}",
+        Scope.FAMILY: "senarai keluarga {patient}",
+        Scope.ASK: "soalan {patient} kepada Nura",
+        Scope.SEND: "mesej yang Nura hantar",
+    },
+    "zh": {
+        Scope.MEDICINES: "{patient}的药",
+        Scope.VISITS: "{patient}看医生的记录",
+        Scope.READINGS: "{patient}的血压本和血糖数字",
+        Scope.RECORDS: "{patient}的病历文件",
+        Scope.NOTES: "{patient}的私人笔记",
+        Scope.MONEY: "{patient}的保险信件",
+        Scope.EMERGENCY: "{patient}的紧急卡",
+        Scope.FAMILY: "{patient}的家人名单",
+        Scope.ASK: "{patient}问 Nura 的问题",
+        Scope.SEND: "Nura 发的信息",
+    },
+}
+"""`SCOPE_WORDS` about him by name, for anyone reading them on someone else's screen — the
+family's grant lines and the consent wording both list parts this way, in his words when
+they are his to read and about him by name otherwise (`app.channels.about_him`)."""
 
 # @patient phrase
 NAMED_WITH_RELATIONSHIP: Mapping[str, str] = {
@@ -209,6 +255,45 @@ TEXTS: tuple[ConsentText, ...] = (
         "{name} 可以看这些：\n"
         "{parts}\n"
         "{name} 可以一直看，直到您说停。\n"
+        "您可以随时停止。",
+    ),
+    # Version 3 (#185) names the role and the window, not only the person and the parts: a
+    # key cut under this consent is refused if it asks for a different role or a window that
+    # runs longer than the one named here (`app.keys.grants.grant_key`). `{role_line}` and
+    # `{window_line}` are rendered with the family screen's own words for a role
+    # (`app.family.strings.ROLE_IS`) and a window (`WINDOW_LINES`), so what the patient reads
+    # here is what the family screen says the key opens.
+    ConsentText(
+        ConsentPurpose.SHARE_WITH_PERSON,
+        "3",
+        "en",
+        "You are letting {named} see some of your record.\n"
+        "{role_line}\n"
+        "{name} can see these parts:\n"
+        "{parts}\n"
+        "{window_line}\n"
+        "You can stop this at any time.",
+    ),
+    ConsentText(
+        ConsentPurpose.SHARE_WITH_PERSON,
+        "3",
+        "ms",
+        "Anda membenarkan {named} melihat sebahagian daripada rekod anda.\n"
+        "{role_line}\n"
+        "{name} boleh melihat bahagian ini:\n"
+        "{parts}\n"
+        "{window_line}\n"
+        "Anda boleh berhenti pada bila-bila masa.",
+    ),
+    ConsentText(
+        ConsentPurpose.SHARE_WITH_PERSON,
+        "3",
+        "zh",
+        "您让{named}看您记录里的一部分。\n"
+        "{role_line}\n"
+        "{name} 可以看这些：\n"
+        "{parts}\n"
+        "{window_line}\n"
         "您可以随时停止。",
     ),
     # --- recording the visit ---------------------------------------------------------------
@@ -366,8 +451,224 @@ def render_sharing(
     name: str,
     relationship: str | None,
     scopes: Iterable[Scope],
+    role: KeyRole,
+    window: KeyWindow,
     language: str,
 ) -> str:
-    """Fill the sharing template with the person and the parts, as the patient will read it."""
+    """Fill the sharing template with the person, the parts, the role and the window, as the
+    patient will read it (#185: letting someone in always states what they are to him and
+    for how long, so `role` and `window` are never optional here). A version that does not
+    name them (version 1 and 2, kept as history) never reads `{role_line}` or `{window_line}`,
+    so filling them in is never wrong."""
     parts = "\n".join(f"- {part}" for part in what_lines(scopes, language))
-    return template.format(named=named_words(name, relationship, language), name=name, parts=parts)
+    role_line = ROLE_IS[language].format(name=name, role=ROLE_WORDS[language][role])
+    window_line = WINDOW_LINES[language][window].format(name=name)
+    return template.format(
+        named=named_words(name, relationship, language),
+        name=name,
+        parts=parts,
+        role_line=role_line,
+        window_line=window_line,
+    )
+
+
+# @patient
+CONSENT_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
+    "en": {
+        "keeps": (
+            "Nura keeps your papers, your medicines and your blood pressure book.",
+            "Nura keeps {patient}'s papers, {patient}'s medicines and {patient}'s blood pressure book.",
+        ),
+        "stop_record": (
+            "You can tell Nura to stop at any time.",
+            "{patient} can tell Nura to stop at any time.",
+        ),
+        "stays": (
+            "The papers Nura already has stay in your record.",
+            "The papers Nura already has stay in {patient}'s record.",
+        ),
+        "share_lead": (
+            "You are letting {named} see some of your record.",
+            "{patient} is letting {named} see some of {patient}'s record.",
+        ),
+        "share_stop": (
+            "You can stop this at any time.",
+            "{patient} can stop this at any time.",
+        ),
+        # Version 1's own words (history, not shown — see TEXTS); its twin is exempt the
+        # same way, for a caregiver who reads an agreement still open from before version 2.
+        "share_v1": (
+            (
+                "You choose who in your family can see your papers. "  # plain-words: history, not shown
+                "You can see who looked at them. "
+                "You can stop this at any time."
+            ),
+            (
+                "{patient} chooses who in {patient}'s family can see {patient}'s papers. "  # plain-words: history, not shown
+                "{patient} can see who looked at them. "
+                "{patient} can stop this at any time."
+            ),
+        ),
+        "recording_when": (
+            "When you see the doctor, Nura listens.",
+            "When {patient} sees the doctor, Nura listens.",
+        ),
+        "recording_keeps": (
+            "Nura keeps what you and the doctor say.",
+            "Nura keeps what {patient} and the doctor say.",
+        ),
+        "recording_only": (
+            "Only you and the family you let in can hear it.",
+            "Only {patient} and the family {patient} let in can hear it.",
+        ),
+        "recording_again": (
+            "You can hear it again whenever you want.",
+            "{patient} can hear it again whenever {patient} wants.",
+        ),
+        "whatsapp_sends": (
+            "Every morning, Nura sends you your Today page on WhatsApp.",
+            "Every morning, Nura sends {patient} {patient}'s Today page on WhatsApp.",
+        ),
+        "calendar_reads": (
+            "Nura reads your calendar to find visits to the doctor.",
+            "Nura reads {patient}'s calendar to find visits to the doctor.",
+        ),
+        "calendar_alone": (
+            "Everything else in your calendar is left alone.",
+            "Everything else in {patient}'s calendar is left alone.",
+        ),
+        "calendar_yes": (
+            "Nothing is added until you say yes.",
+            "Nothing is added until {patient} says yes.",
+        ),
+        "calendar_never": (
+            "Nura never writes in your calendar.",
+            "Nura never writes in {patient}'s calendar.",
+        ),
+    },
+    "ms": {
+        "keeps": (
+            "Nura menyimpan surat-surat anda, ubat anda dan buku tekanan darah anda.",
+            "Nura menyimpan surat-surat {patient}, ubat {patient} dan buku tekanan darah {patient}.",
+        ),
+        "stop_record": (
+            "Anda boleh minta Nura berhenti pada bila-bila masa.",
+            "{patient} boleh minta Nura berhenti pada bila-bila masa.",
+        ),
+        "stays": (
+            "Apa yang sudah disimpan kekal dalam rekod anda.",
+            "Apa yang sudah disimpan kekal dalam rekod {patient}.",
+        ),
+        "share_lead": (
+            "Anda membenarkan {named} melihat sebahagian daripada rekod anda.",
+            "{patient} membenarkan {named} melihat sebahagian daripada rekod {patient}.",
+        ),
+        "share_stop": (
+            "Anda boleh berhenti pada bila-bila masa.",
+            "{patient} boleh berhenti pada bila-bila masa.",
+        ),
+        "recording_when": (
+            "Semasa anda berjumpa doktor, Nura mendengar.",
+            "Semasa {patient} berjumpa doktor, Nura mendengar.",
+        ),
+        "recording_keeps": (
+            "Nura menyimpan apa yang anda dan doktor katakan.",
+            "Nura menyimpan apa yang {patient} dan doktor katakan.",
+        ),
+        "recording_only": (
+            "Hanya anda dan keluarga yang anda benarkan boleh mendengarnya.",
+            "Hanya {patient} dan keluarga yang {patient} benarkan boleh mendengarnya.",
+        ),
+        "recording_again": (
+            "Anda boleh mendengarnya semula bila-bila masa.",
+            "{patient} boleh mendengarnya semula bila-bila masa.",
+        ),
+        "whatsapp_sends": (
+            "Setiap pagi, Nura menghantar halaman Hari Ini anda melalui WhatsApp.",
+            "Setiap pagi, Nura menghantar halaman Hari Ini {patient} melalui WhatsApp.",
+        ),
+        "calendar_reads": (
+            "Nura membaca kalendar anda untuk mencari lawatan ke doktor.",
+            "Nura membaca kalendar {patient} untuk mencari lawatan ke doktor.",
+        ),
+        "calendar_alone": (
+            "Yang lain dalam kalendar anda tidak disentuh.",
+            "Yang lain dalam kalendar {patient} tidak disentuh.",
+        ),
+        "calendar_yes": (
+            "Tiada apa-apa ditambah sehingga anda kata ya.",
+            "Tiada apa-apa ditambah sehingga {patient} kata ya.",
+        ),
+        "calendar_never": (
+            "Nura tidak pernah menulis dalam kalendar anda.",
+            "Nura tidak pernah menulis dalam kalendar {patient}.",
+        ),
+    },
+    "zh": {
+        "keeps": (
+            "Nura 帮您保存您的病历文件、您的药和您的血压本。",
+            "Nura 帮{patient}保存{patient}的病历文件、{patient}的药和{patient}的血压本。",
+        ),
+        "stop_record": (
+            "您可以随时叫 Nura 停下来。",
+            "{patient}可以随时叫 Nura 停下来。",
+        ),
+        "stays": (
+            "已经保存的，还是留在您的记录里。",
+            "已经保存的，还是留在{patient}的记录里。",
+        ),
+        "share_lead": (
+            "您让{named}看您记录里的一部分。",
+            "{patient}让{named}看{patient}记录里的一部分。",
+        ),
+        "share_stop": (
+            "您可以随时停止。",
+            "{patient}可以随时停止。",
+        ),
+        "recording_when": (
+            "您看医生的时候，Nura 会听。",
+            "{patient}看医生的时候，Nura 会听。",
+        ),
+        "recording_keeps": (
+            "Nura 会保存您和医生说的话。",
+            "Nura 会保存{patient}和医生说的话。",
+        ),
+        "recording_only": (
+            "只有您和您让进来的家人可以听。",
+            "只有{patient}和{patient}让进来的家人可以听。",
+        ),
+        "recording_again": (
+            "您什么时候想听，都可以再听一次。",
+            "{patient}什么时候想听，都可以再听一次。",
+        ),
+        "whatsapp_sends": (
+            "每天早上，Nura 会把您的今日页面发到您的 WhatsApp。",
+            "每天早上，Nura 会把{patient}的今日页面发到{patient}的 WhatsApp。",
+        ),
+        "calendar_reads": (
+            "Nura 会看您的日历，找出看医生的时间。",
+            "Nura 会看{patient}的日历，找出看医生的时间。",
+        ),
+        "calendar_yes": (
+            "您说好之前，什么都不会加进去。",
+            "{patient}说好之前，什么都不会加进去。",
+        ),
+        "calendar_never": (
+            "Nura 从来不会写进您的日历。",
+            "Nura 从来不会写进{patient}的日历。",
+        ),
+    },
+}
+"""Every line in `TEXTS`, every purpose and every version, that speaks to him — each with its
+twin about him by name (`app.channels.about_him`). `GET /profiles/{id}/consents` answers
+every agreement ever given on the profile, whatever its purpose, so a key holder reading
+someone else's consents — his chief, on the Family consents screen — can be shown any of
+them, current version or the ones a still-open agreement was made under. A consent record
+quotes his own words verbatim, so this is never a paraphrase: the twin says the same thing,
+about him by name instead of to him. `test_every_consent_wording_ever_shown_is_said_about_him_by_name`
+(`tests/test_about_him.py`) enumerates `TEXTS` itself — not a hand-picked list of the purposes
+and versions this dict happens to name — so a purpose or version added later without an entry
+here fails that test, not a production screen.
+
+The window line ("{name} can see them until you say stop.") is shared with the family's grant
+lines and its twin lives with them (`app.family.strings.WINDOW_LINES_THEIRS`)."""

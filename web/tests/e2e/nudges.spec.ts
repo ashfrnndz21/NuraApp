@@ -183,4 +183,9 @@ test("a nudge with no why does not render", async ({ page, request }) => {
   await signInThroughTheApp(page, pa.phone, "Pa");
   await todayReady(page);
   await expect(page.getByTestId("nudge")).toHaveCount(0);
+  // Today reads its plan more than once (a later, quiet re-check behind this same route); this
+  // test's assertion is already answered by the first read, so a late repeat is left to finish
+  // on its own once the page is gone rather than raced against test teardown — Playwright's own
+  // fix for the "Response has been disposed"/"Request context disposed" flake this caused here.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });

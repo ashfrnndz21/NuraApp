@@ -34,8 +34,8 @@ async def _household(
         "ask",
         "send",
     ]
-    await let_in(deployment, pa, profile_id, MEI, everything, "daughter")
-    await let_in(deployment, pa, profile_id, SITI, HELPER, "helper")
+    await let_in(deployment, pa, profile_id, MEI, everything, "daughter", role="chief")
+    await let_in(deployment, pa, profile_id, SITI, HELPER, "helper", role="helper")
     cut = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_person_id": mei["person_id"], "role": "chief"},

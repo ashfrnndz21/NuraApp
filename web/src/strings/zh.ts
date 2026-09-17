@@ -556,6 +556,10 @@ export const zh = {
     shared: "您的家人现在能看到这张卡。",
     // @patient phrase
     fromPublisher: "来自 {publisher}",
+    // @patient phrase
+    whyLink: "我为什么会看到这个？",
+    // @patient headline
+    whyTitle: "我为什么会看到这个？",
     // @patient
     cannotShare: "Nura 还不能把这张卡发给您的家人。",
     // @patient

@@ -62,8 +62,8 @@ async def _household(
     mei = await register_by_phone(deployment, MEI, "Mei", "en")
     kit = await register_by_phone(deployment, KIT, "Kit", "en")
     profile_id = await own_profile(deployment, pa, display_name="Pa", language="ms")
-    await let_in(deployment, pa, profile_id, MEI, EVERYTHING, "daughter")
-    await let_in(deployment, pa, profile_id, KIT, ["medicines"], "son", holder_display_name="Kit")
+    await let_in(deployment, pa, profile_id, MEI, EVERYTHING, "daughter", role="chief")
+    await let_in(deployment, pa, profile_id, KIT, ["medicines"], "son", holder_display_name="Kit", role="caregiver")
     for who, role in ((mei, "chief"), (kit, "caregiver")):
         cut = await deployment.client.post(
             f"/profiles/{profile_id}/keys",

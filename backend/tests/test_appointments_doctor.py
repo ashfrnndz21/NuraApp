@@ -54,7 +54,7 @@ async def test_each_visit_to_come_names_its_doctor(deployment: Deployment) -> No
 
     # A key without the visits scope reads no visit, and so no doctor's name.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "daughter")
+    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "daughter", role="caregiver")
     granted = await client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "caregiver", "scopes": ["medicines"]},

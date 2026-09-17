@@ -38,6 +38,7 @@ from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.reasoning.ranges import FixtureRanges, ReferenceRanges
 from app.reasoning.visits.summary import Summariser
 from app.regions import OutOfRegion
+from app.search.narrate import FixtureNarrator, Narrator
 from app.search.retrieve import KeywordRetriever, Retriever
 from app.settings import Settings
 
@@ -92,6 +93,10 @@ class Providers:
     retriever: Retriever = field(default_factory=KeywordRetriever)
     """Which things on the record a question is about, for Ask (E03-05): keywords until a
     model-backed retriever exists behind the same port; the tests pass a fixture one."""
+    narrator: Narrator = field(default_factory=FixtureNarrator)
+    """What says Ask's and Find's trace steps aloud (the narrated-trace story): the fixture
+    label, unchanged, until a Claude-backed narrator is chosen on a declared demo
+    (`app.search.narrator_provider.narrator_for`); the tests pass the fixture one."""
 
 
 def settings_of(request: Request) -> Settings:

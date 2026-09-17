@@ -362,7 +362,7 @@ async def test_the_whole_walk_a_label_becomes_a_line_with_a_story_a_count_and_fl
 
     # Mei, a helper with the medicines key: reads the list and the story, cannot add.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "helper")
+    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "helper", role="helper")
     granted = await client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "helper", "scopes": ["medicines"]},

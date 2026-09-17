@@ -54,12 +54,12 @@ async function wording(request: APIRequestContext, purpose: string, language = "
   return ((await (await request.get(`${API}/consent/wording?purpose=${purpose}&language=${language}`)).json()) as { version: string }).version;
 }
 
-export async function letIn(request: APIRequestContext, family: Family, who: Person, scopes: string[], relationship: string): Promise<void> {
+export async function letIn(request: APIRequestContext, family: Family, who: Person, scopes: string[], relationship: string, role: string): Promise<void> {
   await ok(
     `sharing with ${who.name}`,
     await request.post(`${API}/profiles/${family.profileId}/consents/sharing`, {
       headers: auth(family.pa.token),
-      data: { holder_phone_e164: who.phone, holder_display_name: who.name, scopes, relationship, language: "en", captured_via: "app" },
+      data: { holder_phone_e164: who.phone, holder_display_name: who.name, scopes, role, window: "always", relationship, language: "en", captured_via: "app" },
     }),
   );
 }
@@ -91,9 +91,9 @@ export async function seedFamily(request: APIRequestContext, { sitiKey = false }
     "whatsapp",
     await request.post(`${API}/profiles/${profileId}/consents/whatsapp`, { headers: his, data: { wording_version: await wording(request, "whatsapp"), language: "en", captured_via: "app" } }),
   );
-  await letIn(request, family, family.mei, EVERY_PART, "daughter");
-  await letIn(request, family, family.kit, KITS, "son");
-  await letIn(request, family, family.siti, SITIS, "helper");
+  await letIn(request, family, family.mei, EVERY_PART, "daughter", "chief");
+  await letIn(request, family, family.kit, KITS, "son", "caregiver");
+  await letIn(request, family, family.siti, SITIS, "helper", "helper");
   await cutKey(request, family, family.mei, "chief");
   await cutKey(request, family, family.kit, "caregiver", KITS);
   if (sitiKey) await cutKey(request, family, family.siti, "helper");

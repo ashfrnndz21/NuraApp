@@ -213,8 +213,8 @@ async def test_what_each_key_reads_and_who_may_write(deployment: Deployment) -> 
     siti = await register_by_phone(deployment, SITI, "Siti")
     profile_id = await own_profile(deployment, pa, language="en")
     his = pa["token"]
-    await let_in(deployment, pa, profile_id, KIT, ["records", "medicines", "visits"], "son")
-    await let_in(deployment, pa, profile_id, SITI, ["medicines"], "helper")
+    await let_in(deployment, pa, profile_id, KIT, ["records", "medicines", "visits"], "son", role="caregiver")
+    await let_in(deployment, pa, profile_id, SITI, ["medicines"], "helper", role="helper")
     for phone, role, scopes in (
         (KIT, "caregiver", ["records", "medicines", "visits"]),
         (SITI, "helper", ["medicines"]),

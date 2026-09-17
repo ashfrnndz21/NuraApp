@@ -178,6 +178,19 @@ def window_ends_at(window: KeyWindow, granted_at: datetime) -> datetime | None:
     return None if length is None else granted_at + length
 
 
+def window_outlasts(window: KeyWindow, than: KeyWindow) -> bool:
+    """True when `window` runs longer than `than`: `ALWAYS` outlasts every timed window, and
+    among the timed ones, more days does. Used to refuse a key cut for longer than the words
+    a consent named agreed to (`app.keys.grants.grant_key`, #185)."""
+    if window is than:
+        return False
+    if window is KeyWindow.ALWAYS:
+        return True
+    if than is KeyWindow.ALWAYS:
+        return False
+    return _WINDOW_LENGTHS[window] > _WINDOW_LENGTHS[than]
+
+
 def window_of(granted_at: datetime, expires_at: datetime | None) -> KeyWindow | None:
     """The preset window a key was cut for, read back from its dates, or None when its end
     is not one of the presets — a key that was shortened to a day of its own (E12-01)."""

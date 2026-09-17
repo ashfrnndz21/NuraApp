@@ -229,7 +229,7 @@ async def test_a_label_card_shows_the_high_risk_class_and_its_facts_sit_under_me
     assert {m["attribute"] for m in medicines.json()} == {f["attribute"] for f in facts}
     # Under the medicines scope: Mei with a key to the record alone is refused them.
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["records"])
+    await let_in(deployment, pa, profile_id, MEI, ["records"], role="caregiver")
     await _key(deployment, pa, profile_id, MEI, ["records"])
     hers = bearer(mei["token"])
     cards = await deployment.client.get(f"/profiles/{profile_id}/review-cards", headers=hers)
@@ -251,7 +251,7 @@ async def test_a_key_without_the_record_sees_no_card(deployment: Deployment) -> 
         )
     ).json()
     mei = await register_by_phone(deployment, MEI, "Mei")
-    await let_in(deployment, pa, profile_id, MEI, ["readings", "records"])
+    await let_in(deployment, pa, profile_id, MEI, ["readings", "records"], role="caregiver")
     await _key(deployment, pa, profile_id, MEI, ["readings"])
     hers = bearer(mei["token"])
     for path in ("/review-cards", f"/review-cards/{card['card_id']}"):

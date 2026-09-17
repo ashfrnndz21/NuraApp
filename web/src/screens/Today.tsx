@@ -216,12 +216,12 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {furniture && <CheckInCard papers={papers} />}
             <DoGrid papers={papers} />
             <AddReport papers={papers} />
-            {/* "What changed since you last looked" belongs on her Home by the design
-                (docs/design-system.md §3), but `GET /changes` *is* the looking: it writes the
-                look down on his trail and the next read counts from it. Drawing it here would
-                burn the look on every Home open, put an entry on his trail each time, and leave
-                the Record's own "what changed" screen with nothing to say. It stays in the
-                Record until the endpoint can be read without marking. */}
+            {/* "What changed since you last looked" (docs/design-system.md §3): a peek, not a
+                look (#207) — `GET /changes` is the looking, and a tile that draws itself on
+                every Home render is not her choosing to look, so it reads with `peek=true`
+                and marks nothing. The Record's own "what changed" screen is the one place
+                that marks a look, because reading it is what she came there to do. */}
+            <WhatChanged />
             {nextVisit && !fromPhone && (
               <Upcoming papers={papers}>
                 <NextVisitTile visit={nextVisit} />
@@ -547,7 +547,11 @@ function WhatChanged(): JSX.Element | null {
   const [all, setAll] = useState(false);
   useEffect(() => {
     if (!bearer || !papers) return;
-    nura.changes(bearer, papers.profile_id, language.value).then(setFound, () => setFound(null));
+    // A peek (#207): the same words `GET /changes` always says, but Home draws this tile on
+    // every render, and a glance she did not choose is not a look — it marks nothing and
+    // leaves no entry on his trail. The Record's own "what changed" screen is the one place
+    // that marks a look, because reading it is what she came there to do.
+    nura.changes(bearer, papers.profile_id, language.value, true).then(setFound, () => setFound(null));
   }, [bearer, papers?.profile_id]);
   if (!found) return null;
   const rows = [...found.lines, ...found.waiting].map((line, at) => ({ key: `${line.section}:${line.key}:${at}`, text: line.text, tone: toneOf(line.tone ?? null), dotted: true }));

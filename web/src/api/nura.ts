@@ -585,9 +585,11 @@ export const provider = (token: string, profileId: string, providerId: string) =
 export const noteOnProvider = (token: string, profileId: string, providerId: string, text: string) =>
   api<PlaceNoteOut>(`/profiles/${profileId}/providers/${providerId}/notes`, { method: "POST", token, body: { text } });
 
-/** What changed since this reader last looked; reading it is looking (E03-04). */
-export const changes = (token: string, profileId: string, language: string) =>
-  api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language } });
+/** What changed since this reader last looked; reading it is looking (E03-04) — unless
+ *  `peek`, for a tile that draws itself every time (Home) rather than a screen she came to
+ *  read this on: the same words, marking no look and leaving no entry on his trail (#207). */
+export const changes = (token: string, profileId: string, language: string, peek?: boolean) =>
+  api<ChangesOut>(`/profiles/${profileId}/changes`, { token, query: { language, peek: peek ? "true" : undefined } });
 
 /** One analyte's results against his ranges, the direction in words, the boundary last (E09-01). */
 export const trend = (token: string, profileId: string, analyte: string, language: string) =>
@@ -836,9 +838,24 @@ export const pauseSearchJob = (token: string, profileId: string, jobId: string, 
 /** His area and the towns it may be (owner, chief). */
 export const area = (token: string, profileId: string) => api<AreaOut>(`/profiles/${profileId}/area`, { token });
 
-/** Set his area on his yes, or clear it (null). */
-export const setArea = (token: string, profileId: string, value: string | null) =>
-  api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
+/** The owner's own yes to setting his area to exactly this value, or to clearing it (#184):
+ *  minted for the area shown, spent by setArea. The steward's pre-claim write takes none. */
+export const mintAreaConfirmation = (token: string, profileId: string, value: string | null) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "area", area: value },
+  });
+
+/** Set his area on his yes, or clear it (null). Once the graph is his, `confirmationId` must
+ *  be minted for exactly this value (`mintAreaConfirmation`); the steward's pre-claim write
+ *  takes none. */
+export const setArea = (token: string, profileId: string, value: string | null, confirmationId?: string) =>
+  api<AreaOut>(`/profiles/${profileId}/area`, {
+    token,
+    method: "PUT",
+    body: { area: value, confirmation_id: confirmationId ?? null },
+  });
 
 /** "What Nura uses" (RE-05): every family, on or off, and whether this key may set one. */
 export const signals = (token: string, profileId: string) =>

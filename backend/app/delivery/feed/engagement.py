@@ -26,7 +26,7 @@ from app.audit.access import audited, audited_guard, audited_read, audited_write
 from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import as_utc, utcnow
-from app.delivery.feed.compose import today_for
+from app.delivery.feed.compose import DECLINED_TOPIC, DECLINED_TOPIC_WINDOW, today_for
 from app.delivery.feed.models import (
     PLAYS,
     Engagement,
@@ -236,6 +236,11 @@ async def record_engagement(
     )
     if kind is EngagementKind.DISMISSED and context.is_owner:
         await _decline_for_the_day(session, context=context, item=item, event_id=event.id)
+        topic = item.why.get("topic") if isinstance(item.why, dict) else None
+        if topic:
+            await _decline_topic_for_30_days(
+                session, context=context, topic=topic, item=item, event_id=event.id
+            )
     return engagement
 
 
@@ -273,4 +278,52 @@ async def _decline_for_the_day(
         event_id=event_id,
         valid_from=day.now,
         valid_to=day.ends_at,
+    )
+
+
+async def _decline_topic_for_30_days(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    topic: str,
+    item: FeedItem,
+    event_id: uuid.UUID,
+) -> None:
+    """RE-07: "not for me" on a card the broker's slate proposed (`item.why["topic"]` set,
+    `app.delivery.feed.items.Why.topic`) is his word about that *topic*, not just that card's
+    type — so it holds for thirty days, not the rest of his day (`_decline_for_the_day`,
+    above, still runs too: the card's own type is still held back for today). A Fact with a
+    validity window and a confidence state (CLAUDE.md), never a new column; a second decline
+    inside the same window is a no-op, the way `_decline_for_the_day` is idempotent per day."""
+    now = utcnow()
+    already = await current_facts(
+        session, context=context, subject=DECLINED_TOPIC, attribute=topic, at=now
+    )
+    if already:
+        return
+    draft = FactDraft(
+        subject=DECLINED_TOPIC,
+        attribute=topic,
+        value={"item_id": str(item.id)},
+        unit=None,
+        confidence=1.0,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        artifact_id=None,
+        event_id=event_id,
+        episode_id=None,
+        supersedes_id=None,
+    )
+    yes = await confirm(session, context, draft)
+    await assert_fact(
+        session,
+        context=context,
+        subject=draft.subject,
+        attribute=draft.attribute,
+        value=draft.value,
+        confidence=draft.confidence,
+        confidence_state=draft.confidence_state,
+        confirmation_id=yes.id,
+        event_id=event_id,
+        valid_from=now,
+        valid_to=now + DECLINED_TOPIC_WINDOW,
     )
