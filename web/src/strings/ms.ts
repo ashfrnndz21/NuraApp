@@ -506,6 +506,8 @@ export const ms = {
     story: "Kisah anda",
     // @patient headline
     learning: "Dalam kata-kata mudah",
+    // @patient headline
+    didYouKnow: "Tahukah anda",
     // @patient phrase
     ask: "Tanya",
     // @patient phrase

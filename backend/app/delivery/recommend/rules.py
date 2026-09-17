@@ -38,8 +38,9 @@ key could re-read.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -60,16 +61,24 @@ RULE_NEW_MEDICINE_EXPLAINER = "new_medicine_explainer"
 RULE_FEELING_AFTER_NEW_MEDICINE = "feeling_after_new_medicine"
 RULE_VISIT_TOPIC_WEEK = "visit_topic_week"
 RULE_TEST_COMING = "test_coming"
+RULE_DID_YOU_KNOW = "did_you_know"
 
 BASE_WEIGHT: Mapping[str, int] = {
     RULE_NEW_MEDICINE_EXPLAINER: 40,
     RULE_FEELING_AFTER_NEW_MEDICINE: 50,
     RULE_VISIT_TOPIC_WEEK: 30,
     RULE_TEST_COMING: 35,
+    RULE_DID_YOU_KNOW: 20,
 }
 """A rule's own weight before boosts (§2.4). `feeling_after_new_medicine` sits highest: it is
 what fixes the §1.1 finding — a feeling read against a new medicine, with nowhere to raise it,
-now reaches a visit question."""
+now reaches a visit question. `did_you_know` sits lowest of the five: it is a curiosity, never
+more urgent than a real finding on his own record."""
+
+DID_YOU_KNOW_ROTATION = timedelta(days=14)
+"""How long a topic `did_you_know` has already used stays out of the pool (module doc below,
+`did_you_know`): read back from the cards it made (`app.delivery.recommend.broker`), no new
+column."""
 
 FEELING_WINDOW = timedelta(days=7)
 """How recent a cloud tap must be for `feeling_after_new_medicine` (§2.4 rule table)."""
@@ -137,6 +146,15 @@ class UpcomingVisit:
 
 
 @dataclass(frozen=True, slots=True)
+class ToldCondition:
+    """One `condition.<code>` fact that holds (E01, `app.onboarding.settings`): the condition
+    he told, and the fact it rests on — `did_you_know`'s own evidence for it."""
+
+    code: str
+    fact_id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
 class RuleInputs:
     """Everything a rule may read, already fetched under the key by the broker. A rule reads
     only this — never a session, never the key context, never another rule's output."""
@@ -148,6 +166,17 @@ class RuleInputs:
     upcoming_visits: tuple[UpcomingVisit, ...]
     before_visit: bool
     tagger: TopicTagger
+    profile_id: uuid.UUID
+    told_conditions: tuple[ToldCondition, ...] = ()
+    recent_did_you_know_topics: frozenset[str] = frozenset()
+    """Topics `did_you_know` has already used in the last `DID_YOU_KNOW_ROTATION` days (broker,
+    read back from the cards it made — no new column)."""
+    declined_topics: frozenset[str] = frozenset()
+    """Topics he has said "not for me" to, still inside their thirty days
+    (`app.delivery.feed.engagement._decline_topic_for_30_days`) — read directly by the broker
+    under the same fact shape (subject `declined_topic`), the way `SIGNALS_SUBJECT` already
+    is, so this module need not import `app.delivery.feed` (the cycle `compose.py`'s own
+    module doc already documents for the reverse direction)."""
 
 
 @lru_cache(maxsize=1)
@@ -317,6 +346,84 @@ def test_coming(inputs: RuleInputs) -> Sequence[Candidate]:
     return out
 
 
+def _did_you_know_pool(inputs: RuleInputs) -> dict[str, tuple[Evidence, ...]]:
+    """Every topic today's own record makes eligible for `did_you_know`, by topic code: a
+    condition he told, a medicine he takes, or this week's visit topic (module doc below).
+    `dict.setdefault` only decides which evidence a topic already found from two sources keeps
+    — never which topic wins the day, which `_pick_topic` alone decides, from the sorted keys,
+    so build order here never changes the pick.
+
+    No season topic is in this pool: `topics.py`'s catalogue carries conditions, medicines and
+    the sensitive codes only (module doc, `app.delivery.recommend.topics`) — no season family
+    — so a season "did you know" is a named gap here, the same shape `test_coming`'s own
+    fasting-REMINDER gap is documented above."""
+    pool: dict[str, tuple[Evidence, ...]] = {}
+    for told in inputs.told_conditions:
+        topic = f"condition.{told.code}"
+        if _known_topic(topic):
+            pool.setdefault(topic, (Evidence(kind="fact", id=told.fact_id, scope=Scope.RECORDS),))
+    for line in inputs.lines:
+        if line.plain_name_id is None:
+            continue
+        topic = f"medicine.{line.plain_name_id}"
+        if _known_topic(topic):
+            pool.setdefault(
+                topic, (Evidence(kind="line", id=line.line_id, scope=Scope.MEDICINES),)
+            )
+    for visit in inputs.upcoming_visits:
+        until = visit.scheduled_at - inputs.now
+        if until < timedelta(0) or until > BEFORE_VISIT_WINDOW:
+            continue
+        for topic in inputs.tagger.tag(visit.purpose):
+            if _known_topic(topic):
+                pool.setdefault(
+                    topic,
+                    (Evidence(kind="appointment", id=visit.appointment_id, scope=Scope.VISITS),),
+                )
+    return pool
+
+
+def _pick_topic(topics: Iterable[str], *, profile_id: uuid.UUID, day: str) -> str:
+    """The one topic of the day: sorted so the pool's build order never matters, then a
+    sha256 of `profile_id` and `day` alone decides the index — deterministic for the same
+    profile on the same day (a refresh never changes it), and free to move the next day or for
+    another profile, with no state of its own (the "hard-won rule" on tie-breaks, CLAUDE.md:
+    never an insertion order, always an explicit, reproducible one)."""
+    ordered = sorted(topics)
+    digest = hashlib.sha256(f"{profile_id}:{day}".encode("utf-8")).hexdigest()
+    return ordered[int(digest, 16) % len(ordered)]
+
+
+def did_you_know(inputs: RuleInputs) -> Sequence[Candidate]:
+    """One small, true fact a day, on one topic that rests on his own record (module doc,
+    `_did_you_know_pool`): a condition he told, a medicine he takes, or this week's visit
+    topic — never a topic he has said "not for me" to in the last thirty days
+    (`inputs.declined_topics`), and never one `did_you_know` itself has already used in the
+    last `DID_YOU_KNOW_ROTATION` days (`inputs.recent_did_you_know_topics`). At most one
+    candidate: the day's pick, or none at all when nothing on his record is eligible today —
+    never a repeat manufactured to fill the slot."""
+    pool = _did_you_know_pool(inputs)
+    eligible = {
+        topic: evidence
+        for topic, evidence in pool.items()
+        if topic not in inputs.recent_did_you_know_topics and topic not in inputs.declined_topics
+    }
+    if not eligible:
+        return []
+    topic = _pick_topic(eligible, profile_id=inputs.profile_id, day=inputs.now.date().isoformat())
+    return [
+        Candidate(
+            rule_id=RULE_DID_YOU_KNOW,
+            output=OutputKind.READ,
+            topic=topic,
+            because=eligible[topic],
+            safety=SafetyClass.EXTERNAL,
+            audience=frozenset({Audience.PATIENT}),
+            base=BASE_WEIGHT[RULE_DID_YOU_KNOW],
+        )
+    ]
+
+
 @dataclass(frozen=True, slots=True)
 class RecommendationRule:
     """One entry in the catalogue: its id, the signal family it reads from (`None` when it
@@ -343,4 +450,7 @@ CATALOGUE: tuple[RecommendationRule, ...] = (
     RecommendationRule(RULE_FEELING_AFTER_NEW_MEDICINE, None, feeling_after_new_medicine),
     RecommendationRule(RULE_VISIT_TOPIC_WEEK, None, visit_topic_week),
     RecommendationRule(RULE_TEST_COMING, None, test_coming),
+    # "What Nura uses" (module doc): off by the same `subject="signals", attribute="did_you_
+    # know"` fact shape every other family switch reads, on by default like the rest.
+    RecommendationRule(RULE_DID_YOU_KNOW, "did_you_know", did_you_know),
 )

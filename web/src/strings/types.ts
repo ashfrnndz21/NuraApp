@@ -209,6 +209,7 @@ export interface Strings {
     open: string;
     story: string;
     learning: string;
+    didYouKnow: string;
     ask: string;
     family: string;
     notForMe: string;

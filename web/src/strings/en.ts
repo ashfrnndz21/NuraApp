@@ -506,6 +506,8 @@ export const en = {
     story: "Your story",
     // @patient headline
     learning: "In simple words",
+    // @patient headline
+    didYouKnow: "Did you know",
     // @patient phrase
     ask: "Ask",
     // @patient phrase

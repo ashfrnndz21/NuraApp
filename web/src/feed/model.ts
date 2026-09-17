@@ -107,6 +107,10 @@ export interface CardView {
   boundary: string[];
   /** Why am I seeing this: the backend's plain line. */
   why: string;
+  /** The recommendation broker's own "did you know" pick (`app.delivery.recommend.rules.
+   *  did_you_know`, RE-07's `why.rule` on the backend's card): the eyebrow says "Did you
+   *  know", not the plain "In simple words" every other learning card carries. */
+  didYouKnow: boolean;
   /** The page a learning card cites (E21-06): who published it, and the link to it, from
    *  the backend's cite. Null on every other card, and on a cite without an https link. */
   source: { publisher: string; url: string } | null;
@@ -168,6 +172,7 @@ export function cardView(item: FeedItemOut): CardView {
     lines,
     boundary,
     why: whyLine(item),
+    didYouKnow: item.why.rule === "did_you_know",
     source: sourceOf(item),
     clip: clipOf(item),
     spoken: item.voice.length > 0 ? [...item.voice] : [item.headline, ...item.body].filter((line) => line.trim().length > 0),

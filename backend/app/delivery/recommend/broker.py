@@ -33,14 +33,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read
 from app.db import as_utc, utcnow
+from app.delivery.feed.models import FeedItem
 from app.delivery.recommend.models import Candidate, OutputKind
 from app.delivery.recommend.rank import Ranker, RuleRanker, TopicEngagement
 from app.delivery.recommend.rules import (
     CATALOGUE,
+    DID_YOU_KNOW_ROTATION,
+    RULE_DID_YOU_KNOW,
     LineInfo,
     RecommendationRule,
     RuleInputs,
     TapInfo,
+    ToldCondition,
     UpcomingVisit,
 )
 from app.delivery.recommend.topics import KeywordTagger, TopicTagger
@@ -63,6 +67,16 @@ Read here by the fact shape alone; `app.reasoning.signals` is not on `main` (mod
 
 FEELING_WINDOW_DAYS = 7
 """How far back `feeling_after_new_medicine` reads the feeling cloud (§2.4 rule table)."""
+
+CONDITION_SUBJECT = "condition"
+"""`subject` a told condition (E01, `app.onboarding.settings`) is a Fact under; its `attribute`
+is the condition's own code."""
+
+DECLINED_TOPIC_SUBJECT = "declined_topic"
+"""The exact fact shape `app.delivery.feed.engagement._decline_topic_for_30_days` writes
+(`subject="declined_topic"`, `attribute=<topic>`), read here directly by the fact shape alone,
+the way `SIGNALS_SUBJECT` already is above — `app.delivery.feed` reaches back into this module
+(`compose._broker_wanted`), so this module does not import it in the other direction."""
 
 
 class Slate:
@@ -155,6 +169,67 @@ async def _upcoming_visits(
     )
 
 
+async def _told_conditions(
+    session: AsyncSession, *, context: KeyContext
+) -> tuple[ToldCondition, ...]:
+    """`did_you_know`'s own read of the conditions he told (E01): `condition.<code>` facts
+    that hold, under RECORDS, the same subject `app.delivery.feed.compose._conditions_of`
+    already reads for State's clinical facts, here read directly rather than through State so
+    `did_you_know` works even where `state` is `None` (a key too narrow to compute one, the
+    same shape `_active_lines`/`_recent_taps` already read under their own scope alone)."""
+    if not context.allows(Scope.RECORDS):
+        return ()
+    facts = await current_facts(session, context=context, subject=CONDITION_SUBJECT)
+    return tuple(
+        ToldCondition(code=fact.attribute, fact_id=fact.id) for fact in facts if fact.value is True
+    )
+
+
+async def _recent_did_you_know_topics(
+    session: AsyncSession, *, context: KeyContext, now: datetime
+) -> frozenset[str]:
+    """The topics `did_you_know` has already used in the last `DID_YOU_KNOW_ROTATION` days,
+    read back from the cards it made (`FeedItem.why`, RE-08: `Why.rule`/`Why.topic`) — no new
+    column, the same "existing engagement rows" every other rotation in this codebase reads.
+    Read under `Scope.PROFILE`, as `rank.require_item` already does for a `FeedItem` whose own
+    scope varies row by row, and filtered back to what this key actually holds before any
+    topic is trusted (belt and braces, the shape `Candidate.readable_by`'s own docstring
+    documents) — a card `did_you_know` made under a scope this key has since lost is not read
+    back as "already shown" for it."""
+    since = now - DID_YOU_KNOW_ROTATION
+    found = await audited_read(
+        session,
+        FeedItem,
+        context,
+        Scope.PROFILE,
+        where=(FeedItem.created_at >= since, FeedItem.created_at <= now),
+    )
+    topics: set[str] = set()
+    for item in found:
+        if not context.allows(item.scope):
+            continue
+        why = item.why if isinstance(item.why, dict) else {}
+        if why.get("rule") != RULE_DID_YOU_KNOW:
+            continue
+        topic = why.get("topic")
+        if isinstance(topic, str) and topic:
+            topics.add(topic)
+    return frozenset(topics)
+
+
+async def _declined_topics(
+    session: AsyncSession, *, context: KeyContext, now: datetime
+) -> frozenset[str]:
+    """The topic codes he has said "not for me" to, still inside their thirty days at `now` —
+    the exact fact shape `app.delivery.feed.engagement._decline_topic_for_30_days` writes
+    (module doc: `DECLINED_TOPIC_SUBJECT`), read here so `did_you_know` rotates past a topic he
+    declined rather than silently producing nothing for the day it would have picked it."""
+    if not context.allows(Scope.RECORDS):
+        return frozenset()
+    facts = await current_facts(session, context=context, subject=DECLINED_TOPIC_SUBJECT, at=now)
+    return frozenset(fact.attribute for fact in facts)
+
+
 def _before_visit(state: StateView | None) -> bool:
     if state is None:
         return False
@@ -208,6 +283,9 @@ async def slate(
     lines = await _active_lines(session, context=context, registry=registry)
     taps = await _recent_taps(session, context=context, now=moment)
     visits = await _upcoming_visits(session, context=context, now=moment)
+    told_conditions = await _told_conditions(session, context=context)
+    recent_did_you_know = await _recent_did_you_know_topics(session, context=context, now=moment)
+    declined = await _declined_topics(session, context=context, now=moment)
 
     families = {rule.signal_family for rule in catalogue if rule.signal_family is not None}
     off_families = {
@@ -224,6 +302,10 @@ async def slate(
         upcoming_visits=visits,
         before_visit=_before_visit(state),
         tagger=tag,
+        profile_id=context.profile_id,
+        told_conditions=told_conditions,
+        recent_did_you_know_topics=recent_did_you_know,
+        declined_topics=declined,
     )
 
     built: list[Candidate] = []

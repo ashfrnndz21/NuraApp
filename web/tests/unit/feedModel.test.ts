@@ -47,6 +47,12 @@ describe("a card's words", () => {
     expect(view.spoken.at(-1)).toBe("Ask your doctor.");
   });
 
+  it("mark a card the did_you_know rule proposed, and no other learning card", () => {
+    const picked = cardView(learning({ why: { kind: "learning", rule: "did_you_know", topic: "medicine.blood_pressure_tablet", plain: "This is about your blood pressure tablet, which is on your papers." } }));
+    expect(picked.didYouKnow).toBe(true);
+    expect(cardView(learning()).didYouKnow).toBe(false);
+  });
+
   it("read the shown lines out when the backend wrote no voice script", () => {
     const duty = item("duty", "gate", { voice: [], body: ["Mei is on duty today."] });
     expect(cardView(duty).spoken).toEqual(["duty headline", "Mei is on duty today."]);
