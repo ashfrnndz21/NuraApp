@@ -317,7 +317,7 @@ async def test_a_key_is_cut_under_the_consent_that_names_its_holder_and_no_other
 
     # Pa agrees to his daughter. That says nothing about his son.
     clock.set(CLAIMED_AT)
-    hers = await agree_to_family_sharing(sg, owner, daughter)
+    hers = await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     key = await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     assert key.consent_id == hers.id
     with pytest.raises(ConsentWithheld):
@@ -344,7 +344,7 @@ async def test_withdrawing_sharing_from_one_person_closes_their_keys_within_a_mi
     }
     for role, person in family.items():
         clock.set(CLAIMED_AT)
-        await agree_to_family_sharing(sg, owner, person)
+        await agree_to_family_sharing(sg, owner, person, role=role)
         clock.set(CLAIMED_AT)
         await grant_key(sg, context=owner, holder=person, role=role)
     a_week_on = CLAIMED_AT + timedelta(days=7)
@@ -400,7 +400,7 @@ async def test_a_consent_to_older_wording_does_not_satisfy_the_current_version(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
     clock.set(CLAIMED_AT)
-    old = await agree_to_family_sharing(sg, owner, daughter)
+    old = await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.VIEWER)
     a_day_on = CLAIMED_AT + timedelta(days=1)
     assert old.is_active(a_day_on)
 
@@ -422,7 +422,7 @@ async def test_a_consent_to_older_wording_does_not_satisfy_the_current_version(
 
     # A fresh agreement to the current words stands, and the old one stays as history.
     clock.set(a_day_on)
-    fresh = await agree_to_family_sharing(sg, owner, daughter)
+    fresh = await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.VIEWER)
     assert fresh.text_version == new_version
     assert fresh.wording_text == "The new words, in plain words."
     clock.set(a_day_on)
@@ -531,6 +531,7 @@ async def test_the_record_holds_every_version_and_withdrawal_and_none_of_the_gra
         daughter,
         scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
         relationship="daughter",
+        role=KeyRole.CAREGIVER,
     )
     clock.set(CLAIMED_AT + timedelta(days=40, hours=1))
     await grant_key(
@@ -667,7 +668,7 @@ async def test_the_page_names_a_person_he_let_in_before_their_key_is_cut(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
     clock.set(CLAIMED_AT + timedelta(days=1))
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
 
     record = await export_consent_record(sg, context=owner, at=CLAIMED_AT + timedelta(days=2))
     entry = record.document["consents"][-1]
@@ -683,7 +684,7 @@ async def test_a_page_made_for_the_chief_names_the_patient(
     _, profile, owner = await _pa(sg, opened_at=CLAIMED_AT)
     son = await register_person(sg, region=Region.SG, display_name="Son", phone_e164="+6591110004")
     clock.set(CLAIMED_AT)
-    await agree_to_family_sharing(sg, owner, son)
+    await agree_to_family_sharing(sg, owner, son, role=KeyRole.CHIEF)
     clock.set(CLAIMED_AT)
     await grant_key(sg, context=owner, holder=son, role=KeyRole.CHIEF)
     chief = await resolve_key_context(sg, region=Region.SG, person_id=son.id, profile_id=profile.id)
@@ -698,9 +699,12 @@ async def test_a_key_is_never_wider_than_the_words_the_patient_read(sg: AsyncSes
     siti = await register_person(
         sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
     )
-    let_in = await agree_to_family_sharing(sg, owner, siti, scopes={Scope.MEDICINES})
-    assert let_in.wording_text.splitlines()[:3] == [
+    let_in = await agree_to_family_sharing(
+        sg, owner, siti, scopes={Scope.MEDICINES}, role=KeyRole.CAREGIVER
+    )
+    assert let_in.wording_text.splitlines()[:4] == [
         "You are letting Siti see some of your record.",
+        "Siti is a family member who helps.",
         "Siti can see these parts:",
         "- your medicines",
     ]
@@ -739,8 +743,8 @@ async def test_who_else_was_let_in_is_read_under_the_family_scope_whatever_the_a
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, siti)
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, siti, role=KeyRole.HELPER)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     await grant_key(sg, context=owner, holder=siti, role=KeyRole.HELPER)
     helper = await resolve_key_context(
         sg, region=Region.SG, person_id=siti.id, profile_id=profile.id
@@ -779,7 +783,7 @@ async def test_consent_rows_are_pinned_to_the_profile_and_stay_in_its_region(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=profile.id
