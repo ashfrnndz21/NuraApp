@@ -26,10 +26,13 @@
     GET  /profiles/{id}/pushes                  what is scheduled, and what became of it
     GET  /profiles/{id}/documents               the papers behind a basis, with what they back
     POST /profiles/{id}/documents               upload a PDF or a photo and tag it
+    GET  /profiles/{id}/calls/upcoming           calls with family still ahead of now
+    POST /profiles/{id}/calls                   put a call on the calendar (yes)
+    DELETE /profiles/{id}/calls/{call_id}       take a call off the calendar
 
 Every profile route takes the key context like every other. The yeses are minted at
-`POST /profiles/{id}/confirmations` with subjects `key_change`, `only_me`, `task_done` and
-`push`.
+`POST /profiles/{id}/confirmations` with subjects `key_change`, `only_me`, `task_done`,
+`push` and `call`.
 """
 
 from __future__ import annotations
@@ -40,9 +43,13 @@ import uuid
 
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.access import person_display_name
 from app.channels.api.deps import ClosingContext, Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
+    CallOut,
+    CallScheduleIn,
     DigestOut,
     DocumentIn,
     DocumentOut,
@@ -73,9 +80,12 @@ from app.channels.api.schemas import (
     ThreadPostIn,
     TrailDayOut,
 )
+from app.channels.health_strings import call_join_words
 from app.channels.whatsapp.group import mirror_to_group, sync_group
+from app.family.calls import cancel_call, schedule_call, upcoming_calls
 from app.family.documents import add_document, documents
 from app.family.grants import grants, helper_list, role_presets
+from app.family.models import ScheduledCall
 from app.family.photos import (
     NotAPhoto,
     photo_content,
@@ -97,7 +107,7 @@ from app.family.roster import (
 )
 from app.family.thread import digest, post_card, post_message, read_thread
 from app.family.trail import trail
-from app.keys.context import only_the_owner_while_closing
+from app.keys.context import KeyContext, only_the_owner_while_closing
 from app.keys.grants import narrow_key
 from app.keys.scopes import Scope
 
@@ -314,6 +324,62 @@ async def task_done(task_id: uuid.UUID, body: TaskDoneIn, context: Context, sess
             session, context=context, task_id=task_id, confirmation_id=body.confirmation_id
         )
     )
+
+
+# --- upcoming calls (design-direction.md, Connect's "Upcoming Call") -----------------------
+
+
+@router.get("/profiles/{profile_id}/calls/upcoming")
+async def calls_upcoming(
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> list[CallOut]:
+    """Every call still ahead of now, soonest first — the "Upcoming Call" card. Open to any
+    key that holds the family scope, the way the roster is."""
+    found = await upcoming_calls(session, context=context)
+    return [await _call_out(session, context, call, language) for call in found]
+
+
+@router.post("/profiles/{profile_id}/calls", status_code=status.HTTP_201_CREATED)
+async def calls_schedule(
+    body: CallScheduleIn,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> CallOut:
+    """Put a call with a family member on the calendar, on the minted yes (subject `call`).
+    The owner's or his chief's, like the roster and the tasks."""
+    call = await schedule_call(
+        session,
+        context=context,
+        with_person_id=body.with_person_id,
+        scheduled_at=body.scheduled_at,
+        confirmation_id=body.confirmation_id,
+        call_link=body.call_link,
+        label=body.label,
+    )
+    return await _call_out(session, context, call, language)
+
+
+@router.delete("/profiles/{profile_id}/calls/{call_id}")
+async def calls_cancel(
+    call_id: uuid.UUID,
+    context: Context,
+    session: Db,
+    language: str | None = Query(default=None, min_length=2, max_length=16),
+) -> CallOut:
+    """Take a call off the calendar. The owner's or his chief's, like scheduling it."""
+    call = await cancel_call(session, context=context, call_id=call_id)
+    return await _call_out(session, context, call, language)
+
+
+async def _call_out(
+    session: AsyncSession, context: KeyContext, call: ScheduledCall, language: str | None
+) -> CallOut:
+    name = await person_display_name(session, context, call.with_person_id)
+    words = call_join_words(name, call.call_link is not None, language)
+    return CallOut.of(call, with_person_name=name, join_words=words)
 
 
 # --- the trail and only me ----------------------------------------------------------------------

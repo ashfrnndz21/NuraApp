@@ -44,6 +44,7 @@ class ConfirmSubject(StrEnum):
     COUNT_CORRECTION = "count_correction"
     CLOSE_ACCOUNT = "close_account"
     ORDER = "order"
+    CALL = "call"
 
 
 @dataclass(frozen=True, slots=True)
@@ -573,6 +574,33 @@ class OrderDraft:
         return {"line_id": self.line_id, "person_id": self.person_id}
 
 
+@dataclass(frozen=True, slots=True)
+class CallDraft:
+    """A call with a family member about to go on the calendar (design-direction.md, Connect's
+    "Upcoming Call"): who, when, and the link if the family gave one. The yes binds to all
+    three, so a call previewed with a link cannot be scheduled without it, or with a
+    different one."""
+
+    with_person_id: uuid.UUID
+    scheduled_at: datetime
+    call_link: str | None
+
+    @property
+    def confirm_subject(self) -> ConfirmSubject:
+        return ConfirmSubject.CALL
+
+    @property
+    def subject_id(self) -> uuid.UUID | None:
+        return None
+
+    def confirmed_content(self) -> dict[str, Any]:
+        return {
+            "with_person_id": self.with_person_id,
+            "scheduled_at": self.scheduled_at,
+            "call_link": self.call_link,
+        }
+
+
 Draft = (
     FactDraft
     | AppointmentDraft
@@ -593,6 +621,7 @@ Draft = (
     | CountCorrectionDraft
     | CloseDraft
     | OrderDraft
+    | CallDraft
 )
 
 

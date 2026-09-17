@@ -158,6 +158,11 @@ class EventKind(StrEnum):
     SUPPLY = "supply"
     """A person said there are more of a medicine at home (E04-05, "I have more at home"):
     the moment the count correction's fact rests on, under the medicines' part."""
+    FOOD = "food"
+    """He (or a key-holder for him) said what he ate, or that he did not have a meal at all:
+    the moment a meal fact rests on (`app.lifestyle.food`, `subject="meal"`). Under the
+    readings' part, the owner's deliberate call (2026-09-17): whoever can see his readings
+    can see whether he has eaten."""
     SETTING = "setting"
     """He (or his chief) changed a preference about how Nura works for him, after setup
     (RE-05, "What Nura uses"): a signal switched on or off. The moment that preference fact

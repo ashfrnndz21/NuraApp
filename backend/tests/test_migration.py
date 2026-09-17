@@ -34,7 +34,14 @@ from app.consent.models import Consent
 from app.delivery.feed.models import Engagement, FeedItem, FeedPage, SearchJob, Source
 from app.delivery.nudges.models import Nudge, NudgeResponse
 from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder
-from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
+from app.family.models import (
+    Document,
+    RosterSlot,
+    ScheduledCall,
+    ScheduledPush,
+    Task,
+    ThreadMessage,
+)
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.connectors.models import AppointmentProposal, Connector
 from app.ingestion.models import (
@@ -159,6 +166,7 @@ TABLES: tuple[Table, ...] = (
     LastLooked.__table__,
     ConsultRecording.__table__,
     ConsultSegment.__table__,
+    ScheduledCall.__table__,
     DoseQuestion.__table__,
 )
 
@@ -239,7 +247,10 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0043_feeling_note_said"]
+    # #225 (0044_consent_role_window) has not merged to main yet; this branch's migration is
+    # renumbered ahead of it and pinned here. Fails locally until #225 lands — the operator
+    # merges #225 first (see PR comment on #235).
+    assert heads == ["0045_scheduled_call"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(

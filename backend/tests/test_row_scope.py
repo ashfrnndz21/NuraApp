@@ -683,6 +683,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "consent_id": [str(c.id) for c in consents],
             "upload_id": [upload_id],
             "photo_id": [shared["photo"]["photo_id"]],
+            "kind": ["steps", "heart_rate", "sleep", "water"],
         }
     return seeded
 
@@ -870,6 +871,12 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/me-summary"),
     Walk("GET", f"{P}/nudges"),
     Walk("GET", f"{P}/not-feeling-well/offline"),
+    Walk("GET", f"{P}/calls/upcoming"),
+    Walk("GET", f"{P}/health/overview"),
+    Walk("GET", f"{P}/health/insights"),
+    Walk("GET", f"{P}/medication-reminder"),
+    Walk("GET", f"{P}/metrics/{{kind}}"),
+    Walk("GET", f"{P}/food"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
@@ -998,6 +1005,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/thread/photos"): "shares a photo with the family; returns the entry",
     ("POST", f"{P}/whatsapp/group"): "opens the family's WhatsApp group; returns who is in it",
     ("POST", f"{P}/thread/photos/{{photo_id}}/take-back"): "takes a photo back; returns it",
+    ("POST", f"{P}/calls"): "puts a call on the calendar on a yes; returns it",
+    ("DELETE", f"{P}/calls/{{call_id}}"): "takes a call off the calendar; returns it",
+    ("POST", f"{P}/metrics/{{kind}}"): "logs one metric entry, or that it was skipped; returns it",
+    ("POST", f"{P}/food"): "logs one meal, or that it was skipped; returns it",
 }
 """Every other route under `/profiles/{id}/`, and why it is not walked: it writes, and
 answers with what the caller wrote."""
