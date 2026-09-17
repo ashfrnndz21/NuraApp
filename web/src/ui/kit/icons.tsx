@@ -18,11 +18,13 @@ import {
   FileText,
   Footprints,
   Gauge,
+  Globe,
   HandHeart,
   Heart,
   HeartPulse,
   House,
   ListChecks,
+  Lock,
   MapPin,
   Menu,
   MessageSquare,
@@ -115,6 +117,9 @@ export const ICONS = {
   gauge: Gauge,
   meal: UtensilsCrossed,
   comingUp: CalendarClock,
+  // Profile (docs/design/nura-concept-board.html, the Profile screen).
+  language: Globe,
+  lock: Lock,
 } as const satisfies Record<string, IconNode>;
 
 export type IconName = keyof typeof ICONS;

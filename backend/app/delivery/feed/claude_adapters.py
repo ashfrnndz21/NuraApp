@@ -9,9 +9,13 @@ and `app.main` — a caller only ever sees the two ports.
 `app.channels.whatsapp.provider.whatsapp_provider_for` already choose their adapter:
 NURA_SEARCHER and NURA_COMPRESSOR name one, `fixture` by default, and `claude` reads
 ANTHROPIC_API_KEY from the environment. Both Claude adapters refuse to construct outside a
-declared demo (`NURA_DEMO_MODE=1`) — there is no in-region provider yet, so a real deployment's
-data must not leave the region for this — and refuse without the key. Nothing here logs the
-key or writes it anywhere; it is held in memory only, for the one client it constructs.
+declared demo (`NURA_DEMO_MODE=1`) or a declared dev run (`NURA_DEV_CODE_SENDER=1`) on the
+owner's own laptop — there is no in-region provider yet, so a real deployment's data must not
+leave the region for this, and a dev run is the owner choosing for himself to run his own
+documents through his own key (ADR 0017) — and refuse without the key either way. Nothing here
+logs the key or writes it anywhere; it is held in memory only, for the one client it
+constructs. `app.llm.residency.allow_external_model` is the one gate this and every other
+Claude-backed adapter's construction site shares.
 
 What a page becomes is still decided in `app.delivery.feed.search` and `app.delivery.feed.
 compress`, not here: an empty or missing citation is rejected there (`uncited`), a line that
@@ -39,6 +43,7 @@ from app.delivery.feed.compress import (
     Found,
     Searcher,
 )
+from app.llm.residency import allow_external_model
 from app.settings import MissingSetting, Settings
 
 log = logging.getLogger("nura.delivery.feed.claude")
@@ -51,8 +56,9 @@ _VIDEO_HOSTS = ("youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com")
 
 
 class ClaudeAdapterNotAvailable(RuntimeError):
-    """No Claude searcher or compressor outside a declared demo, or without an API key: data
-    residency means no in-region provider exists yet, so this adapter refuses to construct."""
+    """No Claude searcher or compressor outside a declared demo or a declared dev run, or
+    without an API key: data residency means no in-region provider exists yet, so this
+    adapter refuses to construct."""
 
 
 class NoSearcher(RuntimeError):
@@ -63,14 +69,16 @@ class NoCompressor(RuntimeError):
     """NURA_COMPRESSOR names an adapter this build does not have."""
 
 
-def _checked_key(*, api_key: str | None, demo_mode: bool, what: str) -> str:
-    """The one gate both adapters share: a declared demo, and a key. Never a default, never
-    inferred — the way a cross-region provider is refused everywhere else in this file."""
-    if not demo_mode:
-        raise ClaudeAdapterNotAvailable(
-            f"the Claude {what} runs only on a declared demo (NURA_DEMO_MODE=1): no in-region "
-            "provider exists yet"
-        )
+def _checked_key(*, api_key: str | None, demo_mode: bool, dev_run: bool, what: str) -> str:
+    """The one gate both adapters share: a declared demo or a declared dev run, and a key.
+    Never a default, never inferred — the way a cross-region provider is refused everywhere
+    else in this file."""
+    allow_external_model(
+        demo_mode=demo_mode,
+        dev_run=dev_run,
+        refusal=ClaudeAdapterNotAvailable,
+        what=f"the Claude {what}",
+    )
     if not api_key:
         raise ClaudeAdapterNotAvailable(
             f"the Claude {what} needs ANTHROPIC_API_KEY set in the environment"
@@ -304,8 +312,15 @@ class ClaudeSearcher:
     model asked to stay on a list is not the same guarantee as a caller that never returns a
     page off it, or a page whose text did not come from where its URL says it did."""
 
-    def __init__(self, *, api_key: str | None, demo_mode: bool, client: Any | None = None) -> None:
-        key = _checked_key(api_key=api_key, demo_mode=demo_mode, what="searcher")
+    def __init__(
+        self,
+        *,
+        api_key: str | None,
+        demo_mode: bool,
+        dev_run: bool = False,
+        client: Any | None = None,
+    ) -> None:
+        key = _checked_key(api_key=api_key, demo_mode=demo_mode, dev_run=dev_run, what="searcher")
         self._client = client if client is not None else _client(key)
 
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
@@ -388,8 +403,17 @@ class ClaudeCompressor:
     that would change treatment, and still runs every line through the plain-words verifier —
     nothing here is trusted past those checks."""
 
-    def __init__(self, *, api_key: str | None, demo_mode: bool, client: Any | None = None) -> None:
-        key = _checked_key(api_key=api_key, demo_mode=demo_mode, what="compressor")
+    def __init__(
+        self,
+        *,
+        api_key: str | None,
+        demo_mode: bool,
+        dev_run: bool = False,
+        client: Any | None = None,
+    ) -> None:
+        key = _checked_key(
+            api_key=api_key, demo_mode=demo_mode, dev_run=dev_run, what="compressor"
+        )
         self._client = client if client is not None else _client(key)
 
     def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
@@ -437,7 +461,11 @@ class ClaudeCompressor:
 def searcher_for(settings: Settings) -> Searcher:
     """The searcher this deployment runs on: `NURA_SEARCHER`, `fixture` by default."""
     if settings.searcher == "claude":
-        return ClaudeSearcher(api_key=settings.anthropic_api_key, demo_mode=settings.demo_mode)
+        return ClaudeSearcher(
+            api_key=settings.anthropic_api_key,
+            demo_mode=settings.demo_mode,
+            dev_run=settings.dev_code_sender,
+        )
     if settings.searcher == "fixture":
         if settings.feed_fixtures is None:
             raise MissingSetting("NURA_FEED_FIXTURES is not set and there is no other searcher yet")
@@ -450,7 +478,11 @@ def searcher_for(settings: Settings) -> Searcher:
 def compressor_for(settings: Settings) -> Compressor:
     """The compressor this deployment runs on: `NURA_COMPRESSOR`, `fixture` by default."""
     if settings.compressor == "claude":
-        return ClaudeCompressor(api_key=settings.anthropic_api_key, demo_mode=settings.demo_mode)
+        return ClaudeCompressor(
+            api_key=settings.anthropic_api_key,
+            demo_mode=settings.demo_mode,
+            dev_run=settings.dev_code_sender,
+        )
     if settings.compressor == "fixture":
         if settings.feed_fixtures is None:
             raise MissingSetting(

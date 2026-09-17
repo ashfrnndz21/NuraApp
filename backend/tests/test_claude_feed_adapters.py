@@ -150,13 +150,19 @@ def _compress_response(payload: dict[str, Any] | None, *, stop_reason: str = "en
 
 
 # ---------------------------------------------------------------------------
-# Refusal without a declared demo, or without a key: no in-region provider yet.
+# Refusal without a declared demo and a declared dev run, or without a key: no in-region
+# provider yet (ADR 0017, and its dev-run addendum).
 # ---------------------------------------------------------------------------
 
 
-def test_claude_searcher_refuses_without_demo_mode() -> None:
+def test_claude_searcher_refuses_without_demo_mode_or_dev_run() -> None:
     with pytest.raises(ClaudeAdapterNotAvailable, match="declared demo"):
-        ClaudeSearcher(api_key="sk-test", demo_mode=False)
+        ClaudeSearcher(api_key="sk-test", demo_mode=False, dev_run=False)
+
+
+def test_claude_searcher_builds_on_a_declared_dev_run_without_demo_mode() -> None:
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=False, dev_run=True, client=object())
+    assert isinstance(searcher, ClaudeSearcher)
 
 
 def test_claude_searcher_refuses_without_an_api_key() -> None:
@@ -166,9 +172,16 @@ def test_claude_searcher_refuses_without_an_api_key() -> None:
         ClaudeSearcher(api_key="", demo_mode=True)
 
 
-def test_claude_compressor_refuses_without_demo_mode() -> None:
+def test_claude_compressor_refuses_without_demo_mode_or_dev_run() -> None:
     with pytest.raises(ClaudeAdapterNotAvailable, match="declared demo"):
-        ClaudeCompressor(api_key="sk-test", demo_mode=False)
+        ClaudeCompressor(api_key="sk-test", demo_mode=False, dev_run=False)
+
+
+def test_claude_compressor_builds_on_a_declared_dev_run_without_demo_mode() -> None:
+    compressor = ClaudeCompressor(
+        api_key="sk-test", demo_mode=False, dev_run=True, client=object()
+    )
+    assert isinstance(compressor, ClaudeCompressor)
 
 
 def test_claude_compressor_refuses_without_an_api_key() -> None:
@@ -624,7 +637,7 @@ def test_searcher_for_fixture_without_feed_fixtures_refuses() -> None:
         searcher_for(_settings(feed_fixtures=None))
 
 
-def test_searcher_for_claude_without_demo_mode_refuses() -> None:
+def test_searcher_for_claude_without_demo_mode_or_dev_run_refuses() -> None:
     with pytest.raises(ClaudeAdapterNotAvailable, match="declared demo"):
         searcher_for(_settings(searcher="claude", anthropic_api_key="sk-test"))
 
@@ -641,6 +654,18 @@ def test_searcher_for_claude_with_demo_mode_and_key_constructs() -> None:
 
 def test_compressor_for_claude_with_demo_mode_and_key_constructs() -> None:
     settings = _settings(compressor="claude", demo_mode=True, anthropic_api_key="sk-test")
+    assert isinstance(compressor_for(settings), ClaudeCompressor)
+
+
+def test_searcher_for_claude_on_a_declared_dev_run_constructs() -> None:
+    """The owner's own laptop, his own key: a declared dev run alone is enough, without also
+    being a declared demo (ADR 0017 addendum)."""
+    settings = _settings(searcher="claude", dev_code_sender=True, anthropic_api_key="sk-test")
+    assert isinstance(searcher_for(settings), ClaudeSearcher)
+
+
+def test_compressor_for_claude_on_a_declared_dev_run_constructs() -> None:
+    settings = _settings(compressor="claude", dev_code_sender=True, anthropic_api_key="sk-test")
     assert isinstance(compressor_for(settings), ClaudeCompressor)
 
 
