@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { FeedItemOut, ProviderOut, ProviderSummaryOut } from "../../src/api/types";
+import type { FeedItemOut, HomeCareCategory, ProviderOut, ProviderSummaryOut } from "../../src/api/types";
 import { careCards, guideCards } from "../../src/feed/model";
-import { CareBody, ClipMedia, GuideBody, NearYouBody } from "../../src/screens/tabs";
+import { CareBody, ClipMedia, GuideBody, HomeCareGrid, NearYouBody } from "../../src/screens/tabs";
 import { stringsFor } from "../../src/strings";
 import { all, byTestId, byType, one, render, text } from "./ui/render";
 
@@ -36,8 +36,8 @@ function card(overrides: Partial<FeedItemOut> & Pick<FeedItemOut, "type">): Feed
   };
 }
 
-function provider(name: string, id = "prov-1"): ProviderSummaryOut {
-  const out: ProviderOut = { provider_id: id, name, kind: "clinic", region: "SG", phone_e164: null, address: null };
+function provider(name: string, id = "prov-1", category: HomeCareCategory | null = null): ProviderSummaryOut {
+  const out: ProviderOut = { provider_id: id, name, kind: category ? "other" : "clinic", region: "SG", phone_e164: null, address: null, category };
   return { provider: out, visits: 2, last_visit: null, next_visit: null };
 }
 
@@ -77,6 +77,22 @@ describe("Care services and Guides (Services tab)", () => {
     expect(all(nodes, byTestId("care-empty"))).toEqual([]);
     expect(text(all(nodes, byTestId("care-provider")))).toContain("Dr Tan, heart clinic");
     expect(all(nodes, byTestId("care-providers-all"))).toHaveLength(1);
+  });
+
+  it("Help at home always shows all four tiles, each naming what is near him once one is near", () => {
+    const nodes = render(<HomeCareGrid s={en} own name="" providers={[provider("Amanah Home Nursing", "p1", "nursing")]} />);
+    const labels = text(all(nodes, byTestId("home-care-nursing")));
+    expect(labels).toContain("Nursing at home");
+    expect(labels).toContain("Near you");
+    // A category with nothing near him keeps its own caption, in plain words — never hidden.
+    expect(text(all(nodes, byTestId("home-care-physio")))).toContain("Keep moving well");
+  });
+
+  it("Help at home never mixes in a doctor or clinic (no category)", () => {
+    const nodes = render(<HomeCareGrid s={en} own name="" providers={[provider("Dr Tan, heart clinic")]} />);
+    for (const category of ["nursing", "physio", "meals", "transport"]) {
+      expect(text(all(nodes, byTestId(`home-care-${category}`)))).not.toContain("Near you");
+    }
   });
 
   it("Guides is nothing at all when the feed has no learning card, never an empty tile", () => {

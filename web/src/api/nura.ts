@@ -35,7 +35,11 @@ import type {
   FindOut,
   FindStreamEvent,
   FindWhere,
+  FoodCatalogItemOut,
+  FoodEntryOut,
+  FoodLogIn,
   HandedOverOut,
+  HealthOverviewOut,
   ItemDecision,
   JobKind,
   KeyOut,
@@ -47,6 +51,9 @@ import type {
   MeSummaryOut,
   MedicineDraftOut,
   MemoCardOut,
+  MetricEntryOut,
+  MetricKind,
+  MetricLogIn,
   MoreOut,
   NoticeOut,
   NowOut,
@@ -57,6 +64,7 @@ import type {
   PaperAddedOut,
   PlaceNoteOut,
   PlanOut,
+  PolicyOut,
   ProfileOut,
   ProudOut,
   ProviderHistoryOut,
@@ -233,6 +241,31 @@ export const medicinesNow = (token: string, profileId: string, language: string)
 export const facts = (token: string, profileId: string, subject: string) =>
   api<FactOut[]>(`/profiles/${profileId}/facts`, { token, query: { subject } });
 
+/** The Health Overview (design-direction.md, the Health tab): the ring — doses taken this
+ *  week — and the four metric rows, steps, heart rate, sleep and water, each already in the
+ *  backend's own plain words. */
+export const healthOverview = (token: string, profileId: string, language: string) =>
+  api<HealthOverviewOut>(`/profiles/${profileId}/health/overview`, { token, query: { language } });
+
+/** Common foods, for their labels — a tap instead of typing, and how his own words are shown
+ *  back to him when a catalogue id is all a meal carries. No token: it holds no key context. */
+export const foodCatalog = (language: string) => api<FoodCatalogItemOut[]>("/food-catalog", { query: { language } });
+
+/** What he has logged to eat, oldest first — narrowed to `[since, until)` for the Health tab's
+ *  day. "No breakfast" is an entry (`status: "skipped"`), not a missing one. */
+export const food = (token: string, profileId: string, language: string, since?: string, until?: string) =>
+  api<FoodEntryOut[]>(`/profiles/${profileId}/food`, { token, query: { language, since, until } });
+
+/** Log one number for steps, heart rate, sleep or water — or, for steps and water, log it as
+ *  skipped. Home's "Things to do" writes here, through his own explicit Save (E14, the confirm
+ *  flow every reading takes: nothing is sent while he is still typing). */
+export const metricLog = (token: string, profileId: string, kind: MetricKind, body: MetricLogIn) =>
+  api<MetricEntryOut>(`/profiles/${profileId}/metrics/${kind}`, { method: "POST", token, body });
+
+/** Log one meal — a catalogue id, his own words, or both — or that he did not have it. */
+export const foodAdd = (token: string, profileId: string, body: FoodLogIn, language: string) =>
+  api<FoodEntryOut>(`/profiles/${profileId}/food`, { method: "POST", token, body, query: { language } });
+
 /** A word on the feeling strip (E17), as the phone held it while offline. */
 export const feeling = (token: string, profileId: string, word: string, language: string) =>
   api<unknown>(`/profiles/${profileId}/feelings`, { method: "POST", token, body: { word, language } });
@@ -250,6 +283,11 @@ export const insuranceLedger = (token: string, profileId: string, language: stri
 /** The proud number, counted by the backend from the DOSE_TAKEN events in one audited read. */
 export const proud = (token: string, profileId: string) =>
   api<ProudOut>(`/profiles/${profileId}/proud`, { token });
+
+/** His policies (E13-03): every one on the profile, newest of each lineage — under
+ *  `Scope.MONEY`, the door already reserved for his insurance letters. */
+export const policies = (token: string, profileId: string) =>
+  api<PolicyOut[]>(`/profiles/${profileId}/insurance/policies`, { token });
 
 /** The first page of the feed: today's cards, rendered by the backend from a State. */
 export const feed = (token: string, profileId: string) =>

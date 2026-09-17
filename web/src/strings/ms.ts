@@ -57,6 +57,8 @@ export const ms = {
     close: "Tutup",
     // @patient phrase
     bell: "Lagi untuk anda",
+    // @patient phrase
+    back: "Kembali",
   },
   welcome: {
     // @patient headline
@@ -144,17 +146,17 @@ export const ms = {
     // @patient headline
     activities: "Perkara untuk dibuat",
     // @patient line
-    activitiesLine: "Sesuatu untuk dibuat hari ini.",
+    activitiesLine: "Kekal aktif.",
     // @patient headline
-    care: "Bantuan di rumah",
+    care: "Perkhidmatan penjagaan",
     // @patient line
-    careLine: "Seseorang boleh datang membantu anda di rumah.",
+    careLine: "Bantuan di rumah.",
     // @patient line
-    careLineOther: "Seseorang boleh datang membantu {patient} di rumah.",
+    careLineOther: "Bantuan untuk {patient} di rumah.",
     // @patient headline
-    resources: "Bahan bacaan",
+    resources: "Panduan",
     // @patient line
-    resourcesLine: "Nura terangkan dalam kata-kata mudah.",
+    resourcesLine: "Baca dan belajar.",
     // @patient headline
     report: "Tambah surat",
     // @patient line
@@ -214,6 +216,36 @@ export const ms = {
     // @patient
     bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
   },
+  activity: {
+    // @patient headline
+    title: "Perkara untuk dibuat",
+    // @patient headline
+    weekTitle: "Minggu ini",
+    // @patient phrase
+    stepsLabel: "Langkah hari ini",
+    // @patient phrase
+    stepsSave: "Simpan",
+    // @patient phrase
+    waterLabel: "Cawan air hari ini",
+    // @patient phrase
+    waterSave: "Simpan",
+    // @patient phrase
+    waterSkip: "Tiada air hari ini",
+    // @patient
+    saved: "Nura sudah tulis.",
+    // @patient headline
+    mealsTitle: "Makanan anda hari ini",
+    // @patient headline
+    mealsTitleOther: "Makanan {patient} hari ini",
+    // @patient phrase
+    meal: { breakfast: "Sarapan", lunch: "Makan tengah hari", dinner: "Makan malam", snack: "Snek" },
+    // @patient phrase
+    skipMeal: "Tidak makan ini",
+    // @patient
+    skipped: "Anda tidak makan ini.",
+    // @patient
+    skippedOther: "{patient} tidak makan ini.",
+  },
   places: {
     // @patient headline
     visitsOwn: "Lawatan anda",
@@ -243,6 +275,74 @@ export const ms = {
     nearYouAreaOther: "Nura tahu kawasan {name} ialah {area}.",
     // @patient headline
     guidesTitle: "Panduan",
+  },
+  homeCare: {
+    // @patient headline
+    title: "Bantuan di rumah",
+    // @patient phrase
+    nursing: "Jururawat di rumah",
+    // @patient phrase
+    nursingLine: "Jururawat datang kepada anda",
+    // @patient phrase
+    physio: "Fisioterapi",
+    // @patient phrase
+    physioLine: "Kekal bergerak dengan baik",
+    // @patient phrase
+    meals: "Makanan",
+    // @patient phrase
+    mealsLine: "Dihantar kepada anda",
+    // @patient phrase
+    transport: "Pengangkutan",
+    // @patient phrase
+    transportLine: "Ke temu janji anda",
+    // @patient phrase
+    near: "Berhampiran anda",
+    // @patient phrase
+    nearOther: "Berhampiran {name}",
+    // @patient
+    none: "Nura tiada apa-apa berhampiran anda untuk ini lagi.",
+    // @patient
+    noneOther: "Nura tiada apa-apa berhampiran {name} untuk ini lagi.",
+  },
+  health: {
+    // @patient headline
+    title: "Kesihatan anda",
+    // @patient headline
+    titleOther: "Kesihatan {name}",
+    // @patient headline
+    thisWeek: "Minggu ini",
+    // @patient headline
+    readingsTitle: "Buku tekanan darah dan nombor gula",
+    // @patient
+    readingsWithheld: "Kunci ini tidak meliputi buku tekanan darah {name}.",
+    // @patient
+    readingsNone: "Belum ada apa-apa dicatat.",
+    // @patient phrase
+    bloodPressure: "Tekanan darah",
+    // @patient phrase
+    bloodSugar: "Gula dalam darah",
+    // @patient phrase
+    readingSource: "Daripada buku tekanan darah anda, {date}",
+    // @patient phrase
+    readingSourceOther: "Daripada buku tekanan darah {name}, {date}",
+    // @patient phrase
+    metricSource: "Daripada apa yang anda tulis, {date}",
+    // @patient phrase
+    metricSourceOther: "Daripada apa yang {name} tulis, {date}",
+    // @patient phrase
+    asOf: "Setakat {date}",
+    // @patient headline
+    dayTitle: "Hari anda",
+    // @patient headline
+    dayTitleOther: "Hari {name}",
+    // @patient
+    mealNotHad: "Anda tidak makan ini.",
+    // @patient
+    mealNotHadOther: "{name} tidak makan ini.",
+    // @patient headline
+    comingUpTitle: "Akan datang",
+    // @patient phrase
+    addReading: "Tulis tekanan darah",
   },
   signIn: {
     // @patient headline
@@ -748,6 +848,44 @@ export const ms = {
       // @patient phrase
       search_topics: "Apa yang {patient} tanya",
     },
+    // @patient phrase
+    insurance: "Insurans",
+  },
+  insurance: {
+    // @patient headline
+    title: "Insurans anda",
+    // @patient headline
+    titleOther: "Insurans {patient}",
+    // @patient
+    none: "Nura tiada surat insurans untuk anda lagi.",
+    // @patient
+    noneOther: "Nura tiada surat insurans untuk {patient} lagi.",
+    type: {
+      // @patient phrase
+      hospital: "Perlindungan hospital",
+      // @patient phrase
+      outpatient: "Perlindungan pesakit luar",
+      // @patient phrase
+      critical_illness: "Perlindungan penyakit kritikal",
+      // @patient phrase
+      government_scheme: "Skim kerajaan",
+    },
+    status: {
+      // @patient phrase
+      active: "Aktif",
+      // @patient phrase
+      lapsed: "Luput",
+      // @patient phrase
+      cancelled: "Dibatalkan",
+    },
+    // @patient
+    covers: "Ia melindungi {value}.",
+    // @patient
+    renews: "Ia diperbaharui pada {date}.",
+    // @patient
+    premiumDue: "Bayaran seterusnya perlu dibayar pada {date}.",
+    // @patient
+    reference: "Nombor polisinya {reference}.",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

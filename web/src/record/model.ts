@@ -2,6 +2,7 @@ import type {
   ArtifactRefOut,
   EpisodeViewOut,
   FeedItemOut,
+  HomeCareCategory,
   LabelIn,
   LineOut,
   MedicineOutcome,
@@ -229,6 +230,11 @@ export function providerLines(summary: ProviderSummaryOut, dateOf: (iso: string)
 export function kindWord(kind: string, s: Strings): string {
   const known = s.record.kind as Record<string, string>;
   return known[kind] ?? s.record.kind.other;
+}
+
+/** One of Services' four "Help at home" tiles, in his own words (`s.homeCare`). */
+export function homeCareCategoryLabel(category: HomeCareCategory, s: Strings): string {
+  return s.homeCare[category];
 }
 
 // --- a lab trend (E09-01) ---------------------------------------------------------------------

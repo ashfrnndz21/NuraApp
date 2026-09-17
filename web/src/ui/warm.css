@@ -925,19 +925,8 @@ img.avatar {
 .bubble p + p {
   margin-top: 4px;
 }
-.sources {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.bubble .chip-row {
   margin-top: 8px;
-}
-.source-chip {
-  font-size: var(--text-caption);
-  font-weight: 700;
-  background: var(--plum-wash);
-  color: var(--plum);
-  border-radius: var(--radius-pill);
-  padding: 3px 10px;
 }
 .answer-boundary {
   margin-top: 8px;

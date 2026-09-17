@@ -140,6 +140,26 @@ hold Nura's content as follows. Density still changes type and targets, never th
 | **Services** | Visits and doctors, care services, resources |
 | **Profile** | Him, his settings, consents, language, text size, privacy |
 
+### The top bar (the board wins — owner's decision, 2026-09-17)
+
+Board-conformance-pass (round 1, `docs/design/conformance.md`) built one global top bar on
+every screen — menu, the serif wordmark, a profile switcher (whose papers are open), bell —
+and called it a deliberate choice: one app and one account, so whose record is open is always
+on screen. That choice held Reference B's own screens back from matching the board exactly,
+and was named as the one systemic gap the pass left.
+
+**The owner's ruling (board-fidelity-round-2, 2026-09-17): the board wins.** Each of the five
+tabs' own root screen carries the board's own top bar — Health, Connect and Services get the
+board's back arrow · centred title · one contextual icon (`Shell.tsx`'s `topBar` prop, variant
+`"board"`); Home keeps the board's own menu · wordmark · bell (variant `"home"`); Profile is a
+bare title (variant `"plain"`). The bell stays where the board puts it, Home's top-right icon;
+the language picker moves to Profile, where the board draws it (already true since round 1's
+Profile screen). The profile switcher — a real control the board's single-profile mock never
+had to draw — stays on Home's own top bar rather than being dropped, and is also reachable
+from the Profile tab's own "Switch profile" row; nested screens under a tab (Family, the
+Record, Emergency, the vertical feed, Ask, …) are not on the board at all and keep the old
+global header, switcher included, unchanged.
+
 ### Every feature, and how Nura does it
 
 | In Reference B | Nura builds | Needs from outside |

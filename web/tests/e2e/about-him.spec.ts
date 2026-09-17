@@ -80,7 +80,10 @@ test("her Home, her Medicines and her Papers say his papers about him by name, n
   // itself, the hub of his papers.
   for (const [tab, place] of [["tab-health", "record-medicines"], ["tab-health", null]] as const) {
     await page.getByTestId(tab).click();
-    if (place) await page.getByTestId(place).click();
+    if (place) {
+      await page.getByTestId("health-record-hub").click();
+      await page.getByTestId(place).click();
+    }
     await expect(page.getByTestId(tab)).toHaveAttribute("aria-current", "page");
     await page.waitForLoadState("networkidle");
     const lines = await linesOn(page);
@@ -166,17 +169,21 @@ test("no caregiver-density screen says a second-person line about his record", a
   }
   // Her Medicines, a place in Health, as the Medicines tab was.
   await tab("tab-health");
+  await page.getByTestId("health-record-hub").click();
   await page.getByTestId("record-medicines").click();
   await check("medicines");
-  // The places Home's grid names that are not built yet: said about him, never to him, too.
+  // "Things to do", real now (board-fidelity-round-2): his steps, water and meals, said
+  // about him, never to him, on her key too.
   await tab("tab-home");
-  await page.getByTestId("do-care").click();
-  await check("soon");
+  await page.getByTestId("do-activities").click();
+  await expect(page.getByTestId("activity-screen")).toBeVisible();
+  await check("activity-screen");
 
   // Every place in his Record her key opens: the Papers tab, then the place — two taps, which
   // is the most any feature is allowed to be.
   for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
     await tab("tab-health");
+    await page.getByTestId("health-record-hub").click();
     const row = page.getByTestId(`record-${entry}`);
     if (!(await row.isVisible().catch(() => false))) continue;
     await row.click();

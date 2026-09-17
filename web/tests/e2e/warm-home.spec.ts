@@ -45,30 +45,26 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   await page.getByTestId("tab-home").click();
   await todayReady(page);
 
-  // Every tile opens its place, or says plainly it is not built yet; none is a dead tap.
+  // Every tile opens its place; none is a dead tap or a placeholder any more.
   await expect(page.getByTestId("do-grid").locator("button")).toHaveCount(6);
   for (const [tile, tab] of [
     ["do-health", "tab-health"],
     ["do-medicines", "tab-health"],
     ["do-connect", "tab-connect"],
+    ["do-care", "tab-services"],
+    ["do-resources", "tab-services"],
   ] as const) {
     await page.getByTestId(tile).click();
     await expect(page.getByTestId(tab)).toHaveAttribute("aria-current", "page");
     await page.getByTestId("tab-home").click();
     await todayReady(page);
   }
-  for (const [tile, words] of [
-    ["do-activities", "Things to do"],
-    ["do-care", "Help at home"],
-    ["do-resources", "Things to read"],
-  ] as const) {
-    await page.getByTestId(tile).click();
-    const soon = page.getByTestId("soon-screen");
-    await expect(soon.locator("h1")).toHaveText(words);
-    await expect(soon).toContainText("Nura cannot do this yet.");
-    await page.getByTestId("soon-back").click();
-    await todayReady(page);
-  }
+  // "Things to do": his own real screen — the week ring, and his steps, water and meals.
+  await page.getByTestId("do-activities").click();
+  await expect(page.getByTestId("activity-screen")).toBeVisible();
+  await expect(page.getByTestId("activity-screen").locator("h1")).toHaveText("Things to do");
+  await page.getByTestId("tab-home").click();
+  await todayReady(page);
 
   // Coming up: his next visit, and See all opens his visits under Services.
   await expect(page.getByTestId("upcoming").getByTestId("visit-tile")).toBeVisible();

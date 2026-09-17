@@ -64,8 +64,8 @@ test("Welcome and Home, warm, at two sizes and in both densities", async ({ brow
     await hers.evaluate(() => (document.documentElement.dataset.density = "patient"));
     await snap(hers, `home-caregiver-patient-look-${size.name}`);
     await hers.getByTestId("do-activities").click();
-    await expect(hers.getByTestId("soon-screen")).toBeVisible();
-    await snap(hers, `soon-${size.name}`);
+    await expect(hers.getByTestId("activity-screen")).toBeVisible();
+    await snap(hers, `activity-${size.name}`);
     await hers.context().close();
   }
 });

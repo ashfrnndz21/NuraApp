@@ -240,6 +240,10 @@ CLASSES: dict[str, str] = {
     "provider.panel": HEALTH,
     "provider.opens_at": OPERATIONAL,
     "provider.closes_at": OPERATIONAL,
+    # Which of the board's four home-care tiles this provider is listed under — a second
+    # grouping beside `kind`, null for every provider outside that grid: still health data,
+    # the same reasoning as `provider.kind`.
+    "provider.category": HEALTH,
     "appointment.provider_id": HEALTH,
     "appointment.scheduled_at": HEALTH,
     "appointment.status": HEALTH,

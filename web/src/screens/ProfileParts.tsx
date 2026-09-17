@@ -70,6 +70,9 @@ export interface ProfileNavProps {
   /** Null where the feature does not apply (a key already claimed, or no papers to open). */
   onSetUp: (() => void) | null;
   onOpenPapers: (() => void) | null;
+  /** Null for a key that does not open `Scope.MONEY` — the same door "Insurance letters"
+   *  already uses (E13-03). */
+  onOpenInsurance: (() => void) | null;
 }
 
 /** The rest of the board's list (docs/design/nura-concept-board.html, the Profile screen): the
@@ -78,12 +81,15 @@ export interface ProfileNavProps {
  *  screen that already exists (`flow.ts`'s `family` and `emergency` places) — nothing here is
  *  drawn without something real behind it. */
 export function ProfileNav(props: ProfileNavProps): JSX.Element {
-  const { s, papers, owner, showEmergency, onOpenEmergency, onOpenKeys, onOpenConsents, onOpenOnlyMe, onSwitchProfile, onSetUp, onOpenPapers } = props;
+  const { s, papers, owner, showEmergency, onOpenEmergency, onOpenKeys, onOpenConsents, onOpenOnlyMe, onSwitchProfile, onSetUp, onOpenPapers, onOpenInsurance } = props;
   const name = papers.display_name;
   return (
     <TintCard tint="paper" testId="profile-list">
       {showEmergency && (
         <ListRow lead={<IconBadge icon="heart" tint="blush" />} title={s.today.emergencyTitle} onClick={onOpenEmergency} testId="me-emergency" />
+      )}
+      {onOpenInsurance && (
+        <ListRow lead={<IconBadge icon="records" tint="peach" />} title={s.me.insurance} onClick={onOpenInsurance} testId="profile-insurance" />
       )}
       <ListRow lead={<IconBadge icon="lock" tint="lavender" />} title={s.family.keys} onClick={onOpenKeys} testId="profile-keys" />
       <ListRow

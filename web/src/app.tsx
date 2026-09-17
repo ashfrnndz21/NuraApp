@@ -10,9 +10,11 @@ import { CardScreen } from "./screens/Card";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { ConnectScreen } from "./screens/Connect";
 import { FamilyScreen } from "./screens/family/Family";
+import { HealthScreen } from "./screens/Health";
+import { ActivityScreen } from "./screens/Activity";
 import { FeedScreen } from "./screens/Feed";
 import { MeSheet, ProfileScreen } from "./screens/Me";
-import { SoonScreen } from "./screens/Soon";
+import { InsuranceScreen } from "./screens/Insurance";
 import { WelcomeScreen } from "./screens/Welcome";
 import { VisitsScreen } from "./screens/tabs";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
@@ -93,6 +95,10 @@ function Route(): JSX.Element | null {
       return <AskScreen item={current.item} question={current.question} />;
     case "reading":
       return <ReadingScreen />;
+    case "health":
+      return <HealthScreen />;
+    case "activity":
+      return <ActivityScreen />;
     case "visit":
       return <VisitScreen appointmentId={current.appointmentId} />;
     case "visits":
@@ -107,8 +113,8 @@ function Route(): JSX.Element | null {
       return <PapersScreen report={current.report ?? false} />;
     case "profile":
       return <ProfileScreen />;
-    case "soon":
-      return <SoonScreen place={current.place} />;
+    case "insurance":
+      return <InsuranceScreen />;
     case "notWell":
       return <NotWellScreen />;
     case "whatToDo":

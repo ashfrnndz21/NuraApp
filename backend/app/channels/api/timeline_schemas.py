@@ -35,6 +35,7 @@ from app.memory.models import (
     EpisodeKind,
     Event,
     EventKind,
+    HomeCareCategory,
     Provider,
     ProviderKind,
     ProviderNote,
@@ -136,6 +137,7 @@ class ProviderOut(BaseModel):
     panel: bool = False
     opens_at: time | None = None
     closes_at: time | None = None
+    category: HomeCareCategory | None = None
 
     @classmethod
     def of(cls, provider: Provider) -> ProviderOut:
@@ -149,6 +151,7 @@ class ProviderOut(BaseModel):
             panel=bool(provider.panel),
             opens_at=provider.opens_at,
             closes_at=provider.closes_at,
+            category=provider.category,
         )
 
 

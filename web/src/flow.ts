@@ -37,6 +37,12 @@ export type Screen =
    *  `question` is what was typed into the ask bar the shell puts on every screen (D1). */
   | { name: "ask"; item?: FeedItemOut; question?: string }
   | { name: "reading" }
+  /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his
+   *  day, his medicines and what is coming up — one screen, the same for every persona. */
+  | { name: "health" }
+  /** Home's "Things to do" tile (docs/design/nura-concept-board.html): today's steps, water
+   *  and meals, with the week ring — real writes through PR #235's lifestyle logs. */
+  | { name: "activity" }
   /** The visit day (E05-03, E05-04): the logistics card and the one button that records. */
   | { name: "visit"; appointmentId: string }
   /** The visits tab: his visits, and getting ready for the next one. */
@@ -54,8 +60,8 @@ export type Screen =
   | { name: "papers"; report?: boolean }
   /** The Profile tab: what the Me sheet holds, as a screen of its own. */
   | { name: "profile" }
-  /** A place Home's grid names that is not built yet: said plainly, never a dead tap. */
-  | { name: "soon"; place: SoonPlace }
+  /** Profile's Insurance row (E13-03): his policies, in plain words. */
+  | { name: "insurance" }
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
   | { name: "notWell" }
@@ -92,19 +98,18 @@ export type FamilyPart =
 
 export type { Tab };
 
-/** The places Home's grid offers that Nura has not built yet (docs/design-direction.md). */
-export type SoonPlace = "activities" | "care" | "resources";
-
-/** Each tab's first screen — one tab set for everyone (nav.ts). Home is Today; Health is the
- *  Record (W5); Connect is its own overview, before the Family screens each row of it opens;
- *  Services is his visits and getting ready for the next one;
- *  Profile is the person's own settings. */
+/** Each tab's first screen — one tab set for everyone (nav.ts). Home is Today; Health is
+ *  "This week", his readings, his day, his medicines and what is coming up
+ *  (docs/design/nura-concept-board.html) — his papers, his blood tests and the rest of the
+ *  Record (W5) are one tap further on, from its own row; Connect is its own overview, before
+ *  the Family screens each row of it opens; Services is his visits and getting ready for the
+ *  next one; Profile is the person's own settings. */
 export function openTab(tab: Tab): void {
   switch (tab) {
     case "home":
       return go({ name: "today" });
     case "health":
-      return go({ name: "record", at: { name: "hub" } });
+      return go({ name: "health" });
     case "connect":
       return go({ name: "connect" });
     case "services":

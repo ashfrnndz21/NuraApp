@@ -105,9 +105,11 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
   await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
 
+  // The Health tab's own direct entry to Medicines (one tap, no hub in between) — the board's
+  // Home grid has this same one-tap path via its "medicines" tile.
   await page.getByTestId("tab-health").click();
-  await expect(page.getByTestId("record-hub")).toBeVisible();
-  await page.getByTestId("record-medicines").click();
+  await expect(page.getByTestId("health-medicines")).toBeVisible();
+  await page.getByTestId("health-medicines").click();
   await page.getByTestId("add-medicine").click();
   await expect(page.getByTestId("add-photo")).toBeVisible();
   await page.getByTestId("photo-input").setInputFiles({ name: "metformin.png", mimeType: "image/png", buffer: unknownPng() });

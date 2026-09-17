@@ -159,10 +159,12 @@ export async function signInAs(page: Page, person: Pick<Person, "phone">, name: 
   await expect(bar).toBeVisible();
 }
 
-/** The Record's first screen from the tab bar. One tab set for everyone (D1, the reset): the
- *  Papers tab opens the Record's own first screen in either density. */
+/** The Record's first screen from the tab bar: the Health tab opens the Health screen
+ *  (docs/design/nura-concept-board.html), and its own row opens the Record — his papers, his
+ *  blood tests and the rest of it, one tap further on. */
 export async function openRecord(page: Page): Promise<void> {
   await page.getByTestId("tab-health").click();
+  await page.getByTestId("health-record-hub").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
 }
 

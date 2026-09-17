@@ -30,6 +30,7 @@ from app.memory.models import (
     STATUS_CHANGE_IN_PROGRESS,
     Appointment,
     AppointmentStatus,
+    HomeCareCategory,
     Provider,
     ProviderKind,
     short_label,
@@ -87,9 +88,11 @@ async def add_provider(
     panel: bool = False,
     opens_at: time | None = None,
     closes_at: time | None = None,
+    category: HomeCareCategory | None = None,
 ) -> Provider:
     """Add a doctor, clinic, hospital or pharmacy to this profile's directory — a hospital
-    marked as on his insurance (`panel`), a doctor or clinic with the hours it answers."""
+    marked as on his insurance (`panel`), a doctor or clinic with the hours it answers, or —
+    `category` — a home-care provider under one of the board's four "Help at home" tiles."""
     # The directory is kept on the same footing as the rest of the record (E00-02).
     await require_consent(
         session,
@@ -112,6 +115,7 @@ async def add_provider(
         panel=panel and kind is ProviderKind.HOSPITAL,
         opens_at=None if opens_at is None else opens_at.replace(tzinfo=None),
         closes_at=None if closes_at is None else closes_at.replace(tzinfo=None),
+        category=category,
         added_at=utcnow(),
     )
 

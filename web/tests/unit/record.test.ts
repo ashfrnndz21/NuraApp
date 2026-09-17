@@ -219,7 +219,7 @@ describe("the timeline, an illness, the directory", () => {
 
   it("counts a doctor's visits and names the last and the next", () => {
     const visit = { appointment_id: "v", provider_id: "p", scheduled_at: "2026-09-04T01:00:00Z", status: "attended", purpose: "check-up", episode_id: null };
-    const summary = { provider: { provider_id: "p", name: "Dr Tan", kind: "doctor", region: "SG" as const, phone_e164: null, address: null }, visits: 2, last_visit: visit, next_visit: null };
+    const summary = { provider: { provider_id: "p", name: "Dr Tan", kind: "doctor", region: "SG" as const, phone_e164: null, address: null, category: null }, visits: 2, last_visit: visit, next_visit: null };
     expect(providerLines(summary, () => "Friday 4 September", en)).toEqual(["Nura has 2 visits here.", "The last visit was on Friday 4 September."]);
   });
 });

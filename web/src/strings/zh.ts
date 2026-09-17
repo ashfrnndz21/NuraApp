@@ -57,6 +57,8 @@ export const zh = {
     close: "关闭",
     // @patient phrase
     bell: "更多给您的",
+    // @patient phrase
+    back: "返回",
   },
   welcome: {
     // @patient headline
@@ -144,17 +146,17 @@ export const zh = {
     // @patient headline
     activities: "可以做的事",
     // @patient line
-    activitiesLine: "今天可以做点什么。",
+    activitiesLine: "保持忙碌。",
     // @patient headline
-    care: "上门帮忙",
+    care: "照护服务",
     // @patient line
-    careLine: "有人可以上门帮您。",
+    careLine: "上门帮忙。",
     // @patient line
-    careLineOther: "有人可以上门帮{patient}。",
+    careLineOther: "上门帮{patient}。",
     // @patient headline
-    resources: "可以读的东西",
+    resources: "指南",
     // @patient line
-    resourcesLine: "Nura 用简单的话说明。",
+    resourcesLine: "阅读并学习。",
     // @patient headline
     report: "加一份文件",
     // @patient line
@@ -214,6 +216,36 @@ export const zh = {
     // @patient
     bpLast: "最近一次量血压，上面的数字是{number}。",
   },
+  activity: {
+    // @patient headline
+    title: "可以做的事",
+    // @patient headline
+    weekTitle: "本周",
+    // @patient phrase
+    stepsLabel: "今天的步数",
+    // @patient phrase
+    stepsSave: "保存",
+    // @patient phrase
+    waterLabel: "今天喝水的杯数",
+    // @patient phrase
+    waterSave: "保存",
+    // @patient phrase
+    waterSkip: "今天没有喝水",
+    // @patient
+    saved: "Nura 记下来了。",
+    // @patient headline
+    mealsTitle: "您今天的餐点",
+    // @patient headline
+    mealsTitleOther: "{patient}今天的餐点",
+    // @patient phrase
+    meal: { breakfast: "早餐", lunch: "午餐", dinner: "晚餐", snack: "点心" },
+    // @patient phrase
+    skipMeal: "没有吃这个",
+    // @patient
+    skipped: "您没有吃这一餐。",
+    // @patient
+    skippedOther: "{patient}没有吃这一餐。",
+  },
   places: {
     // @patient headline
     visitsOwn: "您的看诊",
@@ -243,6 +275,74 @@ export const zh = {
     nearYouAreaOther: "Nura记下的{name}的地区是{area}。",
     // @patient headline
     guidesTitle: "指南",
+  },
+  homeCare: {
+    // @patient headline
+    title: "居家照顾",
+    // @patient phrase
+    nursing: "居家护理",
+    // @patient phrase
+    nursingLine: "护士上门探访您",
+    // @patient phrase
+    physio: "物理治疗",
+    // @patient phrase
+    physioLine: "帮助您保持活动能力",
+    // @patient phrase
+    meals: "送餐",
+    // @patient phrase
+    mealsLine: "送餐到您家",
+    // @patient phrase
+    transport: "接送",
+    // @patient phrase
+    transportLine: "接送您去看诊",
+    // @patient phrase
+    near: "在您附近",
+    // @patient phrase
+    nearOther: "在{name}附近",
+    // @patient
+    none: "Nura 附近暂时还没有这项服务。",
+    // @patient
+    noneOther: "Nura 在{name}附近暂时还没有这项服务。",
+  },
+  health: {
+    // @patient headline
+    title: "您的健康",
+    // @patient headline
+    titleOther: "{name}的健康",
+    // @patient headline
+    thisWeek: "本周",
+    // @patient headline
+    readingsTitle: "血压本和血糖数字",
+    // @patient
+    readingsWithheld: "这把钥匙不包括{name}的血压本。",
+    // @patient
+    readingsNone: "还没有记下任何数字。",
+    // @patient phrase
+    bloodPressure: "血压",
+    // @patient phrase
+    bloodSugar: "血糖",
+    // @patient phrase
+    readingSource: "来自您的血压本，{date}",
+    // @patient phrase
+    readingSourceOther: "来自{name}的血压本，{date}",
+    // @patient phrase
+    metricSource: "来自您记下的，{date}",
+    // @patient phrase
+    metricSourceOther: "来自{name}记下的，{date}",
+    // @patient phrase
+    asOf: "截至{date}",
+    // @patient headline
+    dayTitle: "您的一天",
+    // @patient headline
+    dayTitleOther: "{name}的一天",
+    // @patient
+    mealNotHad: "您没有吃这一餐。",
+    // @patient
+    mealNotHadOther: "{name}没有吃这一餐。",
+    // @patient headline
+    comingUpTitle: "接下来",
+    // @patient phrase
+    addReading: "写下血压读数",
   },
   signIn: {
     // @patient headline
@@ -748,6 +848,44 @@ export const zh = {
       // @patient phrase
       search_topics: "{patient}问过的事",
     },
+    // @patient phrase
+    insurance: "保险",
+  },
+  insurance: {
+    // @patient headline
+    title: "您的保险",
+    // @patient headline
+    titleOther: "{patient}的保险",
+    // @patient
+    none: "Nura 还没有记录您的保险。",
+    // @patient
+    noneOther: "Nura 还没有记录{patient}的保险。",
+    type: {
+      // @patient phrase
+      hospital: "住院保障",
+      // @patient phrase
+      outpatient: "门诊保障",
+      // @patient phrase
+      critical_illness: "重病保障",
+      // @patient phrase
+      government_scheme: "政府计划",
+    },
+    status: {
+      // @patient phrase
+      active: "生效中",
+      // @patient phrase
+      lapsed: "已失效",
+      // @patient phrase
+      cancelled: "已取消",
+    },
+    // @patient
+    covers: "保障范围是{value}。",
+    // @patient
+    renews: "续保日期是{date}。",
+    // @patient
+    premiumDue: "下次缴费日期是{date}。",
+    // @patient
+    reference: "保单号码是{reference}。",
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

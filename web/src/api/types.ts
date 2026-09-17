@@ -391,6 +391,28 @@ export interface ChangesOut {
   waiting: ChangeLineOut[];
 }
 
+export type PolicyType = "hospital" | "outpatient" | "critical_illness" | "government_scheme";
+export type PolicyStatus = "active" | "lapsed" | "cancelled";
+
+/** One policy on his profile (E13-03, `GET /profiles/{id}/insurance/policies`), the newest of
+ *  its lineage — never edited, only ever superseded (`app.insurance.policy`). */
+export interface PolicyOut {
+  policy_id: string;
+  insurer_name: string;
+  policy_reference: string | null;
+  policy_type: PolicyType;
+  covered: string | null;
+  covers: string | null;
+  start_date: string | null;
+  renewal_date: string | null;
+  premium_due_date: string | null;
+  status: PolicyStatus;
+  guarantee_letter: boolean;
+  supersedes_id: string | null;
+  set_by_person_id: string;
+  set_at: string;
+}
+
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
  *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
 export interface EmergencyCardOut {
@@ -928,6 +950,11 @@ export interface AnchorOut {
   at: string | null;
 }
 
+/** Which of Services' four "Help at home" tiles a provider is listed under (the concept
+ *  board's Services screen) — null for every doctor, clinic, hospital, pharmacy or lab in
+ *  the ordinary directory; only ever set by the demo seed's home-care rows. */
+export type HomeCareCategory = "nursing" | "physio" | "meals" | "transport";
+
 export interface ProviderOut {
   provider_id: string;
   name: string;
@@ -935,6 +962,7 @@ export interface ProviderOut {
   region: Region;
   phone_e164: string | null;
   address: string | null;
+  category: HomeCareCategory | null;
 }
 
 export interface EpisodeOut {
@@ -1623,6 +1651,96 @@ export interface FindResultOut {
 export interface FindOut {
   where: string;
   results: FindResultOut[];
+}
+
+// --- the Health tab (Health Overview, lifestyle logs, food) --------------------------------
+
+/** The ring (`GET /profiles/{id}/health/overview`): a real figure of his own, never a score.
+ *  `label` and `words` are already said his way by the backend. */
+export interface RingOut {
+  kind: "doses" | "check_ins";
+  label: string;
+  words: string;
+  value: number;
+  total: number | null;
+  week_starts_on: string;
+  as_of: string;
+}
+
+export type MetricKind = "steps" | "heart_rate" | "sleep" | "water";
+export type LogStatus = "logged" | "skipped" | "not_logged";
+
+/** One metric row: steps, heart rate, sleep or water — its own words for its state, from the
+ *  backend, never worked out here (`app.channels.health_strings`). */
+export interface MetricRowOut {
+  kind: MetricKind;
+  label: string;
+  status: LogStatus;
+  value: number | null;
+  value_words: string | null;
+  unit: string;
+  last_logged_at: string | null;
+  status_words: string;
+  range_known: boolean | null;
+  range_words: string | null;
+}
+
+export interface HealthOverviewOut {
+  ring: RingOut;
+  metrics: MetricRowOut[];
+}
+
+/** `POST /profiles/{id}/metrics/{kind}`: a number he logged, or — for steps and water, where
+ *  "none" means something — a skip. Exactly one of `value` and `skipped`. */
+export interface MetricLogIn {
+  value?: number | null;
+  skipped?: boolean;
+  taken_at?: string | null;
+  episode_id?: string | null;
+}
+
+/** One logged entry, echoed back so the screen that wrote it can show what it just saved. */
+export interface MetricEntryOut {
+  event_id: string;
+  fact_id: string;
+  kind: MetricKind;
+  status: LogStatus;
+  value: number | null;
+  unit: string;
+  taken_at: string;
+}
+
+export type Meal = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface FoodCatalogItemOut {
+  id: string;
+  label: string;
+}
+
+/** One meal, as he logged it — or, `status: "skipped"`, that he said he did not have it
+ *  ("no breakfast" is an answered day, docs/recommendation-engine.md §2.7). */
+export interface FoodEntryOut {
+  event_id: string;
+  fact_id: string;
+  meal: Meal;
+  meal_label: string;
+  status: LogStatus;
+  catalog_id: string | null;
+  food: string | null;
+  amount: string | null;
+  eaten_at: string;
+}
+
+/** `POST /profiles/{id}/food`: one thing he ate — a catalogue id, his own words, or both — or,
+ *  `skipped`, "I did not have this meal", a real answer that names none of those. */
+export interface FoodLogIn {
+  meal: Meal;
+  catalog_id?: string | null;
+  food?: string | null;
+  amount?: string | null;
+  skipped?: boolean;
+  eaten_at?: string | null;
+  episode_id?: string | null;
 }
 
 /** One claim on the insurance ledger (T2): raw fields the screen lays out itself

@@ -1,4 +1,4 @@
-import type { ReviewCardOut } from "../api/types";
+import type { HomeCareCategory, ReviewCardOut } from "../api/types";
 
 /** Where in the Record he is: one place a screen. The Record is one nav entry (`go({ name:
  *  "record", at })`), so every screen under it is named here and nowhere in `flow.ts`. */
@@ -14,7 +14,9 @@ export type RecordAt =
   | { name: "paper"; card: ReviewCardOut }
   | { name: "timeline" }
   | { name: "episode"; episodeId: string }
-  | { name: "providers" }
+  /** `category`: Services' "Help at home" grid opens the same directory filtered to one of
+   *  its four tiles (board-fidelity-round-2); left off, this is his doctors and clinics. */
+  | { name: "providers"; category?: HomeCareCategory }
   | { name: "provider"; providerId: string }
   | { name: "changes" }
   | { name: "trends"; analyte?: string }

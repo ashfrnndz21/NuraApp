@@ -100,6 +100,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     await expect(page.getByTestId("state-card").getByTestId("boundary")).toContainText("This is not a doctor's advice.");
     // The medicines, with their counts and sources, are in Health (D1, the warm tabs).
     await page.getByTestId("tab-health").click();
+    await page.getByTestId("health-record-hub").click();
     await page.getByTestId("record-medicines").click();
     await expect(page.getByTestId("medicine-line")).toContainText("You have 120 tablets of your blood pressure tablet left.");
     await expect(page.getByTestId("medicine-line")).toContainText("This comes from the label you kept on");
@@ -131,6 +132,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     await expect(page.getByText(/^You took it/)).toBeVisible();
     await expectProud(page, "1");
     await page.getByTestId("tab-health").click();
+    await page.getByTestId("health-record-hub").click();
     await page.getByTestId("record-medicines").click();
     await expect(page.getByTestId("medicine-line")).toContainText("You have 119 tablets of your blood pressure tablet left.");
     await page.getByTestId("tab-home").click();

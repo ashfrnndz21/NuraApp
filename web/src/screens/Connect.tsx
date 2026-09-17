@@ -28,8 +28,11 @@ export function ConnectScreen(): JSX.Element | null {
   const locale = LOCALE[lang];
   const pid = papers.profile_id;
   return (
-    <Shell tab="connect" testId="connect-screen">
-      <h1 class="title place-title">{s.tabs.connect}</h1>
+    <Shell
+      tab="connect"
+      testId="connect-screen"
+      topBar={{ variant: "board", title: s.tabs.connect, back: true, action: { icon: "add", label: s.connect.addPerson, onClick: () => go({ name: "family", part: "keys" }) } }}
+    >
       <FamilySection bearer={bearer} profileId={pid} lang={lang} />
       <NextCallSection bearer={bearer} profileId={pid} lang={lang} locale={locale} />
       <NearYouSection bearer={bearer} profileId={pid} />

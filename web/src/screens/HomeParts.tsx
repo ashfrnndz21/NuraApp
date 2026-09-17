@@ -1,7 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import type { ProfileOut } from "../api/types";
 import { batch } from "../capture/session";
-import { go, openTab, type SoonPlace } from "../flow";
+import { go, openTab } from "../flow";
 import { t } from "../strings";
 import { CheckInFace } from "../ui/illustrations";
 import { FeatureTile, Icon, IconBadge, PillButton, SectionHeader, SkeletonCard, TintCard, type IconName, type Tint } from "../ui/kit";
@@ -51,14 +51,20 @@ interface Place {
 export function DoGrid({ papers }: { papers: ProfileOut | null }): JSX.Element {
   const s = t();
   const h = s.hub;
-  const soon = (place: SoonPlace) => () => go({ name: "soon", place });
   const places: (Place | false)[] = [
     { id: "health", icon: "track", tint: "blush", label: h.health, line: h.healthLine, open: () => openTab("health") },
     opens(papers, "medicines") && { id: "medicines", icon: "medication", tint: "sky", label: h.medicines, line: h.medicinesLine, open: () => go({ name: "record", at: { name: "medicines" } }) },
     opens(papers, "family") && { id: "connect", icon: "connect", tint: "sage", label: h.connect, line: h.connectLine, open: () => openTab("connect") },
-    { id: "activities", icon: "activities", tint: "lavender", label: h.activities, line: h.activitiesLine, open: soon("activities") },
-    { id: "care", icon: "care", tint: "peach", label: h.care, line: h.careLine, open: soon("care") },
-    { id: "resources", icon: "resources", tint: "butter", label: h.resources, line: h.resourcesLine, open: soon("resources") },
+    // "Things to do": today's steps, water and meals, with the week ring — a real screen,
+    // real writes (PR #235's lifestyle logs), open to whoever opens his readings.
+    opens(papers, "readings") && { id: "activities", icon: "activities", tint: "lavender", label: h.activities, line: h.activitiesLine, open: () => go({ name: "activity" }) },
+    // "Help at home": Services' own home-care grid (Nursing at home, Physio, Meals,
+    // Transport), backed by the provider directory — the same tab a key with visits opens.
+    opens(papers, "visits") && { id: "care", icon: "care", tint: "peach", label: h.care, line: h.careLine, open: () => openTab("services") },
+    // "Things to read": Services' Guides section — the same learning cards and clips Home's
+    // own feed shows, read down to the explainers alone. Guides lives on the Services tab, so
+    // this needs the same scope Services itself does (`nav.ts`'s `NEEDS`).
+    opens(papers, "visits") && { id: "resources", icon: "resources", tint: "butter", label: h.resources, line: h.resourcesLine, open: () => openTab("services") },
   ];
   return (
     <section class="do-section" aria-labelledby="do-title">
