@@ -14,6 +14,7 @@ import { proudLine } from "../today/model";
 import { todayPage } from "../today/page";
 import { Hear, Notice, Pill, Tile } from "../ui/components";
 import { Sheet } from "../ui/kit";
+import { LanguageRow, ProfileHeader, ProfileNav, SignOutRow, signalLabel, signalLead } from "./ProfileParts";
 import { Shell } from "./Shell";
 
 /** Me (D1): a sheet from the header's avatar, over whatever screen is open — never a tab. Who
@@ -40,14 +41,49 @@ export function MeSheet(): JSX.Element | null {
   );
 }
 
-/** The Profile tab (docs/design-direction.md): everything the Me sheet holds, as the tab's own
- *  screen — the same parts, so the two can never say different things. */
+/** The Profile tab (docs/design/nura-concept-board.html, the Profile screen): the board's own
+ *  layout — his name and photo, the language picker, "What Nura uses", the family's keys, the
+ *  emergency card, what he agreed to, what he keeps to himself, and sign out — every one of them
+ *  a working row to a screen that already exists, never a decoration. It holds everything the Me
+ *  sheet holds (`MeBody` below), drawn as the board's list instead of the sheet's pills, so the
+ *  two can never say different things about the same settings. */
 export function ProfileScreen(): JSX.Element {
   const s = t();
+  const identity = me.value;
+  const papers = profile.value;
+  const owner = papers?.standing === "owner";
+  const only = papers ? emergencyOnly(papers) : false;
+  const names: Record<Language, string> = { en: s.me.en, ms: s.me.ms, zh: s.me.zh };
+  // Whose emergency card, whose "Set up Nura", whose papers to add from a photo: the same gates
+  // as the Me sheet (`MeBody` below) kept the same, so a key opens the same rows either way.
+  const showEmergency = papers !== null && (papers.standing === "owner" || papers.scopes.includes("emergency"));
   return (
     <Shell tab="profile" testId="profile-screen">
-      <h1 class="title place-title">{s.me.title}</h1>
-      <MeBody open />
+      <h1 class="title place-title">{s.tabs.profile}</h1>
+      <ProfileHeader s={s} name={identity?.display_name ?? ""} />
+      <ProudTile open />
+      <LanguageRow s={s} code={language.value} names={names} onSet={(code) => void setLanguage(code)} />
+      {papers && (
+        <ProfileNav
+          s={s}
+          papers={papers}
+          owner={owner}
+          showEmergency={showEmergency}
+          onOpenEmergency={() => go({ name: "emergency" })}
+          onOpenKeys={() => go({ name: "family", part: "keys" })}
+          onOpenConsents={() => go({ name: "family", part: "consents" })}
+          onOpenOnlyMe={() => go({ name: "family", part: "onlyMe" })}
+          onSwitchProfile={() => void reloadDoors()}
+          onSetUp={only ? null : () => void startOnboarding(papers)}
+          onOpenPapers={owner || papers.scopes.includes("records") ? () => go({ name: "papers" }) : null}
+        />
+      )}
+      <WhatNuraUses />
+      <Area />
+      <Ramadan />
+      <Reminders />
+      <HomeScreenHint />
+      <SignOutRow s={s} onSignOut={() => void signOutEverywhere()} />
     </Shell>
   );
 }
@@ -61,51 +97,9 @@ function MeBody({ open }: { open: boolean }): JSX.Element {
   const bearer = token.value;
   const papers = profile.value;
   const patient = density() === "patient";
-  // The number that only goes up (E17-04), on his own Me, in the backend's words.
-  // "failed": the summary could not be read (offline) — then the count Today read stands in.
-  const [summary, setSummary] = useState<MeSummaryOut | "failed" | null>(null);
-  const owner = papers?.standing === "owner";
-  useEffect(() => {
-    if (!open || !bearer || !papers || !owner) return setSummary(null);
-    nura.meSummary(bearer, papers.profile_id, language.value).then(setSummary, () => setSummary("failed"));
-  }, [open, bearer, papers?.profile_id, language.value]);
-  const said = summary !== null && summary !== "failed" ? summary : null;
-  // His own count waits for his own words; anyone else's view, or his offline, is Today's.
-  // Today's page stands in only for the papers it was read from: never another profile's count.
-  const page = todayPage.value !== null && todayPage.value.profileId === papers?.profile_id ? todayPage.value.model : null;
-  const standIn = page !== null && (!owner || summary === "failed");
-  // Anyone else's view of the count, or his own when the summary cannot be read (offline):
-  // the number Today read, never one counted here.
-  const counted = page?.proud ?? null;
-  const counts = proudLine(counted, s);
   return (
     <>
-      {said ? (
-        <Tile paper testId="me-proud">
-          <div class="number" data-testid="me-proud-number">
-            {said.proud_days}
-          </div>
-          <div class="lines" data-testid="me-proud-lines">
-            {said.lines.map((line, at) => (
-              <p key={at}>{line}</p>
-            ))}
-          </div>
-          <p class="provenance">{s.today.fromDays}</p>
-          <Hear lines={said.lines} />
-        </Tile>
-      ) : (
-        standIn && (
-          <Tile paper testId="proud">
-            <div class="number" data-testid="proud-number">
-              {counted ?? 0}
-            </div>
-            <p>{counts}</p>
-            <p class="caption">{s.today.proudSub}</p>
-            <p class="provenance">{s.today.fromDays}</p>
-            <Hear lines={[counts, s.today.proudSub]} />
-          </Tile>
-        )
-      )}
+      <ProudTile open={open} />
       <Tile paper>
         <p>{fill(s.me.signedInAs, { name: me.value?.display_name || "" })}</p>
       </Tile>
@@ -167,19 +161,80 @@ function MeBody({ open }: { open: boolean }): JSX.Element {
           </Pill>
         </Tile>
       )}
-      {wantsHomeScreenHint() && (
-        <Tile glass>
-          <p>{s.today.homeScreen1}</p>
-          <p>{s.today.homeScreen2}</p>
-          <p>{s.today.homeScreen3}</p>
-        </Tile>
-      )}
+      <HomeScreenHint />
       <Tile paper>
         <Pill onClick={() => void signOutEverywhere()} testId="sign-out">
           {s.me.signOut}
         </Pill>
       </Tile>
     </>
+  );
+}
+
+/** The number that only goes up (E17-04), in the backend's own words. `open`: whether this is on
+ *  screen, so its read waits until it is. "failed": the summary could not be read (offline) —
+ *  then the count Today read stands in. Shared by the Me sheet and the Profile tab (`MeBody`,
+ *  `ProfileScreen` above), so the two never show a different count for the same days. */
+function ProudTile({ open }: { open: boolean }): JSX.Element | null {
+  const s = t();
+  const bearer = token.value;
+  const papers = profile.value;
+  const owner = papers?.standing === "owner";
+  const [summary, setSummary] = useState<MeSummaryOut | "failed" | null>(null);
+  useEffect(() => {
+    if (!open || !bearer || !papers || !owner) return setSummary(null);
+    nura.meSummary(bearer, papers.profile_id, language.value).then(setSummary, () => setSummary("failed"));
+  }, [open, bearer, papers?.profile_id, language.value]);
+  const said = summary !== null && summary !== "failed" ? summary : null;
+  // His own count waits for his own words; anyone else's view, or his offline, is Today's.
+  // Today's page stands in only for the papers it was read from: never another profile's count.
+  const page = todayPage.value !== null && todayPage.value.profileId === papers?.profile_id ? todayPage.value.model : null;
+  const standIn = page !== null && (!owner || summary === "failed");
+  // Anyone else's view of the count, or his own when the summary cannot be read (offline):
+  // the number Today read, never one counted here.
+  const counted = page?.proud ?? null;
+  const counts = proudLine(counted, s);
+  if (said) {
+    return (
+      <Tile paper testId="me-proud">
+        <div class="number" data-testid="me-proud-number">
+          {said.proud_days}
+        </div>
+        <div class="lines" data-testid="me-proud-lines">
+          {said.lines.map((line, at) => (
+            <p key={at}>{line}</p>
+          ))}
+        </div>
+        <p class="provenance">{s.today.fromDays}</p>
+        <Hear lines={said.lines} />
+      </Tile>
+    );
+  }
+  if (!standIn) return null;
+  return (
+    <Tile paper testId="proud">
+      <div class="number" data-testid="proud-number">
+        {counted ?? 0}
+      </div>
+      <p>{counts}</p>
+      <p class="caption">{s.today.proudSub}</p>
+      <p class="provenance">{s.today.fromDays}</p>
+      <Hear lines={[counts, s.today.proudSub]} />
+    </Tile>
+  );
+}
+
+/** The home-screen hint, shared by the Me sheet and the Profile tab: no hooks, so it is simply
+ *  called from both. */
+function HomeScreenHint(): JSX.Element | null {
+  const s = t();
+  if (!wantsHomeScreenHint()) return null;
+  return (
+    <Tile glass>
+      <p>{s.today.homeScreen1}</p>
+      <p>{s.today.homeScreen2}</p>
+      <p>{s.today.homeScreen3}</p>
+    </Tile>
   );
 }
 
@@ -330,6 +385,7 @@ function WhatNuraUses(): JSX.Element | null {
     nura.signals(bearer, papers.profile_id).then(setView, () => setView(null));
   }, [bearer, papers?.profile_id]);
   if (!bearer || !papers || !view) return null;
+  const owner = papers.standing === "owner";
   const flip = async (family: SignalFamily, on: boolean) => {
     setBusy(family);
     setError(null);
@@ -344,15 +400,16 @@ function WhatNuraUses(): JSX.Element | null {
   return (
     <Tile paper testId="what-nura-uses">
       <h2 class="title">{s.me.whatNuraUsesTitle}</h2>
-      <p>{s.me.whatNuraUsesLead}</p>
+      <p>{signalLead(s, owner, papers.display_name)}</p>
       {!view.may_set && <p>{fill(s.me.whatNuraUsesReadOnly, { name: papers.display_name })}</p>}
       {SIGNAL_FAMILIES.map((family) => {
         const row = view.signals.find((one) => one.family === family);
         const on = row?.on ?? false;
+        const label = signalLabel(s, owner, family, papers.display_name);
         return (
           <div key={family}>
-            <p class="label">{s.me.whatNuraUsesFamilies[family]}</p>
-            <div class="row" role="group" aria-label={s.me.whatNuraUsesFamilies[family]}>
+            <p class="label">{label}</p>
+            <div class="row" role="group" aria-label={label}>
               {view.may_set ? (
                 <Pill
                   chosen={on}
