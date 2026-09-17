@@ -253,6 +253,46 @@ export interface AnswerOut {
   red_flag?: FeelingOut | null;
 }
 
+/** One real stage of an ask or a search, streamed the instant it finishes (docs/design-
+ *  direction.md "Conversation, waiting and thinking"): which part of his record Nura just
+ *  read, in his language, already in the caregiver's voice if this key is not his own — never
+ *  invented, never held back, never named for a part this key's scope does not open. */
+export interface AskStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished answer, exactly `POST /profiles/{id}/ask` returns. */
+export interface AskAnswerEvent {
+  type: "answer";
+  answer: AnswerOut;
+}
+
+/** A refusal heard mid-stream — a scope the key does not hold, a malformed question — in the
+ *  same shape `apiStream` turns into a thrown `Refused`, so a caller need not special-case it. */
+export interface AskRefusalEvent {
+  type: "refusal";
+  refusal: string;
+  status: number;
+  scope?: string;
+}
+
+export type AskStreamEvent = AskStepEvent | AskAnswerEvent | AskRefusalEvent;
+
+/** The feed's web/video search, streamed the same way (`POST /profiles/{id}/find/stream`):
+ *  one step while the search runs, then the results `POST /profiles/{id}/find` would return. */
+export interface FindStepEvent {
+  type: "step";
+  key: "searching";
+  label: string;
+}
+export interface FindResultsEvent {
+  type: "results";
+  results: FindResultOut[];
+}
+export type FindStreamEvent = FindStepEvent | FindResultsEvent | AskRefusalEvent;
+
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
 export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";
