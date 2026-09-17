@@ -2744,11 +2744,14 @@ class CallScheduleIn(BaseModel):
 class CallOut(BaseModel):
     """One call on Connect's "Upcoming Call": with whom, when, how to join, and who put it
     on the calendar. `join_words` is the line "Join" opens: ringing the number, or opening
-    the link the family gave, already in his words and his language."""
+    the link the family gave, already in his words and his language. `with_person_phone_e164`
+    is the number Connect's own "Call" button dials through `tel:`, when the family member
+    signed in by phone; none when they signed in by email, or when a call link makes it moot."""
 
     call_id: uuid.UUID
     with_person_id: uuid.UUID
     with_person_name: str
+    with_person_phone_e164: str | None = None
     scheduled_at: datetime
     call_link: str | None
     label: str | None
@@ -2759,12 +2762,18 @@ class CallOut(BaseModel):
 
     @classmethod
     def of(
-        cls, call: ScheduledCall, *, with_person_name: str, join_words: str
+        cls,
+        call: ScheduledCall,
+        *,
+        with_person_name: str,
+        with_person_phone_e164: str | None,
+        join_words: str,
     ) -> CallOut:
         return cls(
             call_id=call.id,
             with_person_id=call.with_person_id,
             with_person_name=with_person_name,
+            with_person_phone_e164=with_person_phone_e164,
             scheduled_at=utc(call.scheduled_at),
             call_link=call.call_link,
             label=call.label,

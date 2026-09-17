@@ -324,17 +324,19 @@ class NotOnThisProfile(Refusal):
     """Not the owner, not a key holder, not named by a consent here: no name to give."""
 
 
-async def person_display_name(
+async def _authorized_person(
     session: AsyncSession,
     context: KeyContext,
     person_id: uuid.UUID,
-    /,
     *,
-    channel: Channel = Channel.APP,
-) -> str:
-    """The display name of someone on this profile: its owner, the steward holding it for him
-    until he claims it, a holder of a key to it, or someone a consent on it names — the
-    person let in, the person who agreed, the witness.
+    channel: Channel,
+) -> Person:
+    """The one read of a `Person` row a profile's own key can make, and only for people the
+    profile already names: its owner, the steward holding it for him until he claims it, a
+    holder of a key to it, or someone a consent on it names — the person let in, the person
+    who agreed, the witness. `person_display_name` and `person_phone_e164` are this same
+    check, each reading a different column of the one row it authorizes — never a second
+    door on the same person.
 
     A Person row is an account, not profile data, so `scoped_select` cannot reach it; this
     is the one read that does, and only for people the profile already names. Whether the
@@ -399,4 +401,32 @@ async def person_display_name(
             raise refusal
     person = await session.get(Person, person_id)
     assert person is not None  # a foreign key on the profile or a key names this row
+    return person
+
+
+async def person_display_name(
+    session: AsyncSession,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+) -> str:
+    """The display name of someone on this profile (`_authorized_person`)."""
+    person = await _authorized_person(session, context, person_id, channel=channel)
     return person.display_name
+
+
+async def person_phone_e164(
+    session: AsyncSession,
+    context: KeyContext,
+    person_id: uuid.UUID,
+    /,
+    *,
+    channel: Channel = Channel.APP,
+) -> str | None:
+    """The phone number of someone on this profile (`_authorized_person`), or none when they
+    signed in with an email instead — Connect's "Call" button falls back to a call link, or to
+    neither, rather than dialling nothing."""
+    person = await _authorized_person(session, context, person_id, channel=channel)
+    return person.phone_e164
