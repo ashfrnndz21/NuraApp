@@ -952,7 +952,9 @@ async def recall(
 
 __all__ = [
     "ASK_TARGET",
+    "QUESTION_LENGTH",
     "STEP_KEYS",
+    "TEXT_LINES",
     "Answer",
     "AnswerLine",
     "AskStep",
