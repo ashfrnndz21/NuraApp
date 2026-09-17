@@ -32,7 +32,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0046_insurance_policies_claims"
-down_revision = "0044_consent_role_window"
+down_revision = "0045_scheduled_call"
 branch_labels = None
 depends_on = None
 
