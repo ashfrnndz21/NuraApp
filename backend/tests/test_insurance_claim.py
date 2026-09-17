@@ -26,8 +26,8 @@ from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.memory.attach import attach_to_appointment
 from tests.safety_support import clinic, let_in, pa
-from tests.timeline_support import artefact, book
 from tests.test_insurance_policy import _write as write_policy
+from tests.timeline_support import artefact, book
 
 
 async def _file(session: AsyncSession, context, policy_id, appointment_id, reference=None):

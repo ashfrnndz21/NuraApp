@@ -43,6 +43,7 @@ where a guarantee letter needs it, which no path here does yet.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime
 from enum import StrEnum
 
@@ -234,7 +235,7 @@ async def current_policies(session: AsyncSession, *, context: KeyContext) -> lis
     )
 
 
-def _lineage_head(rows: list[Policy], row: Policy) -> uuid.UUID:
+def _lineage_head(rows: Sequence[Policy], row: Policy) -> uuid.UUID:
     """The id a lineage is filed under: the first row that started it, walking `supersedes_id`
     back through the rows already read. A row whose ancestor was not read (another scope, a
     different page) is its own lineage — it is still exactly one policy to the reader."""

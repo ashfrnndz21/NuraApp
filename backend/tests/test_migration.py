@@ -37,8 +37,6 @@ from app.delivery.triggers.models import Delivery, DeliverySettings, Ladder
 from app.family.models import Document, RosterSlot, ScheduledPush, Task, ThreadMessage
 from app.identity.models import LoginChallenge, LoginSession, Person, Profile, Stewardship
 from app.ingestion.connectors.models import AppointmentProposal, Connector
-from app.insurance.claim import InsuranceClaim
-from app.insurance.policy import Policy
 from app.ingestion.models import (
     ConsultRecording,
     ConsultSegment,
@@ -46,6 +44,8 @@ from app.ingestion.models import (
     ReviewCard,
     ReviewField,
 )
+from app.insurance.claim import InsuranceClaim
+from app.insurance.policy import Policy
 from app.keys.confirm import Confirmation
 from app.keys.models import Key
 from app.keys.privacy import Privacy

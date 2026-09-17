@@ -78,18 +78,6 @@ from app.ingestion.chunks import (
     UploadClosed,
 )
 from app.ingestion.connectors.calendar import CalendarTooLarge
-from app.insurance.claim import (
-    NoSuchClaim,
-    NotAClaim,
-    NotThatClaimStatusChange,
-    NotTheirsToManageAClaim,
-)
-from app.insurance.policy import (
-    NoSuchPolicy,
-    NotAPolicy,
-    NotAPolicyReference as NotAPolicyReferenceInAPolicy,
-    NotTheirsToSetAPolicy,
-)
 from app.ingestion.connectors.service import (
     AlreadyDecided,
     NoSuchConnector,
@@ -108,7 +96,21 @@ from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
 from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
 from app.ingestion.voice import VoiceNoteTooLong
+from app.insurance.claim import (
+    NoSuchClaim,
+    NotAClaim,
+    NotThatClaimStatusChange,
+    NotTheirsToManageAClaim,
+)
 from app.insurance.insurer import NotAnInsurer, NotAPolicyReference, NotTheirsToSetInsurer
+from app.insurance.policy import (
+    NoSuchPolicy,
+    NotAPolicy,
+    NotTheirsToSetAPolicy,
+)
+from app.insurance.policy import (
+    NotAPolicyReference as NotAPolicyReferenceInAPolicy,
+)
 from app.keys.context import AccountClosing, NoKey, OutOfScope
 from app.keys.grants import NoKeyToClose, NothingToNarrow, NotTheirKeyToCut, WouldWiden
 from app.language.review import (
