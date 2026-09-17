@@ -88,7 +88,13 @@ test("Pa's Connect: his family, his next call, and the family thread, one glance
   await page.getByTestId("connect-message-row").first().click();
   await expect(page.getByTestId("family-thread")).toBeVisible();
 
+  // Back on Connect, every section remounts and re-fetches (D1: a fresh screen, not a cache) —
+  // wait for the section that fetches last to carry real words again before scanning the
+  // layout, or the scan can catch a line mid-swap (an empty-state paragraph Preact is about to
+  // replace with the message row), which reads as "covered" by whatever sits at (0,0) once the
+  // stale node's rect has collapsed to nothing — the header, not a real layout fault.
   await page.getByTestId("tab-connect").click();
+  await expect(page.getByTestId("connect-message-row").first()).toContainText("I will visit on Sunday.");
   expect(await patientScreenOk(page)).toEqual([]);
 });
 
