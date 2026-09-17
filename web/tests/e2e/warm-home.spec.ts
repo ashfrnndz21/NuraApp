@@ -59,7 +59,7 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   }
   for (const [tile, words] of [
     ["do-activities", "Things to do"],
-    ["do-care", "Help at home"],
+    ["do-care", "Care services"],
     ["do-resources", "Things to read"],
   ] as const) {
     await page.getByTestId(tile).click();
