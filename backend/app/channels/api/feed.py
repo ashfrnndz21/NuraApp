@@ -41,7 +41,7 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
-from app.channels.about_him import reader_of
+from app.channels.about_him import Reader, reader_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
@@ -82,9 +82,11 @@ from app.delivery.feed.rank import (
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
 from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
+from app.delivery.feed.why_sheet import why_lines
 from app.delivery.strings import FIND_STEPS, language_for, watch_label
 from app.errors import Refusal
 from app.keys.context import KeyContext
+from app.keys.scopes import Scope
 from app.reasoning.signals import (
     SignalFamily,
     current_signal_use,
@@ -109,6 +111,35 @@ def _engine(request: Request) -> Engine:
     )
 
 
+def _with_why_sheet(out: FeedPageOut, *, context: KeyContext, reader: Reader) -> FeedPageOut:
+    """Every card's Why, as this reader hears it (RE-08, docs/recommendation-engine.md §3.3):
+    its plain reason, when the reader's key covers the scope the card and its evidence rest
+    on, or the line that says a part of the record is withheld — never silent. Runs before
+    `Reader.page()`, whose voice twins already turn `why["plain"]` into the caregiver's voice
+    and do the same here, the same way, for `why["lines"]`."""
+    items = [
+        item.model_copy(
+            update={
+                "why": {
+                    **item.why,
+                    "lines": list(
+                        why_lines(
+                            str(item.why.get("plain") or ""),
+                            scope=Scope(item.scope),
+                            context=context,
+                            language=item.language,
+                            his=reader.his,
+                            patient_name=reader.name,
+                        )
+                    ),
+                }
+            }
+        )
+        for item in out.items
+    ]
+    return out.model_copy(update={"items": items})
+
+
 @router.get("/{profile_id}/feed")
 async def feed(
     request: Request,
@@ -128,14 +159,16 @@ async def feed(
     page = await feed_page(
         session, context=context, engine=_engine(request), cursor=cursor, pretend_local=pretend
     )
-    return (await reader_of(session, context, None)).page(FeedPageOut.of(page))
+    reader = await reader_of(session, context, None)
+    return reader.page(_with_why_sheet(FeedPageOut.of(page), context=context, reader=reader))
 
 
 @router.get("/{profile_id}/feed/today")
 async def feed_today(request: Request, context: Context, session: Db) -> FeedPageOut:
     """Today's top three (E11-02): alerts, then reminders, then insights, each with its why."""
     top = FeedPageOut.of(await top_three(session, context=context, engine=_engine(request)))
-    return (await reader_of(session, context, None)).page(top)
+    reader = await reader_of(session, context, None)
+    return reader.page(_with_why_sheet(top, context=context, reader=reader))
 
 
 @router.get("/{profile_id}/feed/{item_id}/voice")
@@ -239,7 +272,8 @@ async def feed_clip_video(
 async def cached(context: Context, session: Db) -> FeedPageOut:
     """The last first page rendered for this person, as it was: the offline page."""
     kept = FeedPageOut.of(await cached_page(session, context=context))
-    return (await reader_of(session, context, None)).page(kept)
+    reader = await reader_of(session, context, None)
+    return reader.page(_with_why_sheet(kept, context=context, reader=reader))
 
 
 @router.post("/{profile_id}/feed/{item_id}/engagement", status_code=status.HTTP_201_CREATED)

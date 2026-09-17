@@ -270,7 +270,7 @@ class Reader:
         """Whether a card belongs in front of this reader: hers are hers already; one of his
         with no twin for a line that still speaks to him is not shown to anyone else."""
         return item.deliver_to != "patient" or not self.speaks_to_him(
-            [item.headline, item.body, item.voice, item.why.get("plain", "")]
+            [item.headline, item.body, item.voice, item.why.get("plain", ""), item.why.get("lines", [])]
         )
 
     def page(self, out: FeedPageOut) -> FeedPageOut:

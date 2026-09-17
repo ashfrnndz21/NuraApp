@@ -348,6 +348,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal_about": "{season} begins around {day}.",
         "flag": "This is one of the things we never wait for.",
         "needs_doctor_look": "Nura found something to ask {doctor} about.",
+        "withheld": "Part of your papers is not shown here.",
     },
     "ms": {
         "now_tablets": "Anda ada ubat dalam senarai anda.",
@@ -374,6 +375,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal_about": "{season} bermula sekitar {day}.",
         "flag": "Ini salah satu perkara yang kita tidak pernah tunggu.",
         "needs_doctor_look": "Nura jumpa sesuatu untuk ditanya kepada {doctor}.",
+        "withheld": "Sebahagian surat anda tidak ditunjukkan di sini.",
     },
     "zh": {
         "now_tablets": "您的清单上有药。",
@@ -400,6 +402,7 @@ WHY: Mapping[str, Mapping[str, str]] = {
         "seasonal_about": "{season}大约在{day}开始。",
         "flag": "这是我们从不等的事情之一。",
         "needs_doctor_look": "Nura 发现了需要问{doctor}的事。",
+        "withheld": "您的文件有一部分不会显示在这里。",
     },
 }
 
@@ -1103,6 +1106,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who} chose to share this photo with {patient}.",
         "learning": "This is about {topic}, which is on {patient}'s papers.",
         "needs_doctor_look": "Nura found something about {patient} to ask {doctor} about.",
+        "withheld": "Part of {patient}'s papers is not shown here.",
         "recall_action": "{patient}'s {medicine} was named in a safety notice.",
     },
     "ms": {
@@ -1124,6 +1128,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who} memilih untuk berkongsi gambar ini dengan {patient}.",
         "learning": "Ini tentang {topic}, yang ada dalam surat-surat {patient}.",
         "needs_doctor_look": "Nura jumpa sesuatu tentang {patient} untuk ditanya kepada {doctor}.",
+        "withheld": "Sebahagian surat {patient} tidak ditunjukkan di sini.",
         "recall_action": "{medicine} {patient} disebut dalam satu notis keselamatan.",
     },
     "zh": {
@@ -1145,6 +1150,7 @@ WHY_THEIRS: Mapping[str, Mapping[str, str]] = {
         "story_photo": "{who}选择了和{patient}分享这张照片。",
         "learning": "这是关于{topic}的，它在{patient}的文件里。",
         "needs_doctor_look": "Nura 发现了关于{patient}、需要问{doctor}的事。",
+        "withheld": "{patient}的文件有一部分不会显示在这里。",
         "recall_action": "一个安全通知提到了{patient}的{medicine}。",
     },
 }
