@@ -154,7 +154,9 @@ async def _siti_the_helper(sg: AsyncSession, home: Family) -> Person:
     """The domestic helper, with the emergency card and the medicines, as her key is set."""
     siti = await register_person(sg, region=Region.SG, display_name="Siti", phone_e164=SITI)
     scopes = ROLE_SCOPES[KeyRole.HELPER]
-    await agree_to_family_sharing(sg, home.owner, siti, scopes=scopes, relationship="helper")
+    await agree_to_family_sharing(
+        sg, home.owner, siti, scopes=scopes, relationship="helper", role=KeyRole.HELPER
+    )
     await grant_key(sg, context=home.owner, holder=siti, role=KeyRole.HELPER, scopes=scopes)
     return siti
 

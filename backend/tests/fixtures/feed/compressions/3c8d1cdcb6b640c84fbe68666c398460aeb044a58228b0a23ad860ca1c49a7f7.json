@@ -1,0 +1,35 @@
+{
+  "en": {
+    "headline": "Your blood pressure tablet, in 30 seconds",
+    "body": [
+      "It helps your blood vessels relax.",
+      "Tell your doctor if your ankles swell."
+    ],
+    "why_topic": "your blood pressure tablet",
+    "passage": "[0:00] It relaxes your blood vessels.",
+    "start_sec": 0,
+    "end_sec": 25
+  },
+  "ms": {
+    "headline": "Ubat tekanan darah anda, dalam 30 saat",
+    "body": [
+      "Ubat ini membantu saluran darah anda mengendur.",
+      "Beritahu doktor anda jika buku lali anda bengkak."
+    ],
+    "why_topic": "ubat tekanan darah anda",
+    "passage": "[0:00] It relaxes your blood vessels.",
+    "start_sec": 0,
+    "end_sec": 25
+  },
+  "zh": {
+    "headline": "30秒了解您的降血压药",
+    "body": [
+      "它让您的血管放松。",
+      "如果脚踝肿了，告诉您的医生。"
+    ],
+    "why_topic": "您的降血压药",
+    "passage": "[0:00] It relaxes your blood vessels.",
+    "start_sec": 0,
+    "end_sec": 25
+  }
+}

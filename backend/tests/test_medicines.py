@@ -23,7 +23,7 @@ from app.audit.models import Outcome as AuditOutcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.drafts import FactDraft
-from app.drugs.registry import NotIdentified, Severity
+from app.drugs.registry import NotIdentified, Severity, StrengthNotRead
 from app.keys.confirm import NotAConfirmerHere, NotWhatWasConfirmed
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.scopes import KeyRole, Scope
@@ -105,11 +105,18 @@ async def test_a_label_the_register_does_not_know_is_not_guessed(sg: AsyncSessio
     # (tests/test_drugs.py::test_a_monograph_is_rule_ids_not_prose relies on the same gap).
     with pytest.raises(NotIdentified):
         await planned(sg, owner, label("digoxin", "0.125 mg"), photo)
-    # Two strengths and no strength on the label: the strength decides, nothing is picked.
-    with pytest.raises(NotIdentified):
+    # Two strengths on file and no strength on the label: warfarin is high-risk, so the
+    # register did identify the drug and only the strength is undetermined (#211) — its own
+    # refusal, distinct from digoxin above, which the register has never heard of at all.
+    with pytest.raises(StrengthNotRead):
         await planned(sg, owner, label("warfarin", None), photo)  # type: ignore[arg-type]
+    # amlodipine is not high-risk: the same two-strengths-no-strength-given shape stays the
+    # plain NotIdentified this always was — the distinction is for the high-risk case only.
+    with pytest.raises(NotIdentified):
+        await planned(sg, owner, label("amlodipine", None), photo)  # type: ignore[arg-type]
     assert _refusals(list(await read_audit(sg, context=owner))) == {
-        (Action.READ, "medication_line", "NotIdentified")
+        (Action.READ, "medication_line", "NotIdentified"),
+        (Action.READ, "medication_line", "StrengthNotRead"),
     }
 
 

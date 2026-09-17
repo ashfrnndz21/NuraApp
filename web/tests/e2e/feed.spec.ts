@@ -433,7 +433,7 @@ test("the caregiver's list: no gate, what was held from him shown as held, and a
   const scopes = ["medicines", "visits", "readings", "records", "emergency", "ask"];
   const agreed = await request.post(`${API}/profiles/${pa.profileId}/consents/sharing`, {
     ...auth(pa.token),
-    data: { holder_phone_e164: mei, holder_display_name: "Mei", scopes, relationship: "daughter", language: "en", captured_via: "app" },
+    data: { holder_phone_e164: mei, holder_display_name: "Mei", scopes, role: "caregiver", window: "always", relationship: "daughter", language: "en", captured_via: "app" },
   });
   expect(agreed.status(), await agreed.text()).toBe(201);
   const key = await request.post(`${API}/profiles/${pa.profileId}/keys`, { ...auth(pa.token), data: { holder_phone_e164: mei, role: "caregiver", scopes } });

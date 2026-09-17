@@ -43,7 +43,12 @@ async def _pa_on_whatsapp(deployment: Deployment) -> tuple[dict[str, str], str, 
     profile_id = await own_profile(deployment, pa)
     mei = await register_by_phone(deployment, MEI, "Mei")
     await let_in(
-        deployment, pa, profile_id, MEI, ["medicines", "readings", "records", "family", "send"]
+        deployment,
+        pa,
+        profile_id,
+        MEI,
+        ["medicines", "readings", "records", "family", "send"],
+        role="chief",
     )
     key = await deployment.client.post(
         f"/profiles/{profile_id}/keys",

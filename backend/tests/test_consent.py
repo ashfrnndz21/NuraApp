@@ -53,7 +53,7 @@ from app.consent.texts import (
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import KeyRole, KeyWindow, Scope
 from app.memory.episodic import store_artifact
 from app.memory.models import Artifact, ArtifactKind, Recording, SourceChannel
 from app.regions import Region
@@ -94,6 +94,15 @@ SHIPPED_WORDS: dict[tuple[str, str, str, str | None], str] = {
     ),
     ("share_with_family", "2", "zh", None): (
         "939138cd82fb2d96f9197f221f4a960785d235556908a86e384d6a8c4020bc25"
+    ),
+    ("share_with_family", "3", "en", None): (
+        "f9d77a31e2d3313880d992caf6c5f3646e7a765aae59d9a41d808c3cd5d03464"
+    ),
+    ("share_with_family", "3", "ms", None): (
+        "61f6dd3fa0e43f63c55e3e557138031437503cefd0be208a35ac5c58a27d3ac4"
+    ),
+    ("share_with_family", "3", "zh", None): (
+        "04311f36d040d104e666602f210d89cba383597b851a473273303cbf0ea248eb"
     ),
     ("recording", "1", "en", None): (
         "198f6e974300bd444db2daac51b432a39ddf297f6367cca507712040fb2387dc"
@@ -142,7 +151,7 @@ async def _pa_and_his_son(session: AsyncSession) -> tuple[KeyContext, KeyContext
     son = await register_person(
         session, region=Region.SG, display_name="Son", phone_e164="+6591110004"
     )
-    await agree_to_family_sharing(session, owner, son)
+    await agree_to_family_sharing(session, owner, son, role=KeyRole.CHIEF)
     await grant_key(session, context=owner, holder=son, role=KeyRole.CHIEF)
     chief = await resolve_key_context(
         session, region=Region.SG, person_id=son.id, profile_id=profile.id
@@ -367,7 +376,7 @@ async def test_a_spoken_agreement_needs_someone_else_who_heard_it_and_the_record
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     clock.set(GIVEN_AT)
     # A recording of his spoken yes carries the witness's voice as well as his: a recording of
@@ -458,7 +467,9 @@ async def test_sharing_names_a_person_and_the_other_purposes_name_nobody(
             captured_via=ConsentChannel.APP,
             basis=ConsentBasis.OWNER,
             language="en",
-            sharing=Sharing(holder=son, scopes=frozenset({Scope.MEDICINES})),
+            sharing=Sharing(
+                holder=son, scopes=frozenset({Scope.MEDICINES}), role=KeyRole.CAREGIVER, window=KeyWindow.ALWAYS
+            ),
         )
     with pytest.raises(NoHolderNamed):
         await require_consent(
@@ -524,7 +535,7 @@ async def test_a_caregiver_can_neither_give_nor_withdraw_consent(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
@@ -565,7 +576,7 @@ async def test_a_gate_is_only_open_to_someone_the_act_itself_is_open_to(sg: Asyn
     siti = await register_person(
         sg, region=Region.SG, display_name="Siti", phone_e164="+6591110003"
     )
-    await agree_to_family_sharing(sg, owner, siti)
+    await agree_to_family_sharing(sg, owner, siti, role=KeyRole.HELPER)
     await grant_key(sg, context=owner, holder=siti, role=KeyRole.HELPER)
     helper = await resolve_key_context(
         sg, region=Region.SG, person_id=siti.id, profile_id=owner.profile_id

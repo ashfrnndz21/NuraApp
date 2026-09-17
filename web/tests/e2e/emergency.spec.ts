@@ -48,13 +48,13 @@ test("the emergency card, one tap from Today and from Me: the backend's lines on
   await printable.close();
 
   // From Me, the same card.
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("me-emergency").click();
   await expect(page.getByTestId("emergency-card").getByTestId("emergency-lines").locator("p")).toHaveText(lines);
 
   // No network, the next morning: nothing of the day on the phone, and the card still there,
   // dated, printable.
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("tab-home").click();
   await todayReady(page);
   await waitForWorker(page);
   // The printable page is read just after the card: kept on the phone before the network goes.
@@ -78,7 +78,7 @@ test("the emergency card, one tap from Today and from Me: the backend's lines on
   // Sign-out leaves none of it on the phone.
   await page.reload();
   await todayReady(page);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   expect((await keptKeys(page)).filter(kept)).toEqual([]);
@@ -107,9 +107,9 @@ test("a neighbour's key to the emergency card alone opens that card and nothing 
     await expect(page.getByTestId(none)).toHaveCount(0);
   }
   await expect(page.getByRole("button", { name: "Go back" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("tab-home").click();
   await expect(page.getByTestId("emergency-card")).toBeVisible();
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByTestId("set-up")).toHaveCount(0);
   await expect(page.getByTestId("open-papers")).toHaveCount(0);
   await page.getByTestId("me-emergency").click();

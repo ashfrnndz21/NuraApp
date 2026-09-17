@@ -469,7 +469,9 @@ async def test_a_confirmed_or_disputed_state_is_a_persons_yes_used_once(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
-    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES, Scope.RECORDS])
+    await agree_to_family_sharing(
+        sg, owner, daughter, scopes=[Scope.MEDICINES, Scope.RECORDS], role=KeyRole.CAREGIVER
+    )
     await grant_key(
         sg,
         context=owner,
@@ -1136,7 +1138,7 @@ async def test_an_appointment_records_the_person_whose_yes_was_used(
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     key = await grant_key(sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER)
     held = await resolve_key_context(
         sg, region=Region.SG, person_id=daughter.id, profile_id=owner.profile_id
@@ -1243,7 +1245,7 @@ async def test_a_medicine_fact_is_held_under_the_medicines_scope(sg: AsyncSessio
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110004"
     )
     await agree_to_family_sharing(
-        sg, owner, daughter, scopes=[Scope.RECORDS, Scope.READINGS, Scope.VISITS]
+        sg, owner, daughter, scopes=[Scope.RECORDS, Scope.READINGS, Scope.VISITS], role=KeyRole.CAREGIVER
     )
     await grant_key(
         sg,

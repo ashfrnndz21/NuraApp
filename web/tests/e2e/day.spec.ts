@@ -16,6 +16,7 @@ import {
   shotAs,
   signInThroughTheApp,
   stand,
+  todayReady,
 } from "./helpers";
 
 /** Checkpoint 27's web half (W7): the patient's day on a phone-sized screen, against `make dev`
@@ -74,7 +75,14 @@ async function showDemoBanner(page: Page): Promise<void> {
 async function notUnderTheBanner(page: Page): Promise<string[]> {
   await expect(page.locator(".demo-banner")).toBeVisible();
   return page.evaluate(() => {
+    // The shell's page scrolls in its own region (D1), not the window — the same fact
+    // `underTheTabBar` (helpers.ts) already scrolls by. A check run right before this one
+    // (`nothingDrawnOverLines`) brings each line and control to the centre of the screen in
+    // turn, and can leave that region scrolled to wherever its last control was; `window.scrollTo`
+    // never reaches it, so the top of the card can still be scrolled out of view here even
+    // though nothing is actually drawn over it.
     window.scrollTo(0, 0);
+    document.querySelector<HTMLElement>('[data-testid="shell-scroll"]')?.scrollTo(0, 0);
     const bottom = document.querySelector(".demo-banner")?.getBoundingClientRect().bottom ?? 0;
     const problems: string[] = [];
     for (const line of document.querySelectorAll<HTMLElement>("[data-testid=what-to-do-lines] p")) {
@@ -286,6 +294,57 @@ test("a feed refresh already on the wire before he speaks still cannot overtake 
   expect(card.kind).toBe("red_flag");
   expect(card.by_voice).toBe(true);
   releaseFeed();
+});
+
+// --- #142: a tap that starts before the restore lands must never register on whatever the
+// restore lands the screen on -----------------------------------------------------------------
+
+test("a tap in the first second after reopening lands where it was aimed, never on Today underneath it", async ({ page, request }) => {
+  test.skip(BASE_URL.includes(":5173"), "needs the built app the backend serves (the worker is not built in dev)");
+  const pa = await seedVisitDay(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  const notWell = page.getByTestId("not-well");
+  await expect(notWell).toBeVisible();
+  const box = (await notWell.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+
+  // Hold the restore's own doors read open: the reload's `afterSignIn` (W1) does not land
+  // until this test says so — the deliberate shape of "the app has just reopened and nothing
+  // is drawn yet" (`app.tsx`'s own reason: a shared phone must never show a stale session's
+  // papers first), held open long enough to control the race by hand.
+  let releaseDoors: (() => void) | undefined;
+  const gate = new Promise<void>((resolve) => {
+    releaseDoors = resolve;
+  });
+  await page.route("**/api/doors**", async (route) => {
+    await gate;
+    await route.continue();
+  });
+
+  await page.reload();
+  await expect(page.getByTestId("today-ready")).toHaveCount(0);
+  // A finger already resting on the screen, exactly where the not-well button will be, before
+  // there is anything there to press.
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+
+  // The restore lands mid-gesture: Today fills in under the still-down finger, at the same
+  // spot, from the same data — the not-well button is exactly where the finger already is.
+  releaseDoors!();
+  await todayReady(page);
+  await expect(notWell).toBeVisible();
+  await page.mouse.up();
+
+  // Swallowed: a tap aimed at nothing must not read as a tap on the not-well button once
+  // Today happens to have put one under it. Still on Today, not the not-well screen.
+  await expect(page.locator("main h1")).not.toHaveText("Tell Nura how you feel");
+  await todayReady(page);
+
+  // No lasting side effect: a genuine tap right after works at once, with no delay to wait out.
+  await notWell.click();
+  await expect(page.locator("main h1")).toHaveText("Tell Nura how you feel");
 });
 
 // --- E17-01, E17-02: the feeling cloud ------------------------------------------------------------
@@ -647,7 +706,7 @@ test("the post-visit card on the web: each line with where it was said, one left
   // merged in below the card on screen (`feed/store.ts`), and the test does not depend on when.
   const isFeedPage = (response: { request(): { method(): string }; url(): string }) => response.request().method() === "GET" && /\/profiles\/[^/]+\/feed$/.test(new URL(response.url()).pathname);
   const todays = page.waitForResponse(isFeedPage);
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("tab-home").click();
   await todays;
   const fresh = page.waitForResponse(isFeedPage);
   await page.getByTestId("open-feed").click();
@@ -674,7 +733,7 @@ test("the post-visit card on the web: each line with where it was said, one left
     route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ refusal: "OnlyTheFamilyHears" }) }),
   );
   // Out of the feed and back: the feed opens with a player that has fetched nothing yet.
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("tab-home").click();
   await page.getByTestId("open-feed").click();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
   // The pager may open on the backend's cached page, from before his yes; the fresh page takes
@@ -724,7 +783,7 @@ test("the day's nudge where the backend plans it, with its why: OK, and it is go
   // Me: the number that only goes up, as the backend says it.
   const summary = (await (await request.get(`${API}/profiles/${pa.profileId}/me-summary?language=en`, auth(pa.token))).json()) as { proud_days: number; lines: string[] };
   await expect(async () => {
-    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await page.getByTestId("open-me").click();
     await expect(page.getByTestId("me-proud-number")).toBeVisible({ timeout: 2000 });
   }).toPass();
   await expect(page.getByTestId("me-proud-number")).toHaveText(String(summary.proud_days));

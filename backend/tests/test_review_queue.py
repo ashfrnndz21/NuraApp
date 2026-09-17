@@ -67,7 +67,7 @@ async def _pa_and_mei(deployment: Deployment) -> tuple[dict[str, str], str]:
     await register_by_phone(deployment, MEI, "Mei")
     profile_id = await own_profile(deployment, pa, language="en")
     scopes = ["medicines", "readings", "family"]
-    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter")
+    await let_in(deployment, pa, profile_id, MEI, scopes, "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": MEI, "role": "caregiver", "scopes": scopes},

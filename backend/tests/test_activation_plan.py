@@ -264,7 +264,7 @@ async def test_fewer_gaps_fewer_prompts_and_breakfast_at_half_past_seven_until_h
 
     # Letting Kit in closes the last one the next time the plan is read; saying when he has
     # breakfast closes another the moment it is saved.
-    await let_in(deployment, pa, profile_id, KIT, ["records"], "son")
+    await let_in(deployment, pa, profile_id, KIT, ["records"], "son", role="caregiver")
     await call(
         deployment,
         "POST",

@@ -241,9 +241,13 @@ skips a withheld scope's work entirely, so a step for it is never produced)."""
 @dataclass(frozen=True, slots=True)
 class AskStep:
     """One real stage of building the answer, streamed as it finishes: which part of the
-    record was just read. Never invented, never delayed — see `recall_stream`."""
+    record was just read. Never invented, never delayed — see `recall_stream`. `count` is how
+    many things that part held (visits, readings, medicine lines, or facts-and-papers-and-notes
+    together for records) — for a narrator to say something concrete
+    (`app.search.narrate.NarratedStep`), never a row itself."""
 
     key: str
+    count: int = 0
 
 
 # --- the corpus: what this key may read, as candidates ---------------------------------------
@@ -374,7 +378,7 @@ async def _corpus_stream(
             )
         corpus.clips_open = hears_consults(context)
         await _consults(session, context, registry, corpus)
-        yield AskStep("visits")
+        yield AskStep("visits", count=len(corpus.visits))
     else:
         corpus.withhold(Scope.VISITS)
     # readings: current facts under the readings scope. A medicine is recalled from its line,
@@ -387,7 +391,7 @@ async def _corpus_stream(
                 names.add(fact.attribute.replace("_", " "))
             kind = "reading" if _is_reading(fact) else "fact"
             corpus.candidates.append(Candidate(kind, fact.id, fact.valid_from, _with_words(names)))
-        yield AskStep("readings")
+        yield AskStep("readings", count=len(corpus.facts))
     else:
         corpus.withhold(Scope.READINGS)
     # medicines
@@ -409,13 +413,14 @@ async def _corpus_stream(
             corpus.candidates.append(
                 Candidate("medicine", line.id, line.started_at, frozenset(names))
             )
-        yield AskStep("medicines")
+        yield AskStep("medicines", count=len(lines))
     else:
         corpus.withhold(Scope.MEDICINES)
     # records: facts under the record's catch-all scope, the papers hung with something on
     # them, and his and the family's notes on his moments (E02-06) — one part, one scope, one
     # step.
     if context.allows(Scope.RECORDS):
+        _facts_before_records = len(corpus.facts)
         for fact in await _facts_under(session, context, Scope.RECORDS):
             corpus.facts[fact.id] = fact
             names = _what_names(fact.subject)
@@ -457,7 +462,10 @@ async def _corpus_stream(
                 Candidate("paper", artifact.id, artifact.captured_at, _with_words(names))
             )
         await _notes(session, context, store, corpus)
-        yield AskStep("records")
+        records_count = (
+            (len(corpus.facts) - _facts_before_records) + len(corpus.papers) + len(corpus.notes)
+        )
+        yield AskStep("records", count=records_count)
     else:
         corpus.withhold(Scope.RECORDS)
     yield corpus

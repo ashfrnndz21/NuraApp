@@ -391,7 +391,7 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
 
   return (
     <Shell
-      tab={density() === "patient" ? "visits" : "today"}
+      tab={density() === "patient" ? "services" : "home"}
       testId="visit-screen"
       attrs={{ "data-stage": stage.kind }}
       bar={!listening && stage.kind !== "saving" && stage.kind !== "held"}

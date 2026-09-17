@@ -247,9 +247,6 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    # #225 (0044_consent_role_window) has not merged to main yet; this branch's migration is
-    # renumbered ahead of it and pinned here. Fails locally until #225 lands — the operator
-    # merges #225 first (see PR comment on #235).
     assert heads == ["0045_scheduled_call"]
 
 

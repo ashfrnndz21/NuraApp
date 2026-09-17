@@ -64,15 +64,22 @@ async def let_in(
     scopes: list[str],
     relationship: str | None = None,
     holder_display_name: str = "Mei",
+    *,
+    role: str,
+    window: str = "always",
 ) -> dict[str, object]:
-    """The owner agrees to let this number in, to these parts; what a key rests on. By phone
-    the words need the name he calls the person (`HolderNeedsAName` without it)."""
+    """The owner agrees to let this number in, to these parts, as this role, for this
+    window; what a key rests on. By phone the words need the name he calls the person
+    (`HolderNeedsAName` without it). `role` and `window` are required (#185) — the real
+    client's own request shape (`web/src/api/family.ts::SharingBody`) always states both."""
     agreed = await deployment.client.post(
         f"/profiles/{profile_id}/consents/sharing",
         json={
             "holder_phone_e164": holder_phone_e164,
             "holder_display_name": holder_display_name,
             "scopes": scopes,
+            "role": role,
+            "window": window,
             "relationship": relationship,
             "language": "en",
             "captured_via": "app",

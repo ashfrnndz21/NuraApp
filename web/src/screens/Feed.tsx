@@ -19,6 +19,7 @@ import { PillButton } from "../ui/kit";
 import { PlayerControls } from "../ui/Player";
 import { voice } from "../player/voice";
 import { Shell } from "./Shell";
+import { WhySheet } from "./WhySheet";
 import "../ui/feed.css";
 
 /** How long a card must rest at the centre of the pager, untouched by another scroll, before
@@ -53,6 +54,8 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   // What he reads before his yes, by card: who Nura will ask, for which medicine.
   const [previews, setPreviews] = useState<Record<string, OrderPreviewOut>>({});
   const [reorderError, setReorderError] = useState<unknown>(null);
+  // "Why am I seeing this?" (RE-08): which card's sheet is open, or none.
+  const [whyItem, setWhyItem] = useState<FeedItemOut | null>(null);
   const hasReorder = entries.some((entry) => variantOf(entry.item) === "reorder");
   useEffect(() => {
     const bearer = token.value;
@@ -212,7 +215,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const keptAt = store.keptAt.value;
 
   return (
-    <Shell tab="today" fill>
+    <Shell tab="home" fill>
       <div class="feed-screen" data-density={density()} data-testid="feed-screen">
       {/* The screen's name for a screen reader, and where focus starts when the feed opens. */}
       <h1 class="sr-only">{s.feed.title}</h1>
@@ -284,6 +287,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
               onFamily={() => void store.share(entry.item)}
               onNotForMe={() => void store.notForMe(entry.item)}
               onKeepGoing={() => goTo(index + 1)}
+              onWhy={() => setWhyItem(entry.item)}
               reorder={reorderFor(entry.item)}
               said={asked[entry.item.item_id] ?? null}
               preview={previews[entry.item.item_id] ?? null}
@@ -311,6 +315,7 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
       )}
 
       </div>
+      <WhySheet item={whyItem} onClose={() => setWhyItem(null)} s={s} />
     </Shell>
   );
 }
@@ -339,6 +344,8 @@ interface FeedCardProps {
   onFamily: () => void;
   onNotForMe: () => void;
   onKeepGoing: () => void;
+  /** "Why am I seeing this?" (RE-08): opens this card's Why sheet. */
+  onWhy: () => void;
   /** This card's voice is open in the player: its controls show above the side actions. */
   playing: boolean;
   reorder: Reorder | null;
@@ -358,7 +365,7 @@ interface FeedCardProps {
  *  buttons and scroll inside the card when they need more, and the buttons follow in normal
  *  flow. Nothing is drawn over a line — the boundary an inferring card ends on is always
  *  readable, scrolled to if need be. */
-function FeedCard({ entry, index, view, clips, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, playing, reorder, said, preview, onAskToOrder, onOrderYes, onOrderNo }: FeedCardProps): JSX.Element {
+function FeedCard({ entry, index, view, clips, note, status, patient, owner, name, s, onHear, onAsk, onFamily, onNotForMe, onKeepGoing, onWhy, playing, reorder, said, preview, onAskToOrder, onOrderYes, onOrderNo }: FeedCardProps): JSX.Element {
   const item: FeedItemOut = entry.item;
   const declined = note === "declined";
   const section =
@@ -425,6 +432,11 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
               <p class="provenance" data-testid="why">
                 {view.why}
               </p>
+            )}
+            {view.why && (
+              <button type="button" class="why-link" data-testid="why-link" onClick={onWhy}>
+                {s.feed.whyLink}
+              </button>
             )}
           </>
         )}

@@ -3,9 +3,12 @@
 A card names its State or is not written; a card with a failing line is not written and the
 refusal is on the trail; a learning card from outside the allowlist is not written; a
 medicine on the list starts an explainer and a daily safety job, and a notice — whether or
-not it matches the batch on his pack — is held for the caregiver, or rerouted to the memo as
-a doctor question, and never delivered to him (#181; `items.NoticeNotForPatient` refuses one
-built for `DeliverTo.PATIENT` outright).
+not it matches the batch on his pack — is held for the caregiver, or rerouted to a doctor
+question when its words would change treatment (#181, #224, #236), and never delivered to
+him in the notice's own words (`items.NoticeNotForPatient` refuses one built for
+`DeliverTo.PATIENT` outright). Where the batch does match, he gets his own `RECALL_ACTION`
+card instead (spec §0, #183), in his own words, saying what he can do about the box in his
+hand today.
 """
 
 from __future__ import annotations
@@ -24,8 +27,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
+from app.db import utcnow
 from app.delivery.feed import search as search_module
-from app.delivery.feed.compose import Day, around_for, plain_day, refresh, today_for
+from app.delivery.feed.compose import (
+    DECLINED_TOPIC,
+    Day,
+    _broker_wanted,
+    _declined_topics,
+    around_for,
+    plain_day,
+    refresh,
+    today_for,
+)
 from app.delivery.feed.compress import (
     Compressed,
     FixtureCompressor,
@@ -33,6 +46,7 @@ from app.delivery.feed.compress import (
     Found,
     changes_treatment,
 )
+from app.delivery.feed.engagement import record_engagement
 from app.delivery.feed.items import (
     SURFACE_OF,
     NoticeNotForPatient,
@@ -44,6 +58,7 @@ from app.delivery.feed.items import (
 from app.delivery.feed.models import (
     CardType,
     DeliverTo,
+    EngagementKind,
     FeedItem,
     JobKind,
     JobStatus,
@@ -55,23 +70,27 @@ from app.delivery.feed.models import (
 )
 from app.delivery.feed.rank import (
     PAGE_SIZE,
+    NoSuchItem,
     NotACursor,
     _endless,
     decode_cursor,
     encode_cursor,
     feed_page,
     in_quiet_hours,
+    require_item,
 )
 from app.delivery.feed.search import Engine, create_job, list_jobs, run_job
 from app.delivery.feed.sources import SourceNotAllowlisted
+from app.delivery.recommend import broker as broker_module
+from app.delivery.recommend.rules import RULE_NEW_MEDICINE_EXPLAINER
 from app.delivery.strings import Lines, learning_lines, needs_doctor_look_lines, render
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.language.models import ReviewItem
-from app.memory.episodic import store_artifact
-from app.memory.models import ArtifactKind, SourceChannel
+from app.memory.episodic import record_event, store_artifact
+from app.memory.models import ArtifactKind, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.models import MemoKind
@@ -82,6 +101,7 @@ from app.safety.plain_words import verify
 from app.state.models import NotRenderedFromState
 from app.state.service import NoBoundaryLine, current_state
 from tests.conftest import FEED
+from tests.feelings_support import new_medicine
 from tests.medicines_support import let_in
 from tests.support import OPENING_CONSENT
 
@@ -262,9 +282,9 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
     sg: AsyncSession,
 ) -> None:
     """E16-01 on the feed. A learning card is an inferring surface (`Surface.LEARNING_CARD`),
-    and so is a notice, the same compression of a regulator's page: the row carries the line
-    and the body and the voice end on it. Every other card shows the record back and
-    carries no line."""
+    and so is a notice, the same compression of a regulator's page, and the `RECALL_ACTION`
+    card built from one (#183): the row carries the line and the body and the voice end on
+    it. Every other card shows the record back and carries no line."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
@@ -275,7 +295,11 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
         "Ask your doctor.",
     ]
     inferring = [item for item in made if item.type in SURFACE_OF]
-    assert {item.type for item in inferring} == {CardType.LEARNING, CardType.NOTICE}
+    assert {item.type for item in inferring} == {
+        CardType.LEARNING,
+        CardType.NOTICE,
+        CardType.RECALL_ACTION,
+    }
     for item in inferring:
         assert item.boundary == line, item.type
         assert item.body[-3:] == line.splitlines() and item.voice[-3:] == line.splitlines()
@@ -408,13 +432,16 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     assert len(her_learning) == 1
     assert her_learning[0].cite is not None and "warfarin-inr" in her_learning[0].cite["url"]
     assert CardType.QUESTION not in by_type, "no orphaned FeedItem question"
+    # #183: the batch on his pack (230001) does not match the notice's (240077) — no
+    # RECALL_ACTION card at all, his or otherwise.
+    assert CardType.RECALL_ACTION not in by_type
     memos = await current_memos(sg, context=context)
     [memo] = [one for one in memos if one.kind is MemoKind.ASK]
     assert memo.key == "ask_safety_notice"
     assert "skip" not in memo.text.lower() and "dose" not in memo.text.lower()
     # Nothing for the patient carries the notice or the caregiver's copy of the found page.
     page = await feed_page(sg, context=context, engine=ENGINE)
-    assert CardType.NOTICE not in {item.type for item in page.items}
+    assert {item.type for item in page.items} & {CardType.NOTICE, CardType.RECALL_ACTION} == set()
     assert her_learning[0].id not in {item.id for item in page.items}
     # Delivery, not existence: his chief's own, independently resolved key actually reads
     # both the notice and the redirected learning card back.
@@ -548,12 +575,15 @@ async def test_a_food_page_that_would_change_treatment_is_held_for_his_chief_alo
     assert len(rows) == 1
 
 
-async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_card(
+async def test_a_notice_that_matches_the_batch_on_his_pack_gives_him_the_action_card_and_his_chief_the_notice(
     sg: AsyncSession,
 ) -> None:
-    """#181: a batch match no longer earns a notice a place in his feed (spec §0, §9). It is
-    still hers to act on — `Supply.TODAY`, same as before — and still not suppressed (a match
-    is relevant, just never a card he reads); it is simply never `DeliverTo.PATIENT`."""
+    """#181, #183: a batch match no longer earns the notice itself a place in his feed (spec
+    §0, §9) — it is still hers to act on (`Supply.TODAY`, same as before), still not
+    suppressed (a match is relevant, just never a card in the notice's own words), and never
+    `DeliverTo.PATIENT`. Where it matches his own pack, he gets his own `RECALL_ACTION` card
+    instead, in his own words, made and reviewed like every other card of his: neither the
+    notice's own compressed words, nor the batch number on it, ever reach him."""
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
@@ -561,14 +591,28 @@ async def test_a_notice_that_matches_the_batch_on_his_pack_is_still_never_his_ca
     assert notice.deliver_to is DeliverTo.CAREGIVER and notice.supply is Supply.TODAY
     assert notice.why["suppressed"] is None
     assert notice.body[1] == "Look for the batch number 240077 on your box."
-    page = await feed_page(sg, context=context, engine=ENGINE)
-    assert CardType.NOTICE not in {item.type for item in page.items}
-    assert [item.type for item in page.items][:4] == [
-        CardType.NOW,
-        CardType.GATE,
-        CardType.STORY,  # the label photo is one of his papers
-        CardType.LEARNING,
+    action = next(item for item in made if item.type is CardType.RECALL_ACTION)
+    assert action.deliver_to is DeliverTo.PATIENT and action.supply is Supply.TODAY
+    assert action.headline == "The blood thinner tablet was recalled"
+    assert action.body == [
+        "Take the blood thinner tablet to the pharmacist today.",
+        "The pharmacist will tell you what to do next.",
+        "Nura explains one thing in simple words.",
+        "This is not a doctor's advice.",
+        "Ask your doctor.",
     ]
+    assert action.voice == action.body
+    assert action.boundary == boundary_line(Surface.LEARNING_CARD, "en")
+    # No batch number, and no word of the notice's own, reaches him.
+    assert "240077" not in " ".join(action.body) and "batch" not in " ".join(action.body)
+    assert action.action == "ask_the_pharmacist"
+    page = await feed_page(sg, context=context, engine=ENGINE)
+    assert [item.type for item in page.items][:3] == [
+        CardType.NOW,
+        CardType.RECALL_ACTION,
+        CardType.GATE,
+    ]
+    assert CardType.NOTICE not in {item.type for item in page.items}
 
 
 async def test_a_notice_is_refused_outright_if_a_caller_ever_sends_it_to_the_patient(
@@ -822,9 +866,16 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
     her_page = await feed_page(sg, context=mei, engine=engine)
     assert notice.id in {item.id for item in her_page.items}
 
-    # His own feed carries neither the notice nor any question — spec §0, §9.
+    # His own feed carries neither the notice nor any question — spec §0, §9. It does carry
+    # his own RECALL_ACTION card (#183): the batch match and the treatment-change reroute are
+    # independent, so a notice too dangerous to show him in its own words still leaves him
+    # with the one thing he needs, in fixed catalogue words that never repeat it.
     his_page = await feed_page(sg, context=context, engine=engine)
     assert {item.type for item in his_page.items} & {CardType.NOTICE, CardType.QUESTION} == set()
+    action = next(item for item in made if item.type is CardType.RECALL_ACTION)
+    assert action.deliver_to is DeliverTo.PATIENT
+    assert action.id in {item.id for item in his_page.items}
+    assert "stop" not in " ".join(action.body).lower()
 
     # The doctor question: a real Memo, read back through the same function the post-visit
     # brief and the pre-visit question loop both call — not a raw table query.
@@ -1019,6 +1070,214 @@ async def test_refresh_makes_each_card_once(sg: AsyncSession) -> None:
     _, first = await refresh(sg, context=context, engine=ENGINE)
     _, second = await refresh(sg, context=context, engine=ENGINE)
     assert first and second == []
+
+
+# --- RE-07: the feed consumes the slate --------------------------------------------------
+
+
+async def test_a_new_medicines_explainer_and_its_clip_lead_the_learning_supply_that_week(
+    sg: AsyncSession,
+) -> None:
+    """docs/recommendation-engine.md §2.6: `_learning`'s `wanted` gains the slate's READ and
+    CLIP topics first, already ranked by `RuleRanker` — so a medicine he just started leads
+    this week's learning supply, ahead of a gap State already knew about (his diabetes, told
+    at onboarding, which starts its own explainer the old way, `_gaps`)."""
+    context = await _pa(sg)
+    told = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.ONBOARDING,
+        occurred_at=utcnow(),
+        label="the conditions he told",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject="condition",
+        attribute="diabetes",
+        value=True,
+        confidence=1.0,
+        event_id=told.id,
+    )
+    await new_medicine(sg, context)  # amlodipine, started now — inside the 14-day window
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+
+    supply = [item for item in made if item.type in (CardType.LEARNING, CardType.CLIP)]
+    assert len(supply) >= 3, "the medicine's explainer, its clip, and the diabetes explainer"
+    leaders = supply[:2]
+    assert {item.type for item in leaders} == {CardType.LEARNING, CardType.CLIP}
+    for item in leaders:
+        assert item.why["rule"] == RULE_NEW_MEDICINE_EXPLAINER
+        assert item.why["topic"] == "medicine.blood_pressure_tablet"
+        assert "recent_evidence" in item.why["boosts"]
+    # The diabetes gap (an older story, `_gaps`) still runs — just behind the slate's own.
+    trailing = supply[2:]
+    assert any(item.why.get("gap") == "diabetes" for item in trailing)
+    assert not any(item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER for item in trailing)
+
+    jobs = {(job.kind, tuple(job.terms), job.cadence) for job in await list_jobs(sg, context=context)}
+    assert (JobKind.WORTH_KNOWING, ("amlodipine",), "weekly") in jobs
+
+
+async def test_a_dismissed_topic_comes_back_no_sooner_than_30_days(sg: AsyncSession) -> None:
+    """The topic-level "not for me" (`app.delivery.feed.engagement._decline_topic_for_30_days`)
+    is a Fact with a validity window, read back by `_declined_topics` — distinct from
+    `rank.DECLINED`, which is per card type and holds only for the rest of his day. Checked at
+    two levels: the window itself (a hand-written fact, so this does not depend on any one
+    rule's own freshness window still holding thirty days out), and the real wiring — declining
+    a card the broker's slate proposed keeps that topic out of `_broker_wanted` right away."""
+    context = await _pa(sg)
+    topic = "medicine.blood_pressure_tablet"
+    now = utcnow()
+
+    # The window itself: still declined ten days on, not declined on day thirty-one.
+    moment = await record_event(
+        sg,
+        context=context,
+        kind=EventKind.ENGAGEMENT,
+        occurred_at=now,
+        label="not for me: a topic",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        sg,
+        context=context,
+        subject=DECLINED_TOPIC,
+        attribute=topic,
+        value={"item_id": "test"},
+        confidence=1.0,
+        event_id=moment.id,
+        valid_from=now,
+        valid_to=now + timedelta(days=30),
+    )
+    assert topic in await _declined_topics(sg, context=context, at=now + timedelta(days=10))
+    assert topic not in await _declined_topics(sg, context=context, at=now + timedelta(days=31))
+
+    # The real wiring: a card the slate proposed, dismissed, and the slate stops proposing it.
+    other = await _pa(sg, phone="+6591310099")
+    await new_medicine(sg, other)
+    state = await current_state(sg, context=other)
+    day = today_for(other)
+    around = await around_for(sg, context=other, engine=ENGINE, state=state, day=day)
+    before = await _broker_wanted(
+        sg, context=other, engine=ENGINE, state=state, around=around, moment=day.now
+    )
+    assert ("amlodipine",) in {terms for _, terms, *_ in before}
+
+    _, made = await refresh(sg, context=other, engine=ENGINE)
+    [card] = [
+        item
+        for item in made
+        if item.type is CardType.LEARNING and item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER
+    ]
+    await record_engagement(sg, context=other, item_id=card.id, kind=EngagementKind.DISMISSED)
+
+    after = await _broker_wanted(
+        sg, context=other, engine=ENGINE, state=state, around=around, moment=day.now
+    )
+    assert ("amlodipine",) not in {terms for _, terms, *_ in after}
+
+
+async def test_a_candidate_on_a_withheld_scope_never_becomes_a_card_for_that_key(
+    sg: AsyncSession,
+) -> None:
+    """A key without MEDICINES never sees a medicine topic's card, whatever the slate proposes
+    to the owner: the broker itself drops what `Candidate.readable_by` refuses before
+    `slate()` ever returns it (`test_recommend_broker.
+    test_a_key_without_records_never_sees_what_rests_on_it_named_as_withheld`), so
+    `_broker_wanted` never queues the job for a narrower key — not a card filtered after the
+    fact, a candidate that never reached the wanted list in the first place."""
+    context = await _pa(sg)
+    await new_medicine(sg, context)  # amlodipine, on Pa's own key
+    kit = await let_in(
+        sg,
+        context,
+        phone="+6591230099",
+        name="Kit",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER] - {Scope.MEDICINES},
+    )
+    assert not kit.allows(Scope.MEDICINES)
+
+    state = await current_state(sg, context=kit)
+    day = today_for(kit)
+    around = await around_for(sg, context=kit, engine=ENGINE, state=state, day=day)
+    assert "amlodipine" not in around.medicines, "a scope she does not hold names no medicine"
+    wanted = await _broker_wanted(
+        sg, context=kit, engine=ENGINE, state=state, around=around, moment=day.now
+    )
+    assert not wanted, "the withheld scope leaves the broker nothing to propose to her"
+
+
+async def test_a_private_candidates_card_is_unreadable_to_his_chief_and_readable_to_him(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Independent safety review, item 2: `Candidate.private_to` (RE-06, §3.5) never reached
+    the card `_broker_wanted`/`run_job` made for it — the day a rule marks a topic private
+    (his own search history), the card would still show to his chief. It now travels
+    candidate -> `wanted` entry -> `job.reason` -> `create_item(private_to=...)`, so the card
+    holds the same `private_to` `FeedItem.private_to` already enforces for every other card
+    (RE-01, `rank.require_item`).
+
+    No rule sets `private_to` yet (the search-topic rule is a later story), so this wraps the
+    real `RULE_NEW_MEDICINE_EXPLAINER` candidate the way one eventually will: same evidence,
+    same topic, `private_to` added."""
+    context = await _pa(sg)
+    chief = await let_in(
+        sg,
+        context,
+        phone="+6591230077",
+        name="Chief",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
+    )
+    await new_medicine(sg, context)  # amlodipine — fires RULE_NEW_MEDICINE_EXPLAINER
+
+    real_slate = broker_module.slate
+
+    async def _privately(*args: Any, **kwargs: Any) -> broker_module.Slate:
+        result = await real_slate(*args, **kwargs)
+        private = tuple(replace(one, private_to=context.person_id) for one in result.candidates)
+        return broker_module.Slate(private, result.withheld)
+
+    monkeypatch.setattr(broker_module, "slate", _privately)
+
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+    cards = [item for item in made if item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER]
+    assert cards, "the medicine's explainer and clip are still made, now privately"
+    for card in cards:
+        assert card.private_to == context.person_id
+
+        seen = await require_item(sg, context=context, item_id=card.id)
+        assert seen.id == card.id
+
+        with pytest.raises(NoSuchItem):
+            await require_item(sg, context=chief, item_id=card.id)
+
+
+async def test_a_candidate_without_private_to_is_unchanged(sg: AsyncSession) -> None:
+    """The other half of the same gap: a candidate that never names `private_to` (every rule
+    on `main` today) still makes a card every key with the scope can read, exactly as before
+    this fix — carrying `None` through `job.reason` must not narrow anything."""
+    context = await _pa(sg)
+    chief = await let_in(
+        sg,
+        context,
+        phone="+6591230066",
+        name="Chief",
+        role=KeyRole.CAREGIVER,
+        scopes=ROLE_SCOPES[KeyRole.CAREGIVER],
+    )
+    await new_medicine(sg, context)  # amlodipine — fires RULE_NEW_MEDICINE_EXPLAINER
+
+    _, made = await refresh(sg, context=context, engine=ENGINE)
+    cards = [item for item in made if item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER]
+    assert cards
+    for card in cards:
+        assert card.private_to is None
+        seen = await require_item(sg, context=chief, item_id=card.id)
+        assert seen.id == card.id
 
 
 def test_the_dedupe_key_is_job_aware_so_two_jobs_cannot_race_on_one_page() -> None:

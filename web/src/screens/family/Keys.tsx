@@ -138,7 +138,11 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const words = s();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+65");
-  const [role, setRole] = useState<KeyRole | null>(null);
+  // Caregiver and "always" are the sensible defaults (owner's decision, 2026-09-17): an
+  // elderly owner is never made to pick a role before he can even ask to see the words —
+  // caregiver is already chosen, and the window is already the widest, the moment he opens
+  // this tile. He can still change either before he asks.
+  const [role, setRole] = useState<KeyRole | null>("caregiver");
   const [parts, setParts] = useState<Scope[]>([]);
   const [window, setWindow] = useState<KeyWindow>("always");
   const [said, setSaid] = useState<RolePresetOut[] | null>(null);
@@ -182,11 +186,29 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
       setWindow(found.window);
     }
   };
+  // The preset parts for the chosen role are the backend's own (`/family/roles`), never
+  // guessed here — but the default role above is already chosen before that request can have
+  // answered. This catches the still-empty parts up the moment the preset lands, whether the
+  // role was the default or a click that beat the response (#185): never a role sitting on
+  // screen with no parts a "See the words" ask could ever be ready for. A part the owner has
+  // since toggled off by hand (`parts.length > 0`) is left alone.
+  useEffect(() => {
+    if (!role || parts.length > 0) return;
+    const found = defaults.value?.find((each) => each.role === role);
+    if (found) {
+      setParts(partsOf(found.scopes));
+      setWindow(found.window);
+    }
+  }, [role, defaults.value]);
   const shown = role && said?.find((each) => each.role === role);
-  const asked = () => ({
+  // `chosenRole` is only ever passed in once a caller has checked one is chosen (#185: the
+  // words and the consent always name it, the same choice `cut()`'s own `makeKey` call uses).
+  const asked = (chosenRole: KeyRole) => ({
     holder_phone_e164: phone.replace(/\s+/g, ""),
     holder_display_name: name.trim(),
     scopes: parts,
+    role: chosenRole,
+    window,
     language: here.lang,
   });
   // Only this form's own request, never another grant's narrow or close (`act` is shared
@@ -195,8 +217,9 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const busyHere = act.busy && act.at === "new";
   const seeWords = () =>
     act.act("new", async () => {
+      if (!role) return;
       const asOf = generation.current;
-      const rendered = await family.previewSharing(here.bearer, here.papers.profile_id, asked());
+      const rendered = await family.previewSharing(here.bearer, here.papers.profile_id, asked(role));
       if (generation.current !== asOf) return; // stale: something changed while this was in flight
       setPreview(rendered);
     });
@@ -213,7 +236,7 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const agree = () =>
     act.act("new", async () => {
       if (!role || !preview) return;
-      await family.letSomeoneIn(here.bearer, here.papers.profile_id, asked(), preview.wording_version);
+      await family.letSomeoneIn(here.bearer, here.papers.profile_id, asked(role), preview.wording_version);
       await family.makeKey(here.bearer, here.papers.profile_id, { holder_phone_e164: phone.replace(/\s+/g, ""), role, scopes: parts, window });
       setName("");
       setPhone("+65");

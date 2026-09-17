@@ -52,7 +52,7 @@ async def test_his_own_key_hears_the_steps_in_order_then_the_same_answer_ask_giv
 async def test_a_caregivers_step_names_him_not_her(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa", language="en")
     profile_id = await own_profile(deployment, pa, language="en")
-    await let_in(deployment, pa, profile_id, MEI, ["ask", "medicines"], holder_display_name="Mei")
+    await let_in(deployment, pa, profile_id, MEI, ["ask", "medicines"], holder_display_name="Mei", role="caregiver")
     mei = await register_by_phone(deployment, MEI, "Mei", language="en")
     cut = await deployment.client.post(
         f"/profiles/{profile_id}/keys",

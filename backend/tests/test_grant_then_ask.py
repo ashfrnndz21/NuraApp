@@ -94,6 +94,8 @@ async def test_pa_adds_kit_and_kit_asks_against_pas_record_at_once(deployment: D
         "holder_phone_e164": KIT,
         "holder_display_name": "Kit",
         "scopes": KIT_PARTS,
+        "role": "caregiver",
+        "window": "always",
         "relationship": "son",
         "language": "en",
     }

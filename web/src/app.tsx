@@ -10,7 +10,9 @@ import { CardScreen } from "./screens/Card";
 import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./screens/Doors";
 import { FamilyScreen } from "./screens/family/Family";
 import { FeedScreen } from "./screens/Feed";
-import { MeSheet } from "./screens/Me";
+import { MeSheet, ProfileScreen } from "./screens/Me";
+import { SoonScreen } from "./screens/Soon";
+import { WelcomeScreen } from "./screens/Welcome";
 import { VisitsScreen } from "./screens/tabs";
 import { OnboardingScreen } from "./screens/onboarding/Onboarding";
 import { ReadingScreen } from "./screens/Reading";
@@ -24,7 +26,7 @@ import { NotWellScreen } from "./screens/NotWell";
 import { QuestionsScreen } from "./screens/Questions";
 import { SymptomsScreen } from "./screens/Symptoms";
 import { WhatToDoScreen } from "./screens/WhatToDo";
-import { profile, restored, token } from "./store/session";
+import { profile, restored, token, welcomed } from "./store/session";
 import { afterRestoreFailure } from "./restore";
 
 /** One screen at a time. On start, the page restores the session and goes to Today at once
@@ -43,7 +45,7 @@ export function App(): JSX.Element | null {
 function Route(): JSX.Element | null {
   const current = screen.value;
   // A new screen: the screen reader and the keyboard start at its heading (E15-04).
-  useEffect(() => focusHeading(), [current.name]);
+  useEffect(() => focusHeading(), [current.name, welcomed.value]);
   if (!restored.value) return null;
   if (current.name === "loading") {
     if (!token.value) void signOutHere();
@@ -65,7 +67,8 @@ function Route(): JSX.Element | null {
   }
   switch (current.name) {
     case "signin":
-      return <PhoneScreen />;
+      // A phone's first sign-in starts at the welcome (docs/design-direction.md).
+      return welcomed.value ? <PhoneScreen /> : <WelcomeScreen />;
     case "code":
       return <CodeScreen phone={current.phone} />;
     case "email":
@@ -100,7 +103,11 @@ function Route(): JSX.Element | null {
     case "emergency":
       return <EmergencyScreen />;
     case "papers":
-      return <PapersScreen />;
+      return <PapersScreen report={current.report ?? false} />;
+    case "profile":
+      return <ProfileScreen />;
+    case "soon":
+      return <SoonScreen place={current.place} />;
     case "notWell":
       return <NotWellScreen />;
     case "whatToDo":

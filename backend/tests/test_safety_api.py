@@ -103,6 +103,7 @@ async def _key(deployment: Deployment, owner, profile_id: str, phone: str, role:
             "ask",
             "send",
         ],
+        role=role,
     )
     body = {"holder_phone_e164": phone, "role": role}
     if scopes is not None:

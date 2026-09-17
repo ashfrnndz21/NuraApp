@@ -9,6 +9,7 @@ import {
   feedLines,
   greeting,
   dayMonthLine,
+  heroFurnitureAllowed,
   homeHero,
   homeHeroWords,
   lineTitle,
@@ -301,6 +302,15 @@ describe("her Home's hero", () => {
   });
   it("on the phone's kept page says it is from earlier, and shows no chips", () => {
     expect(homeHero(page, { flagged: false, kept: true }, en)).toEqual({ word: "Steady", line: en.today.staleState, drivers: false });
+  });
+});
+
+describe("safety check 5: the Hero's furniture and the daily check-in", () => {
+  it("may draw when nothing is flagged", () => {
+    expect(heroFurnitureAllowed({ flagged: false })).toBe(true);
+  });
+  it("may not draw while a red-flag card is on the page — a wave and a smiling illustration over a flag reassure exactly as a State word would", () => {
+    expect(heroFurnitureAllowed({ flagged: true })).toBe(false);
   });
 });
 
