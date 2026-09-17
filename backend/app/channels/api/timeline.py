@@ -31,7 +31,7 @@ from pydantic import AwareDatetime
 
 from app.channels.about_him import Reader, reader_of
 from app.channels.api.delivery import via_of
-from app.channels.api.deps import Context, Db, providers_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.refusals import refused
 from app.channels.api.timeline_schemas import (
@@ -317,48 +317,55 @@ def _step_event(step: AskStep, lang: str, reader: Reader) -> bytes:
 
 
 @router.post("/{profile_id}/ask/stream")
-async def ask_stream(body: AskIn, request: Request, context: Context, session: Db) -> StreamingResponse:
+async def ask_stream(body: AskIn, request: Request, context: Context) -> StreamingResponse:
     """`POST /{id}/ask`, streamed (docs/design-direction.md 'Conversation, waiting and
     thinking'): a `step` event the instant each real part of his record is read
     (`recall_stream`), then an `answer` event — the same `AnswerOut` the plain route gives.
     The red-flag path is unchanged and streams nothing: it is answered before any part of the
-    record is looked up, same as `ask` above, so there is nothing to trace."""
+    record is looked up, same as `ask` above, so there is nothing to trace.
+
+    Opens its own session (`session_scope`), never `Depends(db)`: FastAPI closes a `yield`
+    dependency the moment this function returns the `StreamingResponse` object, well before
+    Starlette actually drives `events()` to send the body — a session from `Depends(db)` would
+    already be closed by the time a step tried to read with it (`app.channels.api.deps.
+    session_scope`)."""
     outside = providers_of(request)
 
     async def events() -> AsyncIterator[bytes]:
-        heard = detect(body.question)
-        if heard is not None:
-            tapped = await record_tap(
-                session,
-                context=context,
-                word=heard,
-                registry=outside.drug_registry,
-                store=outside.object_store,
-                transcriber=outside.transcriber,
-                via=via_of(request),
-                language=body.language,
-                said=body.question,
-            )
-            answer_out = AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
-            yield _sse({"type": "answer", "answer": answer_out.model_dump(mode="json")})
-            return
-        lang = await language_for(session, context, body.language)
-        reader = await reader_of(session, context, body.language)
         try:
-            async for event in recall_stream(
-                session,
-                context=context,
-                question=body.question,
-                mode=body.mode,
-                retriever=outside.retriever,
-                store=outside.object_store,
-                registry=outside.drug_registry,
-                language=body.language,
-            ):
-                if isinstance(event, AskStep):
-                    yield _step_event(event, lang, reader)
-                else:
-                    yield _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
+            async with session_scope(request) as session:
+                heard = detect(body.question)
+                if heard is not None:
+                    tapped = await record_tap(
+                        session,
+                        context=context,
+                        word=heard,
+                        registry=outside.drug_registry,
+                        store=outside.object_store,
+                        transcriber=outside.transcriber,
+                        via=via_of(request),
+                        language=body.language,
+                        said=body.question,
+                    )
+                    answer_out = AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
+                    yield _sse({"type": "answer", "answer": answer_out.model_dump(mode="json")})
+                    return
+                lang = await language_for(session, context, body.language)
+                reader = await reader_of(session, context, body.language)
+                async for event in recall_stream(
+                    session,
+                    context=context,
+                    question=body.question,
+                    mode=body.mode,
+                    retriever=outside.retriever,
+                    store=outside.object_store,
+                    registry=outside.drug_registry,
+                    language=body.language,
+                ):
+                    if isinstance(event, AskStep):
+                        yield _step_event(event, lang, reader)
+                    else:
+                        yield _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
         except Refusal as refusal:
             yield await _refusal_event(request, refusal)
 

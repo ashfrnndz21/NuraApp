@@ -477,11 +477,11 @@ YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh"
 # @patient
 FIND_STEPS: Mapping[str, Mapping[str, str]] = {
     "en": {
-        "web": "Looking on the web.",
+        "web": "Looking online.",
         "videos": "Looking for videos.",
     },
     "ms": {
-        "web": "Melihat di internet.",
+        "web": "Melihat di web.",
         "videos": "Melihat video.",
     },
     "zh": {

@@ -40,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
 from app.channels.about_him import reader_of
-from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
     AreaOut,
@@ -390,23 +390,27 @@ def _sse(payload: dict[str, object]) -> bytes:
 
 
 @router.post("/{profile_id}/find/stream")
-async def find_pages_stream(body: FindIn, request: Request, context: Context, session: Db) -> StreamingResponse:
+async def find_pages_stream(body: FindIn, request: Request, context: Context) -> StreamingResponse:
     """`POST /{id}/find`, streamed, for the Web and Videos filters (docs/design-direction.md
     'Conversation, waiting and thinking'): one `step` event the instant the allowlisted
     search is actually running (`find_stream`), then a `results` event — the same list
     `POST /{id}/find` gives. Providers is a directory read and streams straight to its
-    results, no step: there is no real stage to say is still in progress."""
+    results, no step: there is no real stage to say is still in progress.
+
+    Opens its own session (`session_scope`), never `Depends(db)` — see `app.channels.api.
+    timeline.ask_stream` for why a stream cannot use a `yield` dependency."""
     code = language_for(body.language)
 
     async def events() -> AsyncIterator[bytes]:
         try:
-            async for event in find_stream(
-                session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
-            ):
-                if isinstance(event, FindStep):
-                    yield _sse({"type": "step", "key": event.key, "label": FIND_STEPS[code][body.where]})
-                else:
-                    yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
+            async with session_scope(request) as session:
+                async for event in find_stream(
+                    session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
+                ):
+                    if isinstance(event, FindStep):
+                        yield _sse({"type": "step", "key": event.key, "label": FIND_STEPS[code][body.where]})
+                    else:
+                        yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
         except Refusal as refusal:
             response = await refused(request, refusal)
             body_ = json.loads(bytes(response.body))

@@ -31,7 +31,7 @@ async def test_web_search_streams_one_step_then_the_same_results_find_gives(
     events = _events(streamed.text)
     assert [e["type"] for e in events] == ["step", "results"]
     assert events[0]["key"] == "searching"
-    assert events[0]["label"] == "Looking on the web."
+    assert events[0]["label"] == "Looking online."
 
     plain = await deployment.client.post(
         f"/profiles/{profile_id}/find",
