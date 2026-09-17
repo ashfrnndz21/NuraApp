@@ -1,4 +1,4 @@
-.PHONY: setup dev migrate reset-db checkpoint test lint plain-words language ios-test web build-web web-test web-e2e
+.PHONY: setup dev migrate reset-db checkpoint checkpoints-ci test lint plain-words language ios-test web build-web web-test web-e2e
 # Every backend target runs `python3 -m …`: the Python 3.12 that `make setup` installed the
 # backend into, never whatever bare `python` on the PATH happens to be.
 setup: ; cd backend && python3 -m pip install -e ".[dev]"
@@ -48,6 +48,11 @@ dev: migrate ; cd backend && python3 -m uvicorn app.main:app --reload --no-acces
 reset-db: ; rm -f backend/dev.db backend/dev.db-journal && $(MAKE) migrate
 # Walk checkpoint N from docs/checkpoints.md against the running dev server, over HTTP.
 checkpoint: ; cd backend && python3 -m scripts.checkpoint $(N)
+# CI's thin wrapper (#192): every checkpoint marked ready in docs/checkpoints.md that
+# backend/scripts/checkpoint.py knows how to run, walked against a dev server this boots,
+# migrates and tears down itself — throwaway sqlite database, free port, no fixed state.
+# Nothing here needs `make dev` or `make setup` run first; it drives them itself.
+checkpoints-ci: ; python3 scripts/run_checkpoints.py
 test: ; cd backend && python3 -m pytest -q
 lint: ; cd backend && python3 -m ruff check . && python3 -m mypy app
 # Every patient string under the paths in .claude/rules/patient-strings.md, against docs/plain-words.md.
