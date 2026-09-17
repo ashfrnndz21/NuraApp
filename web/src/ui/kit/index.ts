@@ -15,9 +15,13 @@ export { Poster } from "./Poster";
 export { ProvenanceLine, WhyLine } from "./Provenance";
 export { ReviewField } from "./ReviewField";
 export { Sheet } from "./Sheet";
-export { SkeletonCard } from "./Skeleton";
 export { Sparkline } from "./Sparkline";
 export { sparkGeometry, type SparkGeometry } from "./sparkGeometry";
 export { TabBar, type TabItem } from "./TabBar";
-export { LookedAt, MessageBubble, SourceChips, ThinkingTrace, TraceStep } from "./Thinking";
 export { GlassTile, PaperTile, SectionLabel } from "./Tiles";
+// The warm components (docs/design-direction.md).
+export { FeatureTile, IconBadge, StatusPill, TintCard, type Tint } from "./Tint";
+export { ArrowButton, ListRow, MetricRow, SectionHeader } from "./Rows";
+export { ProgressRing } from "./ProgressRing";
+export { Wordmark } from "./Wordmark";
+export { Exchange, LookedAt, MessageBubble, SkeletonCard, StepTrace, ThinkingIndicator, TraceSteps, type ExchangeStatus, type ExchangeWords, type TraceStep } from "./Conversation";

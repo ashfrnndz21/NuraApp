@@ -135,7 +135,7 @@ export function VisitsScreen(): JSX.Element {
   const s = t();
   const { own, name } = useOwner();
   return (
-    <Shell tab="visits" testId="visits-screen">
+    <Shell tab="services" testId="visits-screen">
       <PlaceTitle>{own ? s.places.visitsOwn : fill(s.places.visitsOther, { name })}</PlaceTitle>
       <VisitList />
       <GettingReady />

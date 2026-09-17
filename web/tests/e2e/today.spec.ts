@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { API, apiToken, captureSpeech, fixClock, freshPhone, keptKeys, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
+import { API, apiToken, captureSpeech, fixClock, freshPhone, keptKeys, medicinesInIndexedDb, seedMedicine, shot, signInThroughTheApp, pastWelcome, todayReady, expectProud, openMe, scrollPageToEnd } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -98,11 +98,12 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     // No feed cards (the quiet hours, or nothing new): the State and the medicines, in the
     // backend's words, each under its source line.
     await expect(page.getByTestId("state-card").getByTestId("boundary")).toContainText("This is not a doctor's advice.");
-    // The medicines, with their counts and sources, are on the Medicines tab (D1).
-    await page.getByTestId("tab-medicines").click();
+    // The medicines, with their counts and sources, are in Health (D1, the warm tabs).
+    await page.getByTestId("tab-health").click();
+    await page.getByTestId("record-medicines").click();
     await expect(page.getByTestId("medicine-line")).toContainText("You have 120 tablets of your blood pressure tablet left.");
     await expect(page.getByTestId("medicine-line")).toContainText("This comes from the label you kept on");
-    await page.getByTestId("tab-today").click();
+    await page.getByTestId("tab-home").click();
     await todayReady(page);
   }
   await shot(page, "today");
@@ -129,9 +130,10 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
     await taken.click();
     await expect(page.getByText(/^You took it/)).toBeVisible();
     await expectProud(page, "1");
-    await page.getByTestId("tab-medicines").click();
+    await page.getByTestId("tab-health").click();
+    await page.getByTestId("record-medicines").click();
     await expect(page.getByTestId("medicine-line")).toContainText("You have 119 tablets of your blood pressure tablet left.");
-    await page.getByTestId("tab-today").click();
+    await page.getByTestId("tab-home").click();
     await todayReady(page);
     const after = await todaySlots(request, token, me.profile_id);
     expect(after.filter((slot) => slot.taken).map((slot) => slot.anchor)).toEqual([due.anchor]);
@@ -159,7 +161,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await expect(page.locator("[data-testid=me-proud], [data-testid=proud]").first()).toContainText("Nura counted the days you took your tablets.");
   await page.getByTestId("sheet-close").click();
   // One tab set, the same for everyone (D1, the reset): Family is a tab now, not a way in on Me.
-  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Today\s*Medicines\s*Papers\s*Visits\s*Family\s*$/);
+  await expect(page.locator("nav.tabbar")).toHaveText(/^\s*Home\s*Health\s*Connect\s*Services\s*Profile\s*$/);
   const bar = await page.locator("nav.tabbar").boundingBox();
   const viewport = page.viewportSize()!;
   expect(bar!.y + bar!.height).toBeLessThanOrEqual(viewport.height);
@@ -173,7 +175,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
 
   // The phone holds the page while signed in; after sign-out no medicine remains in IndexedDB.
   expect((await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByText("You are signed in as Pa.")).toBeVisible();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
@@ -318,7 +320,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
     else await route.continue();
   });
   await page.reload();
-  await expect(page.getByRole("button", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByTestId("tab-home")).toBeVisible();
   await todayReady(page);
   await expect(page.getByLabel("Your phone number")).toHaveCount(0);
   expect(failed).toBeGreaterThan(0);
@@ -327,6 +329,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
 test("a wrong code is one plain sentence, never the class name", async ({ page }) => {
   const phone = freshPhone();
   await page.goto("./");
+  await pastWelcome(page);
   await page.getByLabel("Your phone number").fill(phone);
   await page.getByTestId("send-code").click();
   await page.getByLabel("The code").fill("000000");
@@ -342,12 +345,12 @@ test("the language picker changes every string and persists on the device", asyn
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("lang-ms").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");
   await expect(page.getByTestId("sign-out")).toHaveText("Daftar keluar");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");
-  await page.getByRole("button", { name: "Hari Ini", exact: true }).click();
+  await page.getByRole("button", { name: "Utama", exact: true }).click();
   await expect(page.getByTestId("no-medicines")).toContainText("Nura belum ada ubat untuk anda.");
 });

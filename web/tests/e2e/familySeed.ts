@@ -148,8 +148,8 @@ export async function caregiverScreenOk(page: Page): Promise<string[]> {
 
 /** Family: the chief's tab; on his phone, the Me sheet's "Family" (D1). */
 export async function openFamily(page: Page): Promise<void> {
-  if ((await page.getByTestId("tab-family").count()) > 0) return page.getByTestId("tab-family").click();
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  if ((await page.getByTestId("tab-connect").count()) > 0) return page.getByTestId("tab-connect").click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("me-family").click();
 }
 

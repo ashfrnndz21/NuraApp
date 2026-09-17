@@ -116,7 +116,7 @@ test("every restyled screen: the tabs, the Record's places, Family's parts, the 
   /** Each place in his Record: the Papers tab, then the place — the two taps the design allows. */
   const eachPlace = async (page: Page, who: string, tag: string) => {
     for (const entry of ["medicines", "papers", "routine", "timeline", "trends", "providers", "changes"]) {
-      await page.getByTestId("tab-records").click();
+      await page.getByTestId("tab-health").click();
       const row = page.getByTestId(`record-${entry}`);
       if (!(await row.isVisible().catch(() => false))) continue;
       await row.click();
@@ -129,7 +129,7 @@ test("every restyled screen: the tabs, the Record's places, Family's parts, the 
   const eachPart = async (page: Page, who: string, tag: string) => {
     const parts = ["keys", "trail", "roster", "thread", "messages", "metrics", "calendar", "deliveries", "settings", "documents", "consents", "onlyMe"];
     for (const part of parts) {
-      await page.getByTestId("tab-family").click();
+      await page.getByTestId("tab-connect").click();
       const way = page.getByTestId(`open-${part}`);
       if (!(await way.isVisible().catch(() => false))) continue;
       await way.click();
@@ -151,7 +151,7 @@ test("every restyled screen: the tabs, the Record's places, Family's parts, the 
     await eachPart(his, "dad", tag);
 
     // The switcher: whose papers are open, and the way to every other set.
-    await his.getByTestId("tab-today").click();
+    await his.getByTestId("tab-home").click();
     await todayReady(his);
     await his.getByTestId("whose").click();
     await settle(his);
@@ -163,19 +163,19 @@ test("every restyled screen: the tabs, the Record's places, Family's parts, the 
     await snap(his, `dad-feed-${tag}`);
 
     // The day's four screens: the pill, what to do now, the symptom log, a feeling.
-    await his.getByTestId("tab-today").click();
+    await his.getByTestId("tab-home").click();
     await todayReady(his);
     await his.getByTestId("open-symptoms").click();
     await settle(his);
     await snap(his, `dad-symptoms-${tag}`);
-    await his.getByTestId("tab-today").click();
+    await his.getByTestId("tab-home").click();
     await todayReady(his);
     await his.getByTestId("not-well").click();
     await settle(his);
     await snap(his, `dad-not-well-${tag}`);
 
     // The blood pressure typed or photographed, and its review card.
-    await his.getByTestId("tab-today").click();
+    await his.getByTestId("tab-home").click();
     await todayReady(his);
     await his.getByTestId("write-reading").click();
     await expect(his.getByTestId("reading-photo")).toBeVisible();
@@ -206,7 +206,7 @@ test("every restyled screen: the tabs, the Record's places, Family's parts, the 
     await eachPlace(hers, "chief", tag);
     await eachPart(hers, "chief", tag);
 
-    await hers.getByTestId("tab-today").click();
+    await hers.getByTestId("tab-home").click();
     await todayReady(hers);
     await hers.getByTestId("whose").click();
     await settle(hers);

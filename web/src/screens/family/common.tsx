@@ -41,7 +41,7 @@ export function whose(here: Here, self: string, other: string): string {
 /** One Family part: the header with its way back, the part, the tab bar. */
 export function FamilyPage({ title, part, children }: { title: string; part: FamilyPart; children: ComponentChildren }): JSX.Element {
   return (
-    <Shell tab="family" extraClass="family" testId={`family-${part}`}>
+    <Shell tab="connect" extraClass="family" testId={`family-${part}`}>
       <Header title={title} onBack={part === "home" ? undefined : () => go({ name: "family", part: "home" })} />
       {children}
     </Shell>

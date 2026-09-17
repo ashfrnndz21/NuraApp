@@ -72,7 +72,7 @@ async function openFeed(page: Page): Promise<void> {
 async function signIn(page: Page, who: Person, owner: boolean): Promise<void> {
   await signInThroughTheApp(page, who.phone, who.name);
   if (!owner) await page.getByTestId("door-key").click();
-  await expect(page.getByTestId("tab-family")).toBeVisible();
+  await expect(page.getByTestId("tab-connect")).toBeVisible();
 }
 
 /** Pa's readings this week and today, and his feed composed once, as his phone would. */

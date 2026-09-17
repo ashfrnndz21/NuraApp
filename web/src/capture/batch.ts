@@ -28,6 +28,9 @@ export interface Picked {
   id: number;
   /** Its place in the grid, from 1: "Picture 3". */
   place: number;
+  /** The file's own name, exactly as his phone gave it — shown so he can see what he is about
+   *  to send before he says so (the report confirm step, `PapersScreen`). */
+  name: string;
   pdf: boolean;
   /** The picture in the grid, while it is not sent: an object URL, or null for a PDF. */
   thumb: string | null;
@@ -66,7 +69,7 @@ export class PaperBatch {
     files.forEach((file, index) => {
       const id = this.nextId++;
       this.files.set(id, file);
-      added.push({ id, place: start + index + 1, pdf: isPdf(file), thumb: isPdf(file) ? null : this.deps.thumb(file), chosen: true, outcome: { kind: "waiting" } });
+      added.push({ id, place: start + index + 1, name: file.name, pdf: isPdf(file), thumb: isPdf(file) ? null : this.deps.thumb(file), chosen: true, outcome: { kind: "waiting" } });
     });
     if (added.length === 0) return;
     this.items.value = [...this.items.value, ...added];

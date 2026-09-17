@@ -11,48 +11,45 @@ import type { RecordAt } from "./record/places";
  *  What does change the list is the key: a tab whose surface a key does not open is not shown,
  *  because tapping it would only reach the backend's no. That is scope, not persona.
  *
- *  The names are the design system's (docs/design-system.md §3) for the surfaces that exist:
- *  Today, Medicines, Records, Visits, Family. Her Home is Today, her Timeline and her Plan are
- *  places inside Records and Visits, each one tap from the tab — so every feature is still at
- *  most two taps away. */
-export type Tab = "today" | "medicines" | "records" | "visits" | "family";
+ *  The five tabs are the owner's reference's (docs/design-direction.md, "The bottom
+ *  navigation"), each holding Nura's content:
+ *  - Home: Today — the greeting, the check-in, "What would you like to do?", Upcoming.
+ *  - Health: his medicines and doses, readings, papers and reports (the Record).
+ *  - Connect: family and friends, the family thread, messages (Family).
+ *  - Services: his visits and doctors, and getting ready for the next one.
+ *  - Profile: him, his settings, language, text size, privacy (what the Me sheet holds). */
+export type Tab = "home" | "health" | "connect" | "services" | "profile";
 
-/** Which scope each tab needs to be worth showing. Today is always there: it is where the app
- *  opens. Papers is not one scope but whatever places a key opens (`hubEntries`) — a helper
- *  with only the medicines still has his day and what changed to read. */
+/** Which scope each tab needs to be worth showing. Home and Profile are always there: Home is
+ *  where the app opens, Profile is the person's own settings. Health is not one scope but
+ *  whatever places a key opens (`hubEntries`) — a helper with only the medicines still has his
+ *  day and what changed to read — so it is always there too. */
 const NEEDS: Partial<Record<Tab, string>> = {
-  medicines: "medicines",
-  visits: "visits",
-  family: "family",
+  connect: "family",
+  services: "visits",
 };
 
 export function tabsFor(density: Density, s: Strings, scopes: readonly string[] = [], owner = true): TabItem[] {
   const all: TabItem[] = [
-    { id: "today", label: s.tabs.today, icon: "today" },
-    { id: "medicines", label: s.tabs.medicines, icon: "medicines" },
-    { id: "records", label: s.tabs.records, icon: "records" },
-    { id: "visits", label: s.tabs.visits, icon: "visits" },
-    { id: "family", label: s.tabs.family, icon: "family" },
+    { id: "home", label: s.tabs.home, icon: "home" },
+    { id: "health", label: s.tabs.health, icon: "health" },
+    { id: "connect", label: s.tabs.connect, icon: "connect" },
+    { id: "services", label: s.tabs.services, icon: "services" },
+    { id: "profile", label: s.tabs.profile, icon: "profile" },
   ];
   // The owner of the papers opens all of them; a key opens what it was cut for. A tab whose
   // surface a key does not open is left off, because tapping it would only reach the
   // backend's no — that is the key's scope, not a second kind of app.
   if (owner) return all;
   return all.filter((tab) => {
-    // Today and Papers are always there. Papers is not gated on a scope because "what changed"
-    // is readable under any key (`hubEntries`, PART null), so the tab always opens something;
-    // which places are on it is the key's business, not the bar's.
-    if (tab.id === "today" || tab.id === "records") return true;
     const needed = NEEDS[tab.id as Tab];
     return needed === undefined || scopes.includes(needed);
   });
 }
 
-/** Which tab a place in the Record (W5) is under, the same for everyone: the medicines, their
- *  story, adding one and "I have more at home." under Medicines; every other place in his
- *  papers under Records. Visits is the appointments surface, not a place in the Record, so
- *  opening his written history never lights a tab he did not tap. */
-export function recordTab(at: RecordAt, _density: Density): Tab {
-  const medicine = at.name === "medicines" || at.name === "story" || at.name === "add" || at.name === "more";
-  return medicine ? "medicines" : "records";
+/** Which tab a place in the Record (W5) is under: every place in his papers — his medicines
+ *  and their story included — is Health, the same for everyone. Visits is the Services tab,
+ *  not a place in the Record, so opening his written history never lights a tab he did not tap. */
+export function recordTab(_at: RecordAt, _density: Density): Tab {
+  return "health";
 }

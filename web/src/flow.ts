@@ -48,8 +48,14 @@ export type Screen =
   | { name: "onboarding" }
   /** His emergency card, one tap from Today, readable with no network (E00-08, E13-01). */
   | { name: "emergency" }
-  /** Papers from his photos: many picked at once, one yes, one review card each (E18-01). */
-  | { name: "papers" }
+  /** Papers from his photos: many picked at once, one yes, one review card each (E18-01).
+   *  `report`: one report chosen from Home's "Add a health report" — the choice is the yes, so it
+   *  goes at once and a readable one opens straight on its review card. */
+  | { name: "papers"; report?: boolean }
+  /** The Profile tab: what the Me sheet holds, as a screen of its own. */
+  | { name: "profile" }
+  /** A place Home's grid names that is not built yet: said plainly, never a dead tap. */
+  | { name: "soon"; place: SoonPlace }
   /** The patient's day (W7): the button, what to do now, a tapped word's one question, the
    *  symptom log, the whole pre-visit brief, the questions for the visit. */
   | { name: "notWell" }
@@ -81,18 +87,24 @@ export type FamilyPart =
 
 export type { Tab };
 
-/** Each tab's first screen — one tab set for everyone (nav.ts). Medicines and Records are
- *  places in the Record (W5); Visits is his visits and getting ready for the next one. */
+/** The places Home's grid offers that Nura has not built yet (docs/design-direction.md). */
+export type SoonPlace = "activities" | "care" | "resources";
+
+/** Each tab's first screen — one tab set for everyone (nav.ts). Home is Today; Health is the
+ *  Record (W5); Connect is Family; Services is his visits and getting ready for the next one;
+ *  Profile is the person's own settings. */
 export function openTab(tab: Tab): void {
   switch (tab) {
-    case "medicines":
-      return go({ name: "record", at: { name: "medicines" } });
-    case "records":
+    case "home":
+      return go({ name: "today" });
+    case "health":
       return go({ name: "record", at: { name: "hub" } });
-    case "family":
+    case "connect":
       return go({ name: "family", part: "home" });
-    default:
-      return go({ name: tab });
+    case "services":
+      return go({ name: "visits" });
+    case "profile":
+      return go({ name: "profile" });
   }
 }
 

@@ -14,6 +14,7 @@ import { proudLine } from "../today/model";
 import { todayPage } from "../today/page";
 import { Hear, Notice, Pill, Tile } from "../ui/components";
 import { Sheet } from "../ui/kit";
+import { Shell } from "./Shell";
 
 /** Me (D1): a sheet from the header's avatar, over whatever screen is open — never a tab. Who
  *  is signed in; the number that only goes up; the language; how Nura looks; his family (the
@@ -22,6 +23,38 @@ import { Sheet } from "../ui/kit";
 export function MeSheet(): JSX.Element | null {
   const s = t();
   const open = meOpen.value;
+  // Escape closes it; opening it puts the screen reader on its title.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMe();
+    };
+    document.addEventListener("keydown", onKey);
+    document.getElementById("sheet-title")?.focus();
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  return (
+    <Sheet title={s.me.title} open={open} onClose={closeMe} closeLabel={s.shell.close} testId="me-sheet">
+      <MeBody open={open} />
+    </Sheet>
+  );
+}
+
+/** The Profile tab (docs/design-direction.md): everything the Me sheet holds, as the tab's own
+ *  screen — the same parts, so the two can never say different things. */
+export function ProfileScreen(): JSX.Element {
+  const s = t();
+  return (
+    <Shell tab="profile" testId="profile-screen">
+      <h1 class="title place-title">{s.me.title}</h1>
+      <MeBody open />
+    </Shell>
+  );
+}
+
+/** What Me holds, wherever it is drawn. `open`: whether it is on screen, so its reads wait. */
+function MeBody({ open }: { open: boolean }): JSX.Element {
+  const s = t();
   // A key to the emergency card alone: nothing here opens more of the papers than that.
   const only = profile.value ? emergencyOnly(profile.value) : false;
   const names: Record<Language, string> = { en: s.me.en, ms: s.me.ms, zh: s.me.zh };
@@ -41,23 +74,12 @@ export function MeSheet(): JSX.Element | null {
   // Today's page stands in only for the papers it was read from: never another profile's count.
   const page = todayPage.value !== null && todayPage.value.profileId === papers?.profile_id ? todayPage.value.model : null;
   const standIn = page !== null && (!owner || summary === "failed");
-  // Escape closes it; opening it puts the screen reader on its title.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeMe();
-    };
-    document.addEventListener("keydown", onKey);
-    document.getElementById("sheet-title")?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
   // Anyone else's view of the count, or his own when the summary cannot be read (offline):
   // the number Today read, never one counted here.
   const counted = page?.proud ?? null;
   const counts = proudLine(counted, s);
   return (
-    <Sheet title={s.me.title} open={open} onClose={closeMe} closeLabel={s.shell.close} testId="me-sheet">
+    <>
       {said ? (
         <Tile paper testId="me-proud">
           <div class="number" data-testid="me-proud-number">
@@ -157,7 +179,7 @@ export function MeSheet(): JSX.Element | null {
           {s.me.signOut}
         </Pill>
       </Tile>
-    </Sheet>
+    </>
   );
 }
 

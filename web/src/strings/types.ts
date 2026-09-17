@@ -19,11 +19,64 @@ export interface Strings {
   appName: string;
   /** The demo banner (ADR 0008): a headline, then whole sentences. */
   demo: { banner: string; bannerShort: string; lines: readonly string[] };
-  tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string };
-  /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close. */
-  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string };
+  tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string; health: string; connect: string; services: string; profile: string };
+  /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close;
+   *  the header's bell, which opens what is new for him (docs/design-direction.md). */
+  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string; bell: string };
+  /** The welcome screen before sign-in (docs/design-direction.md, Reference B's first screen):
+   *  a two-line tagline, the line under it, three value tiles, Get started and Sign in. */
+  welcome: {
+    tagline1: string;
+    tagline2: string;
+    lead: string;
+    remember: string;
+    rememberLine: string;
+    share: string;
+    shareLine: string;
+    prepare: string;
+    prepareLine: string;
+    start: string;
+  };
+  /** Conversation and waiting (docs/design-direction.md): the words every ask, search and
+   *  message composer uses while Nura works. The steps themselves are the backend's lines. */
+  talk: { you: string; nura: string; working: string; answered: string; lookedAt: string; slow: string; failed: string; tryAgain: string; loading: string };
+  /** Home in the warm style: the question under the greeting, the daily check-in, the grid of
+   *  places, adding a health report, and what is coming up. `…Other`: said about him by name. */
+  hub: {
+    howFeeling: string; howFeelingOther: string;
+    checkTitle: string; checkTitleOther: string;
+    checkLine: string; checkLineOther: string;
+    checkIn: string;
+    doTitle: string; doTitleOther: string;
+    health: string;
+    healthLine: string; healthLineOther: string;
+    medicines: string;
+    medicinesLine: string; medicinesLineOther: string;
+    connect: string;
+    connectLine: string; connectLineOther: string;
+    activities: string;
+    activitiesLine: string;
+    care: string;
+    careLine: string; careLineOther: string;
+    resources: string;
+    resourcesLine: string;
+    report: string;
+    reportLine: string; reportLineOther: string;
+    reportNote: string; reportNoteOther: string;
+    /** Before the file he picked goes: its name (raw, not this line) plus this line, and the
+     *  "Send it" button — his one yes, so a chosen file is never sent on its own. */
+    reportReady: string;
+    reportReadyOther: string;
+    reportSend: string;
+    upcoming: string;
+    seeAll: string;
+    seeAllVisits: string;
+    soonLine1: string;
+    soonLine2: string;
+    backHome: string; backHomeOther: string;
+  };
   /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
-  home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
+  home: { mostLikely: string; whatChanged: string; nextVisit: string; atTime: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
   /** The tabs' own titles (D1). */
   places: {
     visitsOwn: string; visitsOwnOther: string;

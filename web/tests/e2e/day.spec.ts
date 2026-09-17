@@ -75,7 +75,14 @@ async function showDemoBanner(page: Page): Promise<void> {
 async function notUnderTheBanner(page: Page): Promise<string[]> {
   await expect(page.locator(".demo-banner")).toBeVisible();
   return page.evaluate(() => {
+    // The shell's page scrolls in its own region (D1), not the window — the same fact
+    // `underTheTabBar` (helpers.ts) already scrolls by. A check run right before this one
+    // (`nothingDrawnOverLines`) brings each line and control to the centre of the screen in
+    // turn, and can leave that region scrolled to wherever its last control was; `window.scrollTo`
+    // never reaches it, so the top of the card can still be scrolled out of view here even
+    // though nothing is actually drawn over it.
     window.scrollTo(0, 0);
+    document.querySelector<HTMLElement>('[data-testid="shell-scroll"]')?.scrollTo(0, 0);
     const bottom = document.querySelector(".demo-banner")?.getBoundingClientRect().bottom ?? 0;
     const problems: string[] = [];
     for (const line of document.querySelectorAll<HTMLElement>("[data-testid=what-to-do-lines] p")) {
@@ -699,7 +706,7 @@ test("the post-visit card on the web: each line with where it was said, one left
   // merged in below the card on screen (`feed/store.ts`), and the test does not depend on when.
   const isFeedPage = (response: { request(): { method(): string }; url(): string }) => response.request().method() === "GET" && /\/profiles\/[^/]+\/feed$/.test(new URL(response.url()).pathname);
   const todays = page.waitForResponse(isFeedPage);
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("tab-home").click();
   await todays;
   const fresh = page.waitForResponse(isFeedPage);
   await page.getByTestId("open-feed").click();
@@ -726,7 +733,7 @@ test("the post-visit card on the web: each line with where it was said, one left
     route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ refusal: "OnlyTheFamilyHears" }) }),
   );
   // Out of the feed and back: the feed opens with a player that has fetched nothing yet.
-  await page.getByRole("button", { name: "Today", exact: true }).click();
+  await page.getByTestId("tab-home").click();
   await page.getByTestId("open-feed").click();
   await expect(page.locator("article.feed-card").first()).toBeVisible();
   // The pager may open on the backend's cached page, from before his yes; the fresh page takes
@@ -776,7 +783,7 @@ test("the day's nudge where the backend plans it, with its why: OK, and it is go
   // Me: the number that only goes up, as the backend says it.
   const summary = (await (await request.get(`${API}/profiles/${pa.profileId}/me-summary?language=en`, auth(pa.token))).json()) as { proud_days: number; lines: string[] };
   await expect(async () => {
-    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await page.getByTestId("open-me").click();
     await expect(page.getByTestId("me-proud-number")).toBeVisible({ timeout: 2000 });
   }).toPass();
   await expect(page.getByTestId("me-proud-number")).toHaveText(String(summary.proud_days));

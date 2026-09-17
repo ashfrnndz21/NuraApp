@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, fixClock, openMe, seedMedicine } from "./helpers";
+import { API, fixClock, openMe, seedMedicine, TAB_SET } from "./helpers";
 import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, openRecord, placeholderPng, readable, signInAs, yes } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
@@ -15,8 +15,8 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
   const siti = await letIn(request, pa, "Siti", "helper", ["medicines"]);
 
   await signInAs(page, pa, "Pa");
-  await expect(page.getByTestId("tab-records")).toHaveText("Papers");
-  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Medicines", "Papers", "Visits", "Family"]);
+  await expect(page.getByTestId("tab-health")).toHaveText("Health");
+  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual([...TAB_SET]);
   await openRecord(page);
   await expect(page.locator("h1")).toHaveText("Your papers");
   const his = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));
@@ -127,10 +127,10 @@ for (const look of LOOKS) {
     // His Today has the blood pressure card; hers is under Visits, with getting ready for the
     // next visit (D1: one tab set, so the same tab for both).
     if (look === "patient") {
-      await page.getByTestId("tab-today").click();
+      await page.getByTestId("tab-home").click();
       await page.getByTestId("write-reading").click();
     } else {
-      await page.getByTestId("tab-visits").click();
+      await page.getByTestId("tab-services").click();
       await page.getByTestId("plan-reading").click();
     }
     await expect(page.getByTestId("reading-photo")).toBeVisible();

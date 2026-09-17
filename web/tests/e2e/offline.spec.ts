@@ -105,7 +105,7 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
   await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("emergency."))).toBe(true);
 
-  await page.getByTestId("tab-records").click();
+  await page.getByTestId("tab-health").click();
   await expect(page.getByTestId("record-hub")).toBeVisible();
   await page.getByTestId("record-medicines").click();
   await page.getByTestId("add-medicine").click();
@@ -130,7 +130,7 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
 
   // Offline from here on: what the phone kept is all there is left to read.
   await context.setOffline(true);
-  await page.getByTestId("tab-today").click();
+  await page.getByTestId("tab-home").click();
   await page.getByTestId("open-emergency").click();
   await expect(page.getByTestId("emergency-card").getByTestId("emergency-lines")).toContainText(line!);
   await context.setOffline(false);
@@ -357,7 +357,7 @@ test("the not-feeling-well cards on the phone: served with no network after a re
   await page.reload();
   await todayReady(page);
   await expect.poll(async () => (await keptKeys(page)).some((key) => key.startsWith("nfw."))).toBe(true);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   expect((await keptKeys(page)).filter((key) => /^(today|feed|queue|emergency|nfw)\./.test(key))).toEqual([]);
@@ -376,7 +376,7 @@ test("an account closing: nothing of its papers stays on the phone, and the door
   await expect.poll(async () => (await kept()).some((key) => key.startsWith("nfw."))).toBe(true);
   expect((await kept()).some((key) => key.startsWith("today."))).toBe(true);
 
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   await page.getByTestId("open-consents").click();
   await page.getByTestId("consent").filter({ hasText: "Nura keeps your papers" }).getByTestId("close-account").click();
   await page.getByTestId("close-yes").click();

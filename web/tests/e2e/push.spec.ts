@@ -52,7 +52,7 @@ test("reminders on this phone: nothing asked on load; a tap asks once, subscribe
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
 
   // Me offers reminders, and nothing has asked the phone yet: not on load, not on Me.
   await expect(page.getByTestId("reminders-get")).toHaveText("Get reminders on this phone");
