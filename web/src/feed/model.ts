@@ -59,6 +59,21 @@ export function variantOf(item: Pick<FeedItemOut, "type">): Variant {
   return VARIANTS[item.type] ?? "text";
 }
 
+/** The Services tab's Care services section (D1): the local alerts the feed already made for
+ *  him — dengue, haze, heat, a season — never a fresh call, and never fiction. `app.delivery.
+ *  feed.local` decides whether one exists at all; here we only pick the ones already in his
+ *  page. */
+export function careCards(items: readonly FeedItemOut[]): FeedItemOut[] {
+  return items.filter((item) => variantOf(item) === "local");
+}
+
+/** The Services tab's Guides section: the same evergreen explainers and clips Home's learning
+ *  section shows, filtered to those two kinds — nothing seasonal or food-specific, which stay
+ *  on Home. */
+export function guideCards(items: readonly FeedItemOut[]): FeedItemOut[] {
+  return items.filter((item) => variantOf(item) === "learning" || variantOf(item) === "clip");
+}
+
 /** The small label above a card: the section of the supply it came from. None for a red
  *  flag (its headline says it) or the gate. */
 export type Section = "now" | "today" | "story" | "learning";
