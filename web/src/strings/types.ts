@@ -223,6 +223,8 @@ export interface Strings {
     declinedToday: string;
     shared: string;
     fromPublisher: string;
+    whyLink: string;
+    whyTitle: string;
     cannotShare: string;
     quiet: string;
     quietSub: string;

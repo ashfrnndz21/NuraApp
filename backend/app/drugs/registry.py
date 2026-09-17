@@ -155,6 +155,15 @@ class NotIdentified(Refusal):
     """What the label said matched no product in the register. Nothing is guessed."""
 
 
+class StrengthNotRead(Refusal):
+    """The generic is real, on the register, and one of the five high-risk classes — but the
+    register carries more than one strength for it and the label did not say which (#211,
+    following #206's `HIGH_RISK_NEEDS_STRENGTH`). A label photo proves a photo exists, not
+    that the strength printed on it was read; the fix is a photo that shows the strength, not
+    a different drug. Distinct from `NotIdentified`, which is the register never having heard
+    of the generic at all — the person is told which is true, so he knows what to fix."""
+
+
 class DrugRegistry(Protocol):
     """Any licensed registry a deployment runs on answers these three."""
 

@@ -455,6 +455,8 @@ CATEGORY_OF: dict[CardType, str] = {
     CardType.MEMO: "reminder",
     CardType.READING: "insight",
     CardType.NOTICE: "insight",
+    # His own pack is one of the recalled batches: something to do today, like a local alert.
+    CardType.RECALL_ACTION: "reminder",
     CardType.STORY: "insight",
     CardType.LEARNING: "insight",
     # A local alert says what to do today; the rest are something to know.

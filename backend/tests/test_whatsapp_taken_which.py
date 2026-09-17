@@ -283,7 +283,7 @@ async def test_the_helpers_sudah_beri_follows_the_same_rule(
         sg, region=Region.SG, display_name="Siti", phone_e164=SITI, language="ms"
     )
     helper = {Scope.MEDICINES, Scope.EMERGENCY, Scope.SEND}
-    await agree_to_family_sharing(sg, home.owner, siti, scopes=helper)
+    await agree_to_family_sharing(sg, home.owner, siti, scopes=helper, role=KeyRole.HELPER)
     await grant_key(sg, context=home.owner, holder=siti, role=KeyRole.HELPER, scopes=helper)
     await _ladders_after_breakfast(sg, home, clock)
 

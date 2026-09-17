@@ -106,7 +106,7 @@ async def _let_in(
 ) -> KeyContext:
     """The owner lets someone in and cuts them a key; the context they then hold."""
     holder = await register_person(session, region=Region.SG, display_name="Mei", phone_e164=phone)
-    await agree_to_family_sharing(session, owner, holder)
+    await agree_to_family_sharing(session, owner, holder, role=role)
     await grant_key(session, context=owner, holder=holder, role=role, scopes=scopes)
     return await resolve_key_context(
         session, region=Region.SG, person_id=holder.id, profile_id=owner.profile_id

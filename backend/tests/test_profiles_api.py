@@ -46,7 +46,7 @@ async def _caregiver_key(
     deployment: Deployment, owner: dict[str, str], profile_id: str, holder_phone: str
 ) -> dict[str, object]:
     """Pa lets the number in to medicines and visits, then cuts a caregiver key on that."""
-    await let_in(deployment, owner, profile_id, holder_phone, ["medicines", "visits"], "daughter")
+    await let_in(deployment, owner, profile_id, holder_phone, ["medicines", "visits"], "daughter", role="caregiver")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={
@@ -135,7 +135,7 @@ async def test_the_owner_lists_the_keys_cut_on_his_profile(deployment: Deploymen
     his = bearer(pa["token"])
 
     hers = await _caregiver_key(deployment, pa, profile_id, DAUGHTER)
-    await let_in(deployment, pa, profile_id, SON, list(SCOPE_NAMES), "son")
+    await let_in(deployment, pa, profile_id, SON, list(SCOPE_NAMES), "son", role="chief")
     granted = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_person_id": son["person_id"], "role": "chief"},
@@ -370,7 +370,7 @@ async def test_a_key_needs_a_holder_and_only_the_owner_or_a_chief_cuts_one(
 
     # Letting a number in that has not registered yet reserves that number an account, so
     # the invite can land on it later. Whether the number was known is not answered.
-    await let_in(deployment, pa, profile_id, "+6591110003", ["medicines"], "helper")
+    await let_in(deployment, pa, profile_id, "+6591110003", ["medicines"], "helper", role="helper")
     invited = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": "+6591110003", "role": "helper"},

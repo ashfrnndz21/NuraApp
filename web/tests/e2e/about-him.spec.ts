@@ -38,20 +38,17 @@ const HERS = [
 
 const aboutHim = (line: string): boolean => TO_HIM.test(line) && !HERS.some((hers) => hers.test(line));
 
-/** The screen's own lines — its chrome and its cards — minus three sets that have fixmes of
- *  their own below: the feed's cards with the "Sent to Pa this week" panel that lists their
- *  headlines, the family's grant lines, and the consent wording. The first two are backend lines
- *  on paths that do not pass the reader: #177's new formats (the recap, the clips, the local
- *  alerts) reach her Home still speaking to him, because that path does not pass the reader that
- *  says his lines about him (`app/channels/about_him.py`). The consent wording is a different
- *  kind of finding (#214): it is a verbatim quotation of the words *he* read, shown on *her*
- *  screen with nothing marking it as a quotation, so "your medicines" reads as hers. That is a
- *  design change (attribute it, or rewrite it for a caregiver), not a wrapper this sweep can
- *  apply — see #214, not #210. Everything else on the screen is held to the rule here. */
+/** The screen's own lines — its chrome and its cards — minus the ordinary feed cards
+ *  (`feed-card`, `flag-card`) and `reach-lines`, whose innerText mixes titles, bodies and
+ *  provenance in a shape this line-by-line sweep cannot read reliably; those are held to the
+ *  rule by the tests that read them directly instead. The feed's "Sent to Pa this week" panel
+ *  (`sent`), the family's grant lines (`grant-lines`) and the consent wording (`consent-words`)
+ *  used to be excluded here too, while #210 and #214 were open; now that both are fixed, they
+ *  are swept like everything else on the screen. */
 async function linesOn(page: Page): Promise<string[]> {
   const { all, cards } = await page.getByTestId("shell-scroll").evaluate((root) => ({
     all: (root as HTMLElement).innerText,
-    cards: [...root.querySelectorAll<HTMLElement>("[data-testid=feed-card], [data-testid=flag-card], [data-testid=sent], [data-testid=grant-lines], [data-testid=reach-lines], [data-testid=consent-words]")].map((card) => card.innerText),
+    cards: [...root.querySelectorAll<HTMLElement>("[data-testid=feed-card], [data-testid=flag-card], [data-testid=reach-lines]")].map((card) => card.innerText),
   }));
   const inACard = new Set(cards.flatMap((card) => card.split("\n").map((line) => line.trim())).filter(Boolean));
   return all
@@ -227,13 +224,12 @@ test("no caregiver-density screen says a second-person line about his record", a
   expect(outside, "every screen the tab bar reaches is inside the shell").toEqual([]);
 });
 
-/** The defect #177 left, named so it is not forgotten: the feed's new formats — "Your week, in
- *  30 seconds", "From your blood pressure book", "How your blood pressure moved" — are drawn on
- *  her Home in his voice. The catalogue twins exist (`HEADLINES_THEIRS`, `LINES_THEIRS`,
- *  `WHY_THEIRS`, added on this branch), so what is missing is the reader on the path that
- *  serves these cards: the endpoint behind her Home's feed does not call `reader.page`, the way
- *  `GET /feed` does. Fixing it is a backend change and is not this branch's. */
-test.fixme("her Home's feed cards say his papers about him by name", async ({ page, request }) => {
+/** The defect #177 left, closed by #210: the feed's new formats — "Your week, in 30 seconds",
+ *  "From your blood pressure book", "How your blood pressure moved" — used to be drawn on her
+ *  Home in his voice. The catalogue twins existed (`HEADLINES_THEIRS`, `LINES_THEIRS`,
+ *  `WHY_THEIRS`, added for #194) but the path that serves "Sent to Pa this week" — `GET
+ *  /profiles/{id}/feed/week` — did not call the reader the way `GET /feed` does; it does now. */
+test("her Home's feed cards say his papers about him by name", async ({ page, request }) => {
   const family = await seedHome(request);
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
@@ -242,14 +238,14 @@ test.fixme("her Home's feed cards say his papers about him by name", async ({ pa
   expect(lines.filter(aboutHim)).toEqual([]);
 });
 
-/** The same defect on a second path, named so it is not forgotten: the family's grant lines say
- *  what a key opens in his voice — "Mei is the person who runs your care.", "- your medicines",
- *  "Mei can see them until you say stop." — and they are drawn on her Family screen, where they
- *  are about him. `GET /profiles/{id}/grants` (`app/channels/api/family.py`) does not pass its
- *  lines through the reader that says his lines about him, and `app/family/strings.py` has no
- *  `*_THEIRS` twins for them to be said with. Both are backend changes and are not this
- *  branch's; the fix is the same shape as the twins this branch added elsewhere. */
-test.fixme("her Family screen says what a key opens about him by name", async ({ page, request }) => {
+/** The same defect on a second path, closed by #210: the family's grant lines used to say what
+ *  a key opens in his voice — "Mei is the person who runs your care.", "- your medicines", "Mei
+ *  can see them until you say stop." — on her Family screen, where they are about him. `GET
+ *  /profiles/{id}/grants` (`app/channels/api/family.py`) now passes its lines through the
+ *  reader that says his lines about him, and `app/family/strings.py` and `app/consent/texts.py`
+ *  carry the twins for them to be said with (`ROLE_IS`, `WINDOW_LINES_THEIRS`,
+ *  `SCOPE_WORDS_THEIRS`). */
+test("her Family screen says what a key opens about him by name", async ({ page, request }) => {
   const family = await seedHome(request);
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
@@ -260,18 +256,16 @@ test.fixme("her Family screen says what a key opens about him by name", async ({
   expect(lines.filter(aboutHim)).toEqual([]);
 });
 
-/** A different kind of finding from the two above (#214, not #210): not a missing reader on a
- *  backend path, but a verbatim quotation with nothing marking it as one. Her Family consents
- *  screen (`ConsentsPart`, `web/src/screens/family/Consents.tsx`) shows the words *he* read and
- *  agreed to — `consent.wording`, from `app/consent/texts.py`'s `SHARE_WITH_PERSON` template —
- *  exactly as he read them, on *her* phone: "You are letting Mei, your daughter, see some of
- *  your record. — your medicines — …". Nothing on the screen says these are his words rather
- *  than a description of what is happening to her, so "your medicines" reads as hers. It matters
- *  more here than an ordinary copy slip: this is the consent record, the one screen whose whole
- *  job is being unambiguous about who agreed to what. The fix is a design change, not a
- *  wrapper — attribute the quote to him, or give the caregiver a rewritten, third-person version
- *  — so it is tracked rather than fixed here. */
-test.fixme("her Family consents screen names whose words the quote is", async ({ page, request }) => {
+/** A different kind of finding from the two above, closed by #214: not a missing reader on a
+ *  backend path, but a verbatim quotation that used to carry nothing marking it as one. Her
+ *  Family consents screen (`ConsentsPart`, `web/src/screens/family/Consents.tsx`) shows the
+ *  words *he* read and agreed to — `consent.wording_text`, from `app/consent/texts.py`'s
+ *  `HOLD_HEALTH_RECORD` and `SHARE_WITH_PERSON` wordings — and used to show them exactly as he
+ *  read them, on *her* phone: "You are letting Mei, your daughter, see some of your record. —
+ *  your medicines — …". `GET /profiles/{id}/consents` now passes the wording through the same
+ *  reader as everything else about him (`CONSENT_THEIRS`, `SCOPE_WORDS_THEIRS`), so what she
+ *  reads is never left in his voice to begin with. */
+test("her Family consents screen names whose words the quote is", async ({ page, request }) => {
   const family = await seedHome(request);
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
@@ -279,6 +273,11 @@ test.fixme("her Family consents screen names whose words the quote is", async ({
   await page.getByTestId("tab-connect").click();
   await page.getByTestId("open-consents").click();
   await expect(page.getByTestId("consent-words").first()).toBeVisible();
-  const lines = (await page.getByTestId("consent-words").first().innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
-  expect(lines.filter(aboutHim)).toEqual([]);
+  const words = page.getByTestId("consent-words");
+  const count = await words.count();
+  expect(count).toBeGreaterThan(0);
+  for (let at = 0; at < count; at += 1) {
+    const lines = (await words.nth(at).innerText()).split("\n").map((line) => line.trim()).filter(Boolean);
+    expect(lines.filter(aboutHim), `consent-words[${at}]`).toEqual([]);
+  }
 });

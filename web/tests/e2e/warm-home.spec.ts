@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cutKey, fixClock, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, todayReady } from "./helpers";
+import { cutKey, fixClock, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, TAB_SET, TAB_SET_MEDICINES_ONLY, todayReady } from "./helpers";
 import { seedHome } from "./homeSeed";
 
 /** The warm pass (docs/design-direction.md): the welcome before a phone's first sign-in, Home's
@@ -36,7 +36,7 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   await expect(hero.locator(".hero-ask")).toHaveText("How are you feeling today?");
   await expect(hero.locator("[data-illustration=couple]")).toHaveAttribute("aria-hidden", "true");
   await expect(hero.locator(".hero-wave")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Health", "Family", "Visits", "Me"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
   await expect(page.getByTestId("tab-home")).toHaveAttribute("aria-current", "page");
 
   // Check in opens the way to say how he feels.
@@ -130,7 +130,8 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   await expect(hero.locator(".hero-greeting")).toHaveText("Good morning, Mei.");
   await expect(hero.locator(".hero-ask")).toHaveText("How is Pa feeling today?");
   await expect(page.getByTestId("daily-check-in")).toContainText("Tell Nura how Pa feels today");
-  await expect(page.locator("#do-title")).toHaveText("What would you like to do?");
+  // The caregiver twin (bcd96c99): "What to do for Pa.", not the generic second-person line.
+  await expect(page.locator("#do-title")).toHaveText("What to do for Pa.");
   const tiles = await page.getByTestId("do-grid").locator("button").evaluateAll((all) => all.map((each) => each.getAttribute("data-testid")));
   expect(tiles[0]).toBe("do-health");
   expect(tiles.slice(-3)).toEqual(["do-activities", "do-care", "do-resources"]);
@@ -142,7 +143,7 @@ test("a key with only the medicines: no Connect or Services tab, no Connect tile
   await signInThroughTheApp(page, kim.phone, "Kim");
   await page.getByTestId("door-key").click();
   await todayReady(page);
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Health", "Me"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET_MEDICINES_ONLY]);
   await expect(page.getByTestId("do-connect")).toHaveCount(0);
   await expect(page.getByTestId("do-medicines")).toBeVisible();
   await expect(page.getByTestId("upcoming-all")).toHaveCount(0);

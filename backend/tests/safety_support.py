@@ -70,7 +70,7 @@ async def let_in(
         session, region=owner.region, display_name=name, phone_e164=phone
     )
     holder.language = language
-    await agree_to_family_sharing(session, owner, holder)
+    await agree_to_family_sharing(session, owner, holder, role=role)
     await grant_key(session, context=owner, holder=holder, role=role, scopes=scopes)
     return await resolve_key_context(
         session, region=owner.region, person_id=holder.id, profile_id=owner.profile_id

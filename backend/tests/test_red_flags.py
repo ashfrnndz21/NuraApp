@@ -198,7 +198,9 @@ async def test_a_red_flag_is_written_before_anything_else_and_escalates(
 ) -> None:
     home = await family(sg, tmp_path)
     kit = await register_person(sg, region=Region.SG, display_name="Kit", phone_e164=KIT)
-    await agree_to_family_sharing(sg, home.owner, kit, scopes={Scope.MEDICINES, Scope.EMERGENCY})
+    await agree_to_family_sharing(
+        sg, home.owner, kit, scopes={Scope.MEDICINES, Scope.EMERGENCY}, role=KeyRole.HELPER
+    )
     await grant_key(sg, context=home.owner, holder=kit, role=KeyRole.HELPER)
 
     handled = await home.inbound(sg, MEI, "he fell in the bathroom just now")

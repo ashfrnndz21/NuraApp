@@ -92,6 +92,21 @@ export async function readCard(bearer: string, profileId: string, language: stri
   return { card, html };
 }
 
+/** Refresh the kept card right away, outside `wantsRead`'s once-a-day gate: called after a
+ *  write that changes what the card says, such as a new medicine (#171) — a paramedic reading
+ *  the kept copy that same day must not find yesterday's list. Best-effort: the write it
+ *  follows already succeeded on its own, so a failure here (no network, a server that could
+ *  not answer) never surfaces — the kept card simply stands until the next read earns a
+ *  fresher one, exactly as `keepsCard` already decides for every other read. */
+export async function refreshCardNow(bearer: string, profileId: string, binding: Binding, language: string, now: Date): Promise<void> {
+  try {
+    const had = await loadCard(profileId, binding);
+    await saveCard(profileId, await readCard(bearer, profileId, language), binding, now, had);
+  } catch {
+    /* the write stands; the kept card catches up on the next read */
+  }
+}
+
 /** What a failed read of the card means for the copy the phone has: no network, a server that
  *  could not answer, or a State behind the record keep it; a no to this key deletes it. */
 export function keepsCard(failure: unknown): boolean {

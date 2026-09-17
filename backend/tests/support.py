@@ -28,7 +28,7 @@ from app.db import Base, ProfileScoped, enum_column, unit_of_work
 from app.errors import Refusal
 from app.identity.models import Person
 from app.keys.context import KeyContext
-from app.keys.scopes import ALL_SCOPES, Scope
+from app.keys.scopes import ALL_SCOPES, KeyRole, KeyWindow, Scope
 from app.safety.boundary import Surface
 from app.state.models import RenderedFromState
 from app.state.service import StateView, render_from_state
@@ -126,8 +126,11 @@ async def agree_to_family_sharing(
     *,
     scopes: Iterable[Scope] = ALL_SCOPES,
     relationship: str | None = None,
+    role: KeyRole,
+    window: KeyWindow = KeyWindow.ALWAYS,
 ) -> Consent:
-    """The owner lets one person in, to these parts; that person's key rests on this."""
+    """The owner lets one person in, to these parts, as this role, for this window; that
+    person's key rests on this."""
     return await grant_consent(
         session,
         context=owner,
@@ -136,7 +139,11 @@ async def agree_to_family_sharing(
         basis=ConsentBasis.OWNER,
         language="en",
         sharing=Sharing(
-            holder=holder, scopes=frozenset(scopes) - {Scope.PROFILE}, relationship=relationship
+            holder=holder,
+            scopes=frozenset(scopes) - {Scope.PROFILE},
+            role=role,
+            window=window,
+            relationship=relationship,
         ),
     )
 

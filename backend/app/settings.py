@@ -51,10 +51,18 @@ class Settings:
     name this build does not have refuses to start."""
     anthropic_api_key: str | None = None
     """NURA_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY): the one key every Claude-backed adapter —
-    the extractor, `NURA_SEARCHER=claude`, `NURA_COMPRESSOR=claude` — calls the Anthropic API with,
+    the extractor, the narrator, `NURA_SEARCHER=claude`, `NURA_COMPRESSOR=claude` — calls the Anthropic API with,
     from the platform's secrets, never the repo, never a log. Unset, the SDK's own
     ANTHROPIC_API_KEY is used if the environment has it; with neither, the extractor refuses
     to build."""
+    narrator: str = "fixture"
+    """NURA_NARRATOR: what says Ask's and Find's trace steps aloud
+    (`app.search.narrator_provider.narrator_for`). `fixture` (the default) is today's
+    behaviour, unchanged — each step's catalogue label, every time; `claude` is the
+    Claude-backed narrator (`app.llm.narrate.ClaudeNarrator`), which only builds on
+    a declared demo (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process
+    in SG or MY and no in-region provider exists yet (ADR 0017) — a laptop dev run stays on
+    the fixture. A name this build does not have refuses to start."""
     visit_fixtures: str | None = None
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
@@ -279,6 +287,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
         anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
+        narrator=source.get("NURA_NARRATOR", "fixture"),
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,

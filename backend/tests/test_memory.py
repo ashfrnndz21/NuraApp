@@ -609,7 +609,7 @@ async def test_a_caregiver_key_without_records_cannot_read_facts_and_the_refusal
     daughter: Person = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, daughter)
+    await agree_to_family_sharing(sg, owner, daughter, role=KeyRole.CAREGIVER)
     await grant_key(
         sg,
         context=owner,

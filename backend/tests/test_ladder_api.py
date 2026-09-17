@@ -34,8 +34,8 @@ async def test_the_person_a_flag_reached_says_im_on_it_and_the_ladder_stops(
         headers=his,
     )
     assert agreed.status_code == 201, agreed.text
-    await let_in(deployment, pa, profile_id, MEI, EVERYTHING, "daughter")
-    await let_in(deployment, pa, profile_id, KIT, ["medicines"], "son", holder_display_name="Kit")
+    await let_in(deployment, pa, profile_id, MEI, EVERYTHING, "daughter", role="chief")
+    await let_in(deployment, pa, profile_id, KIT, ["medicines"], "son", holder_display_name="Kit", role="caregiver")
     for who, role in ((mei, "chief"), (kit, "caregiver")):
         cut = await client.post(
             f"/profiles/{profile_id}/keys",

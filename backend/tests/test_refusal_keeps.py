@@ -32,7 +32,7 @@ async def test_a_unit_that_writes_then_refuses_keeps_the_refused_line_and_not_th
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES])
+    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES], role=KeyRole.CAREGIVER)
     await grant_key(
         sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, scopes=[Scope.MEDICINES]
     )
@@ -72,7 +72,7 @@ async def test_a_nested_unit_that_refuses_keeps_its_refused_line_and_the_work_be
     daughter = await register_person(
         sg, region=Region.SG, display_name="Daughter", phone_e164="+6591110002"
     )
-    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES])
+    await agree_to_family_sharing(sg, owner, daughter, scopes=[Scope.MEDICINES], role=KeyRole.CAREGIVER)
     await grant_key(
         sg, context=owner, holder=daughter, role=KeyRole.CAREGIVER, scopes=[Scope.MEDICINES]
     )
