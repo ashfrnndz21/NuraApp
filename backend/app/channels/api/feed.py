@@ -39,7 +39,9 @@ from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
-from app.channels.about_him import reader_of
+from app.audit.models import Action
+from app.audit.trail import record as record_audit
+from app.channels.about_him import Reader, reader_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
@@ -80,7 +82,10 @@ from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
 from app.delivery.strings import FIND_STEPS, language_for, watch_label
 from app.errors import Refusal
+from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.search.narrate import NarratedStep
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
 log = logging.getLogger("nura.channels.feed")
@@ -400,6 +405,11 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
     Opens its own session (`session_scope`), never `Depends(db)` — see `app.channels.api.
     timeline.ask_stream` for why a stream cannot use a `yield` dependency."""
     code = language_for(body.language)
+    outside = providers_of(request)
+    # FIND_STEPS carries no caregiver twin (its lines are neutral, "Looking online." — see
+    # `app.delivery.strings.FIND_STEPS`), so there is no "his voice" to get wrong here the way
+    # Ask's steps have; the narrator sees the direct-voice reader.
+    reader = Reader(his=True, language=code)
 
     async def events() -> AsyncIterator[bytes]:
         try:
@@ -408,7 +418,25 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
                     session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
                 ):
                     if isinstance(event, FindStep):
-                        yield _sse({"type": "step", "key": event.key, "label": FIND_STEPS[code][body.where]})
+                        label = FIND_STEPS[code][body.where]
+                        if outside.narrator.external_processor is not None:
+                            # One reach outside the region per streamed search (ADR 0017),
+                            # mirroring `app.channels.api.timeline.ask_stream`'s line for Ask.
+                            await record_audit(
+                                session,
+                                context=context,
+                                action=Action.SHARE,
+                                scope=Scope.ASK,
+                                target=EXTERNAL_MODEL_PROCESSOR,
+                                rows=1,
+                                shared_with_label=outside.narrator.external_processor,
+                            )
+                        steps = [NarratedStep(key=event.key, label=label)]
+                        text = label
+                        async for line in outside.narrator.narrate(steps, language=code, reader=reader):
+                            if line.key == event.key:
+                                text = line.text
+                        yield _sse({"type": "step", "key": event.key, "label": text})
                     else:
                         yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
         except Refusal as refusal:
