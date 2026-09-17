@@ -1,0 +1,25 @@
+{
+  "placeholder": "clinic-letter-hypertension-2026-09-12",
+  "sha256": "622733f1e9d91a4a3475c292ddf69d66915869387237ef54bbc39101a2f4a700",
+  "note": "Synthetic fixture (no real patient): a clinic slip naming a condition the clinician wrote in his own words. Written for the documents-lab-reports-and-insurance story: a letter's diagnosis line is recorded verbatim, tagged as a control word against the condition (`app.safety.emergency_card` module docstring), never rephrased by Nura.",
+  "document_kind": "clinic_slip",
+  "document_date": "2026-09-12",
+  "fields": [
+    {
+      "subject": "hypertension",
+      "attribute": "control",
+      "value": "Hypertension, well controlled on current medication",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.2, "x1": 0.8, "y1": 0.26, "page": 1 }
+    },
+    {
+      "subject": "follow_up",
+      "attribute": "date",
+      "value": "2026-12-12",
+      "unit": null,
+      "confidence": 0.93,
+      "span": { "x0": 0.1, "y0": 0.4, "x1": 0.5, "y1": 0.44, "page": 1 }
+    }
+  ]
+}

@@ -49,8 +49,25 @@ class DocumentKind(StrEnum):
     HANDWRITTEN_PRESCRIPTION = "handwritten_prescription"
     """A prescription in a doctor's hand (E02-02): drug, dose and frequency, each asked."""
     INSURANCE_LETTER = "insurance_letter"
+    """A snapshot of an insurance card, for the one field the emergency card keeps
+    (`app.insurance.insurer`) — offered at onboarding, distinct from the fuller papers
+    below."""
+    INSURANCE_POLICY = "insurance_policy"
+    """A policy document: insurer, policy number, plan, holder, dates and coverage lines
+    (`app.insurance.policy`). Read into facts here, never into a policy row directly — the
+    fuller record is always a person's own separate yes (`app.insurance.policy`'s module
+    docstring)."""
+    INSURANCE_CLAIM = "insurance_claim"
+    """A claim letter or a claim's own paperwork: insurer, claim number, status, amount,
+    date and what it was for (`app.insurance.claim`). Read into facts here, the same way."""
     DEVICE_SCREEN = "device_screen"
     """The screen of a blood pressure machine, a glucometer or a scale (E02-08)."""
+    OTHER = "other"
+    """A health paper read as itself, and not one of the named kinds above — an X-ray
+    report, a referral letter, a general clinical note. Its fields are kept as plain facts
+    (`app.ingestion.review._write_paper`'s default), the same as any kind with no special
+    routing of its own; distinct from NOT_HEALTH, which is for a page with nothing medical
+    on it at all."""
     NOT_HEALTH = "not_health"
     """Read, and not a health paper at all: a receipt, a menu. Nothing is taken off it."""
     UNKNOWN = "unknown"
@@ -71,12 +88,20 @@ PHOTO_HINTS = frozenset(
         DocumentKind.CLINIC_SLIP,
         DocumentKind.HANDWRITTEN_PRESCRIPTION,
         DocumentKind.INSURANCE_LETTER,
+        DocumentKind.INSURANCE_POLICY,
+        DocumentKind.INSURANCE_CLAIM,
     }
 )
 """What a person may say a photo of a page is. A device screen has its own route."""
 
 DOCUMENT_HINTS = frozenset(
-    {DocumentKind.LAB_REPORT, DocumentKind.DISCHARGE_LETTER, DocumentKind.INSURANCE_LETTER}
+    {
+        DocumentKind.LAB_REPORT,
+        DocumentKind.DISCHARGE_LETTER,
+        DocumentKind.INSURANCE_LETTER,
+        DocumentKind.INSURANCE_POLICY,
+        DocumentKind.INSURANCE_CLAIM,
+    }
 )
 """What a person may say an imported PDF is (E02-03)."""
 

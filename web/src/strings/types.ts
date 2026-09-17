@@ -545,9 +545,13 @@ export interface Strings {
       otherLine: string;
       kindHandwritten: string;
       kindInsuranceLetter: string;
+      kindInsurancePolicy: string;
+      kindInsuranceClaim: string;
       kindDeviceScreen: string;
+      kindOther: string;
       unreadable: string;
       typeIt: string;
+      fromPage: string;
     };
     questions: {
       titleSelf: string;

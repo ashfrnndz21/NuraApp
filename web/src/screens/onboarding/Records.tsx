@@ -7,7 +7,7 @@ import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, sendPaper, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
-import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
+import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, provenanceLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { fill, language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
@@ -259,6 +259,9 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
               </>
             )}
             {!current.leftOut && <p class="caption" data-testid="confidence">{confidenceLine(field, s)}</p>}
+            {!current.leftOut && provenanceLine(field, s) && (
+              <p class="caption" data-testid="provenance">{provenanceLine(field, s)}</p>
+            )}
             {waiting.includes(field.field_id) && (
               <p role="alert" data-testid="not-a-number">
                 {field.unreadable ? r.typeIt : r.notANumber}

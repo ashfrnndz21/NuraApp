@@ -1194,11 +1194,19 @@ export const zh = {
       // @patient
       kindInsuranceLetter: "这是一封保险信。",
       // @patient
+      kindInsurancePolicy: "这是一份保险保单。",
+      // @patient
+      kindInsuranceClaim: "这是一份保险理赔。",
+      // @patient
       kindDeviceScreen: "这是一台机器的屏幕。",
+      // @patient
+      kindOther: "这是一份健康文件。",
       // @patient
       unreadable: "这一条 Nura 看不清。",
       // @patient
       typeIt: "请输入文件上写的。",
+      // @patient
+      fromPage: "来自这份文件的第 {page} 页。",
       // @patient
       kindUnknown: "Nura 看不懂这一页。",
       // @patient
@@ -1304,11 +1312,13 @@ export const zh = {
         total_cholesterol: "总胆固醇",
         hdl: "好的胆固醇",
         ldl: "坏的胆固醇",
+        ldl_reference_range: "坏胆固醇的正常范围",
         triglycerides: "血里的油脂",
         vldl: "另一个血脂数字",
         tc_hdl_ratio: "胆固醇的比例",
         non_hdl_cholesterol: "去掉好胆固醇后的胆固醇",
       },
+      full_blood_count: { hemoglobin: "血液检查数字" },
       device: { kind: "这台机器" },
       blood_pressure: { systolic: "上面的数字", diastolic: "下面的数字" },
       heart_rate: { pulse: "心跳" },
@@ -1320,8 +1330,17 @@ export const zh = {
         reason: "为什么住院",
         weight_at_discharge: "回家时的体重",
       },
+      follow_up: { date: "什么时候要回诊" },
+      hypertension: { control: "医生对您血压写的话" },
       blood_sugar: { glucose: "血糖数字" },
-      lab_report: { lab: "验血的地方" },
+      lab_report: {
+        lab: "验血的地方",
+        facility: "检查的地方",
+        remark: "报告在数字以外写的话",
+        patient_name: "报告上的姓名",
+        patient_id: "报告上的证件号",
+        ordering_doctor: "哪位医生要求做的",
+      },
       person: { birth_year: "出生年份", sex: "男或女" },
       medicine: {
         name: "这种药",
@@ -1331,6 +1350,22 @@ export const zh = {
         quantity: "给了多少",
         dispensed_at: "什么时候给的",
         prescriber: "哪位医生开的",
+      },
+      insurance_policy: {
+        insurer: "保险公司",
+        policy_number: "保单号码",
+        plan: "保险计划",
+        holder: "这份保单保障谁",
+        start_date: "什么时候开始",
+        end_date: "什么时候结束",
+      },
+      insurance_claim: {
+        insurer: "保险公司",
+        claim_number: "理赔号码",
+        status: "理赔的进度",
+        amount: "金额",
+        date: "日期",
+        for: "这次理赔是为了什么",
       },
     },
   },

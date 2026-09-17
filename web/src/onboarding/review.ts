@@ -1,5 +1,5 @@
 import type { DecisionIn, ReviewCardOut, ReviewFieldOut } from "../api/types";
-import type { Strings } from "../strings";
+import { fill, type Strings } from "../strings";
 
 /** The capture review card (E02-07) as the onboarding records step shows it: what each line
  *  of the paper was read as, how sure Nura is in plain words, a place to correct it, and one
@@ -116,13 +116,27 @@ export function kindLine(kind: ReviewCardOut["document_kind"], s: Strings): stri
       return r.kindHandwritten;
     case "insurance_letter":
       return r.kindInsuranceLetter;
+    case "insurance_policy":
+      return r.kindInsurancePolicy;
+    case "insurance_claim":
+      return r.kindInsuranceClaim;
     case "device_screen":
       return r.kindDeviceScreen;
+    case "other":
+      return r.kindOther;
     case "not_health":
     case "unknown":
     case "unsupported_file_type":
       return r.kindUnknown;
   }
+}
+
+/** Where a field came from, in plain words, when the paper had more than one page: "From
+ *  page {page} of this paper." Nothing is shown for a single-page photo (`field.page` is
+ *  only set for a PDF of several pages). */
+export function provenanceLine(field: Pick<ReviewFieldOut, "page">, s: Strings): string | null {
+  if (field.page == null) return null;
+  return fill(s.onboarding.records.fromPage, { page: field.page });
 }
 
 /** A card Nura could not read, a page that is not a health paper, or a kind of photo Nura
