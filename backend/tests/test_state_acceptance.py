@@ -231,7 +231,9 @@ async def test_a_caregiver_key_without_records_cannot_read_state(
     await current_state(sg, context=owner)
 
     mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6591110005")
-    await agree_to_family_sharing(sg, owner, mei, scopes={Scope.MEDICINES, Scope.VISITS})
+    await agree_to_family_sharing(
+        sg, owner, mei, scopes={Scope.MEDICINES, Scope.VISITS}, role=KeyRole.CAREGIVER
+    )
     await grant_key(
         sg,
         context=owner,
