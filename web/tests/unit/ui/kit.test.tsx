@@ -273,7 +273,8 @@ describe("Icon", () => {
       expect(svg.props.class).toBe("icon");
       expect(svg.props["aria-hidden"]).toBe("true");
       expect(svg.props.viewBox).toBe("0 0 24 24");
-      expect(all(svg, byType("path")).length).toBeGreaterThan(0);
+      // Lucide draws with paths, circles, rects and lines; every icon draws at least one.
+      expect(all(svg, (el) => ["path", "circle", "rect", "line", "polyline", "ellipse"].includes(el.type)).length).toBeGreaterThan(0);
     }
   });
 });
