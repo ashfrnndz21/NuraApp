@@ -286,3 +286,21 @@ export interface DocumentOut {
   tag: DocumentTag | null;
   backs: { kind: "consent" | "stewardship" | string; id: string; basis: string; purpose: string | null; active: boolean }[];
 }
+
+/** One call on Connect's "Upcoming Call" (design-direction.md): with whom, when, how to join,
+ *  and who put it on the calendar. `join_words` is the line the Join affordance opened before
+ *  Connect's own "Call" button (`with_person_phone_e164`) replaced it for the plain `tel:`
+ *  case; a call link still opens as Join. */
+export interface CallOut {
+  call_id: string;
+  with_person_id: string;
+  with_person_name: string;
+  with_person_phone_e164: string | null;
+  scheduled_at: string;
+  call_link: string | null;
+  label: string | null;
+  join_words: string;
+  added_by_person_id: string;
+  added_at: string;
+  cancelled_at: string | null;
+}

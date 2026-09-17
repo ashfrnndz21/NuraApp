@@ -2033,6 +2033,64 @@ export const ms = {
     // @patient phrase
     whatPaper: "Jenis surat apa",
   },
+  connect: {
+    // @patient headline
+    familyTitle: "Keluarga anda",
+    // @patient headline
+    familyTitleOther: "Keluarga {patient}",
+    // @patient phrase
+    addPerson: "Tambah",
+    // @patient phrase
+    addPersonLine: "Orang baru",
+    // @patient line
+    noFamily: "Belum ada sesiapa yang memegang kunci kepada surat-surat anda.",
+    // @patient line
+    noFamilyOther: "Belum ada sesiapa yang memegang kunci kepada surat-surat {patient}.",
+    // @patient headline
+    nextCallTitle: "Panggilan seterusnya",
+    // @patient phrase
+    call: "Panggil",
+    // @patient phrase
+    change: "Tukar",
+    // @patient line
+    noCall: "Belum ada panggilan dalam kalendar anda.",
+    // @patient line
+    noCallOther: "Belum ada panggilan dengan {patient} dalam kalendar.",
+    // @patient headline
+    nearYouTitle: "Berhampiran anda",
+    // @patient headline
+    nearYouTitleOther: "Berhampiran {patient}",
+    // @patient line
+    noNearYou: "Belum ada apa-apa berhampiran anda.",
+    // @patient line
+    noNearYouOther: "Belum ada apa-apa berhampiran {patient}.",
+    // @patient headline
+    messagesTitle: "Mesej",
+    // @patient line
+    noMessages: "Belum ada mesej.",
+    // @patient phrase
+    seeAllFamily: "Lihat semua yang memegang kunci",
+    // @patient phrase
+    seeAllNearYou: "Lihat semua yang berhampiran",
+    // @patient phrase
+    seeAllMessages: "Lihat semua mesej",
+    // @patient headline
+    callsTitle: "Panggilan",
+    // @patient phrase
+    scheduleCall: "Aturkan satu panggilan",
+    // @patient phrase
+    cancelCallButton: "Batalkan panggilan ini",
+    // @patient line
+    cancelledCall: "Panggilan ini sudah dibatalkan.",
+    // @patient phrase
+    personLabel: "Dengan siapa",
+    // @patient phrase
+    whenLabel: "Bila",
+    // @patient phrase
+    linkLabel: "Pautan panggilan, jika ada",
+    // @patient phrase
+    callLabelLabel: "Nama untuk panggilan ini",
+  },
   review: {
     // @patient headline
     title: "Senarai ahli farmasi",
