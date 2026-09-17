@@ -25,7 +25,7 @@ async def _cut_a_key(
     """A narrower key over HTTP: register the holder, the owner's agreement, then the key
     itself — the two-step `_holder` already uses in `tests/test_row_scope.py`."""
     holder = await register_by_phone(deployment, phone, "Lin")
-    await let_in(deployment, owner, profile_id, phone, scopes)
+    await let_in(deployment, owner, profile_id, phone, scopes, role="caregiver")
     cut = await deployment.client.post(
         f"/profiles/{profile_id}/keys",
         json={"holder_phone_e164": phone, "role": "caregiver", "scopes": scopes},
