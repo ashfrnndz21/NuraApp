@@ -157,15 +157,15 @@ class SharingWords:
     consent both render from this through `words_for`, so what he reads first and what is
     kept cannot differ. `role` and `window` name what the key cut under this agreement will
     be cut as (#185): the words say so, so the trail can show he agreed to them, and
-    `app.keys.grants.grant_key` refuses a key that asks for anything else. `POST
-    /consents/sharing` always states both; None is for a consent that names neither — every
-    row written before #185, and a caller that does not care to constrain the key at all."""
+    `app.keys.grants.grant_key` refuses a key that asks for anything else. Both are always
+    given — there is no way to let someone in without saying what they are to him and for
+    how long."""
 
     name: str
     relationship: str | None
     scopes: frozenset[Scope]
-    role: KeyRole | None = None
-    window: KeyWindow | None = None
+    role: KeyRole
+    window: KeyWindow
 
 
 def words_for(
@@ -195,14 +195,13 @@ def words_for(
 class Sharing:
     """Who is being let in, to which parts, as what role and for how long, and — only if the
     granter says — who they are to him ("your daughter", "the clinic"). The words the
-    patient reads are rendered from this. `role` and `window` are None for a caller that
-    does not name them — the consent then constrains neither (#185); `POST /consents/sharing`
-    always gives both."""
+    patient reads are rendered from this. `role` and `window` are required (#185): letting
+    someone in without saying what they are to him and for how long is not a thing."""
 
     holder: Person
     scopes: frozenset[Scope]
-    role: KeyRole | None = None
-    window: KeyWindow | None = None
+    role: KeyRole
+    window: KeyWindow
     relationship: str | None = None
     """Who they are to him, in the language of the words, or nothing. The words decide how
     to say it (`app.consent.texts.named_words`); nothing is baked into the name."""
@@ -359,14 +358,12 @@ async def grant_consent(
             refusal = NotAgreedPerPerson(f"{purpose} is for the whole profile")
         elif sharing is not None and not sharing.name:
             refusal = HolderNeedsAName(f"{purpose} names the person, and there is no name")
-        elif (
-            sharing is not None
-            and (sharing.role is not None or sharing.window is not None)
-            and version != current_version(purpose)
-        ):
-            # Only the current wording has `{role_line}`/`{window_line}` to render them into
-            # (#185); an older version would still take the role or the window onto the row
-            # (`grant_key` would then enforce it) without the words ever having named it.
+        elif sharing is not None and version != current_version(purpose):
+            # `sharing` always names a role and a window (#185); only the current wording has
+            # `{role_line}`/`{window_line}` to render them into. An older version would still
+            # take them onto the row (`grant_key` would then enforce them) without the words
+            # ever having named them — capturing a past `SHARE_WITH_PERSON` agreement at an
+            # older version is not offered once #185 shipped.
             refusal = RoleWindowNeedCurrentWording(
                 f"{purpose} version {version} does not name a role or a window"
             )

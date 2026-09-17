@@ -408,32 +408,22 @@ def render_sharing(
     name: str,
     relationship: str | None,
     scopes: Iterable[Scope],
-    role: KeyRole | None,
-    window: KeyWindow | None,
+    role: KeyRole,
+    window: KeyWindow,
     language: str,
 ) -> str:
     """Fill the sharing template with the person, the parts, the role and the window, as the
-    patient will read it (#185). A version that does not name them (version 1 and 2, kept as
-    history) never reads `{role_line}` or `{window_line}`, so filling them in is never wrong.
-
-    `role` may be None — a caller on words before #185 that does not state one
-    (`app.consent.service.Sharing`) — and then no line names it: nothing said this before,
-    so nothing is lost by not saying it now, and the blank line `{role_line}` would leave is
-    dropped. `window` stood for "until you say stop" even before #185 had a word for it, so
-    None renders the same as `KeyWindow.ALWAYS` — nothing about what he reads changes for a
-    caller who does not yet state one."""
+    patient will read it (#185: letting someone in always states what they are to him and
+    for how long, so `role` and `window` are never optional here). A version that does not
+    name them (version 1 and 2, kept as history) never reads `{role_line}` or `{window_line}`,
+    so filling them in is never wrong."""
     parts = "\n".join(f"- {part}" for part in what_lines(scopes, language))
-    role_line = (
-        "" if role is None else ROLE_IS[language].format(name=name, role=ROLE_WORDS[language][role])
-    )
-    window_line = WINDOW_LINES[language][window or KeyWindow.ALWAYS].format(name=name)
-    rendered = template.format(
+    role_line = ROLE_IS[language].format(name=name, role=ROLE_WORDS[language][role])
+    window_line = WINDOW_LINES[language][window].format(name=name)
+    return template.format(
         named=named_words(name, relationship, language),
         name=name,
         parts=parts,
         role_line=role_line,
         window_line=window_line,
     )
-    # A role not stated leaves `{role_line}` blank; the line it would have been on is dropped
-    # rather than shown empty.
-    return "\n".join(line for line in rendered.split("\n") if line != "")

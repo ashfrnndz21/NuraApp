@@ -221,15 +221,13 @@ class ConsentIn(BaseModel):
 
 
 class SharingConsentIn(BaseModel):
-    """The owner lets one person in: who, to which parts, and who they are to him — and, when
-    he states them, as what role and for how long (#185).
+    """The owner lets one person in: who, to which parts, as what role and for how long, and
+    who they are to him (#185).
 
-    The words the patient reads are rendered with that name, those parts, and the role and
-    the window when given, and kept as read. Naming both means a key for this person can
-    only be cut once this is in force, never wider, and never as a different role or for a
-    window it did not name (`app.keys.grants.grant_key`, `KeyNotAsAgreed`); naming neither
-    is unchanged from before #185 — a key still rests on this consent, unconstrained by
-    either. The current app always states both; a caller on older words may still not.
+    The words the patient reads are rendered with that name, those parts, that role and that
+    window, and kept as read. A key for this person can only be cut once this is in force,
+    never wider, and never as a different role or for a window it did not name
+    (`app.keys.grants.grant_key`, `KeyNotAsAgreed`).
     """
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
@@ -239,8 +237,8 @@ class SharingConsentIn(BaseModel):
     phone (`HolderNeedsAName` without it). A number that is not an account yet keeps it until
     the person signs in and gives his own."""
     scopes: list[Scope] = Field(min_length=1)
-    role: KeyRole | None = None
-    window: KeyWindow | None = None
+    role: KeyRole
+    window: KeyWindow
     relationship: Relationship | None = None
     language: str = Field(min_length=2, max_length=16)
     captured_via: ConsentChannel
@@ -257,15 +255,14 @@ class SharingConsentIn(BaseModel):
 
 class SharingPreviewIn(BaseModel):
     """The words the owner would agree to by `POST /consents/sharing`, for this person, these
-    parts, and — when stated — this role and this window (#185), before he agrees: the same
-    fields, nothing kept."""
+    parts, this role and this window (#185), before he agrees: the same fields, nothing kept."""
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)
     holder_person_id: uuid.UUID | None = None
     holder_display_name: str | None = Field(default=None, max_length=80)
     scopes: list[Scope] = Field(min_length=1)
-    role: KeyRole | None = None
-    window: KeyWindow | None = None
+    role: KeyRole
+    window: KeyWindow
     relationship: Relationship | None = None
     language: str = Field(min_length=2, max_length=16)
 
@@ -856,10 +853,10 @@ class KeyGrant(BaseModel):
     """Cut a key: for whom, as what, over which parts, for how long.
 
     The key rests on the sharing consent the owner gave for this person
-    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused. When that
-    consent named a role and a window (#185), `role` here must match it exactly and `window`
-    must not outlast it (`KeyNotAsAgreed`, 403) — a consent that named neither constrains
-    neither, unchanged from before.
+    (`POST /profiles/{id}/consents/sharing`); without one in force it is refused. `role` here
+    must match what that consent named exactly, and `window` must not outlast it
+    (`KeyNotAsAgreed`, 403, #185) — a consent given before #185 tracked neither constrains
+    neither.
     """
 
     holder_phone_e164: str | None = Field(default=None, pattern=PHONE)

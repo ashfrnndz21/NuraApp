@@ -30,10 +30,14 @@ export function InviteStep(): JSX.Element {
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
+  // This gap always invites a caregiver, for as long as he says nothing more — the same
+  // fixed shape `nura.cutKey` cuts the key as (#185: the words and the key always agree).
   const asked = (): SharingIn => ({
     holder_phone_e164: phone.replace(/\s+/g, ""),
     holder_display_name: name.trim(),
     scopes: PARTS.filter((part) => parts.includes(part)),
+    role: "caregiver",
+    window: "always",
     relationship,
     language: language.value,
   });

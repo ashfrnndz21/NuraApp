@@ -183,10 +183,14 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
     }
   };
   const shown = role && said?.find((each) => each.role === role);
-  const asked = () => ({
+  // `chosenRole` is only ever passed in once a caller has checked one is chosen (#185: the
+  // words and the consent always name it, the same choice `cut()`'s own `makeKey` call uses).
+  const asked = (chosenRole: KeyRole) => ({
     holder_phone_e164: phone.replace(/\s+/g, ""),
     holder_display_name: name.trim(),
     scopes: parts,
+    role: chosenRole,
+    window,
     language: here.lang,
   });
   // Only this form's own request, never another grant's narrow or close (`act` is shared
@@ -195,8 +199,9 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const busyHere = act.busy && act.at === "new";
   const seeWords = () =>
     act.act("new", async () => {
+      if (!role) return;
       const asOf = generation.current;
-      const rendered = await family.previewSharing(here.bearer, here.papers.profile_id, asked());
+      const rendered = await family.previewSharing(here.bearer, here.papers.profile_id, asked(role));
       if (generation.current !== asOf) return; // stale: something changed while this was in flight
       setPreview(rendered);
     });
@@ -213,7 +218,7 @@ function NewKey({ here, act, reload }: { here: Here; act: Act; reload: () => Pro
   const agree = () =>
     act.act("new", async () => {
       if (!role || !preview) return;
-      await family.letSomeoneIn(here.bearer, here.papers.profile_id, asked(), preview.wording_version);
+      await family.letSomeoneIn(here.bearer, here.papers.profile_id, asked(role), preview.wording_version);
       await family.makeKey(here.bearer, here.papers.profile_id, { holder_phone_e164: phone.replace(/\s+/g, ""), role, scopes: parts, window });
       setName("");
       setPhone("+65");
