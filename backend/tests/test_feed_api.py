@@ -20,7 +20,15 @@ from sqlalchemy import select
 
 from app.clock import FrozenClock
 from app.delivery.feed import items
-from app.delivery.feed.models import CardType, FeedItem, ReviewStatus, Source, SourceKind
+from app.delivery.feed.models import (
+    CardType,
+    DeliverTo,
+    FeedItem,
+    ReviewStatus,
+    Source,
+    SourceKind,
+)
+from app.reasoning.visits.models import Memo, MemoKind
 from app.safety.boundary import Surface
 from app.safety.plain_words import verify
 from tests.api import bearer, let_in, own_profile, register_by_phone
@@ -577,7 +585,12 @@ async def test_sources_and_search_jobs_are_the_owners_and_allowlist_scoped(
     assert "supplement-shop.example" not in job["results"]["searched"]
     rejected = {entry["because"] for entry in job["results"]["rejected"]}
     assert "treatment_change_rerouted_as_question" in rejected
-    assert len(job["results"]["items"]) == 1
+    # #236: the INR page (a dose changes with the reading) is not lost — it is held for his
+    # chief as a real card, rerouted, alongside the food page that is genuinely his. Neither
+    # of the two used-to-be-orphaned shapes exists any more: no `CardType.QUESTION`
+    # `FeedItem` (nothing ever read `DeliverTo.MEMO`) and no card in anyone's words but the
+    # reroute's own.
+    assert len(job["results"]["items"]) == 2
     fetched = await deployment.client.get(
         f"/profiles/{profile_id}/search-jobs/{job['job_id']}", headers=bearer(his)
     )
@@ -588,13 +601,32 @@ async def test_sources_and_search_jobs_are_the_owners_and_allowlist_scoped(
     assert learning and learning[0]["headline"] == "Your blood thinner and your food"
     assert learning[0]["cite"]["url"].startswith("https://www.hsa.gov.sg/")
     assert "This comes from Health Sciences Authority." in learning[0]["body"]
-    # The finding that would change a dose is a question for the memo, never on his feed.
+    # The finding that would change a dose never reaches his own feed, in anyone's words.
     assert all("Skip a dose" not in line for item in page["items"] for line in item["body"])
+    assert not any(item["headline"] == "Nura kept this for your doctor" for item in page["items"])
     async with deployment.sessions() as session:
-        questions = (
+        # No `CardType.QUESTION` row exists any more (#224/#236): the question is a real
+        # `Memo`, read the way the post-visit brief and the pre-visit question loop read it.
+        assert (
             await session.scalars(select(FeedItem).where(FeedItem.type == "question"))
+        ).all() == []
+        memos = (await session.scalars(select(Memo).where(Memo.kind == MemoKind.ASK))).all()
+        [memo] = memos
+        # No warfarin fact is on his record yet (this job was added by hand, not from a gap
+        # State showed), so no drug name is known — a name-free question is filed all the
+        # same, never nothing (#236).
+        assert memo.key == "ask_medicines_change"
+        assert memo.slots == {"doctor": "your doctor"}
+        # The chief's own key reads the rerouted card back, in the reroute's own words.
+        held = (
+            await session.scalars(
+                select(FeedItem).where(FeedItem.deliver_to == DeliverTo.CAREGIVER)
+            )
         ).all()
-        assert len(questions) == 1 and questions[0].deliver_to.value == "memo"
+        [rerouted] = [item for item in held if item.type is CardType.LEARNING]
+        assert rerouted.headline == "Nura kept this for your doctor"
+        assert "Skip a dose" not in " ".join(rerouted.body)
+        assert rerouted.why["memo_id"] == str(memo.id)
     # The trail shows the refusal by name.
     trail = (
         await deployment.client.get(f"/profiles/{profile_id}/audit", headers=bearer(his))

@@ -1770,6 +1770,7 @@ class ReviewFieldOut(BaseModel):
 NOTICE_LINES: dict[Notice, str] = {
     Notice.NOT_A_HEALTH_PAPER: "not_a_health_paper",
     Notice.NOT_A_MACHINE_SCREEN: "not_a_machine_screen",
+    Notice.PHOTO_KIND_NOT_READ: "photo_kind_not_read",
 }
 """The key in `app.channels.strings.TEXT` of the lines each notice is said in."""
 

@@ -12,9 +12,14 @@ No steps/heart-rate/sleep/water/food column changes ride with this: those five a
 Events, in the shapes those tables already have, so no schema change for them, and
 `docs/trust/pdpa-data-map.md` was regenerated for the one table this migration does add.
 
-Revision ID: 0040_scheduled_call
-Revises: 0039_feeling_question_marker
+Revision ID: 0045_scheduled_call
+Revises: 0044_consent_role_window
 Create Date: 2026-09-17
+
+Renumbered from 0040 at merge time (#235): main's chain moved to 0043_feeling_note_said
+while this branch sat behind it, and PR #225 has since claimed 0044_consent_role_window,
+which is not on main yet. This revision is pinned ahead of it; `tests/test_migration.py`
+fails locally until #225 merges — the operator merges #225 first.
 """
 
 from __future__ import annotations
@@ -22,8 +27,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0040_scheduled_call"
-down_revision = "0039_feeling_question_marker"
+revision = "0045_scheduled_call"
+down_revision = "0044_consent_role_window"
 branch_labels = None
 depends_on = None
 

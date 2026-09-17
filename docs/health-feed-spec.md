@@ -55,12 +55,21 @@ every other card of his is made and read by the pharmacist's first fifty before 
 (`REVIEWED_TYPES`, `app/language/review.py`). "Your pack is one of the batches; bring it to the
 pharmacy" is his card, because it is his to act on. "This batch was recalled" is not.
 
-**The code does not do this yet.** `app/delivery/feed/search.py` still sends a `NOTICE` whose
-batch matches the pack to `DeliverTo.PATIENT`, and `tests/test_feed.py` asserts that it does.
-The rule above is the decision (2026-09-16); the change is filed separately, because taking his
-batch-match card away is only safe once the "something you must do" card that replaces it
-exists — otherwise a recall that matches his own box reaches nobody but his chief, and he is
-told nothing at all.
+**The code does this now** (#181, 2026-09-17). `app/delivery/feed/search.py` holds every
+safety notice for the chief, batch match or not, and reroutes one whose words would start,
+stop or change a medicine to the memo as a question instead — never `DeliverTo.PATIENT`
+either way. `app/delivery/feed/items.py`'s `create_item` refuses a `NOTICE` built for the
+patient outright (`NoticeNotForPatient`), the one place every card is written, so no later
+job or caller can send one to him by mistake. It is still sampled for the pharmacist's first
+fifty like every other reviewed type, whoever it is held for (`app/language/review.py`).
+
+**The "something you must do" card is not built.** Taking his batch-match card away was safe
+to do now because it was never anything but a recall notice read back to him; the card
+described above — his own words, made from a pharmacist-reviewed pattern, saying what *he*
+must do — is a separate feature, not yet designed or built. Until it exists, a batch that
+matches his own box reaches his chief (and, where it is a question for the doctor, the memo)
+and he is told nothing in the feed. That is accepted, not fixed here: a silent chief beats an
+unreviewed claim in his own feed.
 
 
 Every card carries: `headline`, `body` (plain words), `why` (one sentence, plain), `source` (name, URL, date), `profileRefs` (facts it was built from), `format`, `language`, `audioURL`, `mediaURL`, `expiresAt`, `deliverTo` (patient / caregiver / memo).

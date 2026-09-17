@@ -35,7 +35,7 @@ from app.safety.plain_words import (
     strings_in_typescript,
 )
 from app.settings import Settings
-from tests.conftest import FEED, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET, Deployment
+from tests.conftest import FEED, STAFF_TOKEN, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET, Deployment
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
 
@@ -92,13 +92,16 @@ async def test_the_words_open_a_profile(deployment: Deployment) -> None:
     assert opened.json()["standing"] == "owner"
 
 
-def _app(web_dist: str | None) -> AsyncClient:
-    """A deployment that names (or does not name) a built web client."""
+def _app(web_dist: str | None, *, review_origin: str | None = None) -> AsyncClient:
+    """A deployment that names (or does not name) a built web client, and (or does not)
+    a review origin (#145)."""
     settings = Settings(
         region=Region.SG,
         database_url="sqlite+aiosqlite://",
         dev_code_sender=True,
         web_dist=web_dist,
+        review_origin=review_origin,
+        review_staff=(("pharmacist", STAFF_TOKEN),),
     )
     root = Path(tempfile.mkdtemp(prefix="nura-objects-"))
     providers = Providers(
@@ -132,6 +135,60 @@ async def test_no_web_client_means_no_app_route(tmp_path: Path) -> None:
         assert (await client.get("/app/")).status_code == 404
     async with _app(None) as client:
         assert (await client.get("/app/")).status_code == 404
+
+
+# --- #145: the review queue served from its own origin, before real data ----------------------
+
+
+def _dist_with_review(tmp_path: Path) -> Path:
+    dist = tmp_path / "dist"
+    (dist / "review").mkdir(parents=True)
+    (dist / "index.html").write_text("<title>Nura</title>", encoding="utf-8")
+    (dist / "review" / "index.html").write_text("<title>Nura review</title>", encoding="utf-8")
+    return dist
+
+
+async def test_unset_the_review_queue_stays_on_the_apps_own_origin(tmp_path: Path) -> None:
+    """The demo posture, unchanged: no `NURA_REVIEW_ORIGIN` means no split at all. (The
+    review API itself — staff-only, hardened once split — is covered against a migrated
+    database in `tests/test_review_queue.py`, not the bare engine this module uses.)"""
+    dist = _dist_with_review(tmp_path)
+    async with _app(str(dist)) as client:
+        page = await client.get("/app/review/")
+        assert page.status_code == 200 and "Nura review" in page.text
+        assert "Content-Security-Policy" not in page.headers
+
+
+async def test_named_the_review_queue_answers_only_on_its_own_host(tmp_path: Path) -> None:
+    dist = _dist_with_review(tmp_path)
+    async with _app(str(dist), review_origin="review.nura.test") as client:
+        # The patient's own host never serves the review page, whatever is asked.
+        blocked = await client.get("/app/review/")
+        assert blocked.status_code == 404 and blocked.json() == {"refusal": "WrongOrigin"}
+        blocked_api = await client.get("/review/status")
+        assert blocked_api.status_code == 404 and blocked_api.json() == {"refusal": "WrongOrigin"}
+        blocked_api_prefixed = await client.get("/api/review/status")
+        assert blocked_api_prefixed.status_code == 404
+        # The patient app itself is unaffected on its own host.
+        app_page = await client.get("/app/")
+        assert app_page.status_code == 200 and "<title>Nura</title>" in app_page.text
+        # On the review host, the review page answers, hardened — its CSP is stricter than,
+        # and never shared with, the patient app's (which sets none by default).
+        review_headers = {"host": "review.nura.test"}
+        page = await client.get("/app/review/", headers=review_headers)
+        assert page.status_code == 200 and "Nura review" in page.text
+        assert page.headers["Content-Security-Policy"] == (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
+            "form-action 'none'"
+        )
+        assert page.headers["X-Frame-Options"] == "DENY"
+        # ...and the patient app itself is refused on the review host, both ways, while a
+        # health check (no secret in the answer) still reaches either hostname.
+        assert (await client.get("/app/", headers=review_headers)).status_code == 404
+        assert (await client.get("/openapi.json", headers=review_headers)).status_code == 404
+        health = await client.get("/api/health", headers=review_headers)
+        assert health.status_code == 200 and health.json() == {"status": "ok"}
 
 
 TS = """

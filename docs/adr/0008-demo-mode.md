@@ -125,3 +125,10 @@ providers, the data protection officer and the breach tabletop:
   matters because URLs carry profile ids, though never names or numbers.
 - **The platform accepts the largest request Nura sends.** That is a consult recording of up to
   48 MiB (#128). The app refuses anything larger, and nothing in the image sets a lower limit.
+- **The pharmacist's review queue is on its own origin.** W6 (#137) serves it at `/app/review/`
+  on the patient app's own origin: token-gated, never linked from the patient app and not
+  cached by the service worker, which is fine for the demo because nothing behind either
+  surface is real. Before real data (#145), set `NURA_REVIEW_ORIGIN` to a second hostname
+  (`review.<domain>`) pointed at the same service, strict CSP included
+  (`app.channels.api.ReviewOrigin`, `docs/deploy.md` §3), so no patient-origin script or
+  storage can reach a staff session and no review-origin page can ever serve the patient app.

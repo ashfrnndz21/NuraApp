@@ -46,6 +46,12 @@ TEXT: Mapping[str, Mapping[str, Lines]] = {
         "not_a_health_paper": ("This does not look like a health paper.",),
         # On a card for a photo sent as a machine screen that is not one (E02-08).
         "not_a_machine_screen": ("This does not look like the screen of a machine.",),
+        # On a card for a kind of photo Nura never looked at, distinct from a page it
+        # looked at and could not read (E02-02): retaking it would fail again the same way.
+        "photo_kind_not_read": (
+            "Nura cannot open this kind of photo.",
+            "Please type in what the paper says instead.",
+        ),
         # Under a voice note Nura could not hear; the recording is kept (E02-06).
         "could_not_hear": ("Nura could not hear this note.", "Nura kept the note."),
     },
@@ -67,6 +73,10 @@ TEXT: Mapping[str, Mapping[str, Lines]] = {
         "could_not_read": ("Nura tidak dapat membaca ini.", "Sila taip."),
         "not_a_health_paper": ("Ini tidak kelihatan seperti surat kesihatan.",),
         "not_a_machine_screen": ("Ini tidak kelihatan seperti skrin mesin.",),
+        "photo_kind_not_read": (
+            "Nura tidak dapat membuka jenis gambar ini.",
+            "Sila taip apa yang tertulis pada kertas itu.",
+        ),
         "could_not_hear": ("Nura tidak dapat mendengar nota ini.", "Nura sudah simpan nota ini."),
     },
     "zh": {
@@ -87,6 +97,10 @@ TEXT: Mapping[str, Mapping[str, Lines]] = {
         "could_not_read": ("Nura 看不清这个。", "请把它打出来。"),
         "not_a_health_paper": ("这看起来不像健康文件。",),
         "not_a_machine_screen": ("这看起来不像机器的屏幕。",),
+        "photo_kind_not_read": (
+            "Nura 无法打开这种照片。",
+            "请改为手动输入纸上的内容。",
+        ),
         "could_not_hear": ("Nura 听不清这段录音。", "Nura 保存了这段录音。"),
     },
 }

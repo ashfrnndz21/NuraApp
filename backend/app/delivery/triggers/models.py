@@ -18,10 +18,19 @@ from datetime import datetime, time
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, Time, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    ForeignKey,
+    Integer,
+    String,
+    Time,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
+from app.db import Base, ProfileScoped, enum_column, frozen, monotonic, utcnow
 from app.keys.scopes import Scope
 from app.memory.models import _row_of_profile, _tied_to_profile
 
@@ -119,10 +128,12 @@ ANSWERED_BY_A_PERSON: frozenset[Subject] = frozenset({Subject.FLAG, Subject.UNHE
 ladder stops on the Taken tap). Both are alerts, and both lapse after `FLAG_WINDOW`."""
 
 
+@monotonic
 class DeliverySettings(ProfileScoped, Base):
     """What a profile changed of the delivery defaults (`rules.RULES`): whether a quiet day's
     morning card is skipped, the quiet hours, and per type the channel list and the cap. The
-    times of his day are E10-01's routine, not kept here. A change is a new row."""
+    times of his day are E10-01's routine, not kept here. A change is a new row, and the
+    newest one — `set_at`, tied by `seq` (#192/#218) — is in force."""
 
     __tablename__ = "delivery_settings"
     __table_args__ = (_row_of_profile("delivery_settings"),)
@@ -135,6 +146,7 @@ class DeliverySettings(ProfileScoped, Base):
     caps: Mapped[dict[str, int]] = mapped_column(JSON, default=dict)
     set_by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     set_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 LADDER_STEP = "delivery_ladder_step"

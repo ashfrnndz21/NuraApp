@@ -23,6 +23,16 @@ const DEMO_CODE = process.env.NURA_E2E_DEMO_CODE;
  *  and a run hands out about a hundred — often enough for two to meet. */
 const handedOut = new Set<string>();
 
+/** A stream's body (`ask/stream`, `find/stream`), read back as its events, in the order the
+ *  backend sent them (docs/design-direction.md "Conversation, waiting and thinking"): one
+ *  `data:` line per event, each real, never invented. */
+export function streamedEvents(body: string): { type: string; [key: string]: unknown }[] {
+  return body
+    .split("\n\n")
+    .filter((line) => line.startsWith("data: "))
+    .map((line) => JSON.parse(line.slice("data: ".length)) as { type: string; [key: string]: unknown });
+}
+
 export function freshPhone(prefix = "+659777"): string {
   for (;;) {
     const phone = DEMO_CODE
@@ -233,18 +243,21 @@ export interface Owner {
 }
 
 /** A person with his own papers (today's words agreed over the API) and these medicines, each
- *  written by the label → OK → write flow. */
+ *  written by the label → OK → write flow. `language` (default English) is his own — the one
+ *  the app and his emergency card render in; #222/#229's chemical-name-and-strength data is
+ *  the register's own words in every one of them, never translated. */
 export async function seedOwner(
   request: APIRequestContext,
   name = "Pa",
   medicines: { generic: string; strength: string; dose_text: string; quantity: number }[] = [{ generic: "amlodipine", strength: "5 mg", dose_text: "1 tab QDS", quantity: 120 }],
+  language = "en",
 ): Promise<Owner> {
   const phone = freshPhone("+659666");
   const token = await apiToken(request, phone);
-  const words = (await (await request.get(`${API}/consent/wording?language=en`)).json()) as { version: string };
+  const words = (await (await request.get(`${API}/consent/wording?language=${language}`)).json()) as { version: string };
   const opened = await request.post(`${API}/profiles/mine`, {
     headers: { Authorization: `Bearer ${token}` },
-    data: { consent: { wording_version: words.version, language: "en", captured_via: "app" }, display_name: name, language: "en" },
+    data: { consent: { wording_version: words.version, language, captured_via: "app" }, display_name: name, language },
   });
   if (opened.status() !== 201) throw new Error(`profile: ${opened.status()} ${await opened.text()}`);
   const profileId = ((await opened.json()) as { profile_id: string }).profile_id;

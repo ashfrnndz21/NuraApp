@@ -23,7 +23,8 @@ export type IconName =
   | "play"
   | "chevron"
   | "back"
-  | "note";
+  | "note"
+  | "check";
 
 export const ICONS: Record<IconName, readonly string[]> = {
   today: [
@@ -59,6 +60,7 @@ export const ICONS: Record<IconName, readonly string[]> = {
   chevron: ["M9.5 6l6 6-6 6"],
   back: ["M14.5 6l-6 6 6 6"],
   note: ["M4 5h16v11H9.5L4 20z"],
+  check: ["M5 12.5l4.5 4.5L19 7.5"],
 };
 
 export function Icon({ name }: { name: IconName }): JSX.Element {

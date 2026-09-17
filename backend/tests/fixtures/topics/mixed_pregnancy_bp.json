@@ -1,0 +1,8 @@
+{
+  "text": "I'm pregnant and my blood pressure is high",
+  "sha256": "3cb3f0b1d64e2afa82ad218f8dd2237ecca3e467c6cad3793c876a7aa641d6fc",
+  "codes": [
+    "sensitive.pregnancy",
+    "condition.high_blood_pressure"
+  ]
+}

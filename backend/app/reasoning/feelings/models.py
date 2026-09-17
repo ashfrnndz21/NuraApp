@@ -22,10 +22,10 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, ForeignKey, String
+from sqlalchemy import JSON, BigInteger, Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, enum_column, frozen, utcnow
+from app.db import Base, ProfileScoped, enum_column, frozen, monotonic, utcnow
 from app.memory.models import _row_of_profile, _tied_to_profile
 from app.reasoning.feelings.words import Answer, FollowUp
 from app.safety.red_flags import Feeling
@@ -35,11 +35,14 @@ LINE_LENGTH = 200
 """One line of a note, in his words: never a document."""
 
 
+@monotonic
 class FeelingTap(ProfileScoped, Base):
     """One tap on the feeling cloud, and the one answer it asked for.
 
     The row takes one change: the answer, with when it came and — when a yes to the question
-    that tells a red variant apart made it red — the flag that yes raised.
+    that tells a red variant apart made it red — the flag that yes raised. The reader's own
+    last tap — `tapped_at`, tied by `seq` (#192/#218) — gates whether a watched feeling note
+    is still worth checking in on (`app.delivery.nudges.engine`).
     """
 
     __tablename__ = "feeling_tap"
@@ -68,6 +71,7 @@ class FeelingTap(ProfileScoped, Base):
     )
     by_person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"))
     tapped_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 class NoteOutcome(StrEnum):
@@ -79,15 +83,22 @@ class NoteOutcome(StrEnum):
     """Nothing on the record to read it against; Nura asks again in a week."""
 
 
+@monotonic
 class FeelingNote(RenderedFromState, ProfileScoped, Base):
     """What one tap and its answer were read into, as he was shown it.
 
-    `lines` are the things to tell the doctor (at most two) — plus, right after a line that
-    names a medicine, the two lines that keep it as it is and hand the decision to him
-    (`DO_NOT_STOP`, #157) — `then` who does the next thing, and `voice` the spoken twin —
-    headline, lines, then, and the boundary. `reasons` names
+    `said` is what he said and when, by name, not by position — always `lines[0]` too, but
+    read that way only here, in `app.reasoning.visits.questions.question_from_feeling` (PR
+    #233 review): the guarantee that a question never names a medicine without its
+    `DO_NOT_STOP` pair lives in how `compose_note` builds `lines`, not in `lines[0]` being safe
+    forever by coincidence of today's template order. `lines` are the things to tell the doctor
+    (at most two) — plus, right after a line that names a medicine, the two lines that keep it
+    as it is and hand the decision to him (`DO_NOT_STOP`, #157) — `then` who does the next
+    thing, and `voice` the spoken twin — headline, lines, then, and the boundary. `reasons` names
     what the tap was read against by id: the medicine line and the monograph rule, the facts
-    of a direction in his blood pressure, the event of a visit or a discharge.
+    of a direction in his blood pressure, the event of a visit or a discharge. A watched note
+    still worth checking in on is picked newest first — `created_at`, tied by `seq`
+    (#192/#218) — by `app.delivery.nudges.engine`, which stops at the first match.
     """
 
     __tablename__ = "feeling_note"
@@ -103,6 +114,7 @@ class FeelingNote(RenderedFromState, ProfileScoped, Base):
     answer: Mapped[Answer] = mapped_column(enum_column(Answer, "feeling_answer"))
     language: Mapped[str] = mapped_column(String(16))
     headline: Mapped[str] = mapped_column(String(LINE_LENGTH))
+    said: Mapped[str] = mapped_column(String(LINE_LENGTH))
     lines: Mapped[list[str]] = mapped_column(JSON)
     then: Mapped[str] = mapped_column(String(LINE_LENGTH))
     voice: Mapped[list[str]] = mapped_column(JSON)
@@ -112,6 +124,7 @@ class FeelingNote(RenderedFromState, ProfileScoped, Base):
         ForeignKey("appointment.id"), default=None
     )
     created_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 frozen(FeelingTap, except_for=frozenset({"answer", "answered_at", "flag_id"}))

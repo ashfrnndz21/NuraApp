@@ -1,11 +1,13 @@
-import { api, apiBlob, apiBytes, apiText, apiUpload, sendAndForget } from "./client";
+import { api, apiBlob, apiBytes, apiStream, apiText, apiUpload, sendAndForget } from "./client";
 import type {
   AnswerOut,
   AnsweredOut,
   AppointmentOut,
   AreaOut,
-  AskMode,
   AskedOut,
+  AskMode,
+  AskRefusalEvent,
+  AskStreamEvent,
   BiographyOut,
   BriefOut,
   ChangesOut,
@@ -31,6 +33,7 @@ import type {
   FeedPageOut,
   FeelingOut,
   FindOut,
+  FindStreamEvent,
   FindWhere,
   HandedOverOut,
   ItemDecision,
@@ -73,6 +76,8 @@ import type {
   SettingsOut,
   SharingIn,
   SharingPreviewOut,
+  SignalFamily,
+  SignalsOut,
   SlotOut,
   StateOut,
   StoryOut,
@@ -262,6 +267,37 @@ export const shareCard = (token: string, profileId: string, card_kind: ThreadCar
  *  comes back as cited lines, the honest line when nothing answers, and the boundary last. */
 export const ask = (token: string, profileId: string, question: string, mode: AskMode, language: string) =>
   api<AnswerOut>(`/profiles/${profileId}/ask`, { method: "POST", token, body: { question, mode, language } });
+
+/** The same question, streamed (docs/design-direction.md "Conversation, waiting and
+ *  thinking"): `onStep` for each real part of his record read as it happens, resolving with
+ *  the finished answer — the same `AnswerOut` `ask` returns, so a caller can treat the two the
+ *  same once the promise settles. A refusal (`OutOfScope`, a malformed question) throws
+ *  `Refused`, exactly as `ask` throws it. */
+export function askStream(
+  token: string,
+  profileId: string,
+  question: string,
+  mode: AskMode,
+  language: string,
+  onStep: (key: string, label: string, name: string) => void,
+): Promise<AnswerOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/ask/stream`, { method: "POST", token, body: { question, mode, language } }, (event) => {
+      const streamed = event as unknown as AskStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
+      else if (streamed.type === "answer") {
+        settled = true;
+        resolve(streamed.answer);
+      }
+      // A "refusal" event is thrown by `apiStream` itself before it ever reaches `onEvent`.
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no answer"));
+      })
+      .catch(reject);
+  });
+}
 
 /** A card's pre-rendered voice (E11), when the backend has the route. */
 export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
@@ -786,7 +822,43 @@ export const area = (token: string, profileId: string) => api<AreaOut>(`/profile
 export const setArea = (token: string, profileId: string, value: string | null) =>
   api<AreaOut>(`/profiles/${profileId}/area`, { token, method: "PUT", body: { area: value } });
 
+/** "What Nura uses" (RE-05): every family, on or off, and whether this key may set one. */
+export const signals = (token: string, profileId: string) =>
+  api<SignalsOut>(`/profiles/${profileId}/signals`, { token });
+
+/** Switch one family on or off: his own key, or his chief's. */
+export const setSignal = (token: string, profileId: string, family: SignalFamily, on: boolean) =>
+  api<SignalsOut>(`/profiles/${profileId}/signals/${family}`, { token, method: "PUT", body: { on } });
+
 /** The ask bar's Web, Videos and Providers filters. Records is `ask`. His words go in the
  *  body, never in the URL, where a log or the browser's history would keep them. */
 export const find = (token: string, profileId: string, q: string, where: FindWhere, language: string) =>
   api<FindOut>(`/profiles/${profileId}/find`, { token, method: "POST", body: { q, where, language } });
+
+/** The web and video filters, streamed (docs/design-direction.md): one real step while the
+ *  allowlisted search runs, then the results `find` returns. Providers is a directory lookup
+ *  with nothing to stream — callers keep using `find` for it. */
+export function findStream(
+  token: string,
+  profileId: string,
+  q: string,
+  where: "web" | "videos",
+  language: string,
+  onStep: (key: string, label: string) => void,
+): Promise<FindOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/find/stream`, { token, method: "POST", body: { q, where, language } }, (event) => {
+      const streamed = event as unknown as FindStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "results") {
+        settled = true;
+        resolve({ where, results: streamed.results });
+      }
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no results"));
+      })
+      .catch(reject);
+  });
+}

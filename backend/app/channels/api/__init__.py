@@ -22,6 +22,13 @@ one a hosting platform's health check calls (docs/deploy.md). `GET /deployment` 
 region this is and whether it is a demo, which is how the web client knows to show the demo
 banner on every screen (`app.demo`, ADR 0008). A demo also gets `DemoNumbersOnly` in front
 of every route and a night watch that wipes it each night.
+
+Once a deployment names `NURA_REVIEW_ORIGIN` (#145, before real data), `ReviewOrigin` splits
+the pharmacist's review queue onto that hostname alone: `/app/review`, `/review/*` and
+`/api/review/*` answer there and nowhere else, everything else answers everywhere but there,
+and the review origin's answers carry a strict `Content-Security-Policy`. Unset, nothing
+changes: the review queue stays on the app's own origin, `/app/review`, W6 (#137)'s posture —
+fine for a demo, where nothing behind either surface is real.
 """
 
 from __future__ import annotations
@@ -39,6 +46,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import app.ingestion  # wires the label-photo rule onto the memory store
 import app.medicines
@@ -89,6 +98,90 @@ API_PREFIX = "/api"
 
 WEB_MOUNT = "/app"
 """Where the built web client is served when the deployment has one."""
+
+REVIEW_PATHS = ("/app/review", "/review", "/api/review")
+"""Every path the pharmacist's review queue answers on: its page under the web mount, and its
+API at the root and under `/api` (ADR 0007). `ReviewOrigin` (#145) keeps these off the
+patient's origin once a deployment names a review origin, and keeps everything else off the
+review origin."""
+
+_ALWAYS_BOTH = ("/health", "/health/ready", "/api/health", "/api/health/ready")
+"""Answered on every hostname regardless of `NURA_REVIEW_ORIGIN`: a hosting platform's own
+health check may be pointed at either origin, and up-or-down is not a secret either keeps."""
+
+_REVIEW_CSP = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
+    "form-action 'none'"
+)
+
+
+class WrongOrigin(Refusal):
+    """The pharmacist's review queue and the patient app are never served on each other's
+    origin (#145): a request for one on the other's hostname is refused. Written down nowhere
+    but the log — it names no profile and touches nobody's trail."""
+
+
+def _host_of(scope: Scope) -> str:
+    host = dict(scope.get("headers") or []).get(b"host", b"")
+    return host.split(b":")[0].decode("latin-1").lower()
+
+
+def _is_review_path(path: str) -> bool:
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in REVIEW_PATHS)
+
+
+class ReviewOrigin:
+    """Splits the pharmacist's review queue onto its own hostname, once a deployment names one
+    (`NURA_REVIEW_ORIGIN`, #145, docs/adr/0008-demo-mode.md "Before real data").
+
+    One process still serves both — the same container, the same database — split by the Host
+    header alone, the way two hostnames pointed at the same service commonly are: a request
+    under `REVIEW_PATHS` is refused (`WrongOrigin`, 404) unless its Host is the review origin,
+    and a request to the review origin for anything else is refused the same way, so a
+    review-origin page can never serve the patient app either. A health check answers on both
+    (`_ALWAYS_BOTH`): up-or-down is not part of what this splits. The review origin's answers
+    carry a strict `Content-Security-Policy` and `X-Frame-Options: DENY` — its own posture, no
+    looser and no tighter than the patient app needs, never shared between them.
+
+    Unset, this does nothing: the constructor is never called, and `/app/review` stays where
+    W6 (#137) put it, on the app's own origin — never linked from the patient app, fine for a
+    demo where nothing behind either surface is real.
+    """
+
+    def __init__(self, app: ASGIApp, *, review_origin: str) -> None:
+        self.app = app
+        self.review_origin = review_origin
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] in _ALWAYS_BOTH:
+            await self.app(scope, receive, send)
+            return
+        review_path = _is_review_path(scope["path"])
+        on_review_origin = _host_of(scope) == self.review_origin
+        if review_path != on_review_origin:
+            # Not routed through `refused()` (Refusal's usual door, which answers from inside
+            # FastAPI's own exception handling): this boundary sits outside it, in the ASGI
+            # middleware stack, so the same shape — `{"refusal": "<ClassName>"}` — is built by
+            # hand. Logged, never on a trail: this names no profile, touches nobody's record.
+            refusal = WrongOrigin("wrong origin for this page")
+            log.warning("review origin: refused %s on the wrong host", scope["path"])
+            response = JSONResponse({"refusal": type(refusal).__name__}, status_code=404)
+            await response(scope, receive, send)
+            return
+        if not on_review_origin:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_hardened(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["Content-Security-Policy"] = _REVIEW_CSP
+                headers["X-Frame-Options"] = "DENY"
+                headers["X-Content-Type-Options"] = "nosniff"
+            await send(message)
+
+        await self.app(scope, receive, send_hardened)
 
 
 def _api() -> APIRouter:
@@ -196,6 +289,9 @@ def create_app(
     app.add_exception_handler(Refusal, refused)
     # Every JSON upload is read against its cap before the app parses it (#133).
     app.add_middleware(UploadCaps, prefixes=("", API_PREFIX))
+    if settings.review_origin is not None:
+        # #145, before real data: the review queue and the patient app are split by origin.
+        app.add_middleware(ReviewOrigin, review_origin=settings.review_origin)
     api = _api()
     app.include_router(api)
     app.include_router(api, prefix=API_PREFIX, include_in_schema=False)
