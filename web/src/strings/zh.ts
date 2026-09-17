@@ -1723,6 +1723,15 @@ export const zh = {
       recognition: "做得好",
       presence: "想念您",
     },
+    // @patient phrase
+    kindsTheirs: {
+      anticipation: "帮{name}提前准备",
+      check_in: "问候{name}",
+      pattern: "{name}的规律",
+      commitment: "{name}许下的承诺",
+      recognition: "{name}做得好",
+      presence: "想念{name}",
+    },
     // @patient headline
     calendar: "日历里的看医生预约",
     // @patient phrase

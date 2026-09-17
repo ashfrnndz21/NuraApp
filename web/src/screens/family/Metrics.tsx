@@ -14,6 +14,11 @@ export function MetricsPart(): JSX.Element | null {
   const read = useRead(here ? () => family.nudgeMetrics(here.bearer, here.papers.profile_id, 4) : null, [here?.papers.profile_id]);
   if (!here) return null;
   const day = new Intl.DateTimeFormat(here.locale, { day: "numeric", month: "long", timeZone: "UTC" });
+  // These are his counts, read on her screen: `kinds` reads as her own moment or her own
+  // message when it stands alone ("Thinking of you" as a template she is about to send, in
+  // `Messages.tsx`), but a table has no one for that to be about but him, so this table says it
+  // by his name instead (`kindsTheirs`, the shape of `*_THEIRS` elsewhere for the same reason).
+  const kindLabel = (kind: string) => fill((words.kindsTheirs as Record<string, string>)[kind] ?? kind, { name: here.papers.display_name });
   return (
     <FamilyPage title={words.metrics} part="metrics">
       <Notice error={read.error} />
@@ -50,7 +55,7 @@ export function MetricsPart(): JSX.Element | null {
                 <tbody>
                   {week.kinds.map((kind) => (
                     <tr key={kind.kind}>
-                      <td>{(words.kinds as Record<string, string>)[kind.kind] ?? kind.kind}</td>
+                      <td>{kindLabel(kind.kind)}</td>
                       <td>{kind.handedOver}</td>
                       <td>{kind.accepted}</td>
                       <td>{kind.dismissed}</td>

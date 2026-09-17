@@ -742,6 +742,12 @@ export interface Strings {
     accepted: string;
     dismissed: string;
     kinds: Record<"anticipation" | "check_in" | "pattern" | "commitment" | "recognition" | "presence", string>;
+    /** The same six kinds, said about him by name (D1, the shape of `*_THEIRS` in
+     *  `backend/app/delivery/strings.py`): `kinds` reads as her own message or her own moment
+     *  when it stands alone ("Thinking of you" as a template she is about to send); in a table
+     *  of counts it has no one to be about but whoever is named in it, so the metrics screen
+     *  (`screens/family/Metrics.tsx`) uses these instead. */
+    kindsTheirs: Record<"anticipation" | "check_in" | "pattern" | "commitment" | "recognition" | "presence", string>;
     calendar: string;
     chooseFile: string;
     agree: string;
