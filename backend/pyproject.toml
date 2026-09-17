@@ -13,11 +13,17 @@ dependencies = [
     "pydantic>=2",
     "asyncpg",
     "httpx",
+    # The claude searcher/compressor adapters (NURA_SEARCHER/NURA_COMPRESSOR=claude): the
+    # official SDK, used only from app.delivery.feed.claude_adapters and only on a declared
+    # demo (ANTHROPIC_API_KEY, NURA_DEMO_MODE=1).
+    "anthropic",
     # Web Push (ADR 0001): Mozilla's own RFC 8291 payload encryption and RFC 8292 VAPID
     # signing, the two libraries pywebpush wraps; sent with httpx, so no requests.
     "cryptography==50.0.1",
     "http-ece==1.2.1",
     "py-vapid==1.9.4",
+    # The Claude-backed extractor (NURA_EXTRACTOR=claude, demo only — ADR 0017).
+    "anthropic==1.6.0",
 ]
 [project.optional-dependencies]
 # aiosqlite is tests only: it is how the regional stores run in memory, one database per region.

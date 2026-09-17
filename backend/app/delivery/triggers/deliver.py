@@ -357,7 +357,9 @@ async def open_run(session: AsyncSession, *, via: Via, profile_id: uuid.UUID, at
         DeliverySettings,
         acting,
         Scope.PROFILE,
-        order_by=(DeliverySettings.set_at.desc(),),
+        # `.seq` breaks a tie in `set_at` (#192/#218): which settings are in force is a
+        # decision, not a display order, so it needs the real write-order tiebreaker.
+        order_by=(DeliverySettings.set_at.desc(), DeliverySettings.seq.desc()),
         limit=1,
         channel=Channel.SYSTEM,
     )

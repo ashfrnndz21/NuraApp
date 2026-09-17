@@ -8,7 +8,7 @@ two columns.
 
 Repointed onto 0039 (#205), which landed on main first, so the directory keeps one head.
 
-Revision ID: 0040_consent_role_window
+Revision ID: 0044_consent_role_window
 Revises: 0039_feeling_question_marker
 Create Date: 2026-09-17
 """
@@ -18,8 +18,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0040_consent_role_window"
-down_revision = "0039_feeling_question_marker"
+revision = "0044_consent_role_window"
+down_revision = "0043_feeling_note_said"
 branch_labels = None
 depends_on = None
 

@@ -22,11 +22,12 @@ from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.db import ImmutableRow, as_utc, utcnow
 from app.drafts import QuestionDraft
+from app.identity.service import register_person
 from app.ingestion.objects import LocalObjectStore
 from app.keys.confirm import NotWhatWasConfirmed, confirm
 from app.keys.context import OutOfScope, resolve_key_context
 from app.keys.grants import grant_key
-from app.keys.scopes import KeyRole, Scope
+from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.medicines.models import MedicationLine
 from app.memory.models import (
     AppointmentStatus,
@@ -36,8 +37,11 @@ from app.memory.models import (
 )
 from app.memory.semantic import assert_fact, current_facts, supersede_fact
 from app.memory.spine import upcoming_appointments
+from app.reasoning.feelings.models import FeelingNote, NoteOutcome
+from app.reasoning.feelings.service import answer_tap, record_tap
+from app.reasoning.feelings.words import Answer
 from app.reasoning.visits import strings
-from app.reasoning.visits.brief import brief_for, build_brief
+from app.reasoning.visits.brief import brief_for, build_brief, lines_for
 from app.reasoning.visits.gaps import GapKind, find_gaps
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card, write_memo
 from app.reasoning.visits.models import (
@@ -53,7 +57,10 @@ from app.reasoning.visits.models import (
 )
 from app.reasoning.visits.questions import (
     CARD_SIZE,
+    PRIORITY_PERSON,
+    NoSuchQuestion,
     change_questions,
+    current_questions,
     patient_card,
     question_draft_for,
     questions_for,
@@ -89,8 +96,9 @@ from app.reasoning.visits.summary import (
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_line, boundary_lines
 from app.safety.plain_words import verify
-from app.safety.red_flags import Flag, FlagKind, write_red_flag
+from app.safety.red_flags import Feeling, Flag, FlagKind, write_red_flag
 from app.state.service import current_state
+from tests.feelings_support import STORE, TRANSCRIBER, VIA
 from tests.medicines_support import REGISTRY
 from tests.support import agree_to_family_sharing, refused_unit
 from tests.visits import (
@@ -237,6 +245,406 @@ async def test_an_interaction_the_licensed_data_flagged_is_a_gap_naming_both_lin
         "Ask Dr Tan if the aspirin and the blood thinner tablet (warfarin) are OK together."
     ]
     assert str(flag.id) in asked[0].source_ids
+
+
+# --- the feeling note reaches the visit (RE-02) ----------------------------------------------
+
+
+async def test_a_feeling_note_reaches_the_visits_questions_and_the_brief(
+    sg: AsyncSession,
+) -> None:
+    """The promise the feeling cloud makes — "Nura will keep this for your visit to Dr Tan" —
+    is kept by code, not just by words: a cloud tap read against a new medicine appears on
+    that visit's questions and its brief, citing the note
+    (docs/recommendation-engine.md §1.1, RE-02)."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.outcome is NoteOutcome.FOR_THE_DOCTOR
+    assert note.appointment_id == appointment.id
+    # The words he was shown promised this visit, by name — and the promise is kept below.
+    assert note.then == "Nura will keep this for your visit to Dr Tan."
+
+    # The visit's questions: a new source, citing the note and its tap.
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    feeling_questions = [q for q in found if q.source is QuestionSource.FEELING]
+    assert len(feeling_questions) == 1
+    question = feeling_questions[0]
+    assert question.text == note.lines[0] == note.said == "Tell Dr Tan you felt dizzy on Thursday 3 September."
+    assert question.source_ids == [str(note.id), str(note.tap_id)]
+    # His own card — the first three questions by priority — carries it too.
+    card = await patient_card(sg, context=context, appointment_id=appointment.id)
+    assert note.lines[0] in card
+
+    # Refreshing again does not write the same note twice: the note's own id is its identity.
+    again = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    assert len([q for q in again if q.source is QuestionSource.FEELING]) == 1
+
+    # The brief: beside the symptom log, in his own already-verified words, citing the note —
+    # every line of it, not only the first (the medicine it names keeps its DO_NOT_STOP pair).
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    feeling_lines = [line for line in brief.lines if line["key"] == "feeling_note"]
+    assert len(note.lines) > 1  # the medicine reason brings its DO_NOT_STOP lines with it
+    assert [line["text"] for line in feeling_lines] == list(note.lines)
+    # The evidence keeps the tap too, not just the note (PR #233 review, 2): an auditor
+    # reading a feeling-note line can reach the tap and its SYMPTOM event, not only the note.
+    assert all(line["sources"] == [str(note.id), str(note.tap_id)] for line in feeling_lines)
+    assert brief.sources["feeling_note_ids"] == [str(note.id)]
+    # Not doubled into the brief's own questions preview: it is his account of how he feels,
+    # listed once, beside the symptom log.
+    assert note.lines[0] not in [
+        line["text"] for line in brief.lines if line["section"] == "questions"
+    ]
+
+
+async def test_two_medicine_naming_feeling_notes_never_split_their_do_not_stop_pair(
+    sg: AsyncSession,
+) -> None:
+    """PR #233 review, 3b: a medicine-naming feeling-note group is four lines — the line that
+    names the medicine and its `DO_NOT_STOP` pair (#157) — and `SYMPTOM_LINES` is also four.
+    Two such notes, with nothing else in the symptom log, used to have the first group's own
+    "Tell Dr Tan how you feel." sliced off to fit the page (`brief.py:275-277`), leaving the
+    medicine named with half its pair. The fixed fold never splits a feeling-note group: it is
+    shown whole or held back with `symptoms_more`, the same as any group that is not first."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    # Amlodipine's own monograph watches for both (fixture registry): one medicine, two taps.
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+
+    for word, answer in ((Feeling.DIZZY, Answer.TODAY), (Feeling.SWOLLEN_ANKLES, Answer.NO)):
+        tapped = await record_tap(
+            sg,
+            context=context,
+            word=word,
+            registry=REGISTRY,
+            store=STORE,
+            transcriber=TRANSCRIBER,
+            via=VIA,
+        )
+        answered = await answer_tap(
+            sg,
+            context=context,
+            tap_id=tapped.tap.id,
+            answer=answer,
+            registry=REGISTRY,
+            store=STORE,
+            transcriber=TRANSCRIBER,
+            via=VIA,
+        )
+        assert answered.note is not None and len(answered.note.lines) == 4
+
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    feeling_lines = [line for line in brief.lines if line["key"] == "feeling_note"]
+    assert feeling_lines == []
+    assert any(line["key"] == "symptoms_more" for line in brief.lines)
+    # Never a naked "Do not stop {medicine} yourself." without the line right after it that
+    # hands the decision to the doctor — on this brief, or on any other page of it.
+    do_not_stop = [line for line in brief.lines if line["text"].startswith("Do not stop")]
+    assert do_not_stop == []
+
+
+async def test_a_feeling_note_over_the_question_budget_is_skipped_not_raised(
+    sg: AsyncSession,
+) -> None:
+    """PR #233 review, A (blocking): a note's own budget is 200 characters
+    (`feelings.models.LINE_LENGTH`), a question's is 120 (`visits.models.LINE_LENGTH`) — a
+    clinic name long enough (`Provider.name` is up to 120 chars) can push the rendered line
+    past 120 while staying inside 200. `question_from_feeling` used to raise `NotAQuestion`
+    uncaught, which took down `propose_questions` and with it every question and the whole
+    brief, for every key, from then on (`questions.py:382`, absent from `refusals.STATUS` — a
+    bare 400). The note is skipped, not raised, and the skip is on the trail, not silent.
+
+    The long line is set directly on the written row (a Core update, bypassing the note's own
+    `frozen()` guard the way nothing in `app/` does) rather than through a very long doctor
+    name — a name that long would also break the visit's own "visit_with" brief line
+    (`_NAME`'s own 60-char slot rule), a different, unrelated gap this fix does not cover."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    # A medicine reason so the note is kept `FOR_THE_DOCTOR` (and so tied to this appointment)
+    # rather than only `WATCH`, which `feeling_notes_for` never reads for a visit at all.
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.appointment_id == appointment.id
+    long_line = note.said + " " + "and this clinic's own very long name besides" * 2
+    assert 120 < len(long_line) <= 200
+    await sg.execute(
+        FeelingNote.__table__.update()
+        .where(FeelingNote.id == note.id)
+        .values(said=long_line, lines=[long_line, *note.lines[1:]])
+    )
+    await sg.commit()
+    await sg.refresh(note)
+
+    # Refreshing this visit's questions does not raise, and the brief still builds — the rest
+    # of the visit is intact, not lost with the one note that could not become a question.
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    assert not any(q.source is QuestionSource.FEELING for q in found)
+    brief = await build_brief(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    assert brief is not None
+
+    # The skip has provenance: a refused READ on the note itself, not a vanished note.
+    trail = await read_audit(sg, context=context)
+    skipped = [
+        entry
+        for entry in trail
+        if entry.target == "feeling_note"
+        and entry.target_id == note.id
+        and entry.outcome is Outcome.REFUSED
+    ]
+    # `propose_questions` runs once per call above (`questions_for`, then `build_brief`'s own
+    # refresh) — every run skips the note again and writes its own refusal line; the point is
+    # that at least one exists and names why, not how many.
+    assert len(skipped) >= 1
+    assert skipped[0].refused_because is not None and "120" in skipped[0].refused_because
+
+
+async def test_without_a_visit_the_promise_says_who_tells_the_doctor(sg: AsyncSession) -> None:
+    """No visit is booked, so nothing reads this note onto one later: the words must not
+    promise a delivery the code does not perform (RE-02)."""
+    context = await pa(sg, language="en")
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.outcome is NoteOutcome.FOR_THE_DOCTOR
+    assert note.appointment_id is None
+    assert note.then == "Nura wrote this down for you to tell Dr Tan."
+    assert "next visit" not in note.then
+    assert (await sg.scalars(select(FeelingNote))).all() == [note]
+
+
+async def test_a_viewer_key_reads_neither_the_feeling_note_nor_its_question(
+    sg: AsyncSession,
+) -> None:
+    """The one leak independent review found in #233: `Question.written_scope` (RowScoped,
+    #120) holds a feeling-derived question to `Scope.RECORDS`, the same part of the record
+    the note itself and the brief's own lines about it are already held to — so a `VIEWER`
+    key (`VISITS`, no `RECORDS`) reads the visit's brief and its questions and finds neither
+    his words nor a question built from them, and a key that holds `RECORDS` finds both."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.appointment_id == appointment.id
+
+    mei = await register_person(sg, region=Region.SG, display_name="Mei", phone_e164="+6592220002")
+    await agree_to_family_sharing(sg, context, mei, scopes=set(ROLE_SCOPES[KeyRole.VIEWER]))
+    await grant_key(
+        sg, context=context, holder=mei, role=KeyRole.VIEWER, scopes=ROLE_SCOPES[KeyRole.VIEWER]
+    )
+    viewer = await resolve_key_context(
+        sg, region=Region.SG, person_id=mei.id, profile_id=context.profile_id
+    )
+    assert viewer.allows(Scope.VISITS) and not viewer.allows(Scope.RECORDS)
+
+    # The owner renders the brief once; every key that holds the visits reads the same row,
+    # narrowed to what it may see at read time (`lines_for`), never re-rendered per reader.
+    brief = await brief_for(sg, context=context, appointment_id=appointment.id, registry=REGISTRY)
+    his_shown, his_missing = lines_for(brief, context)
+    assert note.lines[0] in [line["text"] for line in his_shown] and his_missing == []
+    her_shown, her_missing = lines_for(brief, viewer)
+    assert note.lines[0] not in [line["text"] for line in her_shown]
+    assert "feeling_note" not in {line["key"] for line in her_shown}
+    assert Scope.RECORDS in her_missing
+
+    # The questions card: the same story, on `current_questions`/`patient_card`, narrowed by
+    # `written_scope` (`RowScoped`) rather than by a second, separate filter.
+    her_questions = await current_questions(sg, context=viewer, appointment_id=appointment.id)
+    assert all(q.source is not QuestionSource.FEELING for q in her_questions)
+    her_card = await patient_card(sg, context=viewer, appointment_id=appointment.id)
+    assert note.lines[0] not in her_card
+
+    his_questions = await current_questions(sg, context=context, appointment_id=appointment.id)
+    feeling_questions = [q for q in his_questions if q.source is QuestionSource.FEELING]
+    assert len(feeling_questions) == 1 and feeling_questions[0].written_scope is Scope.RECORDS
+    his_card = await patient_card(sg, context=context, appointment_id=appointment.id)
+    assert note.lines[0] in his_card
+
+
+async def test_a_key_without_medicines_cannot_remove_a_feeling_question_it_cannot_fully_read(
+    sg: AsyncSession,
+) -> None:
+    """The gap an independent safety check found in #233's own fix for B: `_may_supersede_
+    feeling` was enforced only in `questions_for`'s auto-supersede loop. `change_questions`
+    reached the row through `_current_question`, which only checks `written_scope` (RECORDS)
+    — so a caregiver key holding RECORDS and VISITS but not MEDICINES, which can already read
+    this `written_scope=RECORDS` question row but not the `new_medicine` note behind it
+    (ADR 0004, `note_scopes`), could still call `change_questions(..., remove=True)` on it and
+    silently retire it: his words about a new medicine taken down by a key never allowed to
+    read them in full. `_current_question` now raises the same not-found refusal a genuinely
+    missing id would, so the row's existence is not revealed either."""
+    context = await pa(sg, language="en")
+    _provider, appointment = await visit(sg, context)
+    await medicine(sg, context, generic="amlodipine", strength="5 mg", dose="1 tab OD")
+    tapped = await record_tap(
+        sg,
+        context=context,
+        word=Feeling.DIZZY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    answered = await answer_tap(
+        sg,
+        context=context,
+        tap_id=tapped.tap.id,
+        answer=Answer.TODAY,
+        registry=REGISTRY,
+        store=STORE,
+        transcriber=TRANSCRIBER,
+        via=VIA,
+    )
+    note = answered.note
+    assert note is not None and note.appointment_id == appointment.id
+
+    found = await questions_for(
+        sg, context=context, appointment_id=appointment.id, registry=REGISTRY
+    )
+    feeling_questions = [q for q in found if q.source is QuestionSource.FEELING]
+    assert len(feeling_questions) == 1
+    question = feeling_questions[0]
+    assert question.written_scope is Scope.RECORDS
+
+    # A caregiver holding RECORDS and VISITS, but not MEDICINES: he reads the row (his key
+    # satisfies `written_scope`) but not the note's own `new_medicine` reason.
+    hana = await register_person(sg, region=Region.SG, display_name="Hana", phone_e164="+6592220003")
+    caregiver_scopes = set(ROLE_SCOPES[KeyRole.CAREGIVER]) - {Scope.MEDICINES}
+    await agree_to_family_sharing(sg, context, hana, scopes=caregiver_scopes)
+    await grant_key(sg, context=context, holder=hana, role=KeyRole.CAREGIVER, scopes=caregiver_scopes)
+    caregiver = await resolve_key_context(
+        sg, region=Region.SG, person_id=hana.id, profile_id=context.profile_id
+    )
+    assert caregiver.allows(Scope.RECORDS) and not caregiver.allows(Scope.MEDICINES)
+    caregiver_questions = await current_questions(
+        sg, context=caregiver, appointment_id=appointment.id
+    )
+    assert question.id in {q.id for q in caregiver_questions}
+
+    draft = QuestionDraft(appointment.id, "", "en", question.id, True)
+    yes = await confirm(sg, caregiver, draft)
+    async with refused_unit(sg, NoSuchQuestion):
+        await change_questions(
+            sg,
+            context=caregiver,
+            appointment_id=appointment.id,
+            confirmation_id=yes.id,
+            question_id=question.id,
+            remove=True,
+        )
+    # Only the owner (or a CHIEF key) opens the trail; read it under his own key, narrowed to
+    # what the caregiver's key just did.
+    refused = [
+        e
+        for e in await read_audit(sg, context=context, actor_person_id=hana.id)
+        if e.outcome is Outcome.REFUSED
+    ]
+    assert {e.refused_because for e in refused} == {"NoSuchQuestion"}
+
+    # Still current, under his own key: nothing was taken down.
+    still_there = await current_questions(sg, context=caregiver, appointment_id=appointment.id)
+    assert question.id in {q.id for q in still_there}
+    owner_still_there = await current_questions(sg, context=context, appointment_id=appointment.id)
+    assert question.id in {q.id for q in owner_still_there}
+    assert (await sg.get(Question, question.id)) is not None
+    assert (await sg.get(Question, question.id)).superseded_at is None  # type: ignore[union-attr]
+
+    # The owner's own key, which holds every scope the note rests on, can still remove it.
+    owner_yes = await confirm(sg, context, draft)
+    removed = await change_questions(
+        sg,
+        context=context,
+        appointment_id=appointment.id,
+        confirmation_id=owner_yes.id,
+        question_id=question.id,
+        remove=True,
+    )
+    assert removed.removed and removed.supersedes_id == question.id
+    after = await current_questions(sg, context=context, appointment_id=appointment.id)
+    assert question.id not in {q.id for q in after}
 
 
 # --- the brief ------------------------------------------------------------------------------
@@ -429,7 +837,7 @@ async def test_a_person_adds_edits_and_removes_a_question_with_a_yes(sg: AsyncSe
         sg, context=context, appointment_id=appointment.id, confirmation_id=yes.id, text=text
     )
     assert added.source is QuestionSource.PERSON and added.added_by_person_id == context.person_id
-    assert added.priority == 2
+    assert added.priority == PRIORITY_PERSON
 
     # A yes for other words is refused.
     other = await confirm(

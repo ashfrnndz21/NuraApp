@@ -28,9 +28,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, time
 from typing import Any
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_profile_read, audited_read, audited_write
+from app.audit.access import audited_guard, audited_profile_read, audited_read, audited_write
+from app.audit.models import Action
 from app.db import as_utc, utcnow
 from app.delivery.feed.compose import Day, can_compose, refresh, today_for
 from app.delivery.feed.models import (
@@ -80,8 +82,19 @@ NOT_IN_THE_WEEK: frozenset[CardType] = frozenset({CardType.NOW, CardType.GATE, C
 page, the duty card is hers."""
 
 
+FEED_TARGET = FeedItem.__tablename__
+
+
 class NotACursor(Refusal):
     """The cursor is Nura's own, handed back as it was given. This was not one."""
+
+
+class NoSuchItem(Refusal):
+    """No feed item by that id on this profile that this key can see. A card that does not
+    exist and a card `private_to` someone else both raise this (`require_item`) — the same
+    refusal, so a caregiver holding every scope the card rests on cannot tell "no such card"
+    from "not yours to see" by which exception comes back. A card outside this key's scope
+    still raises `OutOfScope`, as it always has."""
 
 
 class NotOnADevRun(Refusal):
@@ -139,9 +152,63 @@ def _order_key(item: FeedItem) -> tuple[int, int, datetime]:
     return (_SECTION[item.supply], -item.priority, as_utc(item.created_at))
 
 
+def _visible(item: FeedItem, context: KeyContext) -> bool:
+    """Whether this key may reach this one card at all: the part of the record it was built
+    from, and — `private_to` someone — only that person (RE-01, docs/recommendation-engine.md
+    §2.4, §3.5): his own search history is his alone, and no scope a caregiver holds is an
+    exception, `Scope.ASK` included. The one rule every read of a `FeedItem` is held to,
+    whether it reads a list (`_visible_to`) or one card by id (`require_item`) — so a route
+    added later cannot reach a card by forgetting to call either."""
+    return context.allows(item.scope) and (
+        item.private_to is None or item.private_to == context.person_id
+    )
+
+
 def _visible_to(items: Sequence[FeedItem], context: KeyContext) -> list[FeedItem]:
-    """Only the cards built from parts of the record the key covers."""
-    return [item for item in items if context.allows(item.scope)]
+    """Only the cards this key may reach at all (`_visible`). Never reaches the caregiver's
+    list, "Sent to Pa this week" or the memo with a card that fails it."""
+    return [item for item in items if _visible(item, context)]
+
+
+async def require_item(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    item_id: uuid.UUID,
+    where: Sequence[ColumnElement[bool]] = (),
+) -> FeedItem:
+    """One card, by id — the one door every by-id read of a `FeedItem` goes through (a push
+    notification opening it, its spoken twin, a clip's captions and poster, an engagement
+    event), so `private_to` cannot be reintroduced by a new route that reads by id and
+    forgets it (`tests/test_feed_item_access.py` walks `app/` for a `FeedItem.id` read outside
+    this function and `record_events`' own bulk fetch, and fails if it finds one).
+
+    Not on this profile, or `private_to` someone else, is the same refusal (`NoSuchItem`) —
+    a caregiver holding every scope the card rests on still cannot tell the two apart, on the
+    trail either (PR #233 review, 8): both raises run inside the same `audited_guard`, so both
+    write the same shape of `REFUSED` line — never on this profile writes it under the base
+    `Scope.PROFILE` the lookup itself used, since there is no item to name a truer one. Out of
+    the key's own scope is `OutOfScope`, as every scope refusal here is, audited on the trail.
+    `where` narrows further: an unexpired card, one of a given format.
+    """
+    found = await audited_read(
+        session, FeedItem, context, Scope.PROFILE, where=(FeedItem.id == item_id, *where)
+    )
+    item = found[0] if found else None
+    async with audited_guard(
+        session,
+        context,
+        Action.READ,
+        item.scope if item is not None else Scope.PROFILE,
+        FEED_TARGET,
+    ):
+        if item is None:
+            raise NoSuchItem(f"no card {item_id} on this profile")
+        context.require(item.scope)
+        if item.private_to is not None and item.private_to != context.person_id:
+            raise NoSuchItem(f"no card {item_id} on this profile")
+    assert item is not None  # the guard above raises otherwise
+    return item
 
 
 async def _without_photos_taken_back(
@@ -495,7 +562,9 @@ async def cached_page(session: AsyncSession, *, context: KeyContext) -> Page:
         context,
         Scope.PROFILE,
         where=(FeedPage.person_id == context.person_id,),
-        order_by=(FeedPage.rendered_at.desc(),),
+        # `.seq` breaks a tie in `rendered_at` (#192/#218): which page is "the" cached one
+        # is a decision, not a display order.
+        order_by=(FeedPage.rendered_at.desc(), FeedPage.seq.desc()),
         limit=1,
     )
     if not pages:

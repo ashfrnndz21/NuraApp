@@ -232,13 +232,15 @@ class Deployment:
     whatsapp: FixtureProvider
 
 
-async def _serve(region: Region) -> AsyncIterator[Deployment]:
+async def _serve(region: Region, *, review_origin: str | None = None) -> AsyncIterator[Deployment]:
     async with regional_database() as engine:
-        async for served in _serve_on(engine, region):
+        async for served in _serve_on(engine, region, review_origin=review_origin):
             yield served
 
 
-async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deployment]:
+async def _serve_on(
+    engine: AsyncEngine, region: Region, *, review_origin: str | None = None
+) -> AsyncIterator[Deployment]:
     sessions = make_session_factory(engine)
     sender = LoggingCodeSender(reveal=True)
     settings = Settings(
@@ -248,6 +250,7 @@ async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deploy
         red_flag_tiers=True,
         whatsapp_dev_secret=WHATSAPP_SECRET,
         review_staff=(("pharmacist", STAFF_TOKEN),),
+        review_origin=review_origin,
     )
     # The object store is a fresh directory per served deployment, one region under it,
     # gone at the end: what the local store does under backend/var/objects on a laptop.

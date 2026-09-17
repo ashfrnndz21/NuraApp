@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
+from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
@@ -47,9 +48,9 @@ from app.language.review import (
 )
 from app.language.voice_script import BOUNDARY_PAUSE_MS, script_for
 from app.regions import Region
-from app.settings import BadStaffTokens, load_settings
+from app.settings import BadReviewOrigin, BadStaffTokens, load_settings
 from tests.api import bearer, let_in, own_profile, register_by_phone
-from tests.conftest import STAFF_TOKEN, Deployment
+from tests.conftest import STAFF_TOKEN, Deployment, _serve
 
 PA = "+6591230001"
 MEI = "+6591230002"
@@ -148,6 +149,72 @@ def test_the_staff_list_is_read_strictly() -> None:
         load_settings({**base, "NURA_REVIEW_STAFF_TOKENS": laptop})
     dev = load_settings({**base, "NURA_DEV_CODE_SENDER": "1", "NURA_REVIEW_STAFF_TOKENS": laptop})
     assert dev.review_staff == (("pharmacist", "nura-dev-pharmacist-token-0001"),)
+
+
+def test_the_review_origin_is_read_as_a_bare_hostname() -> None:
+    """#145: `NURA_REVIEW_ORIGIN` is a hostname alone, lowercased — no scheme, path or port
+    silently stripped, since a typo here would put the queue on the wrong host quietly."""
+    base = {"NURA_REGION": "SG", "NURA_DATABASE_URL": "sqlite+aiosqlite://"}
+    assert load_settings(base).review_origin is None
+    assert load_settings({**base, "NURA_REVIEW_ORIGIN": ""}).review_origin is None
+    read = load_settings({**base, "NURA_REVIEW_ORIGIN": "Review.Nura.Example"})
+    assert read.review_origin == "review.nura.example"
+    for bad in (
+        "https://review.nura.example",
+        "review.nura.example/queue",
+        "review.nura.example:8443",
+        "localhost",
+        "review nura example",
+    ):
+        with pytest.raises(BadReviewOrigin):
+            load_settings({**base, "NURA_REVIEW_ORIGIN": bad})
+
+
+REVIEW_ORIGIN = "review.nura.test"
+
+
+@pytest.fixture
+async def split() -> AsyncIterator[Deployment]:
+    """A deployment with a review origin named (#145), so a test can compare how one request
+    answers on the patient's host and on the review queue's."""
+    async for served in _serve(Region.SG, review_origin=REVIEW_ORIGIN):
+        yield served
+
+
+async def test_the_review_queue_is_refused_on_the_patients_host_once_an_origin_is_named(
+    split: Deployment,
+) -> None:
+    """#145: naming `NURA_REVIEW_ORIGIN` moves the queue's API off the patient's own host —
+    the same 404 whether or not a staff token rides along, because the wrong host is refused
+    before a token is even read."""
+    for headers in (staff(), {}):
+        blocked = await split.client.get("/review/status", headers=headers)
+        assert blocked.status_code == 404 and blocked.json() == {"refusal": "WrongOrigin"}
+        blocked_api = await split.client.get("/api/review/status", headers=headers)
+        assert blocked_api.status_code == 404 and blocked_api.json() == {"refusal": "WrongOrigin"}
+    # The rest of the app is unaffected on its own host.
+    health = await split.client.get("/api/health")
+    assert health.status_code == 200
+
+
+async def test_the_review_queue_answers_on_its_own_host_hardened_and_still_staff_only(
+    split: Deployment,
+) -> None:
+    on_review = {"host": REVIEW_ORIGIN}
+    ok = await split.client.get("/review/status", headers={**staff(), **on_review})
+    assert ok.status_code == 200, ok.text
+    assert ok.headers["content-security-policy"].startswith("default-src 'self'")
+    assert ok.headers["x-frame-options"] == "DENY"
+    # The origin split is not the authentication: a wrong or missing token is still refused,
+    # on the review host exactly as it always was.
+    for headers in (on_review, {**bearer("not-a-staff-token-at-all-000"), **on_review}):
+        refused = await split.client.get("/review/status", headers=headers)
+        assert refused.status_code == 403 and refused.json() == {"refusal": "NotStaff"}
+    # The patient app itself never answers on the review host.
+    app_blocked = await split.client.get("/api/health", headers=on_review)
+    assert app_blocked.status_code == 200  # health answers on either host on purpose
+    me_blocked = await split.client.get("/me", headers=on_review)
+    assert me_blocked.status_code == 404 and me_blocked.json() == {"refusal": "WrongOrigin"}
 
 
 # --- the samples carry no profile and no name ---------------------------------------------------
@@ -268,6 +335,24 @@ def _reading_card(n: int, deliver_to: DeliverTo = DeliverTo.PATIENT) -> FeedItem
     )
 
 
+def _notice_card(n: int, deliver_to: DeliverTo = DeliverTo.CAREGIVER) -> FeedItem:
+    """A safety notice, held for the chief (#181) — never `DeliverTo.PATIENT`, but still
+    sampled: it carries a clinical claim reaching a person, same as the cards he reads."""
+    lines = [
+        "One batch of warfarin tablets is being taken back.",
+        f"Look for the batch number 24{1000 + n} on the box.",
+    ]
+    return FeedItem(
+        type=CardType.NOTICE,
+        deliver_to=deliver_to,
+        language="en",
+        headline="A notice about one batch of his blood thinner",
+        body=lines,
+        voice=lines,
+        why={"plain": "A regulator notice matched a medicine on his record."},
+    )
+
+
 async def test_fifty_of_a_type_are_queued_and_then_no_more(sg: AsyncSession) -> None:
     for n in range(FIRST + 5):
         await sample_card(sg, _reading_card(n))
@@ -284,22 +369,48 @@ async def test_the_same_rendering_is_queued_once_and_a_caregivers_card_not_at_al
     assert await sample_card(sg, _reading_card(2, DeliverTo.CAREGIVER)) is None
 
 
+async def test_a_safety_notice_held_for_the_chief_is_sampled_all_the_same(
+    sg: AsyncSession,
+) -> None:
+    """#181: a safety notice is never `DeliverTo.PATIENT` (`items.NoticeNotForPatient`
+    refuses one that is), so gating the queue on that would drop it out of review entirely —
+    the hole the issue found. It is sampled because it is held for the chief, not despite it,
+    the same first-fifty-then-a-flag as any other reviewed type."""
+    for n in range(FIRST + 2):
+        queued = await sample_card(sg, _notice_card(n))
+        assert queued is not None if n < FIRST else queued is None
+    rows = (await sg.scalars(select(ReviewItem).where(ReviewItem.card_type == "notice"))).all()
+    assert len(rows) == FIRST
+    # A rendering already queued, and a notice for the memo, are left alone either way.
+    assert await sample_card(sg, _notice_card(0)) is None
+    assert await sample_card(sg, _notice_card(FIRST + 3, DeliverTo.MEMO)) is None
+
+
 def test_every_card_type_he_is_shown_is_reviewed() -> None:
     """The queue's list is not self-certifying: it is checked against the supply itself.
 
     A card type the patient reads goes in front of the pharmacist's first fifty. Two types do
-    not: the doctor questions held for the memo (`Supply.HELD`), which never reach him, and
-    the caregiver's duty card, which is hers. Every other type in `SUPPLY_OF` is his, so a
-    type added later without a line in `REVIEWED_TYPES` fails here rather than quietly
-    skipping the only human read of its words (F1: clip, recap, local, seasonal, food).
+    not, and are excluded from "his" below for that reason: the doctor questions held for the
+    memo (`Supply.HELD`), which never reach him, and the caregiver's duty card, which is hers.
+    Every other type in `SUPPLY_OF` is his, so a type added later without a line in
+    `REVIEWED_TYPES` fails here rather than quietly skipping the only human read of its words
+    (F1: clip, recap, local, seasonal, food).
+
+    A safety notice is a third case, excluded from "his" for the same reason as the duty card
+    — the patient never sees it either (#181) — but required in `REVIEWED_TYPES` all the same,
+    because unlike the duty card it carries a clinical claim to a person, his chief. So the
+    check below runs both ways and names the one deliberate mismatch: `REVIEWED_TYPES` holds
+    exactly his types, plus the notice.
     """
     his = {
         card_type
         for card_type, supply in SUPPLY_OF.items()
-        if supply is not Supply.HELD and card_type is not CardType.DUTY
+        if supply is not Supply.HELD and card_type not in (CardType.DUTY, CardType.NOTICE)
     }
     assert his - set(REVIEWED_TYPES) == set(), "a card type he is shown that no pharmacist reads"
-    assert set(REVIEWED_TYPES) - his == set(), "a reviewed type the patient is never shown"
+    assert set(REVIEWED_TYPES) - his == {CardType.NOTICE}, (
+        "a reviewed type that is neither his nor the notice held for his chief"
+    )
 
 
 def test_the_pages_he_is_shown_keep_their_compressed_words() -> None:

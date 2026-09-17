@@ -178,7 +178,22 @@ EMERGENCY_CARD: Mapping[str, Mapping[str, str]] = {
         "ms": "Kad ini bukan nasihat doktor.",
         "zh": "这张卡不是医生的意见。",
     },
+    "ec.render_issue": {
+        "en": "One line on {name}'s card was left out.",
+        "ms": "Satu baris pada kad {name} tertinggal.",
+        "zh": "{name}的卡上少了一行。",
+    },
+    "ec.render_issue_family": {
+        "en": "Tell your family or the doctor.",
+        "ms": "Beritahu keluarga anda atau doktor.",
+        "zh": "请告诉家人或医生。",
+    },
 }
+"""`ec.render_issue` and `ec.render_issue_family` are the card's own safety net (#222): if a
+line still cannot be said — for a reason other than a medicine's name, which
+`app.safety.emergency_card._medicine_label` guarantees never fails — these two say so on the
+card itself, not only in the log. Static, no clinical content, so they cannot themselves fail
+the standard and go silent a second time."""
 
 # --- the what-to-do-now card -----------------------------------------------------------------
 
@@ -931,6 +946,14 @@ YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh"
 
 # @patient phrase
 YOUR_MEDICINE: Mapping[str, str] = {"en": "your medicine", "ms": "ubat anda", "zh": "您的药"}
+
+# @patient phrase
+HIGH_RISK_LABEL_WORDS: Mapping[str, str] = {"en": "high-risk", "ms": "berisiko tinggi", "zh": "高风险"}
+"""The short tag beside a high-risk medicine's data (`Medicine.high_risk_label`, A3): not a
+sentence of its own, so it is not `render`ed against `ec.medicine`/`ec.high_risk` — a phrase
+like `YOUR_MEDICINE`, one word or a short run of them, catalogued and checked in every
+language the same way, never typed into a screen as a bare English literal (web/src/screens
+carried the word "high-risk" outside this catalogue and outside the verified render path)."""
 
 
 TEMPLATES: Mapping[str, Mapping[str, str]] = {

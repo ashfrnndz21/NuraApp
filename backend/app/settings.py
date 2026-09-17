@@ -41,6 +41,20 @@ class Settings:
     """NURA_PAPER_FIXTURES: the directory of paper fixtures the fixture extractor answers
     from (`app.ingestion.extract.FixtureExtractor`). Set on a laptop; the real extractor is
     a later adapter, and without either the process refuses to start."""
+    extractor: str = "fixture"
+    """NURA_EXTRACTOR: which reader answers `POST /profiles/{id}/imports` and the photo
+    capture route (`app.ingestion.extract_provider.extractor_for`). `fixture` (the default)
+    answers from NURA_PAPER_FIXTURES; `claude` is the Claude-backed reader
+    (`app.ingestion.claude_extract.ClaudeExtractor`), which only builds on a declared demo
+    (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process in SG or MY and
+    no in-region provider exists yet (ADR 0017) — a laptop dev run stays on the fixture. A
+    name this build does not have refuses to start."""
+    anthropic_api_key: str | None = None
+    """NURA_ANTHROPIC_API_KEY (or ANTHROPIC_API_KEY): the one key every Claude-backed adapter —
+    the extractor, `NURA_SEARCHER=claude`, `NURA_COMPRESSOR=claude` — calls the Anthropic API with,
+    from the platform's secrets, never the repo, never a log. Unset, the SDK's own
+    ANTHROPIC_API_KEY is used if the environment has it; with neither, the extractor refuses
+    to build."""
     visit_fixtures: str | None = None
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
@@ -56,9 +70,21 @@ class Settings:
     (`Unseparated`), which claims nothing it did not hear (E02-05)."""
     feed_fixtures: str | None = None
     """NURA_FEED_FIXTURES: the directory the fixture searcher and compressor answer from
-    (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
-    call are later adapters behind the same two ports, and without either the process
-    refuses to start."""
+    (`app.delivery.feed.compress`), and the clip renderer's stills. Set on a laptop; a real
+    fetcher and a grounded model call are adapters behind the same two ports
+    (`NURA_SEARCHER`/`NURA_COMPRESSOR`), and without one of the two the process refuses to
+    start."""
+    searcher: str = "fixture"
+    """NURA_SEARCHER: which adapter answers the `Searcher` port (`app.delivery.feed.compress`).
+    `fixture` (the default) answers from NURA_FEED_FIXTURES; `claude` reads the allowlist for
+    real through Claude's web search and fetch tools (`app.delivery.feed.claude_adapters`) and
+    runs only on a declared demo (`NURA_DEMO_MODE=1`) with `ANTHROPIC_API_KEY` set — no
+    in-region provider exists yet. Any other name refuses to start."""
+    compressor: str = "fixture"
+    """NURA_COMPRESSOR: which adapter answers the `Compressor` port. `fixture` (the default)
+    answers from NURA_FEED_FIXTURES; `claude` grounds a plain-words card on the fetched page
+    through Claude's structured output (`app.delivery.feed.claude_adapters`), gated the same
+    way as NURA_SEARCHER=claude. Any other name refuses to start."""
     drug_registry: str = "fixture"
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
@@ -130,6 +156,16 @@ class Settings:
     """NURA_ACCOUNT_RETENTION_DAYS: how long a closed account's papers wait before they are
     deleted, while his yes can still undo the closing (#143). 30 until counsel says otherwise
     (docs/trust/account-closure.md)."""
+    review_origin: str | None = None
+    """NURA_REVIEW_ORIGIN: the hostname (`review.nura.example`, no scheme, no path) the
+    pharmacist's review queue is served from once a deployment holds real data (#145,
+    docs/adr/0008-demo-mode.md "Before real data"). Unset — every demo and every laptop run —
+    `/app/review` and `/review/*` stay on the same origin as the patient app, W6 (#137)'s
+    posture, fine while nothing behind either is real. Named, `ReviewOrigin` (`app.channels.api`)
+    splits the two by the Host header alone: the review surface answers only on this host, the
+    rest of the app answers on every other host, and a request for either from the wrong one
+    is refused — so no patient-origin script or storage can ever reach a staff session, and a
+    review-origin page never serves the patient app."""
 
     @property
     def fixtures_allowed(self) -> bool:
@@ -176,6 +212,28 @@ class BadStaffTokens(RuntimeError):
     run. The process must not start on it."""
 
 
+class BadReviewOrigin(RuntimeError):
+    """NURA_REVIEW_ORIGIN is not a bare hostname: no scheme, no path, no port, lowercase."""
+
+
+_HOSTNAME = re.compile(
+    r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$"
+)
+
+
+def _review_origin(value: str | None) -> str | None:
+    """NURA_REVIEW_ORIGIN, read strictly: a bare hostname with at least one dot (#145) — a
+    scheme, a path, a port or an IP address is refused rather than silently stripped."""
+    if value is None or not value.strip():
+        return None
+    origin = value.strip().lower()
+    if not _HOSTNAME.match(origin):
+        raise BadReviewOrigin(
+            "NURA_REVIEW_ORIGIN is a bare hostname (review.nura.example), no scheme or path"
+        )
+    return origin
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     """Read NURA_REGION and NURA_DATABASE_URL. Both are required: neither has a safe default.
 
@@ -219,9 +277,13 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         red_flag_tiers=source.get("NURA_RED_FLAG_TIERS", "") == "1",
         object_store_root=source.get("NURA_OBJECT_STORE") or None,
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
+        extractor=source.get("NURA_EXTRACTOR", "fixture"),
+        anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
+        searcher=source.get("NURA_SEARCHER", "fixture"),
+        compressor=source.get("NURA_COMPRESSOR", "fixture"),
         speaker_fixtures=source.get("NURA_SPEAKER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
         web_dist=source.get("NURA_WEB_DIST") or None,
@@ -244,6 +306,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),
+        review_origin=_review_origin(source.get("NURA_REVIEW_ORIGIN")),
     )
 
 

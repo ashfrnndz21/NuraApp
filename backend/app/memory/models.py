@@ -19,6 +19,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Float,
@@ -30,7 +31,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ImmutableRow, ProfileScoped, enum_column, frozen, utcnow
+from app.db import Base, ImmutableRow, ProfileScoped, enum_column, frozen, monotonic, utcnow
 from app.errors import Refusal
 from app.keys.rows import RowScoped
 from app.regions import Region
@@ -157,8 +158,13 @@ class EventKind(StrEnum):
     SUPPLY = "supply"
     """A person said there are more of a medicine at home (E04-05, "I have more at home"):
     the moment the count correction's fact rests on, under the medicines' part."""
+    SETTING = "setting"
+    """He (or his chief) changed a preference about how Nura works for him, after setup
+    (RE-05, "What Nura uses"): a signal switched on or off. The moment that preference fact
+    rests on, the way an onboarding choice rests on ONBOARDING."""
 
 
+@monotonic
 class Event(ProfileScoped, RowScoped, Base):
     """Something that happened: a reading taken, a visit, a message, a dose taken.
 
@@ -170,6 +176,11 @@ class Event(ProfileScoped, RowScoped, Base):
     `written_scope` is the part it was written under (`RowScoped`, `episodic.EVENT_SCOPES`):
     the record's, a reading taken the readings', a tablet taken the medicines', the family's
     message the family's, the moment of a fall said on WhatsApp the emergency scope.
+
+    `seq` (#192/#218) is the order events were written in, not when they occurred —
+    `occurred_at` can be backdated from a paper or a machine's own clock, so two events
+    genuinely at the same clinical instant break their tie by which was recorded more
+    recently, the same way every other "newest wins" read here does.
     """
 
     __tablename__ = "event"
@@ -189,6 +200,7 @@ class Event(ProfileScoped, RowScoped, Base):
     artifact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("artifact.id"), default=None)
     episode_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("episode.id"), default=None)
     recorded_at: Mapped[datetime] = mapped_column(default=utcnow)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 # --- semantic ------------------------------------------------------------------------------
@@ -455,14 +467,16 @@ class ProviderNote(ProfileScoped, Base):
     written_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
 
+@monotonic
 class LastLooked(ProfileScoped, Base):
     """When one person last looked at what changed on this profile (E03-04).
 
-    One row per look, never edited: the newest row for a person is the moment his next
-    "what changed" counts from. The look is the reader's own act, so the row names him and
-    nothing else — nothing of what he saw is written here. `appointments` is the spine as
-    he saw it, id to status, so a visit whose status has moved since can be told apart from
-    one that has not; a status change leaves no timestamp of its own on the visit.
+    One row per look, never edited: the newest row for a person — `looked_at`, tied by `seq`
+    (#192/#218) — is the moment his next "what changed" counts from. The look is the reader's
+    own act, so the row names him and nothing else — nothing of what he saw is written here.
+    `appointments` is the spine as he saw it, id to status, so a visit whose status has moved
+    since can be told apart from one that has not; a status change leaves no timestamp of its
+    own on the visit.
     """
 
     __tablename__ = "last_looked"
@@ -471,6 +485,7 @@ class LastLooked(ProfileScoped, Base):
     person_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("person.id"), index=True)
     looked_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
     appointments: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
 
 __all__ = ["ImmutableRow"]

@@ -17,6 +17,8 @@
     PATCH /profiles/{id}/search-jobs/{job}      pause or resume it
     GET  /profiles/{id}/area                    his area, coarse (owner, chief)
     PUT  /profiles/{id}/area                    set on his yes (owner, steward)
+    GET  /profiles/{id}/signals                 "What Nura uses": every family, on or off
+    PUT  /profiles/{id}/signals/{family}        switch one on or off (owner, chief)
     POST /profiles/{id}/find                    the ask bar's Web, Videos and Providers filters
 
 Every route takes the key context. The owner reads the patient's supply; a chief, caregiver
@@ -28,16 +30,19 @@ The feeling cloud's tap is in `app.channels.api.feelings`, with the rest of E17.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from pydantic import AwareDatetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
 from app.channels.about_him import reader_of
-from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
 from app.channels.api.feed_schemas import (
     AreaIn,
     AreaOut,
@@ -54,12 +59,16 @@ from app.channels.api.feed_schemas import (
     SearchJobOut,
     SearchJobPatchIn,
     SentOut,
+    SignalIn,
+    SignalsOut,
     SourceOut,
 )
+from app.channels.api.refusals import refused
 from app.delivery.feed.area import read_area, set_area
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
 from app.delivery.feed.compose import around_for, today_for
 from app.delivery.feed.engagement import record_engagement, record_events
+from app.delivery.feed.find import FindStep, find_stream
 from app.delivery.feed.find import find as find_pages
 from app.delivery.feed.models import SearchJob
 from app.delivery.feed.rank import (
@@ -73,8 +82,15 @@ from app.delivery.feed.rank import (
 from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
 from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
-from app.delivery.strings import language_for, watch_label
+from app.delivery.strings import FIND_STEPS, language_for, watch_label
+from app.errors import Refusal
 from app.keys.context import KeyContext
+from app.reasoning.signals import (
+    SignalFamily,
+    current_signal_use,
+    set_signal_use,
+    signals_may_be_set,
+)
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
 log = logging.getLogger("nura.channels.feed")
@@ -366,6 +382,27 @@ async def put_area(body: AreaIn, context: Context, session: Db) -> AreaOut:
     )
 
 
+@router.get("/{profile_id}/signals")
+async def signals(context: Context, session: Db) -> SignalsOut:
+    """"What Nura uses": food, sleep, steps, water, what he asks — each on or off, as he last
+    set it or the default (RE-05, docs/recommendation-engine.md §3.6). `may_set` says
+    whether this key may switch one; a caregiver reads them, only he or his chief sets them."""
+    uses = await current_signal_use(session, context=context)
+    return SignalsOut.of(uses, may_set=signals_may_be_set(context))
+
+
+@router.put("/{profile_id}/signals/{family}")
+async def put_signal(
+    family: SignalFamily, body: SignalIn, context: Context, session: Db
+) -> SignalsOut:
+    """Switch one family on or off, confirmed at the tap: his own key, or his chief's
+    (`NotTheirsToSetSignals`, 403, for anyone else). The fact and the write are on the trail
+    either way; State's preference dimension shows it on the next read."""
+    await set_signal_use(session, context=context, family=family, on=body.on)
+    uses = await current_signal_use(session, context=context)
+    return SignalsOut.of(uses, may_set=True)
+
+
 @router.post("/{profile_id}/find")
 async def find(body: FindIn, request: Request, context: Context, session: Db) -> FindOut:
     """The ask bar's Web, Videos and Providers filters: the allowlisted sources only, said
@@ -381,6 +418,42 @@ async def find(body: FindIn, request: Request, context: Context, session: Db) ->
         language=body.language,
     )
     return FindOut(where=body.where, results=[ResultOut.of(one) for one in found])
+
+
+def _sse(payload: dict[str, object]) -> bytes:
+    """One Server-Sent Event: a `data:` line of JSON (`app.channels.api.timeline._sse`, the
+    same shape — kept local so this route does not import the timeline router)."""
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+@router.post("/{profile_id}/find/stream")
+async def find_pages_stream(body: FindIn, request: Request, context: Context) -> StreamingResponse:
+    """`POST /{id}/find`, streamed, for the Web and Videos filters (docs/design-direction.md
+    'Conversation, waiting and thinking'): one `step` event the instant the allowlisted
+    search is actually running (`find_stream`), then a `results` event — the same list
+    `POST /{id}/find` gives. Providers is a directory read and streams straight to its
+    results, no step: there is no real stage to say is still in progress.
+
+    Opens its own session (`session_scope`), never `Depends(db)` — see `app.channels.api.
+    timeline.ask_stream` for why a stream cannot use a `yield` dependency."""
+    code = language_for(body.language)
+
+    async def events() -> AsyncIterator[bytes]:
+        try:
+            async with session_scope(request) as session:
+                async for event in find_stream(
+                    session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
+                ):
+                    if isinstance(event, FindStep):
+                        yield _sse({"type": "step", "key": event.key, "label": FIND_STEPS[code][body.where]})
+                    else:
+                        yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
+        except Refusal as refusal:
+            response = await refused(request, refusal)
+            body_ = json.loads(bytes(response.body))
+            yield _sse({"type": "refusal", "status": response.status_code, **body_})
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @router.get("/{profile_id}/feed/{item_id}")

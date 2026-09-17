@@ -453,8 +453,10 @@ async def active_consents(
     """Every consent in force on this profile at this moment, oldest first, whatever its version."""
     moment = at or utcnow()
     rows = await audited_read(session, Consent, context, Scope.FAMILY)
+    # `.seq` breaks a tie in `granted_at` (#192/#218), the same way every sort here does.
     return sorted(
-        (row for row in rows if row.is_active(moment)), key=lambda row: as_utc(row.granted_at)
+        (row for row in rows if row.is_active(moment)),
+        key=lambda row: (as_utc(row.granted_at), row.seq),
     )
 
 
@@ -465,7 +467,7 @@ async def all_consents(
 ) -> list[Consent]:
     """Every consent ever given on this profile, withdrawn ones included, oldest first."""
     rows = await audited_read(session, Consent, context, Scope.FAMILY)
-    return sorted(rows, key=lambda row: as_utc(row.granted_at))
+    return sorted(rows, key=lambda row: (as_utc(row.granted_at), row.seq))
 
 
 def _about(
@@ -525,7 +527,10 @@ async def require_consent(
     )
     active = [row for row in rows if row.is_active(moment)]
     wanted = current_version(purpose)
-    for row in sorted(active, key=lambda row: as_utc(row.granted_at), reverse=True):
+    # `.seq` breaks a tie in `granted_at` (#192/#218): which consent's scopes a key is cut
+    # from is a decision — two consents for the same person granted in one request, or under
+    # a frozen clock, must not let an older, narrower one win at random (checkpoint 13).
+    for row in sorted(active, key=lambda row: (as_utc(row.granted_at), row.seq), reverse=True):
         if row.text_version == wanted:
             return ConsentCheck(
                 consent_id=row.id,

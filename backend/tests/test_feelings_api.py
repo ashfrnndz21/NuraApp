@@ -53,7 +53,7 @@ async def test_a_tap_its_one_answer_and_the_note_in_malay(deployment: Deployment
     )
     assert answered.status_code == 201, answered.text
     note = answered.json()["note"]
-    assert note["lines"] == ["Beritahu doktor anda bahawa anda rasa sedih hari ini."]
+    assert note["lines"] == ["Beritahu doktor anda bahawa anda rasa sedih pada Khamis 3 September."]
     assert note["voice"][-2:] == ["Ini bukan nasihat doktor.", "Tanya doktor anda."]
     again = await deployment.client.post(
         f"/profiles/{profile_id}/feelings/{tap.json()['tap_id']}/answer",

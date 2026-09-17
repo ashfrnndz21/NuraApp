@@ -140,7 +140,7 @@ test("Pa adds Priya himself on the Family Keys screen, and she can ask against h
   const asking = priyaPage.getByTestId("ask-screen");
   await asking.getByLabel("Your question").fill("What was my blood pressure?");
   const [asked] = await Promise.all([
-    priyaPage.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask`)),
+    priyaPage.waitForRequest((req) => req.method() === "POST" && req.url().endsWith(`/profiles/${pa.profileId}/ask/stream`)),
     asking.getByTestId("ask-send").click(),
   ]);
   expect(asked.postDataJSON()).toMatchObject({ question: "What was my blood pressure?" });

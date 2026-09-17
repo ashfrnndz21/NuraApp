@@ -67,10 +67,15 @@ class MedicineOut(BaseModel):
     strength: str
     form: str
     plain_name: str
+    has_plain_name: bool
     amount: str
     when: str
     high_risk: bool
     high_risk_class: str | None
+    high_risk_label: str | None
+    """The word a stranger reads for a high-risk medicine, in his language, catalogued and
+    plain-words checked (A3, clinical-safety review on #229's own PR) — the client renders
+    this and nothing of its own; `None` unless `high_risk` is true."""
 
 
 class ContactOut(BaseModel):
@@ -166,10 +171,12 @@ class EmergencyCardOut(BaseModel):
                     strength=m.strength,
                     form=m.form,
                     plain_name=m.plain_name,
+                    has_plain_name=m.has_plain_name,
                     amount=m.amount,
                     when=m.when,
                     high_risk=m.high_risk,
                     high_risk_class=m.high_risk_class,
+                    high_risk_label=m.high_risk_label,
                 )
                 for m in card.medicines
             ],

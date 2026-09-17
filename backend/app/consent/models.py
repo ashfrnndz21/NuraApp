@@ -13,10 +13,10 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy import JSON, BigInteger, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db import Base, ProfileScoped, as_utc, enum_column, utcnow
+from app.db import Base, ProfileScoped, as_utc, enum_column, monotonic, utcnow
 from app.keys.scopes import KeyRole, KeyWindow
 
 
@@ -86,6 +86,7 @@ DOCUMENTED_BASES = frozenset({ConsentBasis.LPA, ConsentBasis.MEDICAL_LETTER})
 """The bases that are a document: the artefact of it is required."""
 
 
+@monotonic
 class Consent(ProfileScoped, Base):
     """One agreement on one profile.
 
@@ -100,6 +101,12 @@ class Consent(ProfileScoped, Base):
     was tracked, carries neither. `basis_artifact_id` is the document behind a
     documented basis, or the recording behind a spoken one; `witness_person_id` is who
     heard a spoken agreement.
+
+    `app.consent.service.require_consent` picks the newest one in force for its purpose —
+    `granted_at`, tied by `seq` (#192/#218) — and a key is cut resting on whichever that is:
+    two consents for the same person granted in one request, or under a frozen clock, used
+    to tie and let the older, narrower one win at random (checkpoint 13's exact failure,
+    the same one #190 reported and could not reproduce).
     """
 
     __tablename__ = "consent"
@@ -142,6 +149,7 @@ class Consent(ProfileScoped, Base):
     revoked_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None
     )
+    seq: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
     def is_active(self, now: datetime) -> bool:
         """Not withdrawn by this moment. Says nothing about the version, like `Key.is_active`."""

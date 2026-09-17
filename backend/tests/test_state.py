@@ -117,6 +117,8 @@ def test_a_fact_goes_to_its_dimension_and_health_is_the_default() -> None:
     assert dimension_of("mobility") is Dimension.FUNCTIONAL
     assert dimension_of("language") is Dimension.COGNITIVE
     assert dimension_of("goal") is Dimension.PREFERENCE
+    # "What Nura uses" (RE-05): every switch is a `signals` fact, folded the same way.
+    assert dimension_of("signals") is Dimension.PREFERENCE
     assert dimension_of("fasting") is Dimension.SITUATIONAL
     assert dimension_of("blood_pressure") is Dimension.CLINICAL
     assert dimension_of("something_nobody_has_classified") is Dimension.CLINICAL
