@@ -12,6 +12,7 @@ it becomes a `QUESTION` item for the memo, never for his feed.
 from __future__ import annotations
 
 import hashlib
+import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -24,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action, Outcome
 from app.audit.trail import record
-from app.db import utcnow
+from app.db import nested_unit_of_work, utcnow
 from app.delivery.feed.clips import ClipRenderer, clip_length_ok, may_excerpt
 from app.delivery.feed.compress import Compressed, Compressor, Found, Searcher, changes_treatment
 from app.delivery.feed.days import Day, plain_day
@@ -60,8 +61,13 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
 from app.reasoning.ranges import ReferenceRanges
+from app.reasoning.visits.memos import write_memo
+from app.reasoning.visits.models import MemoKind, MemoSource
+from app.reasoning.visits.strings import medicine_words
 from app.state.models import Dimension
 from app.state.service import StateView
+
+log = logging.getLogger("nura.delivery.search")
 
 JOB_TARGET = SearchJob.__tablename__
 LEARNING_LIFETIME = timedelta(days=90)
@@ -445,11 +451,16 @@ async def run_job(
             }
         if job.kind is JobKind.SAFETY:
             # A notice is never his card, batch match or not (spec §0, §9; #181): it is held
-            # for the chief, capped like any other of hers, unless its words would start,
-            # stop or change a medicine, in which case it is a question for the doctor and
-            # goes to the memo instead — the same reroute every other found page gets, just
-            # ahead of it, because a safety notice never reaches `create_item` with
-            # `DeliverTo.PATIENT` (that door is shut there too, `NoticeNotForPatient`).
+            # for the chief, capped like any other of hers — ALWAYS, because she must hear
+            # about a recall on his own box whatever else is true of it (#224 review finding:
+            # a `continue` here used to skip the caregiver notice entirely whenever the words
+            # also read as a treatment change, so the most urgent notice reached nobody).
+            # When its words would start, stop or change a medicine, that is filed too, as a
+            # real question for the doctor (`reasoning.visits.memos.write_memo`) — in
+            # addition to the caregiver notice, never instead of it, and never a `FeedItem`
+            # nobody reads (`DeliverTo.MEMO` is not a supply any route or ranking serves).
+            # A safety notice never reaches `create_item` with `DeliverTo.PATIENT` either way
+            # (that door is shut there too, `NoticeNotForPatient`).
             matches = found.batch is not None and found.batch.strip().lower() in _batches_on_record(
                 state
             )
@@ -462,47 +473,23 @@ async def run_job(
                 doctor=doctor or YOUR_DOCTOR[code],
             )
             if changes_treatment([notice_lines.headline, *notice_lines.body]):
-                question = await create_item(
+                memo_id = await _ask_the_doctor(
                     session,
                     context=context,
                     state=state,
-                    type=CardType.QUESTION,
-                    lines=Lines(
-                        language=code,
-                        headline=f"Ask about: {found.title}",
-                        body=tuple(compressed.body),
-                        voice=(),
-                        why=(
-                            f"A safety notice on {found.domain} about his medicine could change "
-                            "treatment, so it is a question for his doctor, not a card."
-                        ),
-                    ),
-                    why=Why(
-                        kind="question",
-                        plain="",
-                        source_id=str(source.id),
-                        gap=job.terms[0],
-                        fact_ids=tuple(_fact_ids_about(state, job.terms)),
-                    ),
-                    scope=Scope.MEDICINES,
-                    deliver_to=DeliverTo.MEMO,
-                    day=day.key,
-                    dedupe_key=key,
-                    expires_at=moment + LEARNING_LIFETIME,
-                    source=source,
-                    cite={**cite, "batch": found.batch},
-                    search_job_id=job.id,
+                    code=code,
+                    doctor=doctor,
+                    generic=job.terms[0],
+                    registry=engine.registry,
+                    source_id=source.id,
                 )
-                existing.add(key)
-                questions.append(question)
                 rejected.append(
                     {
                         "url": found.url,
-                        "because": "treatment_change_rerouted_as_question",
-                        "item_id": str(question.id),
+                        "because": "treatment_change_also_filed_as_a_question",
+                        "memo_id": memo_id or "not_filed",
                     }
                 )
-                continue
             try:
                 notice = await create_item(
                     session,
@@ -763,3 +750,49 @@ def _fact_ids_about(state: StateView, terms: Sequence[str]) -> list[str]:
             if any(term in haystack for term in terms):
                 ids.append(entry["fact_id"])
     return sorted(ids)
+
+
+async def _ask_the_doctor(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    state: StateView,
+    code: str,
+    doctor: str | None,
+    generic: str,
+    registry: DrugRegistry,
+    source_id: uuid.UUID,
+) -> str | None:
+    """File a safety notice that would change treatment as a real question for the doctor
+    (#181, #224), through the same memo the post-visit summary files one against — never a
+    `FeedItem`, which nothing reads for `DeliverTo.MEMO` (rank.py's two supplies exclude it,
+    and no route queries it). `appointment_id` is left unset: this is not about one visit, so
+    it is a standing question `current_memos`/`propose_questions` picks up for whichever
+    comes next, the same way an unfiled memo already works there.
+
+    In a savepoint of its own, the way a review sample sits beside a card
+    (`items._sample`): whatever goes wrong here — a name the register does not carry, a line
+    that fails the verifier, the database — is logged and rolled back. It must never cost him
+    the caregiver notice this always runs alongside; that is written by the caller regardless
+    of what happens here.
+    """
+    try:
+        async with nested_unit_of_work(session):
+            memo = await write_memo(
+                session,
+                context=context,
+                kind=MemoKind.ASK,
+                key="ask_safety_notice",
+                slots={
+                    "doctor": doctor or YOUR_DOCTOR[code],
+                    "medicine": medicine_words(generic, code, registry),
+                },
+                source=MemoSource.SEARCH,
+                source_id=source_id,
+                state=state,
+                language=code,
+            )
+            return str(memo.id)
+    except Exception as skipped:  # noqa: BLE001 — nothing here may cost him the notice
+        log.warning("safety-notice question skipped: %s", type(skipped).__name__)
+        return None

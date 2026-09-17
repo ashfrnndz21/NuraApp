@@ -528,6 +528,13 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Tanya {doctor} tentang perubahan pada {medicine}.",
         "zh": "问一问{doctor}，{medicine}有什么变化。",
     },
+    # A question from a safety notice a search job found (#181/#224): its own words are never
+    # kept, only that there is a notice to ask about.
+    "ask_safety_notice": {
+        "en": "Ask {doctor} about the notice on {medicine}.",
+        "ms": "Tanya {doctor} tentang notis mengenai {medicine}.",
+        "zh": "问一问{doctor}，关于{medicine}的通知。",
+    },
     "ask_medicines_change": {
         "en": "Ask {doctor} about the change to your medicines.",
         "ms": "Tanya {doctor} tentang perubahan pada ubat anda.",
