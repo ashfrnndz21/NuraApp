@@ -109,6 +109,22 @@ PROMPT: Mapping[str, str] = {
 }
 """The one line above the words. Never a form, never a scale."""
 
+
+def asks_about_feeling(text: str, language: str) -> bool:
+    """Whether `text`, sent in `language`, puts the feeling question to him — `PROMPT`'s own
+    words, verbatim, wherever they sit in the message.
+
+    This is what an outbound WhatsApp message is checked against before it is allowed to open
+    his answer window (`app.channels.whatsapp.outbound.send.send`,
+    `WhatsAppMessage.asks_feeling`, #205): not the name of the template that carried it, which
+    is a list a later asker of the same question — a nudge, or anything after it — could
+    silently fall outside of. The plain check-in template and the day's check-in nudge both
+    carry `PROMPT`'s words today; anything later that asks this question the same way, by
+    reusing them, is covered without a line of code changing here.
+    """
+    prompt = PROMPT.get(language)
+    return prompt is not None and prompt in text
+
 # @patient
 LEADS: Mapping[str, Mapping[str, str]] = {
     "en": {
