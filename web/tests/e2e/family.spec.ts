@@ -37,7 +37,7 @@ async function secondPhone(browser: Browser): Promise<Page> {
 const back = (page: Page) => page.getByRole("button", { name: "Go back" }).click();
 
 /** One tab set, the same for everyone (docs/product-reset.md §6). */
-const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"];
+const TAB_SET = ["Today", "Health", "Family", "Visits", "Me"];
 
 test("the nav (D1, the reset): one tab set, the same for the owner and for a key", async ({ page, browser, request }) => {
   const family = await seedFamily(request);

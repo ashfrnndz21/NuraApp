@@ -36,11 +36,11 @@ export const zh = {
     // @patient headline
     health: "健康",
     // @patient headline
-    connect: "联系",
+    connect: "家人",
     // @patient headline
-    services: "服务",
+    services: "看诊",
     // @patient headline
-    profile: "我的",
+    profile: "我",
   },
   shell: {
     // @patient phrase
@@ -56,7 +56,7 @@ export const zh = {
     // @patient phrase
     close: "关闭",
     // @patient phrase
-    bell: "新消息",
+    bell: "更多给您的",
   },
   welcome: {
     // @patient headline
@@ -64,25 +64,21 @@ export const zh = {
     // @patient headline
     tagline2: "您的家人，就在身边。",
     // @patient
-    lead: "陪伴长者，也陪伴照顾他们的家人。",
+    lead: "Nura 把您的药和文件都放在一个地方。",
     // @patient headline
     remember: "记住",
-    // @patient phrase
-    rememberLine: "药和文件",
+    // @patient line
+    rememberLine: "Nura 记住您的药和文件。",
     // @patient headline
     share: "分享",
-    // @patient phrase
-    shareLine: "给您选的家人",
+    // @patient line
+    shareLine: "您选家里的谁可以看。",
     // @patient headline
     prepare: "准备",
-    // @patient phrase
-    prepareLine: "每次看诊前",
+    // @patient line
+    prepareLine: "看医生之前，Nura 帮您准备好。",
     // @patient phrase
     start: "开始",
-    // @patient phrase
-    haveAccount: "已经有账号了？",
-    // @patient phrase
-    signIn: "登录",
   },
   talk: {
     // @patient phrase
@@ -102,7 +98,7 @@ export const zh = {
     // @patient phrase
     tryAgain: "再试一次",
     // @patient phrase
-    loading: "正在准备您的页面",
+    loading: "Nura 正在准备您的“今天”页面。",
   },
   hub: {
     // @patient
@@ -110,47 +106,47 @@ export const zh = {
     // @patient
     howFeelingOther: "{patient}今天感觉怎么样？",
     // @patient headline
-    checkTitle: "每日问候",
-    // @patient phrase
-    checkLine: "告诉 Nura 您今天的感觉",
+    checkTitle: "您今天的感觉",
+    // @patient line
+    checkLine: "告诉 Nura 您今天的感觉。",
     // @patient phrase
     checkLineOther: "告诉 Nura {patient}今天的感觉",
     // @patient phrase
-    checkIn: "说一说",
+    checkIn: "告诉 Nura",
     // @patient
     doTitle: "您想做什么？",
     // @patient headline
-    doTitleOther: "可以去的地方",
-    // @patient headline
     health: "健康",
-    // @patient phrase
-    healthLine: "记录和查看",
+    // @patient line
+    healthLine: "您的血压本和文件。",
     // @patient headline
     medicines: "药",
-    // @patient phrase
-    medicinesLine: "吃药和提醒",
+    // @patient line
+    medicinesLine: "您的药，和什么时候吃。",
     // @patient headline
     connect: "联系",
-    // @patient phrase
-    connectLine: "家人和朋友",
+    // @patient line
+    connectLine: "看看您的家人和朋友。",
     // @patient headline
-    activities: "活动",
-    // @patient phrase
-    activitiesLine: "保持忙碌",
+    activities: "可以做的事",
+    // @patient line
+    activitiesLine: "今天可以做点什么。",
     // @patient headline
-    care: "照护服务",
-    // @patient phrase
-    careLine: "上门帮忙",
+    care: "上门帮忙",
+    // @patient line
+    careLine: "有人可以上门帮您。",
     // @patient headline
-    resources: "指南",
-    // @patient phrase
-    resourcesLine: "读一读，学一学",
+    resources: "可以读的东西",
+    // @patient line
+    resourcesLine: "Nura 用简单的话说明。",
     // @patient headline
-    report: "加一份健康报告",
-    // @patient phrase
-    reportLine: "PDF，或者一张纸的照片",
+    report: "加一份文件",
+    // @patient line
+    reportLine: "拍张照片，或者选医生发给您的那一份。",
+    // @patient line
+    reportNote: "Nura 会读一读，再告诉您它看到了什么。",
     // @patient headline
-    upcoming: "快到了",
+    upcoming: "下次看诊",
     // @patient phrase
     seeAll: "看全部",
     // @patient phrase
@@ -160,7 +156,7 @@ export const zh = {
     // @patient
     soonLine2: "我们还在做。",
     // @patient phrase
-    backHome: "回到首页",
+    backHome: "回到“今天”页面",
   },
   home: {
     // @patient headline
@@ -169,6 +165,8 @@ export const zh = {
     whatChanged: "有什么变化",
     // @patient headline
     nextVisit: "下次看诊",
+    // @patient phrase
+    atTime: "时间是 {time}。",
     // @patient headline
     buyMore: "再买一些",
     // @patient headline

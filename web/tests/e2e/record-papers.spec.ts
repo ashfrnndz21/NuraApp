@@ -16,7 +16,7 @@ test("the Record's first screen: his medicines, his papers and his day first; a 
 
   await signInAs(page, pa, "Pa");
   await expect(page.getByTestId("tab-health")).toHaveText("Health");
-  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Home", "Health", "Connect", "Services", "Profile"]);
+  expect(await page.locator("nav.tabbar button").allTextContents()).toEqual(["Today", "Health", "Family", "Visits", "Me"]);
   await openRecord(page);
   await expect(page.locator("h1")).toHaveText("Your papers");
   const his = await page.getByTestId("record-entries").locator("button").evaluateAll((buttons) => buttons.map((each) => each.getAttribute("data-testid")));

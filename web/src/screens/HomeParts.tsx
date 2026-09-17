@@ -96,6 +96,9 @@ export function AddReport({ papers }: { papers: ProfileOut | null }): JSX.Elemen
       <span class="action-text">
         <span class="action-title">{s.hub.report}</span>
         <span class="action-line">{s.hub.reportLine}</span>
+        {/* Choosing the file *is* the yes — it uploads with no second confirm (`chosen`, above)
+            — so the caption says so plainly, rather than leaving him to discover it. */}
+        <span class="action-line">{s.hub.reportNote}</span>
       </span>
       <span class="action-go" aria-hidden="true">
         <Icon name="chevron" />

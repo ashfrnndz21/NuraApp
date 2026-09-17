@@ -290,7 +290,7 @@ for (const [look, banner] of [
     await expect(page.getByTestId("answer")).toBeVisible();
     await audit(page, where("ask: the answer"));
     await page.getByTestId("back-to-cards").click();
-    await page.getByRole("button", { name: "Home", exact: true }).click();
+    await page.getByTestId("tab-home").click();
 
     await page.getByTestId("open-visit").click();
     await expect(page.getByTestId("logistics")).toBeVisible();
@@ -316,14 +316,14 @@ for (const [look, banner] of [
       await expect(page.getByTestId("record-hub")).toBeVisible();
     }
 
-    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await page.getByTestId("open-me").click();
     await audit(page, where("me"));
     await page.getByTestId("open-papers").click();
     await audit(page, where("papers from your photos"));
     await page.getByTestId("papers-finish").click();
 
     // For someone else, and the papers someone made for you.
-    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await page.getByTestId("open-me").click();
     await page.getByTestId("sign-out").click();
     await expect(page.getByLabel("Your phone number")).toBeVisible();
     await signInThroughTheApp(page, freshPhone("+659334"), "Ash");
@@ -338,7 +338,7 @@ for (const [look, banner] of [
     await expect(page.locator("main.onboarding")).toBeVisible();
     await audit(page, where("about him, for someone else"));
     await page.getByTestId("set-up-later").click();
-    await page.getByRole("button", { name: "Me", exact: true }).click();
+    await page.getByTestId("open-me").click();
     await page.getByTestId("sign-out").click();
     await expect(page.getByLabel("Your phone number")).toBeVisible();
     await signInThroughTheApp(page, his, "Ah Kong");
@@ -436,7 +436,7 @@ for (const banner of [false, true]) test(`the writing at 200%, on a 360 px phone
     await page.getByTestId("record-back").click();
     await expect(page.getByTestId("record-hub")).toBeVisible();
   }
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByTestId("sign-out")).toBeVisible();
   // Me is a sheet (D1): the page under it is covered on purpose and its tab bar is behind the
   // scrim, so the sheet's own lines are what must be readable here.
@@ -564,7 +564,7 @@ test("his large-text setting, from his State, makes the writing one step bigger 
   await page.reload();
   await todayReady(page);
   await expect(page.locator("html")).toHaveAttribute("data-text", "large");
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   await expect(page.locator("html")).not.toHaveAttribute("data-text", "large");

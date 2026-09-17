@@ -6,11 +6,12 @@ import { Icon, IconBadge, PillButton, type IconName, type Tint } from "../ui/kit
 
 /** Welcome, before a phone's first sign-in, as the approved board draws it
  *  (docs/design/nura-concept-board.html, "Welcome"): the picture on its rounded card, the heart
- *  and the serif wordmark, a two-line serif tagline and the line under it, three value tiles, a
- *  full-width Get started, and "Already have an account? Sign in".
+ *  and the serif wordmark, a two-line serif tagline and the line under it, three value tiles, and
+ *  a full-width Get started.
  *
- *  Nura has one way in for both — the phone number — so both go to it. Nothing here is anyone's:
- *  no name, no papers, so it is the same on every phone. */
+ *  Nura has one way in for both a new phone and one that has signed in before — the phone
+ *  number — so there is one button, not two that both led to the same place (plain words
+ *  review, #237): no name, no papers here, so it is the same on every phone either way. */
 export function WelcomeScreen(): JSX.Element {
   const s = t();
   const w = s.welcome;
@@ -47,12 +48,6 @@ export function WelcomeScreen(): JSX.Element {
       <PillButton variant="primary" onClick={onward} testId="welcome-start">
         {w.start}
       </PillButton>
-      <p class="welcome-signin">
-        {w.haveAccount}{" "}
-        <button type="button" class="link-button" onClick={onward} data-testid="welcome-sign-in">
-          {w.signIn}
-        </button>
-      </p>
     </main>
   );
 }

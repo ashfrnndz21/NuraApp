@@ -36,8 +36,6 @@ export interface Strings {
     prepare: string;
     prepareLine: string;
     start: string;
-    haveAccount: string;
-    signIn: string;
   };
   /** Conversation and waiting (docs/design-direction.md): the words every ask, search and
    *  message composer uses while Nura works. The steps themselves are the backend's lines. */
@@ -49,7 +47,7 @@ export interface Strings {
     checkTitle: string;
     checkLine: string; checkLineOther: string;
     checkIn: string;
-    doTitle: string; doTitleOther: string;
+    doTitle: string;
     health: string;
     healthLine: string;
     medicines: string;
@@ -64,6 +62,7 @@ export interface Strings {
     resourcesLine: string;
     report: string;
     reportLine: string;
+    reportNote: string;
     upcoming: string;
     seeAll: string;
     seeAllVisits: string;
@@ -72,7 +71,7 @@ export interface Strings {
     backHome: string;
   };
   /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
-  home: { mostLikely: string; whatChanged: string; nextVisit: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
+  home: { mostLikely: string; whatChanged: string; nextVisit: string; atTime: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
   /** The tabs' own titles (D1). */
   places: {
     visitsOwn: string; visitsOwnOther: string;

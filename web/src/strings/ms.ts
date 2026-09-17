@@ -36,11 +36,11 @@ export const ms = {
     // @patient headline
     health: "Kesihatan",
     // @patient headline
-    connect: "Hubungi",
+    connect: "Keluarga",
     // @patient headline
-    services: "Khidmat",
+    services: "Lawatan",
     // @patient headline
-    profile: "Profil",
+    profile: "Saya",
   },
   shell: {
     // @patient phrase
@@ -56,7 +56,7 @@ export const ms = {
     // @patient phrase
     close: "Tutup",
     // @patient phrase
-    bell: "Apa yang baru",
+    bell: "Lagi untuk anda",
   },
   welcome: {
     // @patient headline
@@ -64,25 +64,21 @@ export const ms = {
     // @patient headline
     tagline2: "Keluarga anda, sentiasa dekat.",
     // @patient
-    lead: "Teman yang prihatin untuk warga emas dan keluarga yang menjaga mereka.",
+    lead: "Nura menyimpan ubat dan surat anda di satu tempat.",
     // @patient headline
     remember: "Ingat",
-    // @patient phrase
-    rememberLine: "Ubat dan surat",
+    // @patient line
+    rememberLine: "Nura ingat ubat dan surat anda.",
     // @patient headline
     share: "Kongsi",
-    // @patient phrase
-    shareLine: "Dengan keluarga pilihan anda",
+    // @patient line
+    shareLine: "Anda pilih siapa dalam keluarga boleh melihatnya.",
     // @patient headline
     prepare: "Bersedia",
-    // @patient phrase
-    prepareLine: "Untuk setiap lawatan",
+    // @patient line
+    prepareLine: "Nura sediakan anda sebelum jumpa doktor.",
     // @patient phrase
     start: "Mula",
-    // @patient phrase
-    haveAccount: "Sudah ada akaun?",
-    // @patient phrase
-    signIn: "Daftar masuk",
   },
   talk: {
     // @patient phrase
@@ -102,7 +98,7 @@ export const ms = {
     // @patient phrase
     tryAgain: "Cuba lagi",
     // @patient phrase
-    loading: "Menyediakan halaman anda",
+    loading: "Nura sedang menyediakan halaman Hari Ini anda.",
   },
   hub: {
     // @patient
@@ -110,47 +106,47 @@ export const ms = {
     // @patient
     howFeelingOther: "Apa khabar {patient} hari ini?",
     // @patient headline
-    checkTitle: "Semakan harian",
-    // @patient phrase
-    checkLine: "Beritahu Nura apa yang anda rasa hari ini",
+    checkTitle: "Apa yang anda rasa hari ini",
+    // @patient line
+    checkLine: "Beritahu Nura apa yang anda rasa hari ini.",
     // @patient phrase
     checkLineOther: "Beritahu Nura apa yang {patient} rasa hari ini",
     // @patient phrase
-    checkIn: "Semak",
+    checkIn: "Beritahu Nura",
     // @patient
     doTitle: "Apa yang anda mahu buat?",
     // @patient headline
-    doTitleOther: "Tempat untuk dituju",
-    // @patient headline
     health: "Kesihatan",
-    // @patient phrase
-    healthLine: "Pantau dan semak",
+    // @patient line
+    healthLine: "Buku tekanan darah dan surat anda.",
     // @patient headline
     medicines: "Ubat",
-    // @patient phrase
-    medicinesLine: "Ubat dan peringatan",
+    // @patient line
+    medicinesLine: "Ubat anda, dan bila hendak makan.",
     // @patient headline
     connect: "Hubungi",
-    // @patient phrase
-    connectLine: "Keluarga dan kawan",
+    // @patient line
+    connectLine: "Lihat keluarga dan kawan anda.",
     // @patient headline
-    activities: "Aktiviti",
-    // @patient phrase
-    activitiesLine: "Kekal aktif",
+    activities: "Perkara untuk dibuat",
+    // @patient line
+    activitiesLine: "Sesuatu untuk dibuat hari ini.",
     // @patient headline
-    care: "Khidmat jagaan",
-    // @patient phrase
-    careLine: "Bantuan di rumah",
+    care: "Bantuan di rumah",
+    // @patient line
+    careLine: "Seseorang boleh datang membantu anda di rumah.",
     // @patient headline
-    resources: "Panduan",
-    // @patient phrase
-    resourcesLine: "Baca dan belajar",
+    resources: "Bahan bacaan",
+    // @patient line
+    resourcesLine: "Nura terangkan dalam kata-kata mudah.",
     // @patient headline
-    report: "Tambah laporan kesihatan",
-    // @patient phrase
-    reportLine: "PDF, atau gambar sehelai surat",
+    report: "Tambah surat",
+    // @patient line
+    reportLine: "Ambil gambarnya, atau pilih yang doktor hantar kepada anda.",
+    // @patient line
+    reportNote: "Nura akan membacanya dan tunjuk apa yang dijumpainya.",
     // @patient headline
-    upcoming: "Akan datang",
+    upcoming: "Lawatan seterusnya",
     // @patient phrase
     seeAll: "Lihat semua",
     // @patient phrase
@@ -160,7 +156,7 @@ export const ms = {
     // @patient
     soonLine2: "Kami masih membuatnya.",
     // @patient phrase
-    backHome: "Kembali ke Utama",
+    backHome: "Kembali ke halaman Hari Ini",
   },
   home: {
     // @patient headline
@@ -169,6 +165,8 @@ export const ms = {
     whatChanged: "Apa yang berubah",
     // @patient headline
     nextVisit: "Lawatan seterusnya",
+    // @patient phrase
+    atTime: "Pada {time}.",
     // @patient headline
     buyMore: "Beli lagi",
     // @patient headline

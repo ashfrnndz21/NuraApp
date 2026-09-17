@@ -16,10 +16,10 @@ import {
   clockWords,
   lineTitle,
   dateLine,
-  dayMonthLine,
   dueCards,
   feedLines,
   greeting,
+  heroFurnitureAllowed,
   homeHero,
   nearestToRunOut,
   readingLead,
@@ -56,15 +56,19 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const locale = LOCALE[language.value];
   const name = papers?.display_name || me.value?.display_name || "";
   const hero = page?.hero ?? null;
+  // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
+  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
+  const flagged = feed.flags.length > 0;
+  const furniture = heroFurnitureAllowed({ flagged });
   return (
     <Shell tab="home" testId="today-screen">
       <AskField placeholder={s.shell.askNura} />
       <Hero
         greeting={greeting(now.getHours(), name, s)}
-        wave
-        ask={s.hub.howFeeling}
+        wave={furniture}
+        ask={furniture ? s.hub.howFeeling : undefined}
         sub={dateLine(now, locale)}
-        art={<CoupleIllustration />}
+        art={furniture ? <CoupleIllustration /> : undefined}
         figure={fromPhone ? null : (hero?.count ?? null)}
         words={!fromPhone && hero?.count !== null && hero?.count !== undefined ? hero.words : null}
         testId="today-hero"
@@ -84,7 +88,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
             {stateAt === "top" && <StateCard v={v} />}
-            <CheckInCard papers={papers} />
+            {furniture && <CheckInCard papers={papers} />}
             <DoGrid papers={papers} />
             <AddReport papers={papers} />
             {nextVisit && !fromPhone && (
@@ -141,7 +145,11 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt, now, papers } = v;
   const bearer = token.value;
   const drivers = page?.drivers ?? [];
-  const hero = page ? homeHero(page, { flagged: feed.flags.length > 0, kept: fromPhone }, s) : null;
+  // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
+  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
+  const flagged = feed.flags.length > 0;
+  const furniture = heroFurnitureAllowed({ flagged });
+  const hero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
   const locale = LOCALE[language.value];
   const supply = page ? <SupplyTile lines={page.lines} /> : null;
   const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
@@ -153,9 +161,9 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
           (strings/index.ts, ABOUT_HIM), so a caregiver's Home never speaks in his voice. */}
       <Hero
         greeting={greeting(now.getHours(), me.value?.display_name || "", s)}
-        wave
-        ask={s.hub.howFeeling}
-        art={<CoupleIllustration />}
+        wave={furniture}
+        ask={furniture ? s.hub.howFeeling : undefined}
+        art={furniture ? <CoupleIllustration /> : undefined}
         label={state && hero?.word ? s.home.mostLikely : undefined}
         figure={state ? hero?.word : undefined}
         words={state ? hero?.line : undefined}
@@ -205,7 +213,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
             {(stateAt === "top" || stateAt === "forYou") && <StateCard v={v} />}
-            <CheckInCard papers={papers} />
+            {furniture && <CheckInCard papers={papers} />}
             <DoGrid papers={papers} />
             <AddReport papers={papers} />
             {/* "What changed since you last looked" belongs on her Home by the design
@@ -570,7 +578,9 @@ function AskAboutPill(): JSX.Element | null {
   );
 }
 
-/** The next visit as a figure — its day and time — and where, as the logistics card says. */
+/** The next visit as a figure — its day and time — and where, as the logistics card says. Its
+ *  date and its time are two lines, never one joined by a symbol to decode (plain words): the
+ *  date a whole line on its own, the time under it in `home.atTime`. */
 function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
   const s = t();
   const locale = LOCALE[language.value];
@@ -583,10 +593,8 @@ function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element {
         <IconBadge icon="calendar" tint="paper" />
         <span class="grow">
           <span class="card-title">{visit.doctor || weekdayOf(at, locale)}</span>
-          <span class="card-line">
-            {visit.doctor && `${weekdayOf(at, locale)} `}
-            <span data-testid="next-visit-date">{dayMonthLine(at, locale)}</span> · {timeLine(at, locale)}
-          </span>
+          <span class="card-line" data-testid="next-visit-date">{dateLine(at, locale)}</span>
+          <span class="card-line">{fill(s.home.atTime, { time: timeLine(at, locale) })}</span>
         </span>
         <Icon name="chevron" />
       </button>

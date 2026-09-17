@@ -9,9 +9,9 @@ import { all, byType, hasClass, one, render as renderAll, text } from "./ui/rend
 const en = stringsFor("en");
 
 describe("the five tabs (docs/design-direction.md)", () => {
-  it("are Home, Health, Connect, Services and Profile for the owner, in either density", () => {
+  it("are Today, Health, Family, Visits and Me for the owner, in either density", () => {
     for (const density of ["patient", "caregiver"] as const) {
-      expect(tabsFor(density, en).map((tab) => tab.label)).toEqual(["Home", "Health", "Connect", "Services", "Profile"]);
+      expect(tabsFor(density, en).map((tab) => tab.label)).toEqual(["Today", "Health", "Family", "Visits", "Me"]);
     }
   });
 

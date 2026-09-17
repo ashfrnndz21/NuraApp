@@ -36,11 +36,11 @@ export const en = {
     // @patient headline
     health: "Health",
     // @patient headline
-    connect: "Connect",
+    connect: "Family",
     // @patient headline
-    services: "Services",
+    services: "Visits",
     // @patient headline
-    profile: "Profile",
+    profile: "Me",
   },
   shell: {
     // @patient phrase
@@ -56,7 +56,7 @@ export const en = {
     // @patient phrase
     close: "Close",
     // @patient phrase
-    bell: "What is new",
+    bell: "More for you",
   },
   welcome: {
     // @patient headline
@@ -64,25 +64,21 @@ export const en = {
     // @patient headline
     tagline2: "Your family, close by.",
     // @patient
-    lead: "A caring companion for older adults and the family who look after them.",
+    lead: "Nura keeps your medicines and your papers in one place.",
     // @patient headline
     remember: "Remember",
-    // @patient phrase
-    rememberLine: "Medicines and papers",
+    // @patient line
+    rememberLine: "Nura remembers your medicines and your papers.",
     // @patient headline
     share: "Share",
-    // @patient phrase
-    shareLine: "With family you choose",
+    // @patient line
+    shareLine: "You choose who in your family can see them.",
     // @patient headline
     prepare: "Prepare",
-    // @patient phrase
-    prepareLine: "For every visit",
+    // @patient line
+    prepareLine: "Nura gets you ready before you see the doctor.",
     // @patient phrase
     start: "Get started",
-    // @patient phrase
-    haveAccount: "Already have an account?",
-    // @patient phrase
-    signIn: "Sign in",
   },
   talk: {
     // @patient phrase
@@ -102,7 +98,7 @@ export const en = {
     // @patient phrase
     tryAgain: "Try again",
     // @patient phrase
-    loading: "Getting your page ready",
+    loading: "Nura is getting your Today page ready.",
   },
   hub: {
     // @patient
@@ -110,47 +106,47 @@ export const en = {
     // @patient
     howFeelingOther: "How is {patient} feeling today?",
     // @patient headline
-    checkTitle: "Daily check-in",
-    // @patient phrase
-    checkLine: "Tell Nura how you feel today",
+    checkTitle: "How you feel today",
+    // @patient line
+    checkLine: "Tell Nura how you feel today.",
     // @patient phrase
     checkLineOther: "Tell Nura how {patient} feels today",
     // @patient phrase
-    checkIn: "Check in",
+    checkIn: "Tell Nura",
     // @patient
     doTitle: "What would you like to do?",
     // @patient headline
-    doTitleOther: "Places to go",
-    // @patient headline
     health: "Health",
-    // @patient phrase
-    healthLine: "Track and check",
+    // @patient line
+    healthLine: "Your blood pressure book and your papers.",
     // @patient headline
     medicines: "Medicines",
-    // @patient phrase
-    medicinesLine: "Tablets and reminders",
+    // @patient line
+    medicinesLine: "Your tablets, and when to take them.",
     // @patient headline
     connect: "Connect",
-    // @patient phrase
-    connectLine: "Family and friends",
+    // @patient line
+    connectLine: "See your family and friends.",
     // @patient headline
-    activities: "Activities",
-    // @patient phrase
-    activitiesLine: "Stay busy",
+    activities: "Things to do",
+    // @patient line
+    activitiesLine: "Something to do today.",
     // @patient headline
-    care: "Care services",
-    // @patient phrase
-    careLine: "Help at home",
+    care: "Help at home",
+    // @patient line
+    careLine: "Someone can come and help you at home.",
     // @patient headline
-    resources: "Guides",
-    // @patient phrase
-    resourcesLine: "Read and learn",
+    resources: "Things to read",
+    // @patient line
+    resourcesLine: "Nura explains things in plain words.",
     // @patient headline
-    report: "Add a health report",
-    // @patient phrase
-    reportLine: "A PDF, or a photo of a paper",
+    report: "Add a paper",
+    // @patient line
+    reportLine: "Take a photo of it, or choose the one your doctor sent you.",
+    // @patient line
+    reportNote: "Nura will read it and show you what it found.",
     // @patient headline
-    upcoming: "Coming up",
+    upcoming: "Next visit",
     // @patient phrase
     seeAll: "See all",
     // @patient phrase
@@ -160,7 +156,7 @@ export const en = {
     // @patient
     soonLine2: "We are still making it.",
     // @patient phrase
-    backHome: "Back to Home",
+    backHome: "Back to your Today page",
   },
   home: {
     // @patient headline
@@ -169,6 +165,8 @@ export const en = {
     whatChanged: "What changed",
     // @patient headline
     nextVisit: "Next visit",
+    // @patient phrase
+    atTime: "At {time}.",
     // @patient headline
     buyMore: "Buy more",
     // @patient headline

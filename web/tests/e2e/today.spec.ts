@@ -175,7 +175,7 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
 
   // The phone holds the page while signed in; after sign-out no medicine remains in IndexedDB.
   expect((await medicinesInIndexedDb(page)).length).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByText("You are signed in as Pa.")).toBeVisible();
   await page.getByTestId("sign-out").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
@@ -320,7 +320,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
     else await route.continue();
   });
   await page.reload();
-  await expect(page.getByRole("button", { name: "Home", exact: true })).toBeVisible();
+  await expect(page.getByTestId("tab-home")).toBeVisible();
   await todayReady(page);
   await expect(page.getByLabel("Your phone number")).toHaveCount(0);
   expect(failed).toBeGreaterThan(0);
@@ -345,7 +345,7 @@ test("the language picker changes every string and persists on the device", asyn
   await page.getByTestId("door-for-me").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await page.getByTestId("lang-ms").click();
   await expect(page.locator("html")).toHaveAttribute("lang", "ms");
   await expect(page.getByTestId("sign-out")).toHaveText("Daftar keluar");

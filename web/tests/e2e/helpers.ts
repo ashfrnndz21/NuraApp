@@ -723,9 +723,10 @@ export async function todayReady(page: Page): Promise<void> {
   await expect(page.getByTestId("today-ready")).toBeAttached();
 }
 
-/** Open the Me sheet from the header's avatar. */
+/** Open the Me sheet from the header's avatar. By testid, not its accessible name: the Profile
+ *  tab is named "Me" too now (plain words), so "Me" alone no longer picks out one button. */
 export async function openMe(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Me", exact: true }).click();
+  await page.getByTestId("open-me").click();
   await expect(page.getByTestId("me-sheet")).toBeVisible();
 }
 

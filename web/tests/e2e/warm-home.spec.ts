@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
   await fixClock(page);
 });
 
-test("the welcome shows once a phone: Sign in reaches the phone number, and it is not shown again", async ({ page }) => {
+test("the welcome shows once a phone: Get started reaches the phone number, and it is not shown again", async ({ page }) => {
   await page.goto("./");
   const welcome = page.getByTestId("welcome-screen");
   await expect(welcome).toBeVisible();
@@ -18,7 +18,7 @@ test("the welcome shows once a phone: Sign in reaches the phone number, and it i
   await expect(welcome.locator(".welcome-tagline")).toHaveText("Your health, kept together. Your family, close by.");
   await expect(welcome.locator(".value-tile")).toHaveCount(3);
   await expect(welcome.locator("[data-illustration]")).toHaveAttribute("aria-hidden", "true");
-  await page.getByTestId("welcome-sign-in").click();
+  await page.getByTestId("welcome-start").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
@@ -36,7 +36,7 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   await expect(hero.locator(".hero-ask")).toHaveText("How are you feeling today?");
   await expect(hero.locator("[data-illustration=couple]")).toHaveAttribute("aria-hidden", "true");
   await expect(hero.locator(".hero-wave")).toHaveAttribute("aria-hidden", "true");
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Home", "Health", "Connect", "Services", "Profile"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Health", "Family", "Visits", "Me"]);
   await expect(page.getByTestId("tab-home")).toHaveAttribute("aria-current", "page");
 
   // Check in opens the way to say how he feels.
@@ -58,9 +58,9 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
     await todayReady(page);
   }
   for (const [tile, words] of [
-    ["do-activities", "Activities"],
-    ["do-care", "Care services"],
-    ["do-resources", "Guides"],
+    ["do-activities", "Things to do"],
+    ["do-care", "Help at home"],
+    ["do-resources", "Things to read"],
   ] as const) {
     await page.getByTestId(tile).click();
     const soon = page.getByTestId("soon-screen");
@@ -91,8 +91,8 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   await signInThroughTheApp(page, pa.phone, "Pa");
   await todayReady(page);
   const add = page.getByTestId("add-report");
-  await expect(add).toContainText("Add a health report");
-  await expect(add).toContainText("A PDF, or a photo of a paper");
+  await expect(add).toContainText("Add a paper");
+  await expect(add).toContainText("Take a photo of it, or choose the one your doctor sent you.");
   await expect(page.getByTestId("report-input")).toHaveAttribute("accept", "application/pdf,image/*");
   // No `capture`: the phone offers its files, its photos and its camera.
   expect(await page.getByTestId("report-input").getAttribute("capture")).toBeNull();
@@ -123,7 +123,7 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   await expect(hero.locator(".hero-greeting")).toHaveText("Good morning, Mei.");
   await expect(hero.locator(".hero-ask")).toHaveText("How is Pa feeling today?");
   await expect(page.getByTestId("daily-check-in")).toContainText("Tell Nura how Pa feels today");
-  await expect(page.locator("#do-title")).toHaveText("Places to go");
+  await expect(page.locator("#do-title")).toHaveText("What would you like to do?");
   const tiles = await page.getByTestId("do-grid").locator("button").evaluateAll((all) => all.map((each) => each.getAttribute("data-testid")));
   expect(tiles[0]).toBe("do-health");
   expect(tiles.slice(-3)).toEqual(["do-activities", "do-care", "do-resources"]);
@@ -135,7 +135,7 @@ test("a key with only the medicines: no Connect or Services tab, no Connect tile
   await signInThroughTheApp(page, kim.phone, "Kim");
   await page.getByTestId("door-key").click();
   await todayReady(page);
-  await expect(page.locator("nav.tabbar button")).toHaveText(["Home", "Health", "Profile"]);
+  await expect(page.locator("nav.tabbar button")).toHaveText(["Today", "Health", "Me"]);
   await expect(page.getByTestId("do-connect")).toHaveCount(0);
   await expect(page.getByTestId("do-medicines")).toBeVisible();
   await expect(page.getByTestId("upcoming-all")).toHaveCount(0);

@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** One tab set, the same for everyone (docs/product-reset.md §6, the owner's decision). */
-const TAB_SET = ["Home", "Health", "Connect", "Services", "Profile"];
+const TAB_SET = ["Today", "Health", "Family", "Visits", "Me"];
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
 

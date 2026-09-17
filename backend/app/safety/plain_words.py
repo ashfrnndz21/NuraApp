@@ -376,9 +376,7 @@ _LATIN_ABBREVIATION = re.compile(r"\b(?:e\.g\.|i\.e\.|etc\.|vs\.?|approx\.|w/o)"
 _UNIT = re.compile(
     r"\b\d+(?:[.,]\d+)?\s?(?:mg/dL|mmol/L|mmHg|mmol|mcg|µg|ug|mg|mL|ml|dL|bpm|mEq|IU)\b"
 )
-# "PDF": the word his phone's own file chooser shows him for a report he was sent, and the word on
-# the approved Home ("Add a health report — A PDF, or a photo of a paper", docs/design-direction.md).
-ABBREVIATIONS_HE_USES = frozenset({"OK", "IC", "TV", "PDF"})
+ABBREVIATIONS_HE_USES = frozenset({"OK", "IC", "TV"})
 
 EVERYDAY_WORDS = frozenset(
     {
@@ -404,8 +402,6 @@ EVERYDAY_WORDS = frozenset(
         "vegetables",
         "medicines",
         "explanation",
-        # Home's grid on the approved board (docs/design/nura-concept-board.html): "Activities".
-        "activities",
     }
 )
 """Long words he already uses, so their length is not held against them."""
