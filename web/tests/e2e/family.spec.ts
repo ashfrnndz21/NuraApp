@@ -186,7 +186,7 @@ test("the Family Keys screen's own request names the role and the window, and a 
   await todayReady(page);
 
   const priyaPhone = freshPhone("+659778");
-  await page.getByTestId("tab-family").click();
+  await page.getByTestId("tab-connect").click();
   await page.getByTestId("open-keys").click();
   await page.getByLabel("Their name").fill("Priya");
   await page.getByLabel("Their phone number").fill(priyaPhone);
