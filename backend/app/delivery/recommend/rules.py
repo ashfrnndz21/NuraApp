@@ -390,7 +390,7 @@ def _pick_topic(topics: Iterable[str], *, profile_id: uuid.UUID, day: str) -> st
     another profile, with no state of its own (the "hard-won rule" on tie-breaks, CLAUDE.md:
     never an insertion order, always an explicit, reproducible one)."""
     ordered = sorted(topics)
-    digest = hashlib.sha256(f"{profile_id}:{day}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{profile_id}:{day}".encode()).hexdigest()
     return ordered[int(digest, 16) % len(ordered)]
 
 

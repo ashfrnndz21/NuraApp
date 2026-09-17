@@ -83,7 +83,7 @@ def _inputs(
     )
 
 
-POOL_INPUTS = dict(lines=(_amlodipine(),), told_conditions=(_diabetes(),))
+POOL_INPUTS = {"lines": (_amlodipine(),), "told_conditions": (_diabetes(),)}
 POOL_TOPICS = {"medicine.blood_pressure_tablet", "condition.diabetes"}
 
 
