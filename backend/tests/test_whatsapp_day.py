@@ -57,7 +57,7 @@ from app.medicines.models import DoseTaken
 from app.medicines.service import proud_days
 from app.memory.models import Fact
 from app.safety.red_flags import Flag
-from tests.api import bearer, let_in, own_profile, register_by_phone
+from tests.api import accept_whatsapp, bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.delivery_support import MEI, PA, Home, home
 from tests.medicines_support import add, label
@@ -362,6 +362,10 @@ class Day:
             ),
             201,
         )
+        # Mei's and Siti's own answers at the key-accept step (#148, Meta's per-recipient
+        # opt-in): without them Nura may send neither anything on WhatsApp.
+        await accept_whatsapp(self.deployment, self.mei, self.profile_id)
+        await accept_whatsapp(self.deployment, self.siti, self.profile_id, language="ms")
         await _ok(
             await self.client.post(
                 f"/profiles/{self.profile_id}/consents/whatsapp",

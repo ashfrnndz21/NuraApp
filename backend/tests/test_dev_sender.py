@@ -18,6 +18,7 @@ from app.channels.strings import CODE_WORKS_FOR, phone_code_message
 from app.channels.whatsapp.provider import FixtureProvider
 from app.db import make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.voice import FixtureVoice
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import (
     DevSenderInProduction,
@@ -50,6 +51,7 @@ def _providers(sender: LoggingCodeSender, tmp: Path) -> Providers:
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret="test"),
+        voice=FixtureVoice(Region.SG),
         reference_ranges=FixtureRanges.load(),
     )
 

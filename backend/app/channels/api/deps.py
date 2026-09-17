@@ -23,7 +23,7 @@ from app.db import unit_of_work
 from app.delivery.feed.clips import ClipRenderer
 from app.delivery.feed.compress import Compressor, Searcher
 from app.delivery.push import NoDevices, PushSender
-from app.delivery.voice import FixtureVoice, Voice
+from app.delivery.voice import Voice
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.identity.login import resolve_session
@@ -68,14 +68,15 @@ class Providers:
     whatsapp: WhatsAppProvider
     """The business solution provider behind its port (`app.channels.whatsapp.provider`);
     the fixture on a laptop and in the tests, which sends nothing anywhere."""
+    voice: Voice
+    """What says a card aloud (E11-04), behind its port (`app.delivery.voice`), pinned to this
+    deployment's region like the transcriber (#149): `main` passes the fixture on a dev run and
+    refuses to start anywhere else until a speech provider exists."""
     reference_ranges: ReferenceRanges = field(default_factory=FixtureRanges.load)
     """The reference ranges the lab trend reads (E09-01, `app.reasoning.ranges`): the fixture
     table until a licensed one is signed off. `main` chooses it by `NURA_REFERENCE_RANGES`; the
     default is there so a test that builds `Providers` for another purpose need not name it,
     the way `retriever` is."""
-    voice: Voice = field(default_factory=FixtureVoice)
-    """What says a card aloud (E11-04), behind its port (`app.delivery.voice`); `main` passes
-    the fixture on a dev run and refuses to start anywhere else until a speech provider exists."""
     push: PushSender = field(default_factory=NoDevices)
     """What reaches a person's app with a content-free push (`app.delivery.push`); nobody
     until the app registers devices, so the app channel falls through."""

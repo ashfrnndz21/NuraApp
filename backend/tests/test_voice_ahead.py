@@ -49,10 +49,11 @@ class Counting:
     """The fixture voice, counting what it is asked to say."""
 
     name = "fixture"
+    region = Region.SG
 
     def __init__(self) -> None:
         self.said: list[str] = []
-        self._voice = FixtureVoice()
+        self._voice = FixtureVoice(Region.SG)
 
     async def speak(self, script: VoiceScript) -> Spoken:
         self.said.append(script.spoken())
@@ -141,9 +142,10 @@ class Breaking:
     """A voice that cannot say a script in one language: what a provider outage looks like."""
 
     name = "fixture"
+    region = Region.SG
 
     def __init__(self, fails_language: str) -> None:
-        self._voice = FixtureVoice()
+        self._voice = FixtureVoice(Region.SG)
         self._fails_language = fails_language
 
     async def speak(self, script: VoiceScript) -> Spoken:
@@ -186,7 +188,7 @@ async def test_a_prerender_failure_is_on_the_trail_and_never_costs_him_the_card(
     # The route falls back to rendering on request exactly as it does today: asked now,
     # through a voice that is working, the card is still said.
     twin = await spoken_twin(
-        sg, context=context, item_id=reading_card.id, voice=FixtureVoice(), store=store
+        sg, context=context, item_id=reading_card.id, voice=FixtureVoice(Region.SG), store=store
     )
     assert not twin.cached
     assert store.path_of(cache_key(context.profile_id, "fixture", digest)).is_file()
@@ -239,7 +241,7 @@ async def test_a_corrected_cards_audio_is_never_the_stale_digest(
     context = await pa(sg, language="en")
     state = await current_state(sg, context=context)
     store = LocalObjectStore(tmp_path, Region.SG)
-    engine = replace(ENGINE, voice=FixtureVoice(), store=store)
+    engine = replace(ENGINE, voice=FixtureVoice(Region.SG), store=store)
 
     def _lines(text: str) -> Lines:
         return Lines(
@@ -283,10 +285,10 @@ async def test_a_corrected_cards_audio_is_never_the_stale_digest(
     assert wrong_digest != fixed_digest
 
     wrong_twin = await spoken_twin(
-        sg, context=context, item_id=wrong.id, voice=FixtureVoice(), store=store
+        sg, context=context, item_id=wrong.id, voice=FixtureVoice(Region.SG), store=store
     )
     fixed_twin = await spoken_twin(
-        sg, context=context, item_id=fixed.id, voice=FixtureVoice(), store=store
+        sg, context=context, item_id=fixed.id, voice=FixtureVoice(Region.SG), store=store
     )
     # Each card's play reads back its own digest's slot, never the other's: the corrected
     # card was never at risk of the wrong one's stale bytes, by construction.

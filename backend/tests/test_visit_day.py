@@ -47,7 +47,7 @@ from app.reasoning.visits.summary import ConsultClips, Span
 from app.regions import Region
 from app.safety.plain_words import verify
 from app.safety.recording import CHECKLIST, recording_notice
-from tests.api import bearer, let_in, own_profile, register_by_phone
+from tests.api import accept_whatsapp, bearer, let_in, own_profile, register_by_phone
 from tests.capture_support import agree_to_recording, confirm, decide, pdf, photo, refusals
 from tests.conftest import Deployment
 from tests.consult_audio import CONSULT, CONTENT_TYPE, DURATION_S, placeholder_consult
@@ -117,6 +117,9 @@ async def household(deployment: Deployment) -> House:
         ),
         201,
     )
+    # Mei's own answer at the key-accept step (#148, Meta's per-recipient opt-in): without it
+    # Nura may send her nothing on WhatsApp, a red-flag notice included.
+    await accept_whatsapp(deployment, mei, profile_id)
     tan = await _ok(
         await client.post(
             f"/profiles/{profile_id}/providers",

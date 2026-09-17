@@ -107,6 +107,13 @@ class WhatsAppProvider(Protocol):
         """Free text into the group. The provider's message id."""
         ...
 
+    async def send_group_image(
+        self, group_id: str, image: bytes, content_type: str, *, caption: str = ""
+    ) -> str:
+        """A photo into the group, with the words that came with it. The provider's message
+        id (#149: photos mirror between the family thread and the group, the way text does)."""
+        ...
+
     def verify_webhook(self, signature: str | None, body: bytes) -> bool:
         """Whether `body` was signed by the provider (`X-Hub-Signature-256: sha256=…`)."""
         ...
@@ -228,6 +235,18 @@ class FixtureProvider:
     async def send_group_text(self, group_id: str, text: str) -> str:
         message_id = f"wamid.fixture.{uuid.uuid4().hex[:12]}"
         self.sent.append(Sent("", "group", text, None, "", {}, message_id, group_id=group_id))
+        return message_id
+
+    async def send_group_image(
+        self, group_id: str, image: bytes, content_type: str, *, caption: str = ""
+    ) -> str:
+        message_id = f"wamid.fixture.{uuid.uuid4().hex[:12]}"
+        shown = f"(a photo, {len(image)} bytes of {content_type})"
+        if caption:
+            shown += "\n" + caption
+        self.sent.append(
+            Sent("", "group_image", shown, None, "", {}, message_id, group_id=group_id)
+        )
         return message_id
 
     async def fetch_media(self, media_id: str, *, max_bytes: int | None = None) -> Media:

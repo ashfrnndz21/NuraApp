@@ -33,7 +33,7 @@ from app.consent.withdrawal import (
 )
 from app.delivery.triggers.models import DeliveryOutcome, Ladder, TriggerType
 from app.safety.plain_words import verify
-from tests.api import bearer, let_in, own_profile, register_by_phone
+from tests.api import accept_whatsapp, bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.delivery_support import home
 from tests.family_support import MONDAY
@@ -71,6 +71,8 @@ async def _household(
             headers=bearer(pa["token"]),
         )
         assert cut.status_code == 201, cut.text
+    for holder in (mei, kit):
+        await accept_whatsapp(deployment, holder, profile_id)
     return pa, mei, kit, profile_id
 
 

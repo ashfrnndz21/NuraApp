@@ -42,7 +42,7 @@ MEI = "+6591119902"
 
 
 async def test_the_fixture_says_a_card_as_silence_of_the_right_length() -> None:
-    voice = FixtureVoice()
+    voice = FixtureVoice(Region.SG)
     lines = [
         "Your blood pressure today was 138 over 84.",
         "It is in your blood pressure book.",
@@ -59,7 +59,7 @@ async def test_the_fixture_says_a_card_as_silence_of_the_right_length() -> None:
 
 
 async def test_hokkien_and_tamil_wait_for_t2_and_a_long_note_is_refused(tmp_path: Path) -> None:
-    voice = FixtureVoice()
+    voice = FixtureVoice(Region.SG)
     store = LocalObjectStore(tmp_path, Region.SG)
     import uuid
 
@@ -92,7 +92,7 @@ async def test_the_twin_is_kept_by_digest_in_the_regions_store_never_as_an_artef
 ) -> None:
     import uuid
 
-    voice = FixtureVoice()
+    voice = FixtureVoice(Region.SG)
     store = LocalObjectStore(tmp_path, Region.SG)
     profile_id = uuid.uuid4()
     lines = ["Your tablets for today are on your list."]
@@ -204,7 +204,7 @@ async def test_the_audio_is_said_from_the_voice_script_and_kept_under_its_digest
 
     from app.language.voice_script import script_for
 
-    voice = FixtureVoice()
+    voice = FixtureVoice(Region.SG)
     store = LocalObjectStore(tmp_path, Region.SG)
     profile_id = uuid.uuid4()
     lines = ["Your blood pressure today was 138 over 84.", "It is in your blood pressure book."]

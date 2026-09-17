@@ -7,6 +7,7 @@ read the code from: nothing on the wire carries it.
 from __future__ import annotations
 
 from app.consent.models import ConsentPurpose
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.texts import current_version
 from tests.conftest import Deployment
 
@@ -82,3 +83,31 @@ async def let_in(
     assert agreed.status_code == 201, agreed.text
     consent: dict[str, object] = agreed.json()
     return consent
+
+
+async def accept_whatsapp(
+    deployment: Deployment,
+    holder: dict[str, str],
+    profile_id: str,
+    *,
+    messages: bool = True,
+    group: bool = True,
+    language: str = "en",
+) -> dict[str, object]:
+    """The holder's own answers at the key-accept step (#143, #148, Meta's per-recipient
+    opt-in): without his own yes to messages, Nura may send him nothing on WhatsApp, a
+    red-flag notice included. Call this for each holder a test expects to reach on WhatsApp;
+    skip it for one a test means to leave unasked."""
+    answered = await deployment.client.post(
+        f"/profiles/{profile_id}/whatsapp-opt-in",
+        json={
+            "messages": messages,
+            "group": group,
+            "wording_version": OPT_IN_VERSION,
+            "language": language,
+        },
+        headers=bearer(holder["token"]),
+    )
+    assert answered.status_code == 201, answered.text
+    out: dict[str, object] = answered.json()
+    return out

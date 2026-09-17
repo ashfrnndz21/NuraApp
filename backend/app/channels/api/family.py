@@ -73,7 +73,7 @@ from app.channels.api.schemas import (
     ThreadPostIn,
     TrailDayOut,
 )
-from app.channels.whatsapp.group import mirror_to_group, sync_group
+from app.channels.whatsapp.group import mirror_photo_to_group, mirror_to_group, sync_group
 from app.family.documents import add_document, documents
 from app.family.grants import grants, helper_list, role_presets
 from app.family.photos import (
@@ -201,14 +201,25 @@ async def share(
         data = base64.b64decode(body.data, validate=True)
     except (binascii.Error, ValueError) as bad:
         raise NotAPhoto("the photo is not base64") from bad
+    store = providers_of(request).object_store
     message, photo = await share_photo(
         session,
         context=context,
-        store=providers_of(request).object_store,
+        store=store,
         data=data,
         content_type=body.content_type,
         caption=body.caption,
         on_his_feed=body.on_his_feed,
+    )
+    # The family's WhatsApp group mirrors the thread's photos too (#149), the way it already
+    # mirrors its text.
+    await mirror_photo_to_group(
+        session,
+        context=context,
+        provider=providers_of(request).whatsapp,
+        store=store,
+        message=message,
+        photo=photo,
     )
     return ThreadEntryOut.of(message, photo)
 

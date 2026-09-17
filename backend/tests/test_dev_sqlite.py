@@ -20,6 +20,7 @@ from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import FixtureProvider
 from app.db import Base, make_engine, make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.voice import FixtureVoice
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
@@ -57,6 +58,7 @@ async def test_a_reopened_page_is_answered_while_the_feed_is_still_writing(tmp_p
             compressor=FixtureCompressor(FEED),
             drug_registry=FixtureRegistry.load(),
             whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
+            voice=FixtureVoice(Region.SG),
         ),
     )
     try:

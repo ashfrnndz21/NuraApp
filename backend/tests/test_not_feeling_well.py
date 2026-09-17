@@ -418,14 +418,17 @@ async def test_a_helper_pressing_for_him_escalates_without_the_record(
     assert flag is not None and flag.event_id == done.event_id
     assert flag.raised_by_person_id == siti.person_id
     assert (await sg.scalars(select(Fact).where(Fact.subject == "symptom"))).all() == []
-    # Every write is on the trail under the emergency scope, in her name.
+    # Every write about the emergency is on the trail under that scope, in her name — not
+    # counting her own key-accept answers (#148), which are hers too but under the profile
+    # scope, from letting her in, not from pressing the button.
     hers = [
         line
         for line in await trail(sg, owner.profile_id)
-        if line.actor_person_id == siti.person_id and line.action.value == "write"
+        if line.actor_person_id == siti.person_id
+        and line.action.value == "write"
+        and line.scope is Scope.EMERGENCY
     ]
     assert {line.target for line in hers} == {"event", "red_flag"}
-    assert all(line.scope is Scope.EMERGENCY for line in hers)
 
 
 async def test_a_caregiver_pressing_for_him_escalates_and_writes_the_record(

@@ -17,7 +17,9 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.channels.whatsapp.opt_in import record_opt_in
 from app.clock import FrozenClock
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.db import as_utc
 from app.delivery.triggers.day import (
     A_FLAG_IS_OPEN,
@@ -301,6 +303,16 @@ async def test_the_notice_counts_only_what_her_key_opens(
     narrow = frozenset({Scope.FAMILY, Scope.READINGS})
     await agree_to_family_sharing(sg, h.owner, kit, scopes=narrow, relationship="son")
     await grant_key(sg, context=h.owner, holder=kit, role=KeyRole.CHIEF, scopes=narrow)
+    # Kit's own answer at the key-accept step (#148, Meta's per-recipient opt-in): without it
+    # Nura may send him nothing on WhatsApp.
+    await record_opt_in(
+        sg,
+        context=await h.ctx(sg, kit),
+        messages=True,
+        joins_group=True,
+        wording_version=OPT_IN_VERSION,
+        language="en",
+    )
     # Today: a feeling of his (the record) and a blood pressure Mei sent and confirmed.
     await _he_says(sg, h, clock, at(12), "tired")
     clock.set(at(12, 5))

@@ -46,6 +46,7 @@ from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
 from app.delivery.feed.clips import FixtureClipRenderer
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.voice import FixtureVoice
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
@@ -264,6 +265,7 @@ async def _serve_on(engine: AsyncEngine, region: Region) -> AsyncIterator[Deploy
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=whatsapp,
+        voice=FixtureVoice(region),
         reference_ranges=FixtureRanges.load(),
         speaker_separator=FixtureSeparator(SPEAKERS, region),
         clips=FixtureClipRenderer(FEED),

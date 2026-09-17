@@ -20,6 +20,7 @@ from app.consent.models import ConsentPurpose
 from app.consent.texts import current_version
 from app.db import make_session_factory
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.voice import FixtureVoice
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
@@ -111,6 +112,7 @@ def _app(web_dist: str | None) -> AsyncClient:
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
+        voice=FixtureVoice(Region.SG),
     )
     engine = create_async_engine(settings.database_url)
     app = create_app(settings, make_session_factory(engine), providers)

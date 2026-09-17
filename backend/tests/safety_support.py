@@ -11,6 +11,8 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import AuditEntry
+from app.channels.whatsapp.opt_in import record_opt_in
+from app.consent.opt_in_words import OPT_IN_VERSION
 from app.drugs.fixture import FixtureRegistry
 from app.identity.service import create_own_profile, register_person
 from app.ingestion.transcribe import FixtureTranscriber
@@ -65,6 +67,7 @@ async def let_in(
     role: KeyRole,
     scopes: set[Scope] | None = None,
     language: str = "en",
+    opted_in: bool = True,
 ) -> KeyContext:
     holder = await register_person(
         session, region=owner.region, display_name=name, phone_e164=phone
@@ -72,9 +75,22 @@ async def let_in(
     holder.language = language
     await agree_to_family_sharing(session, owner, holder)
     await grant_key(session, context=owner, holder=holder, role=role, scopes=scopes)
-    return await resolve_key_context(
+    context = await resolve_key_context(
         session, region=owner.region, person_id=holder.id, profile_id=owner.profile_id
     )
+    if opted_in:
+        # His own answer at the key-accept step (#148, Meta's per-recipient opt-in): without
+        # it Nura may send him nothing on WhatsApp, a red-flag notice included. A test that
+        # wants a member nobody has asked yet passes `opted_in=False`.
+        await record_opt_in(
+            session,
+            context=context,
+            messages=True,
+            joins_group=True,
+            wording_version=OPT_IN_VERSION,
+            language=language,
+        )
+    return context
 
 
 async def fact(

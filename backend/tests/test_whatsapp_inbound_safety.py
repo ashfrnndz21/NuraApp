@@ -677,6 +677,63 @@ async def test_two_copies_of_one_delivery_at_the_same_instant_are_one_handling(
     assert receipt.handled_at is not None and receipt.failures == 0
 
 
+async def test_the_loser_of_the_race_answers_failed_when_the_winner_also_failed(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#182: losing the same-instant claim race only proves another try claimed the row
+    first, not that it went on to handle the message — the winner may itself fail and roll
+    back. The loser must not then answer `ALREADY` (a 200 the provider would never retry, so
+    the message would be lost for good); it waits for the winner's row and answers `FAILED`
+    too, exactly like the winner's own request did, so the provider's one more redelivery is
+    what finally handles the message, once."""
+    home = await family(sg, tmp_path)
+    message = DevInbound(from_e164=MEI, text="BP 150/90 this morning").as_message(utcnow())
+    real_propose = inbound.propose
+    failed: list[str] = []
+
+    async def flaky(*args: Any, **kwargs: Any) -> Any:
+        if not failed:
+            failed.append("once")
+            raise ConnectionError("the database went away, for the test")
+        return await real_propose(*args, **kwargs)
+
+    monkeypatch.setattr(inbound, "propose", flaky)
+
+    async def handle() -> object:
+        return await handle_inbound(
+            sg,
+            settings=home.settings,
+            providers=home.providers,
+            number=home.number,
+            classifier=RuleClassifier(),
+            message=message,
+        )
+
+    # The winner claims the row, tries, and fails: rolled back, its receipt says not handled.
+    assert await receive(sg, message, handle) is Received.FAILED
+
+    real_receipt = receipts._receipt
+
+    async def nothing_yet(*args: object, **kwargs: object) -> None:
+        # The copy that lost the race has not seen the winner's row: its insert is what
+        # decides, exactly as in the race above — only this time the winner did not succeed.
+        return None
+
+    monkeypatch.setattr(receipts, "_receipt", nothing_yet)
+    assert await receive(sg, message, handle) is Received.FAILED
+    [receipt] = (await sg.scalars(select(WhatsAppReceipt))).all()
+    # The loser never ran the handler itself — running it again here would risk running it
+    # twice at once — so only the winner's own failure is counted; neither claimed a handling
+    # that never happened.
+    assert receipt.handled_at is None and receipt.failures == 1
+
+    # The provider's one more redelivery, unraced this time, finally handles it — once.
+    monkeypatch.setattr(receipts, "_receipt", real_receipt)
+    assert await receive(sg, message, handle) is Received.HANDLED
+    assert await receive(sg, message, handle) is Received.ALREADY
+    assert len((await sg.scalars(select(Proposal))).all()) == 1
+
+
 async def test_a_message_that_failed_keeps_its_claimed_row_and_is_tried_again(
     sg: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

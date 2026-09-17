@@ -8,8 +8,13 @@ message from someone the keys no longer name is not taken in (`is_member`).
 
 Both ways, the thread is the one record. A message written in the app's thread is said in
 the group, in its poster's name (`mirror_to_group`); a message posted in the group lands in
-the thread in its poster's name (`app.channels.whatsapp.inbound`), and is not said back.
-Nothing here reads a fact out of what the family says to each other.
+the thread in its poster's name (`app.channels.whatsapp.inbound`), and is not said back. A
+photo follows the same two roads (#149, `mirror_photo_to_group`): shared in the app it is
+sent into the group too, and posted in the group it lands in the thread — always the family's
+photo, on the family scope alone (`app.family.photos.share_photo`), never his papers: filing
+one of his papers is its own separate door (`app.ingestion.documents`), never reached from a
+group photo by this alone. Nothing here reads a fact out of what the family says to each
+other.
 
 Who may be in it (#143). The patient, while his agreement to WhatsApp is in force: it is his
 agreement to be messaged there, and it is his alone. Everyone else, while their key reads the
@@ -45,7 +50,9 @@ from app.consent.service import NoConsent, require_consent, revoke_consent
 from app.db import as_utc, utcnow
 from app.delivery.timeline_strings import SOMEONE
 from app.errors import Refusal
-from app.family.models import ThreadMessage
+from app.family.models import ThreadMessage, ThreadPhoto
+from app.family.photos import photo_content
+from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext, closing_since
 from app.keys.models import Key
 from app.keys.privacy import only_me_scopes
@@ -288,6 +295,56 @@ async def mirror_to_group(
     return sent
 
 
+async def mirror_photo_to_group(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    provider: WhatsAppProvider,
+    store: ObjectStore,
+    message: ThreadMessage,
+    photo: ThreadPhoto,
+) -> str | None:
+    """A photo shared in the app's family thread, said in the family's group too (#149), the
+    same way `mirror_to_group` says a text message: after the members are set from the keys,
+    in the sharer's name, with the caption it came with. Nothing when there is no group, his
+    account is closing, or the sharer no longer reads the thread — the same rules
+    `mirror_to_group` holds to. The photo is read through the family door
+    (`app.family.photos.photo_content`), which is what keeps it the family's, never one of
+    his papers, whatever the group later does with it."""
+    if not context.allows(Scope.FAMILY):
+        return None
+    group = await group_of(session, context=context)
+    if group is None or await closing_since(session, profile_id=context.profile_id) is not None:
+        return None
+    members = await sync_group(session, context=context, provider=provider)
+    poster = next((m for m in members if m.person_id == message.author_person_id), None)
+    if poster is None:
+        return None
+    profile = await audited_profile_read(session, context)
+    who = poster.name or SOMEONE[language_of(profile.language)]
+    caption = reply("family_said", profile.language, who=who)
+    if message.text:
+        caption += "\n" + message.text
+    data, content_type = await photo_content(
+        session, context=context, store=store, photo_id=photo.id
+    )
+    sent = await provider.send_group_image(
+        group.provider_group_id, data, content_type, caption=caption
+    )
+    await record(
+        session,
+        context=context,
+        action=Action.SHARE,
+        scope=Scope.FAMILY,
+        target=ThreadPhoto.__tablename__,
+        channel=Channel.WHATSAPP,
+        target_id=photo.id,
+        rows=len(members),
+        shared_with_label="whatsapp_group",
+    )
+    return sent
+
+
 async def withdraw(
     session: AsyncSession,
     *,
@@ -319,6 +376,7 @@ __all__ = [
     "group_of",
     "is_member",
     "members_of",
+    "mirror_photo_to_group",
     "mirror_to_group",
     "open_group",
     "said_yes_to_the_group",

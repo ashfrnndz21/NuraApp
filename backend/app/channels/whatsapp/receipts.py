@@ -8,12 +8,17 @@ must never handle a message twice when the delivery comes again.
 `receive` is one message's walk through the webhook. The receipt row is claimed before the
 handler runs (#173): the provider's id is inserted first, under the unique constraint, so two
 copies of one delivery arriving at the same instant cannot both run the handler — the second
-one's insert loses the race and is answered as the duplicate it is, not with a 500. A message
-whose row says it was handled already is acknowledged and skipped the same way, and a row left
-by an earlier failure is claimed for this try alone (`SELECT ... FOR UPDATE`), so a redelivery
-racing another redelivery waits and then finds it handled. Then it is handled in a savepoint
-of its own (`nested_unit_of_work`), and its receipt is marked in the same savepoint, so the
-message's rows and the note that it was handled stand or fall together.
+one's insert loses the race. It does not answer the duplicate it is from timing alone, though:
+losing the race only proves the winner claimed the row first, not that the winner went on to
+handle it, so the loser waits on that row (`SELECT ... FOR UPDATE`, which blocks until the
+winner's own attempt is settled) and reads what it wrote — `ALREADY` once it is handled,
+`FAILED` when the winner tried and rolled back without handling it (#182), so "never answer
+200 for something unhandled" holds by the code, not by which of two requests happens to
+answer first. A row left by an earlier, already-settled failure is claimed the same way: a
+redelivery racing another redelivery waits and then finds it handled, or is free to try again
+when it was not. Then it is handled in a savepoint of its own (`nested_unit_of_work`), and its
+receipt is marked in the same savepoint, so the message's rows and the note that it was
+handled stand or fall together.
 A refusal is an answer, not a failure: its lines are on the trail (the savepoint's keepers
 replay them) and it is not tried again. Anything else rolls the savepoint back — nothing of
 that message is left half-written — and is counted on the receipt, by the class name of what
@@ -92,9 +97,15 @@ async def _claim(session: AsyncSession, key: str) -> Received | None:
 
     The row is inserted first, in a savepoint of its own: the unique constraint on the
     provider's id is what decides the race, so of two copies of one delivery arriving at the
-    same instant exactly one runs the handler and the other is answered as a duplicate. A row
-    an earlier try left behind is claimed with `SELECT ... FOR UPDATE`, which waits for a try
-    running right now and then reads what it wrote — handled, and there is nothing to do.
+    same instant exactly one wins the insert. The loser of that race does not answer the
+    duplicate it is on the insert alone — the winner may still fail and roll back its own
+    attempt — so it waits for the winner's try to settle and answers what actually happened
+    (`_lost_the_race`, #182): `ALREADY` once the winner handled it, `FAILED` when the winner
+    tried and rolled back without handling it, so "never answer 200 for something unhandled"
+    holds by the code, not by which of two requests happens to answer first. A row an earlier,
+    already-settled try left behind is claimed with the same `SELECT ... FOR UPDATE`, but that
+    one is free to try again when it was not handled — a redelivery racing another redelivery
+    waits and then finds it handled, or runs the handler itself when it was not.
     """
     earlier = await _receipt(session, key)
     if earlier is None:
@@ -105,9 +116,11 @@ async def _claim(session: AsyncSession, key: str) -> Received | None:
                 )
                 await session.flush()
         except IntegrityError:
-            # Another copy of this delivery claimed it first: a duplicate, not a failure.
-            log.info("whatsapp: one inbound message is being handled already")
-            return Received.ALREADY
+            # Another copy of this delivery claimed the row first, at the same instant. By the
+            # time the unique constraint conflicts here, that try is settled — committed or
+            # rolled back — so its row, not the order of these two requests, says the answer.
+            log.info("whatsapp: one inbound message is claimed by another try")
+            return await _lost_the_race(session, key)
         return None
     held: WhatsAppReceipt | None = await session.scalar(
         select(WhatsAppReceipt)
@@ -120,6 +133,26 @@ async def _claim(session: AsyncSession, key: str) -> Received | None:
     if held is not None and held.handled_at is not None:
         return Received.ALREADY
     return None
+
+
+async def _lost_the_race(session: AsyncSession, key: str) -> Received:
+    """The outcome of the try that won the same-instant race for this row, read after it
+    settles (`SELECT ... FOR UPDATE`, which blocks until a try running right now finishes):
+    `ALREADY` once it handled the message, `FAILED` for every other case — it tried and rolled
+    back without handling it, or its whole attempt is gone and left no row at all. Either way
+    this try is not the one to run the handler itself: unlike a row an earlier, already-settled
+    try left behind, losing this race means a winner just ran (or is running) right now, and
+    trying the handler here too would risk running it twice at once. `FAILED` asks the
+    provider to send the message again, for a later, unraced try to pick up cleanly (#182)."""
+    held: WhatsAppReceipt | None = await session.scalar(
+        select(WhatsAppReceipt)
+        .where(WhatsAppReceipt.provider_message_id == key)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if held is not None and held.handled_at is not None:
+        return Received.ALREADY
+    return Received.FAILED
 
 
 async def _failed(session: AsyncSession, key: str, what: str) -> WhatsAppReceipt:

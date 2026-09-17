@@ -17,7 +17,16 @@ kept in the region's object store under the profile, by the voice that said it a
 of the card's voice script (`app.language.voice_script`, E22-03: the same words and pauses,
 the same digest, wherever they appear) — `voice/<profile_id>/<voice>/<digest>` — and read
 back from there the next time the same card is played. What is said is the script's
-`spoken()` form: numbers and dates as a voice says them, the words otherwise the card's own. The store is pinned to one region, like every byte of his.
+`spoken()` form: numbers and dates as a voice says them, the words otherwise the card's own.
+The store is pinned to one region, like every byte of his — and since #149, so is the voice
+itself: `Voice.region` says which one a speech provider serves, and `voiced` refuses a script
+from another region before a word of it reaches the provider (`guard_region`), the same
+refusal the transcriber already holds card and story text to on the way in
+(`app.ingestion.transcribe`). A provider built for one region is never asked to say another's
+words; `main.providers_for` wires the fixture to the deployment's own region, so a real
+deployment out of step with its speech provider's region fails the same way a mis-pinned
+transcriber would, before it can say a word — required before a real speech provider is
+connected.
 """
 
 from __future__ import annotations
@@ -75,6 +84,13 @@ class Spoken:
 class Voice(Protocol):
     @property
     def name(self) -> str: ...
+
+    @property
+    def region(self) -> Region:
+        """The one region this speech provider serves (#149), like `Transcriber.region`. A
+        script from a profile in the other region is never sent to it: `voiced` refuses it
+        first (`guard_region`)."""
+        ...
 
     async def speak(self, script: VoiceScript) -> Spoken:
         """The script's segments, said in its language, as WAV audio, with the silence the
@@ -148,9 +164,17 @@ def wav_seconds(audio: bytes) -> float:
 @fixture
 class FixtureVoice:
     """Silence as long as the script runs, its pauses counted like any other adapter's would
-    be. Deterministic: the same script, the same bytes."""
+    be. Deterministic: the same script, the same bytes. Pinned to one region (#149), like
+    `FixtureTranscriber`: it never says a script from a profile in the other one."""
 
     name = "fixture"
+
+    def __init__(self, region: Region) -> None:
+        self._region = region
+
+    @property
+    def region(self) -> Region:
+        return self._region
 
     async def speak(self, script: VoiceScript) -> Spoken:
         seconds = seconds_for_script(script)
@@ -163,11 +187,11 @@ class FixtureVoice:
 
 
 def voice_for(settings: Settings) -> Voice:
-    """The fixture on a declared dev run or demo (ADR 0008, `app.fixtures`); anywhere else
-    there is no speech provider yet, and a process that cannot speak a card must not pretend
-    to with silence."""
+    """The fixture, pinned to this deployment's own region, on a declared dev run or demo
+    (ADR 0008, `app.fixtures`); anywhere else there is no speech provider yet, and a process
+    that cannot speak a card must not pretend to with silence."""
     if settings.fixtures_allowed:
-        return FixtureVoice()
+        return FixtureVoice(settings.region)
     raise NoVoiceProvider(
         "no speech provider is built; the fixture voice runs only on a dev run "
         "(NURA_DEV_CODE_SENDER=1) or a demo (NURA_DEMO_MODE=1)"
@@ -200,13 +224,16 @@ async def voiced(
 ) -> Voiced:
     """The spoken twin of these lines: from the region's store when it has been said before,
     otherwise said now and kept there. Refused before anything is said when the lines would
-    run past thirty seconds, or when there is no voice in the language yet."""
+    run past thirty seconds, when there is no voice in the language yet, or when the store or
+    the voice itself is pinned to another region (#149) — a script never reaches a speech
+    provider out of step with the profile it is for, cache hit or not."""
     code = voice_language(language)  # before the script: a T2 language is refused, not guessed
     script = script_for(lines, code, boundary=boundary)
     estimate = seconds_for_script(script)
     if estimate > MAX_SECONDS:
         raise TooLongToSay(f"{estimate} seconds is over {MAX_SECONDS:g}")
     guard_region(held_in=store.region, asked_from=region)
+    guard_region(held_in=voice.region, asked_from=region)
     key = cache_key(profile_id, voice.name, script.digest)
     try:
         audio = await store.get(key)

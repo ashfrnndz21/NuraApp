@@ -38,7 +38,7 @@ import hashlib
 import logging
 import re
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, time, timedelta
 
@@ -107,6 +107,7 @@ from app.delivery.triggers.models import PHONE, DeliveryOutcome, Ladder, Trigger
 from app.drafts import FactDraft
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.family.photos import MAX_PHOTO_BYTES, NotAPhoto, PhotoTooLarge, share_photo
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
@@ -161,6 +162,15 @@ MESSAGE = WhatsAppMessage.__tablename__
 TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
 IMAGE_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/heic", "image/webp"})
 PDF_CONTENT_TYPE = "application/pdf"
+
+# @patient
+NO_CAPTION: Mapping[str, str] = {
+    "en": "Shared a photo.",
+    "ms": "Berkongsi gambar.",
+    "zh": "分享了一张照片。",
+}
+"""A group photo (#149) with no caption still needs words for the family thread (a message
+is one to `MESSAGE_LENGTH` characters, never none, `app.family.thread.post_message`)."""
 FEELING_VOCABULARY = frozenset({"ok", "tired", "pain"})
 CHECK_IN_OK = dict(FEELING)["ok"]
 """His "OK": a yes when something of his is open to say yes to, else his check-in answer."""
@@ -1830,6 +1840,53 @@ async def _group_message(session: AsyncSession, work: _Work) -> Handled:
     )
 
 
+async def _group_photo(session: AsyncSession, work: _Work) -> Handled:
+    """A photo posted in the family's group lands in the family thread too (#149), the same
+    rule as a typed message (`_group_message`): only for a member, in its poster's name. It is
+    kept through the family's own door (`app.family.photos.share_photo`) — the family's photo,
+    on the family scope alone, never one of his papers (#146's rule) — and never put on his
+    feed by this alone: nobody in the group was asked that, so the answer defaults to no.
+    Fetched against a photo's own cap, the way any photo reaching Nura is (`MAX_PHOTO_BYTES`);
+    a file that turns out not to be a photo, or one too large, is not kept, the same silence a
+    document in the group already got before this."""
+    if not is_member(work.context):
+        log.info("whatsapp: a group photo from someone who does not read the family thread")
+        return Handled(outcome="ignored", profile_id=work.profile.id)
+    assert work.message.media_id is not None
+    try:
+        media = await work.providers.whatsapp.fetch_media(
+            work.message.media_id, max_bytes=MAX_PHOTO_BYTES
+        )
+    except (NoSuchMedia, MediaTooLarge) as unfetched:
+        log.info("whatsapp: a group photo not fetched: %s", type(unfetched).__name__)
+        return Handled(outcome="ignored", profile_id=work.profile.id)
+    content_type = (work.message.content_type or media.content_type).strip().lower()
+    # Who is in the group is set from the keys again at every post (E11-01).
+    await sync_group(session, context=work.context, provider=work.providers.whatsapp)
+    try:
+        message, photo = await share_photo(
+            session,
+            context=work.context,
+            store=work.providers.object_store,
+            data=media.data,
+            content_type=content_type,
+            caption=(work.message.text or "").strip() or NO_CAPTION[work.language],
+            on_his_feed=False,
+            source_channel=SourceChannel.WHATSAPP,
+        )
+    except (NotAPhoto, PhotoTooLarge) as unkept:
+        log.info("whatsapp: a group file not kept as a photo: %s", type(unkept).__name__)
+        return Handled(outcome="ignored", profile_id=work.profile.id)
+    row = await _keep_row(session, work=work, kind=MessageKind.COORDINATION, artifact=None)
+    return Handled(
+        outcome="family_thread",
+        profile_id=work.profile.id,
+        message_id=row.id,
+        artifact_id=photo.artifact_id,
+        thread_message_id=message.id,
+    )
+
+
 # --- the walk ------------------------------------------------------------------------------------
 
 
@@ -1848,10 +1905,10 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
             return replace(flagged, note_id=kept.note.id)
         return flagged
     if work.message.group_id is not None and (work.voice is not None or work.voice_missing):
-        # A voice note in the family's group is the family's, the way a photo there is: not
-        # kept, and never an alert. The group is where they talk to each other, and a note
-        # Nura could not hear in it would page everyone (#173). A red word in one was read
-        # above, before this, and is a flag like any other.
+        # A voice note in the family's group is not kept and never an alert — unlike a photo
+        # there (#149), which does land in the thread. The group is where they talk to each
+        # other, and a note Nura could not hear in it would page everyone (#173). A red word
+        # in one was read above, before this, and is a flag like any other.
         return Handled(outcome="ignored", profile_id=work.profile.id)
     if work.voice_missing:
         return await _voice_not_heard(session, work)
@@ -1882,7 +1939,11 @@ async def _dispatch(session: AsyncSession, work: _Work, what: Classification) ->
     if work.message.group_id is not None:
         if work.message.media_id is None and work.message.text:
             return await _group_message(session, work)
-        # A photo or a file in the family's group is the family's, never one of his papers.
+        if work.message.media_id is not None:
+            # A photo in the family's group is the family's too (#149): mirrored into the
+            # thread the same way a typed message is. A file that is not a photo (a PDF, say)
+            # is still the family's, never one of his papers — `_group_photo` keeps neither.
+            return await _group_photo(session, work)
         return Handled(outcome="ignored", profile_id=work.profile.id)
     if work.message.text and what.kind in (Kind.OTHER, Kind.HEALTH_EVENT):
         # An answer to "which tablet?" (#162): a number, "both", or the tablet's own word.

@@ -27,9 +27,16 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.channels.whatsapp.group import members_of, mirror_to_group, open_group, sync_group
+from app.channels.whatsapp.group import (
+    members_of,
+    mirror_photo_to_group,
+    mirror_to_group,
+    open_group,
+    sync_group,
+)
 from app.clock import FrozenClock
 from app.consent.models import Consent, ConsentPurpose
+from app.family.photos import photos_on, share_photo
 from app.family.thread import post_message, read_thread
 from app.ingestion.models import EventNote, NoteKind
 from app.ingestion.transcribe import FixtureTranscriber
@@ -107,6 +114,28 @@ async def test_the_family_group_is_who_reads_the_thread_and_a_message_there_land
     assert await mirror_to_group(sg, context=home.chief, provider=home.whatsapp, message=entry)
     [out] = [sent for sent in home.whatsapp.sent if sent.group_id == gid]
     assert out.text == "Mei wrote this in the Nura app:\nThe doctor moved it to 3 pm."
+
+    # A photo shared in the app's thread mirrors out to the group too (#149), the same way.
+    message, photo = await share_photo(
+        sg,
+        context=home.chief,
+        store=home.providers.object_store,
+        data=b"\x89PNG\r\n\x1a\nnura-test-photo",
+        content_type="image/png",
+        caption="From Grandma's birthday.",
+        on_his_feed=False,
+    )
+    assert await mirror_photo_to_group(
+        sg,
+        context=home.chief,
+        provider=home.whatsapp,
+        store=home.providers.object_store,
+        message=message,
+        photo=photo,
+    )
+    [photo_out] = [sent for sent in home.whatsapp.sent if sent.kind == "group_image"]
+    assert photo_out.group_id == gid
+    assert "Mei wrote this in the Nura app:\nFrom Grandma's birthday." in photo_out.text
 
     # Her key closed: out of the group at once; her next message there is not taken in.
     assert home.chief.key_id is not None
@@ -416,9 +445,14 @@ async def test_the_group_follows_only_me_and_his_agreement(
     assert home.whatsapp.groups[gid] == ()
 
 
-async def test_a_photo_in_the_group_is_never_one_of_his_papers(
+async def test_a_photo_in_the_group_lands_in_the_thread_and_is_never_one_of_his_papers(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
+    """#149: a photo posted in the family's group is mirrored into the family thread, the way
+    a typed message already is — but it is kept the family's way (`app.family.photos`), under
+    the family scope, on `SourceChannel.WHATSAPP`; it is never one of his papers (no review
+    card, nothing extracted), and never on his feed by this alone (nobody in the group was
+    asked that)."""
     home = await family(sg, tmp_path)
     group, _ = await open_group(sg, context=home.chief, provider=home.whatsapp)
     shared = await home.inbound(
@@ -428,10 +462,27 @@ async def test_a_photo_in_the_group_is_never_one_of_his_papers(
         content_type="image/jpeg",
         group_id=group.provider_group_id,
     )
-    assert shared.outcome == "ignored" and shared.review_card_id is None
-    assert not list(
+    assert shared.outcome == "family_thread" and shared.review_card_id is None
+    [artifact] = list(
         await sg.scalars(select(Artifact).where(Artifact.profile_id == home.profile.id))
     )
+    assert artifact.kind is ArtifactKind.PHOTO and artifact.source_channel is SourceChannel.WHATSAPP
+    page, _ = await read_thread(sg, context=home.owner)
+    [entry] = [e for e in page if e.id == shared.thread_message_id]
+    assert entry.author_person_id == home.mei.id
+    photo = (await photos_on(sg, context=home.owner, message_ids=[entry.id]))[entry.id]
+    assert photo.artifact_id == artifact.id and photo.on_his_feed is False
+
+    # It is not fetched again for the family that already loses this race, and a file that is
+    # not a photo (a PDF, say) is still not kept as one of his papers.
+    not_a_photo = await home.inbound(
+        sg,
+        MEI,
+        media_id="clinic-letter-pdf",
+        content_type="application/pdf",
+        group_id=group.provider_group_id,
+    )
+    assert not_a_photo.outcome == "ignored" and not_a_photo.review_card_id is None
 
 
 async def test_his_ok_is_a_check_in_answer_only_while_a_check_in_is_open(

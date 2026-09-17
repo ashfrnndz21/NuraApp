@@ -7,7 +7,7 @@ from __future__ import annotations
 from app.clock import FrozenClock
 from app.consent.models import ConsentPurpose
 from app.consent.texts import current_version
-from tests.api import bearer, let_in, own_profile, register_by_phone
+from tests.api import accept_whatsapp, bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.family_support import MONDAY
 
@@ -43,6 +43,8 @@ async def test_the_person_a_flag_reached_says_im_on_it_and_the_ladder_stops(
             headers=his,
         )
         assert cut.status_code == 201, cut.text
+    for holder in (mei, kit):
+        await accept_whatsapp(deployment, holder, profile_id)
     slot = await client.post(
         f"/profiles/{profile_id}/roster",
         json={"person_id": mei["person_id"], "role": "chief", "weekdays": list(range(7)), "from_time": "00:00:00", "to_time": "23:59:00"},

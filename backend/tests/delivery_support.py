@@ -79,7 +79,7 @@ def via_for(region: Region = Region.SG, root: Path | None = None) -> Via:
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
-        voice=FixtureVoice(),
+        voice=FixtureVoice(region),
         push=FixturePush(),
     )
     return Via.of(settings, providers)

@@ -155,6 +155,47 @@ jobs:
               raise SystemExit("production accepted the demo's code sender")
           print("refused by name:", ", ".join(fixtures_in(providers)), "+ the demo code sender")
           PY
+      - name: The voice port is pinned to its region, like the transcriber (#149)
+        # Before a real speech provider is connected: the fixture voice `main.providers_for`
+        # wires is pinned to the deployment's own region, exactly as the transcriber already
+        # is, and a script from the other region is refused before it reaches the provider —
+        # proven inside the built image, not just by a unit test against the fixture.
+        run: |
+          docker run --rm -i --network host -e NURA_REGION=SG -e NURA_DATABASE_URL="$DB" \
+            -e NURA_DEMO_MODE=1 -e NURA_DEMO_LOGIN_CODE=246810 -e NURA_WHATSAPP_DEV_SECRET=ci-only \
+            $FIXTURES nura:ci python - <<'PY'
+          import asyncio
+
+          from app.delivery.voice import voiced
+          from app.ingestion.objects import LocalObjectStore
+          from app.main import providers_for, settings as demo
+          from app.regions import OutOfRegion, Region
+
+          providers = providers_for(demo)
+          assert providers.voice.region is demo.region is Region.SG, providers.voice.region
+          assert providers.transcriber.region is demo.region
+
+          async def out_of_region() -> None:
+              # A Malaysian object store, so the store's own guard passes (it is asked about
+              # its own region): the failure below can only be the voice's, pinned to SG.
+              store = LocalObjectStore("/tmp/nura-voice-ci", Region.MY)
+              await voiced(
+                  store,
+                  providers.voice,
+                  profile_id=__import__("uuid").uuid4(),
+                  region=Region.MY,
+                  lines=["A card read aloud."],
+                  language="en",
+              )
+
+          try:
+              asyncio.run(out_of_region())
+          except OutOfRegion:
+              pass
+          else:
+              raise SystemExit("a script from another region reached the voice provider")
+          print("voice pinned to", providers.voice.region.value, "- refuses the other region")
+          PY
       - name: With VAPID keys, a deployment pushes by Web Push, a real sender production accepts
         # Throwaway keys made inside the job and never kept: with the three NURA_VAPID_*
         # settings the demo's push is WebPush, not a fixture, and production's check no longer

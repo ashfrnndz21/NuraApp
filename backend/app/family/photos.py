@@ -4,7 +4,10 @@ A photo is shared with a line of words, the way one is on WhatsApp: the words ar
 of the thread (`post_message`), and the photo hangs off it (`ThreadPhoto`). The bytes go to
 the region's object store under a content-addressed key and one artefact names them, written
 under the family scope (`app.memory.episodic.store_family_photo`): the family's, never one of
-his papers, and nothing is read off it.
+his papers, and nothing is read off it. A photo posted in the family's WhatsApp group lands
+here the same way (#149, `app.channels.whatsapp.inbound._group_photo`), its `source_channel`
+saying it came from there — still never on his feed by that alone (`on_his_feed=False`; only
+the sharer's own yes does that, and nobody in the group was asked it).
 
 The one who shares it says, then and there, whether it may also be one of his story cards
 (`on_his_feed`) — their yes, not anyone else's — and may take it back later
@@ -32,6 +35,7 @@ from app.ingestion.photos import MAX_PHOTO_BYTES, PHOTO_CONTENT_TYPES, PhotoTooL
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import require_artifact_under, store_family_photo
+from app.memory.models import SourceChannel
 from app.regions import guard_region
 
 PHOTO_TARGET = ThreadPhoto.__tablename__
@@ -75,10 +79,13 @@ async def share_photo(
     content_type: str,
     caption: str,
     on_his_feed: bool,
+    source_channel: SourceChannel = SourceChannel.APP,
 ) -> tuple[ThreadMessage, ThreadPhoto]:
     """Share one photo with the family, with the words it comes with, and the sharer's own
     yes or no to its being one of his story cards. The row first, then the bytes: a refusal
-    leaves nothing in the store."""
+    leaves nothing in the store. `source_channel` is the app by default; a photo mirrored in
+    from the family's WhatsApp group (#149) is WhatsApp's, for the same provenance every
+    artefact carries."""
     guard_region(held_in=store.region, asked_from=context.region)
     kind = check_photo(data, content_type)
     message = await post_message(session, context=context, text=caption)
@@ -92,6 +99,7 @@ async def share_photo(
         sha256=digest,
         captured_at=utcnow(),
         region=store.region,
+        source_channel=source_channel,
     )
     await store.put(key, data)
     photo = await audited_write(

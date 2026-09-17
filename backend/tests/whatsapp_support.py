@@ -23,6 +23,7 @@ from app.consent.opt_in_words import OPT_IN_VERSION
 from app.consent.service import grant_consent
 from app.db import utcnow
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.voice import FixtureVoice
 from app.drugs.fixture import FixtureRegistry
 from app.identity.models import Person, Profile
 from app.identity.providers import LoggingCodeSender
@@ -108,6 +109,7 @@ def deployment(tmp_path: Path, region: Region = Region.SG) -> tuple[Settings, Pr
         compressor=FixtureCompressor(FEED),
         drug_registry=FixtureRegistry.load(),
         whatsapp=FixtureProvider(secret=WHATSAPP_SECRET, fixtures=WHATSAPP_FIXTURES),
+        voice=FixtureVoice(region),
         reference_ranges=FixtureRanges.load(),
         summariser=FixtureSummariser(VISITS),
     )
