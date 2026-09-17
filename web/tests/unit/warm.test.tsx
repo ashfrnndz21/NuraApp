@@ -138,6 +138,13 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
     expect(text(all(answered, byTestId("exchange-live")))).toBe(words.answered);
   });
 
+  it("never says it has answered when no answer was given", () => {
+    const empty = one(<Exchange question="Q" steps={steps} status="answered" words={words} />);
+    expect(empty.props["data-status"]).toBe("working");
+    expect(text(all(empty, byTestId("exchange-live")))).toBe(words.working);
+    expect(all(empty, byTestId("exchange-answer"))).toEqual([]);
+  });
+
   it("says a long wait or a failure plainly and offers Try again", () => {
     const retry = vi.fn();
     const failed = one(<Exchange question="Q" steps={[]} status="failed" words={words} onRetry={retry} />);

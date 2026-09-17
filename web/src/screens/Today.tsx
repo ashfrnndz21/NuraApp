@@ -147,8 +147,9 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   return (
     <Shell tab="home" testId="home-screen">
       {page && <span data-testid="today-ready" hidden />}
-      {/* Her greeting is hers — her own name — and the question under it is about him, by name
-          (`hub.howFeelingOther`): a caregiver's Home never speaks in his voice. */}
+      {/* Her greeting is hers — her own name — and the question under it is about him, by name:
+          on a key that is not his, `t()` reads `hub.howFeeling` as its twin `howFeelingOther`
+          (strings/index.ts, ABOUT_HIM), so a caregiver's Home never speaks in his voice. */}
       <Hero
         greeting={greeting(now.getHours(), me.value?.display_name || "", s)}
         wave

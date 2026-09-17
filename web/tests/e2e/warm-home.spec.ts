@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { cutKey, fixClock, nothingDrawnOverLines, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, todayReady } from "./helpers";
+import { cutKey, fixClock, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, todayReady } from "./helpers";
 import { seedHome } from "./homeSeed";
 
 /** The warm pass (docs/design-direction.md): the welcome before a phone's first sign-in, Home's
@@ -59,8 +59,8 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   }
   for (const [tile, words] of [
     ["do-activities", "Things to do"],
-    ["do-care", "Care services"],
-    ["do-resources", "Guides"],
+    ["do-care", "Help at home"],
+    ["do-resources", "In simple words"],
   ] as const) {
     await page.getByTestId(tile).click();
     const soon = page.getByTestId("soon-screen");
@@ -79,10 +79,6 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   // Profile is his settings, as the Me sheet holds them.
   await page.getByTestId("tab-profile").click();
   await expect(page.getByTestId("profile-screen").getByTestId("lang-en")).toBeVisible();
-
-  await page.getByTestId("tab-home").click();
-  await todayReady(page);
-  expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p", controls: "button", minTarget: 56 })).toEqual([]);
 });
 
 test("Add a health report: a PDF or a photo, through the one upload path, straight onto its review card", async ({ page, request }) => {

@@ -21,7 +21,7 @@ function opens(papers: ProfileOut | null, scope: string): boolean {
  *  backend exactly as the button does. A key that cannot write to his papers has no check-in. */
 export function CheckInCard({ papers }: { papers: ProfileOut | null }): JSX.Element | null {
   const s = t();
-  if (!papers?.scopes.includes("records")) return null;
+  if (!opens(papers, "records")) return null;
   return (
     <TintCard tint="lavender" testId="daily-check-in" extra="check-in">
       <div class="check-in-text">

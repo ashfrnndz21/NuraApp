@@ -68,11 +68,11 @@ export const ms = {
     // @patient headline
     simple: "Mudah",
     // @patient phrase
-    simpleLine: "Tulisan besar, satu perkara pada satu masa",
+    simpleLine: "Huruf besar, satu perkara pada satu masa",
     // @patient headline
     family: "Keluarga",
     // @patient phrase
-    familyLine: "Orang yang anda benarkan boleh membantu",
+    familyLine: "Keluarga membantu bila anda setuju",
     // @patient headline
     private: "Peribadi",
     // @patient phrase
@@ -108,13 +108,13 @@ export const ms = {
     // @patient
     howFeelingOther: "Apa khabar {patient} hari ini?",
     // @patient headline
-    checkTitle: "Semakan harian",
+    checkTitle: "Bagaimana hari ini",
     // @patient
     checkLine: "Ambil seminit untuk kata apa yang anda rasa.",
     // @patient
     checkLineOther: "Ambil seminit untuk kata apa yang {patient} rasa.",
     // @patient phrase
-    checkIn: "Mula semak",
+    checkIn: "Beritahu Nura",
     // @patient
     doTitle: "Apa yang anda mahu buat?",
     // @patient headline
@@ -122,7 +122,7 @@ export const ms = {
     // @patient headline
     health: "Kesihatan",
     // @patient phrase
-    healthLine: "Surat dan ujian",
+    healthLine: "Surat dan ujian darah",
     // @patient headline
     medicines: "Ubat",
     // @patient phrase
@@ -136,13 +136,13 @@ export const ms = {
     // @patient phrase
     activitiesLine: "Perkara yang menyeronokkan",
     // @patient headline
-    care: "Khidmat jagaan",
+    care: "Bantuan di rumah",
     // @patient phrase
-    careLine: "Bantuan daripada orang",
+    careLine: "Orang yang boleh membantu",
     // @patient headline
-    resources: "Panduan",
+    resources: "Dalam kata-kata mudah",
     // @patient phrase
-    resourcesLine: "Bahan untuk dibaca",
+    resourcesLine: "Bacaan pendek",
     // @patient headline
     report: "Tambah laporan kesihatan",
     // @patient phrase

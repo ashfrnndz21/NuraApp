@@ -68,11 +68,11 @@ export const zh = {
     // @patient headline
     simple: "简单",
     // @patient phrase
-    simpleLine: "字大，一次一件事",
+    simpleLine: "字很大，一次一件事",
     // @patient headline
     family: "家人",
     // @patient phrase
-    familyLine: "您让进来的人可以帮忙",
+    familyLine: "您同意了，家人就可以帮忙",
     // @patient headline
     private: "私密",
     // @patient phrase
@@ -114,7 +114,7 @@ export const zh = {
     // @patient
     checkLineOther: "花一分钟，说说{patient}的感觉。",
     // @patient phrase
-    checkIn: "说一说",
+    checkIn: "告诉 Nura",
     // @patient
     doTitle: "您想做什么？",
     // @patient headline
@@ -122,7 +122,7 @@ export const zh = {
     // @patient headline
     health: "健康",
     // @patient phrase
-    healthLine: "文件和检查",
+    healthLine: "文件和验血",
     // @patient headline
     medicines: "药",
     // @patient phrase
@@ -136,13 +136,13 @@ export const zh = {
     // @patient phrase
     activitiesLine: "开心的事",
     // @patient headline
-    care: "照护服务",
+    care: "上门帮忙",
     // @patient phrase
-    careLine: "找人帮忙",
+    careLine: "可以来帮忙的人",
     // @patient headline
-    resources: "指南",
+    resources: "用简单的话说",
     // @patient phrase
-    resourcesLine: "可以读的东西",
+    resourcesLine: "简短的说明",
     // @patient headline
     report: "加一份健康报告",
     // @patient phrase
@@ -152,7 +152,7 @@ export const zh = {
     // @patient phrase
     seeAll: "看全部",
     // @patient phrase
-    seeAllVisits: "看全部看诊",
+    seeAllVisits: "看所有看诊的日子",
     // @patient
     soonLine1: "Nura 现在还做不到这个。",
     // @patient

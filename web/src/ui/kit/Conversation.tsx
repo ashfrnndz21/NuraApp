@@ -115,7 +115,9 @@ interface ExchangeProps {
  *  that the answer is there (or that it failed) — never each step, never a frame. */
 export function Exchange({ question, steps, status, answer, words, onRetry, testId }: ExchangeProps): JSX.Element {
   const answered = answer !== undefined && answer !== null;
-  const shown: ExchangeStatus = answered ? "answered" : status;
+  // "Answered" is the answer being there, never a status alone: with no answer given, Nura is
+  // still working, and nothing says it has answered.
+  const shown: ExchangeStatus = answered ? "answered" : status === "answered" ? "working" : status;
   const announce = shown === "answered" ? words.answered : shown === "failed" ? words.failed : words.working;
   return (
     <section class="exchange" data-status={shown} data-testid={testId}>

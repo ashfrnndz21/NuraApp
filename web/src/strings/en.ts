@@ -68,11 +68,11 @@ export const en = {
     // @patient headline
     simple: "Simple",
     // @patient phrase
-    simpleLine: "Big words, one thing at a time",
+    simpleLine: "Big letters, one thing at a time",
     // @patient headline
     family: "Family",
     // @patient phrase
-    familyLine: "The people you let in can help",
+    familyLine: "Your family helps when you say yes",
     // @patient headline
     private: "Private",
     // @patient phrase
@@ -108,13 +108,13 @@ export const en = {
     // @patient
     howFeelingOther: "How is {patient} feeling today?",
     // @patient headline
-    checkTitle: "Daily check-in",
+    checkTitle: "How today is going",
     // @patient
     checkLine: "Take a minute to say how you feel.",
     // @patient
     checkLineOther: "Take a minute to say how {patient} feels.",
     // @patient phrase
-    checkIn: "Check in",
+    checkIn: "Tell Nura",
     // @patient
     doTitle: "What would you like to do?",
     // @patient headline
@@ -122,7 +122,7 @@ export const en = {
     // @patient headline
     health: "Health",
     // @patient phrase
-    healthLine: "Papers and tests",
+    healthLine: "Papers and blood tests",
     // @patient headline
     medicines: "Medicines",
     // @patient phrase
@@ -136,13 +136,13 @@ export const en = {
     // @patient phrase
     activitiesLine: "Stay busy and happy",
     // @patient headline
-    care: "Care services",
+    care: "Help at home",
     // @patient phrase
-    careLine: "Help from people",
+    careLine: "People who can help",
     // @patient headline
-    resources: "Guides",
+    resources: "In simple words",
     // @patient phrase
-    resourcesLine: "Things to read",
+    resourcesLine: "Short reads",
     // @patient headline
     report: "Add a health report",
     // @patient phrase
