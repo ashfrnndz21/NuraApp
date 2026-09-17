@@ -56,9 +56,25 @@ class Settings:
     (`Unseparated`), which claims nothing it did not hear (E02-05)."""
     feed_fixtures: str | None = None
     """NURA_FEED_FIXTURES: the directory the fixture searcher and compressor answer from
-    (`app.delivery.feed.compress`). Set on a laptop; the real fetcher and the grounded model
-    call are later adapters behind the same two ports, and without either the process
-    refuses to start."""
+    (`app.delivery.feed.compress`), and the clip renderer's stills. Set on a laptop; a real
+    fetcher and a grounded model call are adapters behind the same two ports
+    (`NURA_SEARCHER`/`NURA_COMPRESSOR`), and without one of the two the process refuses to
+    start."""
+    searcher: str = "fixture"
+    """NURA_SEARCHER: which adapter answers the `Searcher` port (`app.delivery.feed.compress`).
+    `fixture` (the default) answers from NURA_FEED_FIXTURES; `claude` reads the allowlist for
+    real through Claude's web search and fetch tools (`app.delivery.feed.claude_adapters`) and
+    runs only on a declared demo (`NURA_DEMO_MODE=1`) with `ANTHROPIC_API_KEY` set — no
+    in-region provider exists yet. Any other name refuses to start."""
+    compressor: str = "fixture"
+    """NURA_COMPRESSOR: which adapter answers the `Compressor` port. `fixture` (the default)
+    answers from NURA_FEED_FIXTURES; `claude` grounds a plain-words card on the fetched page
+    through Claude's structured output (`app.delivery.feed.claude_adapters`), gated the same
+    way as NURA_SEARCHER=claude. Any other name refuses to start."""
+    anthropic_api_key: str | None = None
+    """ANTHROPIC_API_KEY: the key `NURA_SEARCHER=claude`/`NURA_COMPRESSOR=claude` call the
+    Claude API with. From the platform's secrets, never the repo, never a log — read here and
+    passed down as a parameter, the way every other secret in this file is."""
     drug_registry: str = "fixture"
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
@@ -254,6 +270,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,
+        searcher=source.get("NURA_SEARCHER", "fixture"),
+        compressor=source.get("NURA_COMPRESSOR", "fixture"),
+        anthropic_api_key=source.get("ANTHROPIC_API_KEY") or None,
         speaker_fixtures=source.get("NURA_SPEAKER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
         web_dist=source.get("NURA_WEB_DIST") or None,

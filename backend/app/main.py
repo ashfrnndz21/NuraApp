@@ -9,7 +9,12 @@ fixture one over NURA_PAPER_FIXTURES until the real one exists (E02); the transc
 fixture one over NURA_VOICE_FIXTURES, pinned to this region, until a speech provider exists
 (E02-06); the drug registry is the fixture one (`NURA_DRUG_REGISTRY=fixture`) until a licensed
 client exists (E04); the summariser is the fixture one over NURA_VISIT_FIXTURES until a model
-in the region does (E05); the WhatsApp provider is the fixture (`NURA_WHATSAPP_PROVIDER=fixture`,
+in the region does (E05); the feed's searcher and compressor are the fixture ones over
+NURA_FEED_FIXTURES by default (`NURA_SEARCHER`/`NURA_COMPRESSOR=fixture`), or Claude's own web
+search, fetch and structured output when both are set to `claude` — which runs only on a
+declared demo, `NURA_DEMO_MODE=1`, with `ANTHROPIC_API_KEY` set, because there is no in-region
+provider yet (`app.delivery.feed.claude_adapters`); the WhatsApp provider is the fixture
+(`NURA_WHATSAPP_PROVIDER=fixture`,
 signing with `NURA_WHATSAPP_DEV_SECRET`), which also only runs on a declared dev run (E19); so
 does the fixture voice that says a card aloud (E11-04), and the app push reaches nobody until
 the app registers devices (E11-05).
@@ -27,8 +32,8 @@ from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import whatsapp_provider_for
 from app.clock import install_frozen
 from app.db import make_engine, make_session_factory
+from app.delivery.feed.claude_adapters import compressor_for, searcher_for
 from app.delivery.feed.clips import FixtureClipRenderer
-from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.push import push_sender_for
 from app.delivery.voice import voice_for
 from app.drugs.client import drug_registry_for
@@ -57,14 +62,16 @@ def providers_for(settings: Settings) -> Providers:
     if settings.voice_fixtures is None:
         raise MissingSetting("NURA_VOICE_FIXTURES is not set and there is no other transcriber yet")
     if settings.feed_fixtures is None:
-        raise MissingSetting("NURA_FEED_FIXTURES is not set and there is no other searcher yet")
+        raise MissingSetting(
+            "NURA_FEED_FIXTURES is not set and there is no other clip still to show"
+        )
     return Providers(
         code_sender=code_sender_for(settings),
         object_store=object_store_for(settings),
         extractor=FixtureExtractor(Path(settings.paper_fixtures)),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
-        searcher=FixtureSearcher(Path(settings.feed_fixtures)),
-        compressor=FixtureCompressor(Path(settings.feed_fixtures)),
+        searcher=searcher_for(settings),
+        compressor=compressor_for(settings),
         drug_registry=drug_registry_for(settings),
         summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
