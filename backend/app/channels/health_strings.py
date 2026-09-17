@@ -30,14 +30,14 @@ def _in(language: str | None) -> str:
 
 # @patient headline
 RING_LABEL: Mapping[str, str] = {
-    "en": "Doses taken this week",
+    "en": "Tablets taken this week",
     "ms": "Ubat yang diambil minggu ini",
     "zh": "本周已服用的药",
 }
 
 # @patient headline
 RING_LABEL_THEIRS: Mapping[str, str] = {
-    "en": "{patient}'s doses taken this week",
+    "en": "{patient}'s tablets taken this week",
     "ms": "Ubat {patient} yang diambil minggu ini",
     "zh": "{patient}本周已服用的药",
 }
@@ -73,14 +73,14 @@ METRIC_LABEL: Mapping[str, Mapping[str, str]] = {
 
 # @patient phrase
 METRIC_NOT_LOGGED: Mapping[str, str] = {
-    "en": "Not logged yet",
+    "en": "Not written down yet",
     "ms": "Belum dicatat",
     "zh": "还没有记录",
 }
 
 # @patient phrase
 METRIC_NOT_LOGGED_THEIRS: Mapping[str, str] = {
-    "en": "{patient} has not logged this yet",
+    "en": "{patient} has not written this down yet",
     "ms": "{patient} belum mencatat ini",
     "zh": "{patient}还没有记录这个",
 }
@@ -96,7 +96,7 @@ blank (docs/recommendation-engine.md, the absence rule)."""
 
 # @patient phrase
 METRIC_SKIPPED_THEIRS: Mapping[str, str] = {
-    "en": "{patient} logged none today",
+    "en": "{patient} wrote down none today",
     "ms": "{patient} catat tiada hari ini",
     "zh": "{patient}今天记录了没有",
 }
@@ -195,28 +195,28 @@ INSIGHT_CHECKED_IN_THEIRS: Mapping[str, Lines] = {
 
 # @patient
 INSIGHT_ACTIVE: Mapping[str, Lines] = {
-    "en": ("Great job staying active!", "You logged {value} steps today."),
+    "en": ("Great job staying active!", "You wrote down {value} steps today."),
     "ms": ("Syabas, anda aktif hari ini!", "Anda catat {value} langkah hari ini."),
     "zh": ("做得好，今天很活跃！", "您今天记录了{value}步。"),
 }
 
 # @patient
 INSIGHT_ACTIVE_THEIRS: Mapping[str, Lines] = {
-    "en": ("{patient} stayed active today.", "{patient} logged {value} steps today."),
+    "en": ("{patient} stayed active today.", "{patient} wrote down {value} steps today."),
     "ms": ("{patient} aktif hari ini.", "{patient} catat {value} langkah hari ini."),
     "zh": ("{patient}今天很活跃。", "{patient}今天记录了{value}步。"),
 }
 
 # @patient
 INSIGHT_WATER: Mapping[str, Lines] = {
-    "en": ("You logged {value} cups of water today.", "Water is OK."),
-    "ms": ("Anda catat {value} cawan air hari ini.", "Air tiada masalah."),
+    "en": ("You wrote down {value} cups of water today.", "Water is OK."),
+    "ms": ("Anda catat {value} cawan air hari ini.", "Air kosong boleh."),
     "zh": ("您今天记录了喝{value}杯水。", "喝水没问题。"),
 }
 
 # @patient
 INSIGHT_WATER_THEIRS: Mapping[str, Lines] = {
-    "en": ("{patient} logged {value} cups of water today.",),
+    "en": ("{patient} wrote down {value} cups of water today.",),
     "ms": ("{patient} catat {value} cawan air hari ini.",),
     "zh": ("{patient}今天记录了喝{value}杯水。",),
 }

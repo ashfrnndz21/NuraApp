@@ -30,17 +30,16 @@ from app.drafts import CallDraft
 from app.errors import Refusal
 from app.family.common import a_chief
 from app.family.models import ScheduledCall
+from app.family.roster import NotOnThisProfile
 from app.keys.confirm import consume_confirmation
 from app.keys.context import KeyContext, holds_the_profile
 from app.keys.scopes import Scope
 from app.memory.models import LABEL_LENGTH, short_label
 
 CALLS_TARGET = ScheduledCall.__tablename__
-
-
-class NotOnThisProfile(Refusal):
-    """A call is with a family member — someone who holds a key on this profile, or its
-    owner — never a stranger."""
+"""`NotOnThisProfile` (a call is with someone who holds a key on this profile, or its owner,
+never a stranger) is `app.family.roster`'s own — the same refusal a task or a roster slot
+given to a stranger raises, already registered in `app.channels.api.refusals`."""
 
 
 class NoSuchCall(Refusal):

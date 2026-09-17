@@ -9,31 +9,32 @@ provenanced fact, and makes it cheap to ask "what did he eat around this moment"
 judge, score or advise on what he ate: that is the engine's job, and anything clinical about
 food goes through the review queue like everything else that reasons about him.
 
-A food entry is a Fact (`subject="food"`) resting on a FOOD event, the same provenance and
-confidence shape as a metric log (`app.lifestyle.metrics`): CONFIRMED_BY_PERSON, confidence
-1.0, naming who entered it. `app.memory.models.EventKind.FOOD` is the moment; the fact's value
-carries the meal, what he ate (a catalogue id, his own words, or both) and roughly how much —
-never calories or grams, because that is not how he thinks about a meal. The event's
-`occurred_at` is indexed, so "what did he eat in the hours around this reading" is one range
-read on the event table, the same way any other time-bounded read here is.
+**The shape follows docs/recommendation-engine.md §2.7 exactly**, since RE-10 (the engine's
+meal, steps, sleep, water and heart-rate series) reads this module's rows directly and cannot
+start until they land:
 
-Three states, not two (docs/recommendation-engine.md, RE-03 and the absence rule): a meal is
-**logged** (what he ate), **logged as skipped** — "I did not have breakfast", a real one-tap
-answer — or **not logged** at all, because nobody has said anything about it yet. The engine
-comparing his readings on days he ate breakfast against days he skipped it needs to tell those
-two kinds of silence apart; `app.lifestyle.metrics.LogStatus` is the same three states, reused
-here so both logs answer "logged, skipped, or nothing said" the same way.
+1. Every entry is an Event (`EventKind.FOOD`), with a Fact resting on it. `occurred_at` is
+   when the meal happened on his day, not when it was typed.
+2. Meals are one Fact per meal slot: `subject="meal"`, `attribute` is the meal itself —
+   `"breakfast" | "lunch" | "dinner" | "snack"` — never a fixed attribute with the meal
+   folded into the value. The value holds what he said, plus `"had": true | false`.
+   **"No breakfast" is an entry** (`had: false`), not a missing one.
+3. Nothing is inferred at write time: no "healthy meal" flag, no score.
+
+Three states, not two (the absence rule): a meal is **logged** (`had: true`, what he ate),
+**logged as skipped** (`had: false` — "I did not have breakfast", a real one-tap answer), or
+**not logged** at all, because no Fact for that meal that day exists yet. `LogStatus`
+(`app.lifestyle.metrics`) is the same three states, reused here so both logs answer "logged,
+skipped, or nothing said" the same way; `had` is the wire form §2.7 asks for, and `status` is
+read back from it, never stored twice.
 
 **Where this sits under a key's scope.** Meals are read and written under readings
-(`Scope.READINGS`, `app.keys.scopes.scope_for_subject("food")`), the owner's deliberate call
+(`Scope.READINGS`, `app.keys.scopes.scope_for_subject("meal")`), the owner's deliberate call
 (2026-09-17, made after weighing it against keeping meals under the general record so a
 helper could not see them): whoever checks on him day to day can see whether he has eaten, a
-helper included. The design draft this module started from recommended the general record
-instead; the owner overrode that on purpose, so if a food fact's scope is ever changed back,
-that is a considered decision to make again, not a bug to fix. The scope lives in one place —
-`_SUBJECT_SCOPES` in `app.keys.scopes`, and the matching event scope in
-`app.memory.episodic.EVENT_SCOPES` — so changing it, either way, is those two lines and
-nothing in this file.
+helper included. The scope lives in one place — `_SUBJECT_SCOPES` in `app.keys.scopes`, and
+the matching event scope in `app.memory.episodic.EVENT_SCOPES` — so changing it, either way,
+is those two lines and nothing in this file.
 """
 
 from __future__ import annotations
@@ -65,8 +66,7 @@ from app.memory.models import (
 from app.memory.semantic import assert_fact, current_facts
 from app.regions import REGION_TZ
 
-FOOD_SUBJECT = "food"
-FOOD_ATTRIBUTE = "meal"
+MEAL_SUBJECT = "meal"
 AMOUNT_LENGTH = LABEL_LENGTH
 
 
@@ -79,7 +79,7 @@ class Meal(StrEnum):
 
 class NotAFoodEntry(Refusal):
     """A food entry names what he ate — a catalogue item, his own words, or both — and is not
-    later than now; a skipped entry names none of those, and only those."""
+    later than now; a skipped entry (`had: false`) names none of those, and only those."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,9 +119,10 @@ async def log_food(
     food_catalog`, his own words, or both (free entry beside the catalogue, never one without
     the other's option). No calorie count and no gram weight are asked for or accepted.
 
-    `skipped=True` — "I did not have breakfast" — is a real, one-tap answer for the meal, not
-    a blank: it takes no catalogue id, no food and no amount, and the reverse (any of those
-    given with `skipped=True`) is refused rather than guessed at.
+    `skipped=True` — "I did not have breakfast" — is a real, one-tap answer for the meal
+    (written as `had: false`, docs/recommendation-engine.md §2.7), not a blank: it takes no
+    catalogue id, no food and no amount, and the reverse (any of those given with
+    `skipped=True`) is refused rather than guessed at.
     """
     if skipped and (catalog_id is not None or food is not None or amount is not None):
         raise NotAFoodEntry("a skipped meal names nothing he ate")
@@ -144,13 +145,12 @@ async def log_food(
         source_channel=SourceChannel.APP,
         episode_id=episode_id,
     )
-    status = LogStatus.SKIPPED if skipped else LogStatus.LOGGED
-    value: dict[str, object] = {"meal": meal.value, "status": status.value}
+    value: dict[str, object] = {"had": not skipped}
     if not skipped:
         value.update({"catalog_id": catalog_id, "food": named_food, "amount": named_amount})
     draft = FactDraft(
-        subject=FOOD_SUBJECT,
-        attribute=FOOD_ATTRIBUTE,
+        subject=MEAL_SUBJECT,
+        attribute=meal.value,
         value=value,
         unit=None,
         confidence=1.0,
@@ -180,11 +180,12 @@ async def log_food(
 
 def _entry_of(fact: Fact) -> FoodEntry:
     value = _value_of(fact)
+    had = bool(value.get("had", True))
     return FoodEntry(
         event_id=fact.event_id or fact.id,
         fact_id=fact.id,
-        meal=Meal(value["meal"]),
-        status=LogStatus(value.get("status", LogStatus.LOGGED.value)),
+        meal=Meal(fact.attribute),
+        status=LogStatus.LOGGED if had else LogStatus.SKIPPED,
         catalog_id=value.get("catalog_id"),
         food=value.get("food"),
         amount=value.get("amount"),
@@ -196,13 +197,16 @@ async def food_log(
     session: AsyncSession,
     *,
     context: KeyContext,
+    meal: Meal | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> list[FoodEntry]:
     """What he has logged, oldest first, ties on the same moment broken by id — narrowed to
-    `[since, until)` when given, the range a correlation asks for ("what did he eat around
-    this reading", "has he eaten before this dose")."""
-    facts = await current_facts(session, context=context, subject=FOOD_SUBJECT)
+    one meal slot, or to `[since, until)`, when given: the range a correlation asks for
+    ("what did he eat around this reading", "has he eaten before this dose")."""
+    facts = await current_facts(
+        session, context=context, subject=MEAL_SUBJECT, attribute=meal.value if meal else None
+    )
     entries = [_entry_of(f) for f in facts]
     if since is not None:
         entries = [e for e in entries if e.eaten_at >= since]
@@ -230,11 +234,11 @@ async def meal_status_on(
     """Logged, skipped, or nothing said, for one meal on his day (the day `on` falls on, his
     own if `on` is not given) — the cheap per-day series read a correlation like "compare his
     readings on days he had breakfast against days he skipped it" starts from
-    (docs/recommendation-engine.md, RE-03). The newest entry for that meal that day wins,
-    ties on the same moment broken by id, same as every other "latest" read here."""
+    (docs/recommendation-engine.md §2.7, "answered_days"). The newest entry for that meal that
+    day wins, ties on the same moment broken by id, same as every other "latest" read here."""
     zone = REGION_TZ[context.region]
     day = (as_utc(on).astimezone(zone).date()) if on is not None else today_in(context)
-    entries = [e for e in await food_log(session, context=context) if e.meal is meal]
+    entries = await food_log(session, context=context, meal=meal)
     of_the_day = [e for e in entries if e.eaten_at.astimezone(zone).date() == day]
     if not of_the_day:
         return LogStatus.NOT_LOGGED
@@ -244,8 +248,7 @@ async def meal_status_on(
 
 __all__ = [
     "AMOUNT_LENGTH",
-    "FOOD_ATTRIBUTE",
-    "FOOD_SUBJECT",
+    "MEAL_SUBJECT",
     "FoodEntry",
     "Meal",
     "NotAFoodEntry",

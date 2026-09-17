@@ -55,6 +55,8 @@ from app.family.pushes import (
     NoSuchTemplate,
     NotAMemo,
 )
+from app.channels.api.health import NoSuchMetric
+from app.family.calls import LinkTooLong, NoSuchCall
 from app.family.roster import (
     AlreadyDone,
     NoSuchSlot,
@@ -105,6 +107,8 @@ from app.language.review import (
     NotStaff,
     SourceAlreadyListed,
 )
+from app.lifestyle.food import NotAFoodEntry
+from app.lifestyle.metrics import NotAWholeMetric
 from app.medicines.reorder import NobodyToAsk, NotACount
 from app.medicines.service import AlreadyRecorded, NoSuchLine, NotTheirsToChange, TapNotToday
 from app.medicines.story import NoSuchStoryPart
@@ -197,6 +201,11 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NotTheDoer, 403),
     (WouldWiden, 403),
     (NotOnThisProfile, 403),
+    # A call with a family member (design-direction.md, Connect's "Upcoming Call"): the
+    # owner's and his chief's, like the roster and the tasks; one not on the calendar.
+    (NoSuchCall, 404),
+    # A metric row or logged entry not on this profile (Health Overview, food intake).
+    (NoSuchMetric, 404),
     (NoSuchSlot, 404),
     (NoSuchTask, 404),
     (NoSuchTaskForCard, 404),
@@ -378,6 +387,12 @@ _SHAPE: tuple[type[Refusal], ...] = (
     # He said no to WhatsApp at the key-accept step (#163): Nura starts nothing with that
     # person on it, a red-flag notice included.
     SaidNoToWhatsApp,
+    # A metric he logs (steps, heart rate, sleep, water) or a meal: a number in range, at a
+    # moment not later than now, and never both a value and a skip; a call link too long to
+    # be a link.
+    NotAWholeMetric,
+    NotAFoodEntry,
+    LinkTooLong,
 )
 """Named so that a reader of this file sees every family and timeline refusal; each is a
 400."""

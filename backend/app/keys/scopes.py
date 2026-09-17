@@ -90,8 +90,10 @@ _SUBJECT_SCOPES: dict[str, Scope] = {
     # see his readings — a helper included — can see whether he has eaten. Weighed against
     # keeping meals under the general record so a helper could not see them; the owner chose
     # practicality over that extra privacy line. If this ever changes, it is this one line —
-    # every reader of a food fact goes through `scope_for_subject`, not its own scope check.
-    "food": Scope.READINGS,
+    # every reader of a meal fact goes through `scope_for_subject`, not its own scope check.
+    # Subject "meal" per docs/recommendation-engine.md §2.7 ("Meals are one fact per meal
+    # slot. Subject `meal`, attribute `breakfast | lunch | dinner | snack`").
+    "meal": Scope.READINGS,
 }
 
 
