@@ -61,15 +61,17 @@ from app.delivery.strings import (
     language_for,
     learning_lines,
     needs_doctor_look_lines,
+    recall_action_lines,
     season_name,
 )
 from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
-from app.drugs.registry import DrugRegistry, LabelFields
+from app.drugs.registry import DrugRegistry, LabelFields, UnknownDrug
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
+from app.medicines.strings import PLAIN_NAME
 from app.reasoning.ranges import ReferenceRanges
 from app.reasoning.visits.memos import MEMO, write_memo
 from app.reasoning.visits.models import MemoKind, MemoSource
@@ -477,9 +479,10 @@ async def run_job(
             # `needs_doctor_look_lines` and a real question is filed for the doctor
             # (`reasoning.visits.memos.write_memo`) — the caregiver still gets a card, never
             # nothing, and never a `FeedItem` nobody reads (`DeliverTo.MEMO` is not a supply
-            # any route or ranking serves). A safety notice never reaches `create_item` with
-            # `DeliverTo.PATIENT` either way (that door is shut there too,
-            # `NoticeNotForPatient`).
+            # any route or ranking serves). The notice's own words — whichever of the two —
+            # never reach `create_item` with `DeliverTo.PATIENT` (`NoticeNotForPatient`); where
+            # the batch on his own pack matches (#183), he still gets his own `RECALL_ACTION`
+            # card below, in fixed catalogue words that never repeat the notice's own text.
             matches = found.batch is not None and found.batch.strip().lower() in _batches_on_record(
                 state
             )
@@ -550,6 +553,48 @@ async def run_job(
             )
             existing.add(key)
             made.append(notice)
+            if matches:
+                # His own pack is one of the recalled batches (#183): he gets his own card,
+                # in his own words, saying what he can do about the box in his hand today —
+                # never the notice's own words above, whether they stayed `notice_lines` or
+                # were rerouted to `needs_doctor_look_lines`; both stay his chief's to read.
+                action_key = f"{key}:recall_action"
+                action_lines = recall_action_lines(
+                    code,
+                    medicine=_plain_medicine_name(engine, job.terms[0], code),
+                    doctor=doctor or YOUR_DOCTOR[code],
+                )
+                try:
+                    action = await create_item(
+                        session,
+                        context=context,
+                        state=state,
+                        type=CardType.RECALL_ACTION,
+                        lines=action_lines,
+                        why=Why(
+                            kind="recall_action",
+                            plain=action_lines.why,
+                            source_id=str(source.id),
+                            gap=job.terms[0],
+                            fact_ids=fact_ids,
+                        ),
+                        scope=Scope.MEDICINES,
+                        deliver_to=DeliverTo.PATIENT,
+                        day=day.key,
+                        dedupe_key=action_key,
+                        expires_at=moment + LEARNING_LIFETIME,
+                        format=around.format,
+                        source=source,
+                        cite={**cite, "batch": found.batch},
+                        search_job_id=job.id,
+                    )
+                except NotPlainWords as failed:
+                    rejected.append(
+                        {"url": found.url, "because": "not_plain_words", "detail": str(failed)}
+                    )
+                    continue
+                existing.add(action_key)
+                made.append(action)
             continue
         # #236: a page whose words would start, stop or change a medicine is never simply
         # dropped, whichever job found it, and it is never addressed to anyone in its own
@@ -844,6 +889,19 @@ def _batches_on_record(state: StateView) -> set[str]:
         if isinstance(batch, str):
             found.add(batch.strip().lower())
     return found
+
+
+def _plain_medicine_name(engine: Engine, generic: str, language: str) -> str:
+    """His word for the generic a safety job watches (#183) — "the water pill", never
+    "furosemide": the same catalogue `app.medicines.service` reads a reconciled line's name
+    from. A generic the licensed registry has no monograph for (reachable only if a batch
+    fact somehow outlived the line it was read from) falls back to the generic itself rather
+    than failing the whole day's safety run over one card."""
+    try:
+        plain_name_id = engine.registry.monograph(generic).plain_name_id
+    except UnknownDrug:
+        return generic
+    return PLAIN_NAME[language].get(plain_name_id, generic)
 
 
 def _fact_ids_about(state: StateView, terms: Sequence[str]) -> list[str]:

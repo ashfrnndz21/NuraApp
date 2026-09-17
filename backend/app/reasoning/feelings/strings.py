@@ -273,7 +273,64 @@ TELL: Mapping[str, Mapping[Feeling, str]] = {
         Feeling.STOMACH_UPSET: "告诉{doctor}：您肚子不舒服，{when}。",
     },
 }
-"""The first thing to mention: his own word, and when, as he answered the one question."""
+"""The first thing to mention: his own word, and when, as he answered the one question — the
+cloud's own reply, said once, right when he answers (plain words: "today"/"since yesterday" is
+true only at that moment). Never used for what a note goes on to say elsewhere: `TELL_ON`."""
+
+# @patient
+TELL_ON: Mapping[str, Mapping[Feeling, str]] = {
+    "en": {
+        Feeling.DIZZY: "Tell {doctor} you felt dizzy on {date}.",
+        Feeling.TIRED: "Tell {doctor} you felt tired on {date}.",
+        Feeling.PAIN: "Tell {doctor} about the pain on {date}.",
+        Feeling.BREATHLESS: "Tell {doctor} you were short of breath on {date}.",
+        Feeling.LOW: "Tell {doctor} you felt sad on {date}.",
+        Feeling.WORRIED: "Tell {doctor} you felt worried on {date}.",
+        Feeling.CANT_SLEEP: "Tell {doctor} you were not sleeping well on {date}.",
+        Feeling.CRAMPS: "Tell {doctor} about the cramps on {date}.",
+        Feeling.THIRSTY: "Tell {doctor} you felt very thirsty on {date}.",
+        Feeling.ACHES: "Tell {doctor} about the muscle aches on {date}.",
+        Feeling.HEADACHE: "Tell {doctor} about the headache on {date}.",
+        Feeling.SWOLLEN_ANKLES: "Tell {doctor} about your swollen ankles on {date}.",
+        Feeling.STOMACH_UPSET: "Tell {doctor} about your upset stomach on {date}.",
+    },
+    "ms": {
+        Feeling.DIZZY: "Beritahu {doctor} bahawa anda rasa pening pada {date}.",
+        Feeling.TIRED: "Beritahu {doctor} bahawa anda rasa letih pada {date}.",
+        Feeling.PAIN: "Beritahu {doctor} tentang rasa sakit itu pada {date}.",
+        Feeling.BREATHLESS: "Beritahu {doctor} bahawa anda sesak nafas pada {date}.",
+        Feeling.LOW: "Beritahu {doctor} bahawa anda rasa sedih pada {date}.",
+        Feeling.WORRIED: "Beritahu {doctor} bahawa anda rasa risau pada {date}.",
+        Feeling.CANT_SLEEP: "Beritahu {doctor} bahawa anda susah tidur pada {date}.",
+        Feeling.CRAMPS: "Beritahu {doctor} tentang kejang otot pada {date}.",
+        Feeling.THIRSTY: "Beritahu {doctor} bahawa anda rasa sangat dahaga pada {date}.",
+        Feeling.ACHES: "Beritahu {doctor} tentang sakit otot pada {date}.",
+        Feeling.HEADACHE: "Beritahu {doctor} tentang sakit kepala pada {date}.",
+        Feeling.SWOLLEN_ANKLES: "Beritahu {doctor} tentang buku lali yang bengkak pada {date}.",
+        Feeling.STOMACH_UPSET: "Beritahu {doctor} bahawa perut anda tidak selesa pada {date}.",
+    },
+    "zh": {
+        Feeling.DIZZY: "告诉{doctor}：您{date}头晕。",
+        Feeling.TIRED: "告诉{doctor}：您{date}觉得累。",
+        Feeling.PAIN: "告诉{doctor}：您{date}身上痛。",
+        Feeling.BREATHLESS: "告诉{doctor}：您{date}气短。",
+        Feeling.LOW: "告诉{doctor}：您{date}心情低落。",
+        Feeling.WORRIED: "告诉{doctor}：您{date}很担心。",
+        Feeling.CANT_SLEEP: "告诉{doctor}：您{date}睡不好。",
+        Feeling.CRAMPS: "告诉{doctor}：您{date}抽筋。",
+        Feeling.THIRSTY: "告诉{doctor}：您{date}很口渴。",
+        Feeling.ACHES: "告诉{doctor}：您{date}肌肉酸痛。",
+        Feeling.HEADACHE: "告诉{doctor}：您{date}头痛。",
+        Feeling.SWOLLEN_ANKLES: "告诉{doctor}：您{date}脚踝肿。",
+        Feeling.STOMACH_UPSET: "告诉{doctor}：您{date}肚子不舒服。",
+    },
+}
+"""The first thing to mention, day-anchored (PR #233 review, plain words rules 2 and 5): a
+question row or a brief line is read back on a day that is not the day he answered, so "today"
+and "since yesterday" go stale or false. `{date}` is `app.medicines.strings.say_date` on the
+day he answered, fixed at compose time — true however long after that it is read. This is what
+`compose_note` actually writes to `FeelingNote.lines`; `TELL` above is the cloud's own reply
+alone and is never replayed."""
 
 # @patient phrase
 WHEN: Mapping[str, Mapping[Answer, str]] = {
@@ -352,21 +409,29 @@ and the pharmacist's sign-off (docs/trust/clinical-wording-sign-off.md)."""
 THEN: Mapping[str, Mapping[str, str]] = {
     "en": {
         "for_the_doctor": "Nura will keep this for your visit to {doctor}.",
-        "for_the_next_visit": "Nura will keep this for your next visit.",
+        "for_the_next_visit": "Nura wrote this down for you to tell {doctor}.",
         "watch": "Nura will ask you again in a week.",
     },
     "ms": {
         "for_the_doctor": "Nura akan simpan ini untuk lawatan anda ke {doctor}.",
-        "for_the_next_visit": "Nura akan simpan ini untuk lawatan anda yang akan datang.",
+        "for_the_next_visit": "Nura sudah tulis ini untuk anda beritahu {doctor}.",
         "watch": "Nura akan tanya anda lagi dalam seminggu.",
     },
     "zh": {
         "for_the_doctor": "Nura 会把这个留到您看{doctor}的时候。",
-        "for_the_next_visit": "Nura 会把这个留到您下次看医生的时候。",
+        "for_the_next_visit": "Nura 记下了这个，让您告诉{doctor}。",
         "watch": "一个星期后，Nura 会再问您。",
     },
 }
-"""Who does the next thing, and when (docs/plain-words.md rule 7)."""
+"""Who does the next thing, and when (docs/plain-words.md rule 7).
+
+`for_the_doctor` names a visit on the spine: the brief and the questions for that visit read
+this note (`app.reasoning.visits.questions.feeling_notes_for`, RE-02), so the promise is kept
+by code, not just by these words. `for_the_next_visit` is the honest line for when there is no
+visit yet to attach the note to — nothing reads an unattached note onto a visit later, so it
+never promises one; it says who does the next thing instead (rule 7): he does, when he next
+sees a doctor. Changing this promise to match what the code does, rather than building the
+code to match an old promise, is RE-02's own finding."""
 
 
 def catalogue() -> list[tuple[str, str]]:
@@ -379,6 +444,7 @@ def catalogue() -> list[tuple[str, str]]:
         found.extend((code, line) for line in FINE_LINES[code])
         found.append((code, NOTE_HEADLINE[code]))
         found.extend((code, line) for line in TELL[code].values())
+        found.extend((code, line) for line in TELL_ON[code].values())
         found.extend((code, line) for line in REASON[code].values())
         found.extend((code, line) for line in DO_NOT_STOP[code])
         found.extend((code, line) for line in THEN[code].values())

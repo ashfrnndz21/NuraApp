@@ -150,7 +150,8 @@ holds:
 
 ## 4. First deploy on Render (recommended for the demo)
 
-No local tool is needed. You create the account.
+No local tool is needed. You create the account. (`docs/deploy-demo.md` is the short version
+of this section: the Blueprint, the secrets, verifying it, and turning on Claude features.)
 
 1. Open **New → Blueprint** in the dashboard, connect the GitHub repository
    `ashfrnndz21/NuraApp`, and choose the branch.

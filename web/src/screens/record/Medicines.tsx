@@ -3,11 +3,13 @@ import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { LabelIn, LineOut, MedicineDraftOut, MoreOut, OrderPreviewOut } from "../../api/types";
 import { browserAudio } from "../../feed/playback";
+import { refreshCardNow } from "../../offline/emergencyCache";
+import { bindingOf } from "../../offline/todayCache";
 import { base64Of, isPdf } from "../../onboarding/actions";
 import { StoryVoice } from "../../record/storyVoice";
 import { speak } from "../../speech/speak";
 import { confidenceLine, countOf, labelFromCard, lineQuestions, outcomeLine, reorderActions, severityLine, tidyLabel } from "../../record/model";
-import { density } from "../../store/session";
+import { density, profile } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
 import { Capture } from "../onboarding/parts";
@@ -353,6 +355,10 @@ export function AddMedicineScreen(): JSX.Element {
       const { bearer, profileId } = session();
       const yes = await nura.mintMedicine(bearer, profileId, ready, artifactId);
       await nura.addMedicine(bearer, profileId, ready, artifactId, yes.confirmation_id);
+      // The kept emergency card's list is this same medicine's, from now (#171): a paramedic
+      // reading the phone tonight must not see the list from before this add.
+      const papers = profile.value;
+      if (papers) await refreshCardNow(bearer, profileId, bindingOf(papers), language.value, new Date());
       recordNote.value = [s.record.added];
       toRecord({ name: "medicines" });
     });

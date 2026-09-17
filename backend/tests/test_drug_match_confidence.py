@@ -18,7 +18,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.drugs.fixture import FIXTURE_PATH, FixtureRegistry
-from app.drugs.registry import LabelFields, NotIdentified
+from app.drugs.registry import LabelFields, NotIdentified, StrengthNotRead
 from app.medicines.service import Label
 from tests.medicines_support import REGISTRY, add, artefact, label, pa, planned
 
@@ -73,12 +73,17 @@ def test_a_name_match_with_no_strength_given_scores_above_the_floor_but_below_ex
 async def test_a_high_risk_drug_by_name_alone_scores_below_the_floor(sg: AsyncSession) -> None:
     """A photo of the label proves a photo exists; it does not prove the strength on it was
     read. Warfarin, an insulin, digoxin, methotrexate and an opioid are not identified on a
-    bare name the way an ordinary product is — the clinical-safety review on #206."""
+    bare name the way an ordinary product is — the clinical-safety review on #206.
+
+    "Marevan" is on file at two strengths (1 mg, 3 mg): the register did identify the drug,
+    it just cannot say which strength, so this is `StrengthNotRead`, not `NotIdentified`
+    (#211) — the person is told to retake the photo with the strength in it, not that Nura
+    has never heard of warfarin."""
     found = REGISTRY.identify(LabelFields(brand="Marevan"))
     assert found and all(m.high_risk and m.confidence < 0.8 for m in found)
     owner = await pa(sg)
     photo = await artefact(sg, owner)
-    with pytest.raises(NotIdentified):
+    with pytest.raises(StrengthNotRead):
         await planned(sg, owner, Label(dose=label("warfarin", "3 mg").dose, brand="Marevan"), photo)
 
 
