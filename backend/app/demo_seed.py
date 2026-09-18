@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_write
 from app.audit.models import Channel
 from app.channels.api.deps import Providers
-from app.clock import now
+from app.clock import FrozenClock, now, use_clock
 from app.consent.models import ConsentBasis, ConsentChannel, ConsentPurpose
 from app.consent.service import RecordConsent, Sharing, grant_consent
 from app.consent.texts import current_version
@@ -307,12 +307,39 @@ async def _write_past_dose(
     )
 
 
+NEW_MEDICINE = "amlodipine"
+"""Which of `MEDICINES` is backdated to `NEW_MEDICINE_AGO`, below, rather than started at seed
+time — his blood pressure tablet, the one defect #1's own live-run question was about ("...is
+it safe with my blood pressure tablet"). A `MedicationLine` is a frozen row (`app.db.frozen`):
+`started_at` cannot be edited after the write, so this runs `_add_medicine` under a clock
+wound back by `NEW_MEDICINE_AGO` (`app.clock.use_clock`, never a raw `datetime.now()` —
+CLAUDE.md), the same "frozen clock only" seam `_write_past_dose` already leans on for a
+seeded day of dose history, and puts the real clock straight back for everything seeded after
+it. Reconciling a line always dates it from the moment it is written, which is right, and is
+"this week" trivially at the instant the demo is freshly seeded — but the demo seeds Pa once,
+idempotently (`seed_demo`'s own guard), and a dev run's database is never nightly-wiped the
+way a real demo deployment's is (`app.demo.wipe_if_due`), so on a laptop that has had Pa
+seeded for a while, every medicine's `started_at` just keeps receding into the past.
+`new_medicine_explainer` (`app.delivery.recommend.rules`) only ever proposes a READ/CLIP for a
+line started within the last 14 days, so past that window his learning supply had nothing new
+to lead with (live-run defect: "no learning cards appear", `GET /feed` showing none of READ,
+CLIP or "Did you know") — backdating one line by a fixed, small amount keeps it inside that
+window (and its own 7-day "recent" boost) regardless of how long the seed itself has sat in
+the database."""
+NEW_MEDICINE_AGO = timedelta(days=3)
+"""Inside both `new_medicine_explainer`'s 14-day window and its own 7-day "recent" boost."""
+
+
 async def _seed_medicines(
     session: AsyncSession, owner: KeyContext, registry: DrugRegistry
 ) -> list[Reconciled]:
     lines: list[Reconciled] = []
     for item in MEDICINES:
-        lines.append(await _add_medicine(session, owner, registry, item))
+        if item[0] == NEW_MEDICINE:
+            with use_clock(FrozenClock(now() - NEW_MEDICINE_AGO)):
+                lines.append(await _add_medicine(session, owner, registry, item))
+        else:
+            lines.append(await _add_medicine(session, owner, registry, item))
     high_risk_photo = await _photo(session, owner, "label-warfarin", ArtifactKind.PHOTO)
     what = _label(*HIGH_RISK)
     shown = await plan(

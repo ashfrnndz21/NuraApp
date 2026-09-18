@@ -59,6 +59,10 @@ export const ms = {
     bell: "Lagi untuk anda",
     // @patient phrase
     back: "Kembali",
+    // @patient phrase
+    bellFeed: "Lagi untuk anda",
+    // @patient phrase
+    bellInsights: "Minggu anda, dilihat dengan teliti",
   },
   welcome: {
     // @patient headline
@@ -343,6 +347,60 @@ export const ms = {
     comingUpTitle: "Akan datang",
     // @patient phrase
     addReading: "Tulis tekanan darah",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "Minggu anda, dilihat dengan teliti",
+    // @patient headline
+    cardTitleOther: "Minggu {name}, dilihat dengan teliti",
+    // @patient
+    cardNone: "Nura belum melihat minggu anda.",
+    // @patient
+    cardNoneOther: "Nura belum melihat minggu {name}.",
+    // @patient phrase
+    cardLastLooked: "Nura melihat ini pada {date}",
+    // @patient phrase
+    generate: "Jana sekarang",
+    // @patient headline
+    screenTitle: "Minggu anda",
+    // @patient headline
+    screenTitleOther: "Minggu {name}",
+    // @patient
+    working: "Nura sedang melihat minggu ini.",
+    // @patient phrase
+    weekOf: "Minggu bermula {date}",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "Apa yang berubah",
+      // @patient headline
+      worth_a_look: "Patut dilihat",
+      // @patient headline
+      medicines_and_supplements: "Ubat dan suplemen",
+      // @patient headline
+      what_you_pay: "Apa yang anda bayar",
+      // @patient headline
+      screenings_due: "Saringan yang perlu dibuat",
+      // @patient headline
+      questions_for_the_doctor: "Soalan untuk doktor",
+    },
+    // @patient
+    sectionWithheld: "Kunci ini tidak meliputi bahagian minggu {name} ini.",
+    // @patient
+    sectionEmpty: "Tiada apa untuk ditandakan minggu ini.",
+    // @patient phrase
+    why: "Sebab",
+    // @patient phrase
+    sure: "Pasti",
+    // @patient phrase
+    likely: "Berkemungkinan",
+    // @patient phrase
+    worthALook: "Patut dilihat",
+    // @patient phrase
+    askThis: "Tanya {who} soalan ini",
+    // @patient
+    asked: "Nura menyimpan soalan ini untuk lawatan anda.",
+    // @patient
+    noVisit: "Belum ada lawatan ditempah untuk bawa soalan ini.",
   },
   signIn: {
     // @patient headline
@@ -1273,6 +1331,10 @@ export const ms = {
       done: "Itu sahaja",
       // @patient
       term: "Doktor panggilnya {term}.",
+      // @patient
+      countNone: "Nura belum tulis apa-apa lagi.",
+      // @patient
+      count: "Nura sudah tulis {n} perkara.",
     },
     asks: {
       // @patient

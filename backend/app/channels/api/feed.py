@@ -30,10 +30,10 @@ The feeling cloud's tap is in `app.channels.api.feelings`, with the rest of E17.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -66,6 +66,7 @@ from app.channels.api.feed_schemas import (
     SourceOut,
 )
 from app.channels.api.refusals import refused
+from app.channels.api.sse_pump import stream_with_background_pump
 from app.delivery.feed.area import read_area, set_area
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
 from app.delivery.feed.compose import around_for, today_for
@@ -96,7 +97,7 @@ from app.reasoning.signals import (
     set_signal_use,
     signals_may_be_set,
 )
-from app.search.narrate import NarratedStep
+from app.search.narrate import NarratedStep, Narrator, narrate_step_label
 
 router = APIRouter(prefix="/profiles", tags=["feed"])
 log = logging.getLogger("nura.channels.feed")
@@ -468,6 +469,23 @@ def _sse(payload: dict[str, object]) -> bytes:
     return f"data: {json.dumps(payload)}\n\n".encode()
 
 
+async def _narrate_find_step_later(
+    queue: asyncio.Queue[bytes | object],
+    narrator: Narrator,
+    steps: list[NarratedStep],
+    key: str,
+    label: str,
+    language: str,
+    reader: Reader,
+) -> None:
+    """Find's own twin of `app.channels.api.timeline._narrate_step_later`: awaited in the
+    background, never in the stream's own path — the one `step` event already went out, with
+    its catalogue label, before this is even scheduled."""
+    new_label = await narrate_step_label(narrator, steps, key, label, language=language, reader=reader)
+    if new_label is not None:
+        await queue.put(_sse({"type": "step_label", "key": key, "label": new_label}))
+
+
 @router.post("/{profile_id}/find/stream")
 async def find_pages_stream(body: FindIn, request: Request, context: Context) -> StreamingResponse:
     """`POST /{id}/find`, streamed, for the Web and Videos filters (docs/design-direction.md
@@ -477,7 +495,13 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
     results, no step: there is no real stage to say is still in progress.
 
     Opens its own session (`session_scope`), never `Depends(db)` — see `app.channels.api.
-    timeline.ask_stream` for why a stream cannot use a `yield` dependency."""
+    timeline.ask_stream` for why a stream cannot use a `yield` dependency.
+
+    Zero or more `step_label` events may follow the one `step`, whenever a Claude-backed
+    narrator (`NURA_NARRATOR=claude`) actually rephrases its label — in the background, never
+    holding the step or the `results` event back, the same redesign `app.channels.api.
+    timeline.ask_stream` carries for Ask (`app.search.narrate.narrate_step_label`). An older
+    web client that has never seen `step_label` simply ignores it."""
     code = language_for(body.language)
     outside = providers_of(request)
     # FIND_STEPS carries no caregiver twin (its lines are neutral, "Looking online." — see
@@ -485,9 +509,10 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
     # Ask's steps have; the narrator sees the direct-voice reader.
     reader = Reader(his=True, language=code)
 
-    async def events() -> AsyncIterator[bytes]:
+    async def pump(queue: asyncio.Queue[bytes | object]) -> None:
         try:
             async with session_scope(request) as session:
+                narration_tasks: list[asyncio.Task[None]] = []
                 async for event in find_stream(
                     session, context=context, engine=_engine(request), words=body.q, where=body.where, language=body.language
                 ):
@@ -505,20 +530,27 @@ async def find_pages_stream(body: FindIn, request: Request, context: Context) ->
                                 rows=1,
                                 shared_with_label=outside.narrator.external_processor,
                             )
+                        # Sent at once, with the catalogue label — never held back for the
+                        # narrator (`_step_event_now`'s own docstring in timeline.py).
+                        await queue.put(_sse({"type": "step", "key": event.key, "label": label}))
                         steps = [NarratedStep(key=event.key, label=label)]
-                        text = label
-                        async for line in outside.narrator.narrate(steps, language=code, reader=reader):
-                            if line.key == event.key:
-                                text = line.text
-                        yield _sse({"type": "step", "key": event.key, "label": text})
+                        narration_tasks.append(
+                            asyncio.create_task(
+                                _narrate_find_step_later(queue, outside.narrator, steps, event.key, label, code, reader)
+                            )
+                        )
                     else:
-                        yield _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
+                        await queue.put(
+                            _sse({"type": "results", "results": [ResultOut.of(one).model_dump(mode="json") for one in event]})
+                        )
+                if narration_tasks:
+                    await asyncio.gather(*narration_tasks, return_exceptions=True)
         except Refusal as refusal:
             response = await refused(request, refusal)
             body_ = json.loads(bytes(response.body))
-            yield _sse({"type": "refusal", "status": response.status_code, **body_})
+            await queue.put(_sse({"type": "refusal", "status": response.status_code, **body_}))
 
-    return StreamingResponse(events(), media_type="text/event-stream")
+    return StreamingResponse(stream_with_background_pump(pump), media_type="text/event-stream")
 
 
 @router.get("/{profile_id}/feed/{item_id}")

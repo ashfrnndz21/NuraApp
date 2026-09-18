@@ -59,6 +59,10 @@ export const en = {
     bell: "More for you",
     // @patient phrase
     back: "Go back",
+    // @patient phrase
+    bellFeed: "More for you",
+    // @patient phrase
+    bellInsights: "Your week, looked at closely",
   },
   welcome: {
     // @patient headline
@@ -343,6 +347,60 @@ export const en = {
     comingUpTitle: "Coming up",
     // @patient phrase
     addReading: "Write down a blood pressure",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "Your week, looked at closely",
+    // @patient headline
+    cardTitleOther: "{name}'s week, looked at closely",
+    // @patient
+    cardNone: "Nura has not looked at your week yet.",
+    // @patient
+    cardNoneOther: "Nura has not looked at {name}'s week yet.",
+    // @patient phrase
+    cardLastLooked: "Nura looked at this on {date}",
+    // @patient phrase
+    generate: "Generate now",
+    // @patient headline
+    screenTitle: "Your week",
+    // @patient headline
+    screenTitleOther: "{name}'s week",
+    // @patient
+    working: "Nura is looking at this week.",
+    // @patient phrase
+    weekOf: "The week of {date}",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "What changed",
+      // @patient headline
+      worth_a_look: "Worth a look",
+      // @patient headline
+      medicines_and_supplements: "Medicines and supplements",
+      // @patient headline
+      what_you_pay: "What you pay",
+      // @patient headline
+      screenings_due: "Screenings due",
+      // @patient headline
+      questions_for_the_doctor: "Questions for the doctor",
+    },
+    // @patient
+    sectionWithheld: "This key does not cover this part of {name}'s week.",
+    // @patient
+    sectionEmpty: "There is nothing here this week.",
+    // @patient phrase
+    why: "Why",
+    // @patient phrase
+    sure: "Sure",
+    // @patient phrase
+    likely: "Likely",
+    // @patient phrase
+    worthALook: "Worth a look",
+    // @patient phrase
+    askThis: "Ask {who} this",
+    // @patient
+    asked: "Nura kept this question for your visit.",
+    // @patient
+    noVisit: "There is no visit booked yet to take this to.",
   },
   signIn: {
     // @patient headline
@@ -1273,6 +1331,10 @@ export const en = {
       done: "That is everything",
       // @patient
       term: "Doctors call it {term}.",
+      // @patient
+      countNone: "Nura has not written anything down yet.",
+      // @patient
+      count: "Nura has written {n} things down.",
     },
     asks: {
       // @patient
