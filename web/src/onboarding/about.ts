@@ -33,6 +33,7 @@ export function startingSettings(saved: SettingsOut | null, profile: ProfileOut 
   return {
     language: saved?.language ?? profile?.language ?? fallback,
     conditions: saved?.conditions ?? [],
+    answers: saved?.answers ?? {},
     density: saved?.density ?? "detailed",
     large_text: saved?.large_text ?? false,
     high_contrast: saved?.high_contrast ?? false,

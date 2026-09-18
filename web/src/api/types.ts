@@ -751,6 +751,14 @@ export interface ConditionsOut {
   conditions: ConditionOut[];
 }
 
+/** "Or just tell me" (`POST /onboarding/tell-me`): the condition codes his own words tagged —
+ *  already the cloud's own words, never a new one — and `red_flag`, true when a red word means
+ *  `conditions` is deliberately empty and he is sent to the safety path instead. */
+export interface TellMeOut {
+  conditions: string[];
+  red_flag: boolean;
+}
+
 export type Density = "detailed" | "simple";
 
 /** The settings screen, whole (`PUT /profiles/{id}/settings` replaces it). The words he
@@ -758,6 +766,8 @@ export type Density = "detailed" | "simple";
 export interface SettingsIn {
   language: string;
   conditions: string[];
+  /** His answer to a tapped word's follow-up question, by the word's code (`ConditionOut.ask`). */
+  answers: Record<string, string>;
   density: Density;
   large_text: boolean;
   high_contrast: boolean;
@@ -775,10 +785,12 @@ export interface SettingsIn {
 }
 
 /** The settings as the caller's key reads them; `withheld` names what it does not open. */
-export interface SettingsOut extends Omit<SettingsIn, "conditions" | "doctor_name" | "birth_decade"> {
+export interface SettingsOut extends Omit<SettingsIn, "conditions" | "answers" | "doctor_name" | "birth_decade"> {
   settings_id: string | null;
   profile_id: string;
   conditions: string[] | null;
+  /** Null exactly when `conditions` is: the same key's read withholds both together. */
+  answers: Record<string, string> | null;
   doctor_name: string | null;
   birth_decade: number | null;
   set_by_person_id: string | null;

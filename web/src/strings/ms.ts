@@ -1275,6 +1275,22 @@ export const ms = {
       countNone: "Nura belum tulis apa-apa lagi.",
       // @patient
       count: "Nura sudah tulis {n} perkara.",
+      // @patient phrase
+      tellMe: "Atau beritahu saja",
+      // @patient
+      tellMeLead: "Cakap dengan kata-kata anda sendiri.",
+      // @patient phrase
+      tellMeLabel: "Dengan kata-kata anda sendiri",
+      // @patient phrase
+      tellMeSend: "Hantar",
+      // @patient
+      tellMeNothing: "Nura tidak jumpa perkataan di atas untuk itu.",
+      // @patient
+      tellMeNothingSub: "Cuba tekan sahaja.",
+      // @patient
+      tellMeSafety: "Nura tidak akan jadikan itu satu perkataan di sini.",
+      // @patient
+      tellMeSafetySub: "Sila beritahu seseorang yang anda percaya, atau dapatkan bantuan sekarang.",
     },
     asks: {
       // @patient

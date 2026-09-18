@@ -580,6 +580,14 @@ export interface Strings {
       term: string;
       countNone: string;
       count: string;
+      tellMe: string;
+      tellMeLead: string;
+      tellMeLabel: string;
+      tellMeSend: string;
+      tellMeNothing: string;
+      tellMeNothingSub: string;
+      tellMeSafety: string;
+      tellMeSafetySub: string;
     };
     asks: { lead: string };
     readBack: {

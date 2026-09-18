@@ -103,8 +103,8 @@
     "snoring": {"weight": 1, "names": {"en": "Snore, stop breathing at night", "ms": "Berdengkur, berhenti bernafas waktu malam", "zh": "打鼾、夜里停止呼吸"}, "related": []},
     "knees": {"weight": 1, "names": {"en": "Knees", "ms": "Lutut", "zh": "膝盖"}, "related": []},
     "pain_tablets_most_days": {"weight": 1, "names": {"en": "Pain tablets most days", "ms": "Ubat sakit hampir setiap hari", "zh": "几乎每天吃止痛药"}, "related": [], "ask": {"question": {"en": "Which?", "ms": "Ubat yang mana?", "zh": "哪一种?"}, "options": [
-      {"id": "paracetamol", "text": {"en": "Paracetamol", "ms": "Paracetamol", "zh": "扑热息痛"}},
-      {"id": "anti_inflammatory", "text": {"en": "Anti-inflammatory", "ms": "Ubat anti-radang", "zh": "消炎药"}},
+      {"id": "paracetamol", "text": {"en": "Fever and pain tablets", "ms": "Ubat demam dan sakit", "zh": "退烧止痛药"}},
+      {"id": "anti_inflammatory", "text": {"en": "A stronger pain tablet", "ms": "Ubat sakit yang lebih kuat", "zh": "较强的止痛药"}},
       {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
     ]}},
     "fall_this_year": {"weight": 2, "names": {"en": "A fall this year", "ms": "Jatuh tahun ini", "zh": "今年跌倒过"}, "related": []},
@@ -118,8 +118,8 @@
     "cancer_checkups_only": {"weight": 1, "names": {"en": "Only check-ups now", "ms": "Hanya pemeriksaan sekarang", "zh": "现在只是定期检查"}, "related": []},
     "cataract": {"weight": 1, "names": {"en": "Cataract", "ms": "Katarak", "zh": "白内障"}, "related": []},
     "medicine_allergy": {"weight": 2, "names": {"en": "Allergic to a medicine", "ms": "Alah kepada ubat", "zh": "对某种药过敏"}, "related": [], "ask": {"question": {"en": "Which one?", "ms": "Ubat yang mana?", "zh": "哪一种药?"}, "options": [
-      {"id": "penicillin", "text": {"en": "Penicillin", "ms": "Penisilin", "zh": "青霉素"}},
-      {"id": "aspirin_or_anti_inflammatory", "text": {"en": "Aspirin or anti-inflammatory", "ms": "Aspirin atau ubat anti-radang", "zh": "阿司匹林或消炎药"}},
+      {"id": "penicillin", "text": {"en": "An infection medicine, like Penicillin", "ms": "Ubat jangkitan, seperti Penisilin", "zh": "感染药物，像青霉素"}},
+      {"id": "aspirin_or_anti_inflammatory", "text": {"en": "Aspirin or a stronger pain tablet", "ms": "Aspirin atau ubat sakit yang lebih kuat", "zh": "阿司匹林或较强的止痛药"}},
       {"id": "another", "text": {"en": "Another one", "ms": "Ubat lain", "zh": "另一种药"}},
       {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
     ]}},

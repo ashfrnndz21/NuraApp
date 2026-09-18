@@ -91,11 +91,13 @@ class Graph:
     """Every condition, in the order the file lists them: the top level, then the rest."""
 
 
-def _load_ask(code: str, raw: Mapping[str, object] | None) -> Ask | None:
+def _load_ask(code: str, raw: object | None) -> Ask | None:
     """`raw["ask"]`, checked: a question named in exactly `LANGUAGES`, one or more options
     each with a short id, unique within this ask, and its own text in every language."""
     if raw is None:
         return None
+    if not isinstance(raw, dict):
+        raise NotAGraph(f"{code}'s ask is not an object")
     question = raw.get("question")
     if not isinstance(question, dict) or set(question) != set(LANGUAGES):
         raise NotAGraph(f"{code}'s ask is not a question named in exactly {LANGUAGES}")

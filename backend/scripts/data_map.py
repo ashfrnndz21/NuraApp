@@ -843,6 +843,7 @@ CLASSES: dict[str, str] = {
     # what is missing from it: health.
     "profile_settings.id": HEALTH,
     "profile_settings.conditions": HEALTH,
+    "profile_settings.answers": HEALTH,
     "profile_settings.language": OPERATIONAL,
     "profile_settings.density": HEALTH,
     "profile_settings.large_text": HEALTH,

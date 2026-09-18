@@ -4,7 +4,7 @@ import type { BiographyOut, PlanOut, ReviewCardOut } from "../api/types";
 import { profile, setDensity, token } from "../store/session";
 import { language } from "../strings";
 import { deviceEffects, startingSettings, tidy } from "./about";
-import { biography, closed, draft, picked, plan, settings, to, whose } from "./state";
+import { answers, biography, closed, draft, picked, plan, settings, to, whose } from "./state";
 
 /** The calls more than one step makes, on #117's routes. Each throws what the API threw; the
  *  screen that called it shows it (`Notice`) — a refusal is never swallowed here. */
@@ -42,7 +42,7 @@ export async function refreshPlan(): Promise<void> {
 export async function saveSettings(): Promise<void> {
   const { bearer, profileId } = who();
   const base = draft.value ?? startingSettings(settings.value, profile.value, language.value);
-  const body = tidy({ ...base, conditions: picked.value });
+  const body = tidy({ ...base, conditions: picked.value, answers: answers.value });
   settings.value = await nura.putSettings(bearer, profileId, body);
   draft.value = body;
   const effects = deviceEffects(body, profile.value?.standing);

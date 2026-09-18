@@ -1275,6 +1275,22 @@ export const en = {
       countNone: "Nura has not written anything down yet.",
       // @patient
       count: "Nura has written {n} things down.",
+      // @patient phrase
+      tellMe: "Or just tell me",
+      // @patient
+      tellMeLead: "Say it in your own words.",
+      // @patient phrase
+      tellMeLabel: "In your own words",
+      // @patient phrase
+      tellMeSend: "Send",
+      // @patient
+      tellMeNothing: "Nura found no word above for that.",
+      // @patient
+      tellMeNothingSub: "Try tapping instead.",
+      // @patient
+      tellMeSafety: "Nura will not turn that into a word here.",
+      // @patient
+      tellMeSafetySub: "Please tell someone you trust, or get help now.",
     },
     asks: {
       // @patient

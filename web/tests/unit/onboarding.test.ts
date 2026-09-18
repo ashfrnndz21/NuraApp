@@ -2,6 +2,25 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { isPdf } from "../../src/onboarding/actions";
+import { foldTold } from "../../src/onboarding/cloud";
+
+describe("\"or just tell me\": folding the backend's tagged codes into what is already picked", () => {
+  it("adds a new code at the end", () => {
+    expect(foldTold(["bp"], ["chol"])).toEqual(["bp", "chol"]);
+  });
+
+  it("keeps an already-picked code where it was, and does not repeat it", () => {
+    expect(foldTold(["bp", "chol"], ["bp"])).toEqual(["bp", "chol"]);
+  });
+
+  it("adds more than one code, each once, in the order the backend named them", () => {
+    expect(foldTold([], ["sugar", "heart"])).toEqual(["sugar", "heart"]);
+  });
+
+  it("leaves what was picked alone when the backend tagged nothing", () => {
+    expect(foldTold(["bp"], [])).toEqual(["bp"]);
+  });
+});
 
 describe("papers", () => {
   it("sends a PDF to /imports and anything else to /photos", () => {
