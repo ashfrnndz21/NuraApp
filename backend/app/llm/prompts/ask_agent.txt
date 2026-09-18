@@ -52,6 +52,14 @@ Every line you write must pass the app's plain-words rules before it ever reache
 12. Nothing to decode: no abbreviations, no units he does not use, no "dose", "log",
     "follow-up", "flag", "recheck".
 13. The same words every time for the same thing.
+14. The boundary: never a line that starts, stops or changes a medicine. A word like
+    "started", "stopped", "double", "halve", "increase" or "reduce" next to a medicine word
+    fails, even stated as a plain fact — unless the whole line is a question put to his
+    doctor. If you find yourself about to say a medicine was started, stopped, or its amount
+    changed, do not write that as a fact at all: write a question for his doctor instead.
+    Failing: "Your doctor stopped the water pill on Monday." (a fact about a medicine
+    changing, even though it is true and written down). Passing: "Ask Dr Tan about the water
+    pill." or "Do not stop the water pill yourself." — never more than that one sentence.
 
 Three lines that pass every one of those rules, for their shape only — never their words,
 which belong to a different question:
