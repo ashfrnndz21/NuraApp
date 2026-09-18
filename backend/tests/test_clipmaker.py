@@ -34,9 +34,9 @@ from app.delivery.feed.clipmaker import (
     scene_for,
 )
 from app.delivery.feed.compress import Found
+from app.delivery.feed.days import today_for
 from app.delivery.feed.items import Why, create_item
 from app.delivery.feed.models import CardType, DeliverTo
-from app.delivery.feed.days import today_for
 from app.delivery.strings import Lines
 from app.keys.scopes import Scope
 from app.medicines.dose import parse_dose_text
@@ -357,6 +357,7 @@ async def test_explainer_clip_item_writes_a_self_made_clip_card(sg: AsyncSession
         gap="amlodipine",
     )
     assert item.type is CardType.CLIP
+    assert item.cite is not None
     assert item.cite["kind"] == "nura_made"
     assert item.cite["source"] == "Nura"
     assert "publisher" not in item.cite
@@ -374,8 +375,8 @@ async def test_a_self_made_card_names_no_publisher_because_it_read_no_page(sg: A
     lines = Lines(
         language=script.language,
         headline=script.headline,
-        body=list(script.lines),
-        voice=list(script.lines),
+        body=script.lines,
+        voice=script.lines,
         why=script.why_topic,
         boundary=script.boundary,
     )
@@ -407,8 +408,8 @@ async def test_self_made_is_refused_on_every_card_type_but_clip(sg: AsyncSession
     lines = Lines(
         language="en",
         headline="Your blood pressure tablet, explained",
-        body=["This is your blood pressure tablet."],
-        voice=["This is your blood pressure tablet."],
+        body=("This is your blood pressure tablet.",),
+        voice=("This is your blood pressure tablet.",),
         why="This explains a new medicine.",
     )
     with pytest.raises(ValueError, match="only a clip"):

@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from app.delivery.feed.clips import CLIP_LONGEST, CLIP_SHORTEST, caption_cues
 from app.delivery.feed.compress import Found, Searcher, changes_treatment
@@ -46,6 +46,20 @@ from app.delivery.strings import language_for, learning_lines
 from app.delivery.timeline_strings import verified
 from app.llm.narrate import _has_conclusion_language  # the one blocklist, not a second copy
 from app.safety.boundary import YOUR_DOCTOR
+
+if TYPE_CHECKING:
+    # Only for mypy: `explainer_clip_item`'s own docstring explains why the real imports stay
+    # local to the function at runtime (this module is imported with no database at all by
+    # `app.demo_seed` and by tests that build a `ClipScript` alone). A `TYPE_CHECKING` import
+    # costs nothing at import time and lets every caller's argument be checked for real.
+    from datetime import datetime
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.delivery.feed.models import FeedItem
+    from app.keys.context import KeyContext
+    from app.keys.scopes import Scope
+    from app.state.service import StateView
 
 MIN_LINES = 4
 MAX_LINES = 6
@@ -261,10 +275,9 @@ class ClaudeClipMaker:
         api_key: str | None,
         demo_mode: bool,
         dev_run: bool = False,
-        client: object | None = None,
+        client: Any | None = None,
     ) -> None:
         from app.delivery.feed.claude_adapters import ClaudeAdapterNotAvailable, _client
-
         from app.llm.residency import allow_external_model
 
         allow_external_model(
@@ -290,7 +303,7 @@ class ClaudeClipMaker:
         if page is None or not page.text.strip():
             return None
         try:
-            response = self._client.messages.create(  # type: ignore[attr-defined]
+            response = self._client.messages.create(
                 model=self.MODEL,
                 max_tokens=2048,
                 output_config={"format": {"type": "json_schema", "json_schema": _LINES_SCHEMA}},
@@ -349,18 +362,18 @@ def cite_of(script: ClipScript) -> dict[str, object]:
 
 
 async def explainer_clip_item(
-    session: object,
+    session: AsyncSession,
     *,
-    context: object,
-    state: object,
+    context: KeyContext,
+    state: StateView,
     script: ClipScript,
     fact_ids: Sequence[str],
-    scope: object,
+    scope: Scope,
     day_key: str,
     dedupe_key: str,
-    expires_at: object,
+    expires_at: datetime,
     gap: str | None = None,
-) -> object:
+) -> FeedItem:
     """Write a Nura-made clip as a card, through the same choke point every other card is
     written through (`app.delivery.feed.items.create_item`) — never a raw row. A thin seam:
     the caller (today, `app.demo_seed`; RE-07's gap-driven planner once it is wired to offer

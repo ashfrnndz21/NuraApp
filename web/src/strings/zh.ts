@@ -697,6 +697,8 @@ export const zh = {
     // @patient phrase
     play: "播放",
     // @patient phrase
+    watchAgain: "再看一次",
+    // @patient phrase
     watchWhole: "在{publisher}看完整的视频",
     // @patient phrase
     askOrSearch: "提问或搜索",
