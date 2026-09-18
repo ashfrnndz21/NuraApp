@@ -13,6 +13,11 @@ Acceptance lines this covers:
 - A policy or a claim document's fields become facts under Scope.MONEY, never RECORDS, and
   the review card never writes a Policy or an InsuranceClaim row directly.
 - Every proposed field carries its artefact and its page.
+- A pill photo and a pharmacy receipt both route through the review card the same way; a
+  pill's guess never auto-confirms, matched against the registry or not; a pharmacy receipt's
+  matched line becomes a cost entry the ledger sums; an unmatched line stays a plain paper
+  fact; a receipt's item name naming a red-flag word is flagged before the card is shown, the
+  same as a lab report's remark (#pill-receipt).
 """
 
 from __future__ import annotations
@@ -22,14 +27,17 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.drugs.fixture import FixtureRegistry
 from app.ingestion.extract import DocumentKind, FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
-from app.ingestion.review import confirm_review_card, review_photo
+from app.ingestion.review import PILL_MAX_CONFIDENCE, card_fields, confirm_review_card, review_photo
+from app.insurance.ledger import medicine_monthly_costs
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
 from app.memory.semantic import current_facts
 from app.regions import Region
 from app.safety.red_flags import FlagKind, open_flags
+from tests.medicines_support import add, label
 from tests.paper import (
     CLINIC_LETTER_HYPERTENSION,
     INSURANCE_CLAIM,
@@ -37,8 +45,13 @@ from tests.paper import (
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
     PAPER,
+    PHARMACY_RECEIPT,
+    PHARMACY_RECEIPT_RED_FLAG,
+    PILL_PHOTO,
 )
 from tests.test_ingestion import _card, _decide, _pa, _photo, _yes  # test helpers
+
+REGISTRY = FixtureRegistry.load()
 
 
 @pytest.fixture
@@ -60,6 +73,33 @@ async def _confirm(
     return await confirm_review_card(
         sg, context=owner, card_id=card.id, decisions=decisions, confirmation_id=yes
     )
+
+
+async def _confirm_with_registry(
+    sg: AsyncSession, owner: KeyContext, store: LocalObjectStore, extractor: FixtureExtractor, paper_label: str
+):
+    """`_confirm`, but matched against the licensed registry (`registry=REGISTRY`): what a
+    pill photo's guess is matched against, and what turns a pharmacy receipt's matching item
+    line into a cost entry besides its plain paper fact (#pill-receipt)."""
+    card, fields = await _card_with_registry(sg, owner, store, extractor, paper_label)
+    decisions = _decide(fields)
+    yes = await _yes(sg, owner, card, decisions)
+    return await confirm_review_card(
+        sg, context=owner, card_id=card.id, decisions=decisions, confirmation_id=yes, registry=REGISTRY
+    )
+
+
+async def _card_with_registry(
+    sg: AsyncSession, owner: KeyContext, store: LocalObjectStore, extractor: FixtureExtractor, paper_label: str
+):
+    """`_card`, but reading through the licensed registry — what a pill photo's guess is
+    matched against at read time (#pill-receipt)."""
+    photo = await _photo(sg, owner, store, paper_label)
+    card = await review_photo(
+        sg, context=owner, artifact_id=photo.id, store=store, extractor=extractor, language="en", registry=REGISTRY
+    )
+    fields = await card_fields(sg, context=owner, card_id=card.id)
+    return card, fields
 
 
 async def test_a_lab_reports_known_unit_becomes_a_reading_proposal_and_the_rest_stay_facts(
@@ -177,3 +217,123 @@ async def test_a_lab_readings_fact_joins_the_same_trend_a_device_reading_would(
     held = list(await current_facts(sg, context=owner, subject="blood_sugar", at=fact.valid_from))
     assert held and held[0].id == fact.id
     assert scope_for_subject("blood_sugar") is Scope.READINGS
+
+
+# --- the pill-and-receipt story (#pill-receipt) -------------------------------------------
+
+
+async def test_a_pill_photo_and_a_pharmacy_receipt_both_route_through_the_review_card(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """Neither kind is a special route of its own: both are read into an ordinary review
+    card, one field per statement on the page, exactly like a lab report or a label."""
+    owner = await _pa(sg)
+    pill_card, pill_fields = await _card(sg, owner, store, extractor, PILL_PHOTO)
+    assert pill_card.document_kind is DocumentKind.PILL_PHOTO
+    assert {f.subject for f in pill_fields} == {"pill", "medicine"}
+
+    receipt_card, receipt_fields = await _card(sg, owner, store, extractor, PHARMACY_RECEIPT)
+    assert receipt_card.document_kind is DocumentKind.PHARMACY_RECEIPT
+    assert {f.subject for f in receipt_fields} == {"receipt", "item_1", "item_2"}
+
+
+async def test_a_pill_photos_guess_never_auto_confirms_even_matched_against_the_registry(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """The pill's guess (paracetamol 500 mg) matches a product in the licensed registry
+    exactly — an ordinary label photo at that confidence would need no check — but a pill's
+    identity is a guess from what it looks like, never a read: it is still held below the
+    confirmation threshold, so `needs_confirm` is set either way. The raw `pill` fields
+    (what was actually seen) are untouched by the cap."""
+    owner = await _pa(sg)
+    card, fields = await _card_with_registry(sg, owner, store, extractor, PILL_PHOTO)
+    assert card.document_kind is DocumentKind.PILL_PHOTO
+    medicine = [f for f in fields if f.subject == "medicine"]
+    assert medicine, "the guess matched the registry and is still on the card"
+    for field in medicine:
+        assert field.confidence <= PILL_MAX_CONFIDENCE
+        assert field.needs_confirm is True
+    name = next(f for f in medicine if f.attribute == "name")
+    strength = next(f for f in medicine if f.attribute == "strength")
+    # Narrowed to the register's own canonical answer, not the model's free text — but only
+    # ever offered as a proposal, never taken as read.
+    assert name.value == "paracetamol"
+    assert strength.value == "500 mg"
+    # The pill's own fields (what was actually seen) pass through uncapped.
+    colour = next(f for f in fields if f.subject == "pill" and f.attribute == "colour")
+    assert colour.confidence == pytest.approx(0.92)
+
+
+async def test_a_pharmacy_receipts_matched_line_sums_into_the_ledger_and_an_unmatched_line_stays_a_fact(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """A line naming a medicine already on his list (Panadol, matched to paracetamol) becomes
+    a cost entry the ledger sums, besides its own plain paper fact; a line naming something
+    not on his list (a hand sanitiser) stays a plain paper fact only — never held back for
+    that, and never silently taken as a medicine."""
+    owner = await _pa(sg)
+    await add(sg, owner, label("paracetamol", "500 mg"))
+
+    card, decided, facts = await _confirm_with_registry(sg, owner, store, extractor, PHARMACY_RECEIPT)
+    assert card.document_kind is DocumentKind.PHARMACY_RECEIPT
+
+    # The matched line's own words are kept exactly as printed, same as any other kind.
+    item1_name = next(f for f in decided if f.subject == "item_1" and f.attribute == "name")
+    item1_fact = next(fact for fact in facts if fact.id == item1_name.fact_id)
+    assert item1_fact.value == "Panadol"
+
+    # And, besides that plain fact, a cost entry for the generic it matched.
+    cost_facts = [fact for fact in facts if fact.subject == "medicine_cost"]
+    assert len(cost_facts) == 1
+    assert cost_facts[0].attribute == "paracetamol"
+    assert cost_facts[0].value == {"total_cents": 1300, "item": "Panadol"}
+    assert cost_facts[0].unit == "SGD"
+    assert scope_for_subject("medicine_cost") is Scope.MEDICINES
+
+    # The ledger sums it: one receipt, one month, S$13 a month.
+    costs = await medicine_monthly_costs(sg, context=owner, language="en")
+    assert len(costs) == 1
+    assert costs[0].generic == "paracetamol"
+    assert costs[0].monthly_cents == 1300
+    assert costs[0].monthly_said == "S$13 a month"
+
+    # The unmatched line (nothing on his list is a hand sanitiser) stays a plain fact only.
+    item2_name = next(f for f in decided if f.subject == "item_2" and f.attribute == "name")
+    item2_fact = next(fact for fact in facts if fact.id == item2_name.fact_id)
+    assert item2_fact.value == "Hand sanitiser 250ml"
+    assert not any(fact.attribute == "hand sanitiser" for fact in cost_facts)
+    assert {fact.generic for fact in costs} == {"paracetamol"}  # never the hand sanitiser
+
+
+async def test_a_pharmacy_receipt_naming_nothing_on_his_list_writes_no_cost_entry_at_all(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """A receipt confirmed without a registry to match against (or against nobody's list)
+    writes every line as a plain paper fact and no cost entry — never held back."""
+    owner = await _pa(sg)
+    card, decided, facts = await _confirm(sg, owner, store, extractor, PHARMACY_RECEIPT)  # no registry
+    assert card.document_kind is DocumentKind.PHARMACY_RECEIPT
+    assert not any(fact.subject == "medicine_cost" for fact in facts)
+    item1_name = next(f for f in decided if f.subject == "item_1" and f.attribute == "name")
+    assert next(fact for fact in facts if fact.id == item1_name.fact_id).value == "Panadol"
+
+
+async def test_a_pharmacy_receipt_item_naming_a_red_word_is_flagged_before_the_card_is_shown(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """The same red-flag path a lab report's remark goes through (`_red_flag_scan`), read off
+    a receipt's item line instead: "whichever way it comes in, it comes here first"."""
+    owner = await _pa(sg)
+    photo = await _photo(sg, owner, store, PHARMACY_RECEIPT_RED_FLAG)
+    card = await review_photo(
+        sg, context=owner, artifact_id=photo.id, store=store, extractor=extractor, language="en"
+    )
+    flags = await open_flags(sg, context=owner)
+    assert len(flags) == 1
+    flag = flags[0]
+    assert flag.code == "chest_pain"
+    assert flag.kind is FlagKind.RED_FLAG
+    assert flag.artifact_id == photo.id
+    assert flag.appointment_id is None
+    assert flag.payload["found_in"] == "item_1.name"
+    assert card.document_kind is DocumentKind.PHARMACY_RECEIPT  # the card still opens as usual

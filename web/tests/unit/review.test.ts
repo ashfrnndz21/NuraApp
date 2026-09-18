@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewCardOut, ReviewFieldOut } from "../../src/api/types";
-import { canCorrect, confidenceLine, decide, decisionsFor, fieldLabel, kindLine, parseNumber, readable, spokenLine, startingEdits, valueText } from "../../src/onboarding/review";
+import { canCorrect, confidenceLine, decide, decisionsFor, fieldLabel, kindLine, parseNumber, pillProposalLine, readable, spokenLine, startingEdits, valueText } from "../../src/onboarding/review";
 import { en } from "../../src/strings/en";
 
 const field = (field_id: string, attribute: string, value: unknown, needs_confirm = false, position = 0): ReviewFieldOut => ({
@@ -181,5 +181,41 @@ describe("the kinds of paper since E02 capture", () => {
     // Even if the backend ever sent fields alongside it, the card still has nothing to
     // confirm: this kind was never read, so there is nothing genuine to say yes to.
     expect(readable(card([tg], "unsupported_file_type"))).toBe(false);
+  });
+});
+
+describe("a pill photo and a pharmacy receipt (#pill-receipt)", () => {
+  const imprint = field("f-imprint", "imprint", "IP 190", false, 0);
+  const pillName = { ...field("f-pill-name", "name", "paracetamol", true, 1), subject: "medicine" };
+  const pillStrength = { ...field("f-pill-strength", "strength", "500 mg", true, 2), subject: "medicine" };
+  const item1Name = { ...field("f-item1-name", "name", "Panadol", false, 0), subject: "item_1" };
+  const item1Total = { ...field("f-item1-total", "total", 12.5, false, 1), subject: "item_1", unit: "SGD" };
+
+  it("names the two new kinds, never by their code", () => {
+    expect(kindLine("pill_photo", en)).toBe(en.onboarding.records.kindPillPhoto);
+    expect(kindLine("pharmacy_receipt", en)).toBe(en.onboarding.records.kindPharmacyReceipt);
+  });
+
+  it("labels a pill's own fields, and every receipt line's fields the same way whichever item it is", () => {
+    expect(fieldLabel({ subject: "pill", attribute: "imprint" }, en)).toBe(en.onboarding.fields.pill!.imprint);
+    expect(fieldLabel({ subject: "pill", attribute: "score_line" }, en)).toBe(en.onboarding.fields.pill!.score_line);
+    expect(fieldLabel({ subject: "receipt", attribute: "pharmacy" }, en)).toBe(en.onboarding.fields.receipt!.pharmacy);
+    expect(fieldLabel({ subject: "item_1", attribute: "total" }, en)).toBe(en.onboarding.fields.item!.total);
+    expect(fieldLabel({ subject: "item_12", attribute: "quantity" }, en)).toBe(en.onboarding.fields.item!.quantity);
+  });
+
+  it("proposes a pill's guess with the pharmacist line, only on a pill photo that guessed a medicine", () => {
+    expect(pillProposalLine(card([imprint, pillName, pillStrength], "pill_photo"), en)).toBe(
+      "This looks like paracetamol 500 mg — check with the pharmacist.",
+    );
+    // No medicine guess at all: no proposal line, the raw pill fields still stand alone.
+    expect(pillProposalLine(card([imprint], "pill_photo"), en)).toBeNull();
+    // Never on another kind, even if it happened to carry a "medicine" field.
+    expect(pillProposalLine(card([pillName], "medicine_label"), en)).toBeNull();
+  });
+
+  it("keeps a receipt line's price fields readable, unit and all", () => {
+    expect(spokenLine(item1Total, en)).toEqual([en.onboarding.fields.item!.total, "12.5 SGD", "Nura is sure of this one."]);
+    expect(fieldLabel(item1Name, en)).toBe(en.onboarding.fields.item!.name);
   });
 });

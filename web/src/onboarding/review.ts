@@ -90,9 +90,14 @@ export function decisionsFor(card: ReviewCardOut, edits: Record<string, FieldEdi
   return { decisions, waiting };
 }
 
+/** A pharmacy receipt's line subjects are numbered in the order printed (`item_1`,
+ *  `item_2`…) — every one of them shares one set of words (`s.onboarding.fields.item`). */
+const ITEM_SUBJECT = /^item_\d+$/;
+
 /** His words for the line, by the backend's subject and attribute codes; never the code. */
 export function fieldLabel(field: Pick<ReviewFieldOut, "subject" | "attribute">, s: Strings): string {
-  return s.onboarding.fields[field.subject]?.[field.attribute] ?? s.onboarding.records.otherLine;
+  const subject = ITEM_SUBJECT.test(field.subject) ? "item" : field.subject;
+  return s.onboarding.fields[subject]?.[field.attribute] ?? s.onboarding.records.otherLine;
 }
 
 /** How sure Nura is, in words: the backend's own threshold (`needs_confirm`), never a percentage. */
@@ -122,6 +127,10 @@ export function kindLine(kind: ReviewCardOut["document_kind"], s: Strings): stri
       return r.kindInsuranceClaim;
     case "device_screen":
       return r.kindDeviceScreen;
+    case "pill_photo":
+      return r.kindPillPhoto;
+    case "pharmacy_receipt":
+      return r.kindPharmacyReceipt;
     case "other":
       return r.kindOther;
     case "not_health":
@@ -129,6 +138,20 @@ export function kindLine(kind: ReviewCardOut["document_kind"], s: Strings): stri
     case "unsupported_file_type":
       return r.kindUnknown;
   }
+}
+
+/** A pill photo's proposal, from the drug it was matched against at read time: "This looks
+ *  like paracetamol 500 mg — check with the pharmacist." Never higher than a proposal — the
+ *  backend holds the field's own confidence below the confirmation threshold either way
+ *  (`app.ingestion.review.PILL_MAX_CONFIDENCE`), so this is shown beside the ordinary field,
+ *  not in place of it. Null where a pill photo carried no guess at all (nothing recognised). */
+export function pillProposalLine(card: ReviewCardOut, s: Strings): string | null {
+  if (card.document_kind !== "pill_photo") return null;
+  const name = card.fields.find((field) => field.subject === "medicine" && field.attribute === "name");
+  if (!name || typeof name.value !== "string") return null;
+  const strength = card.fields.find((field) => field.subject === "medicine" && field.attribute === "strength");
+  const strengthText = strength && typeof strength.value === "string" ? ` ${strength.value}` : "";
+  return fill(s.onboarding.records.pillProposal, { medicine: `${name.value}${strengthText}` });
 }
 
 /** Where a field came from, in plain words, when the paper had more than one page: "From

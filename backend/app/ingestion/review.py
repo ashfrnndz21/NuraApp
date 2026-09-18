@@ -45,7 +45,14 @@ from app.db import as_utc, utcnow
 from app.drafts import DecidedField, FactDraft, ReviewDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
-from app.ingestion.extract import DocumentKind, ExtractedField, Extraction, Extractor, Hints, check_value
+from app.ingestion.extract import (
+    DocumentKind,
+    ExtractedField,
+    Extraction,
+    Extractor,
+    Hints,
+    check_value,
+)
 from app.ingestion.models import (
     CONFIDENCE_THRESHOLD,
     DECISIONS,

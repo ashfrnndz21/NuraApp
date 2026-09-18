@@ -1362,6 +1362,10 @@ export const ms = {
       // @patient
       kindOther: "Ini surat kesihatan.",
       // @patient
+      kindPillPhoto: "Ini gambar sebiji pil.",
+      // @patient
+      kindPharmacyReceipt: "Ini resit farmasi.",
+      // @patient
       unreadable: "Nura tidak dapat membaca yang ini.",
       // @patient
       typeIt: "Sila taip apa yang tertulis pada surat itu.",
@@ -1375,6 +1379,8 @@ export const ms = {
       dated: "Surat ini bertarikh {date}.",
       // @patient
       highRisk: "Nura lebih berhati-hati dengan ubat ini.",
+      // @patient
+      pillProposal: "Ini kelihatan seperti {medicine} — semak dengan ahli farmasi.",
       // @patient
       fromPhoto: "Daripada gambar yang anda tambah pada {date}.",
       // @patient phrase
@@ -1526,6 +1532,22 @@ export const ms = {
         amount: "Jumlah wang",
         date: "Tarikh",
         for: "Untuk apa tuntutan itu",
+      },
+      pill: {
+        imprint: "Apa yang tertera padanya",
+        colour: "Warnanya",
+        shape: "Bentuknya",
+        score_line: "Sama ada ia boleh dibelah",
+      },
+      receipt: {
+        pharmacy: "Farmasi",
+        currency: "Mata wang",
+      },
+      item: {
+        name: "Apa yang dibeli",
+        quantity: "Berapa banyak",
+        unit_price: "Harga seunit",
+        total: "Jumlah harga",
       },
     },
   },
