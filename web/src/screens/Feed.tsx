@@ -5,7 +5,7 @@ import type { CardClipOut, FeedItemOut, LineOut, OrderPreviewOut } from "../api/
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
 import { go, openTab } from "../flow";
-import { cueAt, parseVtt, type Cue } from "../feed/captions";
+import { cueAt, cuesFromCaptions, parseVtt, type Cue } from "../feed/captions";
 import { cardView, speechLanguage, statusLine, variantOf, type CardView, type ClipView, type SideAction } from "../feed/model";
 import { lineForCard, reorderActions } from "../record/model";
 import type { Playback } from "../feed/playback";
@@ -519,17 +519,42 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
   );
 }
 
-/** A clip (E09-06, E11-09): its still, from Nura's own server — no video platform is asked,
- *  so none learns who watched — and Play, which plays the card's narration (the same voice as
+/** A clip (E09-06, E11-09, RE-07 item 1): a publisher's still and excerpt, or a Nura-made
+ *  script over one of the kit's warm scenes — the card's own `clip.kind` says which, and
+ *  each has its own component below. Nothing here starts by itself: bytes and captions are
+ *  fetched (a publisher clip) or already on the card (a Nura-made one), never played. */
+function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: ClipView; playing: boolean; onPlay: () => void; s: Strings }): JSX.Element {
+  return clip.kind === "nura_made" ? (
+    <NuraMadeClipPart clip={clip} playing={playing} onPlay={onPlay} s={s} />
+  ) : (
+    <PublisherClipPart itemId={itemId} clip={clip} playing={playing} onPlay={onPlay} s={s} />
+  );
+}
+
+/** The elapsed time since a clip started playing, in seconds; zero, and no timer, once it stops. */
+function useElapsedWhilePlaying(playing: boolean): number {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!playing) {
+      setElapsed(0);
+      return;
+    }
+    const started = performance.now();
+    const timer = setInterval(() => setElapsed((performance.now() - started) / 1000), 200);
+    return () => clearInterval(timer);
+  }, [playing]);
+  return elapsed;
+}
+
+/** A publisher's clip: its still, from Nura's own server — no video platform is asked, so
+ *  none learns who watched — and Play, which plays the card's narration (the same voice as
  *  Hear) with its captions, the line being said shown under the still. Where the publisher's
  *  licence let the server keep the excerpt, it plays silently under the narration; otherwise
- *  the still is the picture. The whole video is on the publisher's own site, a link he taps.
- *  Nothing here starts by itself: the still and the captions are fetched, never played. */
-function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: ClipView; playing: boolean; onPlay: () => void; s: Strings }): JSX.Element {
+ *  the still is the picture. The whole video is on the publisher's own site, a link he taps. */
+function PublisherClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: ClipView; playing: boolean; onPlay: () => void; s: Strings }): JSX.Element {
   const [poster, setPoster] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(null);
   const [cues, setCues] = useState<Cue[]>([]);
-  const [elapsed, setElapsed] = useState(0);
   const moving = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const bearer = token.value;
@@ -551,15 +576,9 @@ function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: 
       for (const url of urls) URL.revokeObjectURL(url);
     };
   }, [itemId, clip.excerpt]);
+  const elapsed = useElapsedWhilePlaying(playing);
   useEffect(() => {
-    if (!playing) {
-      setElapsed(0);
-      moving.current?.pause();
-      return;
-    }
-    const started = performance.now();
-    const timer = setInterval(() => setElapsed((performance.now() - started) / 1000), 200);
-    return () => clearInterval(timer);
+    if (!playing) moving.current?.pause();
   }, [playing]);
   const said = playing ? cueAt(cues, elapsed) : null;
   const play = () => {
@@ -589,6 +608,33 @@ function ClipPart({ itemId, clip, playing, onPlay, s }: { itemId: string; clip: 
           <a href={clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
             {fill(s.feed.watchWhole, { publisher: clip.publisher })}
           </a>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A Nura-made explainer clip (RE-07, item 1): his own words, said over one of the kit's warm
+ *  scenes — never a photo of him or of his medicine — with its own captions already timed on
+ *  the card (`clip.captions`), so nothing is fetched before Play. "Watch again" restarts the
+ *  same tap Play already does (`onPlay`, `feed/playback.ts`'s own tap-to-replay); there is no
+ *  separate pause, the same as every other card's Hear. */
+function NuraMadeClipPart({ clip, playing, onPlay, s }: { clip: ClipView; playing: boolean; onPlay: () => void; s: Strings }): JSX.Element {
+  const elapsed = useElapsedWhilePlaying(playing);
+  const cues = useMemo(() => cuesFromCaptions(clip.captions, clip.durationMs), [clip.captions, clip.durationMs]);
+  const said = playing ? cueAt(cues, elapsed) : null;
+  return (
+    <div class="clip" data-testid="clip">
+      <div class={`scene ${clip.scene ?? "morning"}`} data-testid="clip-scene" aria-hidden="true">
+        <i />
+        <i />
+      </div>
+      <Pill plum onClick={onPlay} testId="clip-play">
+        {playing ? s.feed.watchAgain : s.feed.play}
+      </Pill>
+      {said && (
+        <p class="caption" aria-live="polite" data-testid="clip-caption">
+          {said.text}
         </p>
       )}
     </div>

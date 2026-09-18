@@ -325,6 +325,71 @@ export interface FindStepLabelEvent {
 }
 export type FindStreamEvent = FindStepEvent | FindStepLabelEvent | FindResultsEvent | AskRefusalEvent;
 
+/** How sure Nura is of one line of the weekly report (W1): the backend's own word, never a
+ *  score. Drawn as a chip, never as a colour that reads like a health state. */
+export type InsightConfidence = "sure" | "likely" | "worth_a_look";
+
+/** One part of the record an insight rests on ("Your blood pressure book", "Monday's visit"),
+ *  the backend's own name for it — the same idea as `AnswerLineOut.cites`, in the shape the
+ *  weekly report sends. */
+export interface InsightEvidenceOut {
+  id: string;
+  kind: string;
+  label: string;
+}
+
+/** One line of the weekly report: the backend's sentence, who to ask about it (a doctor's
+ *  name) when there is a question worth taking to a visit, what it rests on, the plain reason,
+ *  and how sure Nura is. */
+export interface InsightOut {
+  insight_id: string;
+  kind: string;
+  text: string;
+  ask_who: string | null;
+  evidence: InsightEvidenceOut[];
+  why_plain: string;
+  confidence: InsightConfidence;
+}
+
+/** The report's fixed sections, in the order they are always shown. A section left out of
+ *  `InsightsReportOut.sections` entirely is one this key's scope does not cover; a section
+ *  present with an empty `insights` list is one Nura looked at and found nothing to say. */
+export type InsightSectionKey = "what_changed" | "worth_a_look" | "medicines_and_supplements" | "what_you_pay" | "screenings_due" | "questions_for_the_doctor";
+
+export interface InsightsSectionOut {
+  key: InsightSectionKey | string;
+  title: string;
+  insights: InsightOut[];
+}
+
+/** The weekly report (W1, `GET /profiles/{id}/insights`): the week it covers, only the
+ *  sections this key's scope opens, and the boundary line last, exactly as `AnswerOut` ends
+ *  its own. */
+export interface InsightsReportOut {
+  report_id: string;
+  generated_at: string;
+  week_of: string;
+  boundary: string[];
+  sections: InsightsSectionOut[];
+}
+
+/** One real stage of building the report, streamed the instant it finishes (`POST
+ *  /profiles/{id}/insights/stream`), the same trace pattern as `AskStepEvent`. */
+export interface InsightsStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished report, exactly `GET /profiles/{id}/insights` would
+ *  return once it is written. */
+export interface InsightsReportEvent {
+  type: "report";
+  report: InsightsReportOut;
+}
+
+export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
+
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
 export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";
@@ -513,6 +578,38 @@ export interface AppointmentOut {
   /** The doctor's or clinic's name as the family wrote it (the provider's); absent where the
    *  route does not read it. */
   doctor?: string | null;
+}
+
+/** One id a visit proposal rests on, and the scope it was read under
+ *  (`app.delivery.recommend.models.Evidence`, `EvidenceOut`). */
+export interface VisitEvidenceOut {
+  kind: string;
+  id: string;
+  scope: string;
+}
+
+/** Where a proposal's evidence came from (T2, `app.reasoning.visits.planner.VisitSource`). */
+export type VisitSource = "follow_up" | "medicine_review" | "test_coming" | "screening_due";
+
+/** One visit Nura proposes (T2, `GET /profiles/{id}/visits/proposed`): never booked, never a
+ *  claim about what is wrong — only what the record already holds that a visit would follow
+ *  up on, cited. `purpose` is the backend's own plain-words line, in his voice, pre-filled
+ *  into the booking screen on "Book it"; the row itself says whose suggestion it is in the
+ *  screen's own words (caregiver by name), never this line verbatim to a caregiver. */
+export interface VisitProposalOut {
+  proposal_id: string;
+  source: VisitSource;
+  purpose: string;
+  provider_kind: string | null;
+  suggested_at: string | null;
+  why: VisitEvidenceOut[];
+}
+
+/** Every proposal a key may see right now, and which scopes held none back
+ *  (`app.reasoning.visits.planner.ProposedVisits`). */
+export interface ProposedVisitsOut {
+  proposals: VisitProposalOut[];
+  withheld: string[];
 }
 
 /** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */
