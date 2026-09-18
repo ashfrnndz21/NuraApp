@@ -34,6 +34,7 @@ from anthropic import (
     AsyncAnthropic,
 )
 
+from app.llm.blocks import answer_text
 from app.llm.prompts import load_prompt
 from app.reasoning.navigation.models import Need, NeedKind
 from app.reasoning.navigation.rule_drafter import RuleDrafter, names_dose_or_diagnosis
@@ -151,7 +152,7 @@ class ClaudeDrafter:
             log.info("claude navigation drafter: %s; the rule draft said it plainly", message.stop_reason)
             return None
         try:
-            raw = message.content[0].text  # type: ignore[union-attr]
+            raw = answer_text(message)
             payload = json.loads(raw)
             if not isinstance(payload, Mapping):
                 raise TypeError("the model's answer was not a JSON object")
