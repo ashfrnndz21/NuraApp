@@ -173,6 +173,7 @@ html {
 .list-row:focus-visible,
 .head-button:focus-visible,
 .link-button:focus-visible,
+.insights-card-open:focus-visible,
 .action-row:focus-within {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
@@ -348,6 +349,75 @@ button.list-row {
   color: var(--ink-quiet);
   align-self: flex-start;
   padding-top: 4px;
+}
+/* The Insights card (Health, W1): its own open button, the same row shape as `.list-row`
+   (icon, text stack, real touch target) but its own class since a second control, "Generate
+   now", sits beside it in the same tint card rather than after it in a list. */
+.insights-card-open {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.insights-card-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.insights-card-title {
+  font-weight: 700;
+}
+/* The Insights card's own headline line (Health, W1): the one insight the card leads with,
+   set apart from the caption lines around it in the card's own ink, not the quiet one. */
+.insights-card-headline {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- The weekly report: one line per insight, its "Why" opening to its evidence ------------- */
+.insight-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-1) 0;
+}
+.insight-row + .insight-row {
+  border-top: 1px solid var(--card-line);
+}
+.insight-text {
+  margin: 0;
+}
+.insight-why {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.insight-why summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  cursor: pointer;
+  list-style: none;
+}
+.insight-why summary::-webkit-details-marker {
+  display: none;
+}
+.insight-why summary:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.insight-why p {
+  margin: 4px 0;
 }
 .metric-row {
   display: flex;

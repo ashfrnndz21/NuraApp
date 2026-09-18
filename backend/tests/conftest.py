@@ -23,7 +23,7 @@ import shutil
 import tempfile
 import uuid
 from collections.abc import AsyncIterator, Callable, Iterator
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,6 +56,7 @@ from app.keys import confirm  # noqa: F401
 from app.reasoning.ranges import FixtureRanges
 from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
+from app.search.narrate import Narrator
 from app.settings import Settings, database_url_for
 
 # Imported for the side effect of registering every table on the shared metadata.
@@ -232,14 +233,20 @@ class Deployment:
     whatsapp: FixtureProvider
 
 
-async def _serve(region: Region, *, review_origin: str | None = None) -> AsyncIterator[Deployment]:
+async def _serve(
+    region: Region, *, review_origin: str | None = None, narrator: Narrator | None = None
+) -> AsyncIterator[Deployment]:
     async with regional_database() as engine:
-        async for served in _serve_on(engine, region, review_origin=review_origin):
+        async for served in _serve_on(engine, region, review_origin=review_origin, narrator=narrator):
             yield served
 
 
 async def _serve_on(
-    engine: AsyncEngine, region: Region, *, review_origin: str | None = None
+    engine: AsyncEngine,
+    region: Region,
+    *,
+    review_origin: str | None = None,
+    narrator: Narrator | None = None,
 ) -> AsyncIterator[Deployment]:
     sessions = make_session_factory(engine)
     sender = LoggingCodeSender(reveal=True)
@@ -270,6 +277,7 @@ async def _serve_on(
         reference_ranges=FixtureRanges.load(),
         speaker_separator=FixtureSeparator(SPEAKERS, region),
         clips=FixtureClipRenderer(FEED),
+        **({"narrator": narrator} if narrator is not None else {}),
     )
     app = create_app(settings, sessions, providers)
     try:
@@ -299,3 +307,16 @@ async def deployment() -> AsyncIterator[Deployment]:
 async def client(deployment: Deployment) -> AsyncClient:
     """An HTTP client on the Singapore backend."""
     return deployment.client
+
+
+@pytest.fixture
+def deployment_factory() -> Callable[..., AbstractAsyncContextManager[Deployment]]:
+    """The Singapore backend, served with a caller's own `narrator` (a test double, never the
+    real Claude-backed one — `tests/test_narrator.py` mocks the `anthropic` client for that)
+    in place of the default `FixtureNarrator`: `async with deployment_factory(narrator=...) as
+    deployment:`. Everything else `deployment` gives is unchanged."""
+
+    def _factory(*, narrator: Narrator | None = None) -> AbstractAsyncContextManager[Deployment]:
+        return asynccontextmanager(_serve)(Region.SG, narrator=narrator)
+
+    return _factory

@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — full experience reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap">
+<style>
+:root{
+  --board:#efe6e0; --screen:#fbf6f1; --card:#fffaf6; --line:#eadfd7;
+  --ink:#2c2733; --soft:#7b7385;
+  --plum:#4e3a78; --plum-deep:#3d2d61; --plum-wash:#ece6f5;
+  --peach:#f8e4d6; --blush:#f6dde5; --lavender:#e8e1f4; --sage:#e1ece2; --butter:#f6ecd3; --sky:#e1e9f2;
+  --good:#3b7a57; --watch:#b8741a; --act:#c24a3a;
+  --paper:rgba(255,255,255,.9); --glass:rgba(255,255,255,.55);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--board);color:var(--ink);font:16px/1.5 Outfit,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+h1,h2,h3{margin:0}
+.serif{font-family:Newsreader,Georgia,serif}
+.icon{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---------- top strip ---------- */
+.strip{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--plum-deep);color:#f3edf8}
+.strip .band-l{display:flex;align-items:center;gap:10px;font-size:13px}
+.strip b{font-weight:600;color:#fff}
+.strip .tag{background:rgba(255,255,255,.14);border-radius:999px;padding:3px 10px;font-size:11px;letter-spacing:.02em}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#e4dbf0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.legend .lp{background:#e7ceac}.legend .lm{background:#a9c9c4}.legend .ls{background:#c9dba6}
+
+.header{max-width:1180px;margin:0 auto;padding:26px 24px 4px}
+.header .eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--plum);font-weight:600}
+.header h1{font:600 28px/1.15 Newsreader,serif;margin-top:4px}
+.header p{color:var(--soft);max-width:70ch;margin-top:8px;font-size:14.5px}
+
+/* ---------- persona switch ---------- */
+.pswitch{display:flex;gap:6px;background:#e6dfe8;border-radius:999px;padding:5px;max-width:fit-content;margin:18px auto 0}
+.pswitch button{padding:10px 18px;min-height:44px;border-radius:999px;font-size:14px;color:var(--soft);display:flex;align-items:center;gap:8px}
+.pswitch button.on{background:#fff;color:var(--plum);font-weight:600;box-shadow:0 2px 10px rgba(60,40,80,.14)}
+.pswitch i{width:8px;height:8px;border-radius:50%}
+
+/* ---------- stage ---------- */
+.stage{display:grid;grid-template-columns:392px 1fr;gap:34px;max-width:1180px;margin:0 auto;padding:26px 24px 70px;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:1fr;justify-items:center}}
+
+.phone{position:relative;width:392px;max-width:100%;background:#241f2b;border-radius:52px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.2)}
+.screen{position:relative;width:100%;height:844px;border-radius:42px;overflow-y:auto;overflow-x:hidden;background:var(--screen);scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.scr-pad{padding:14px 16px 116px}
+.wash-home{background:linear-gradient(180deg,#f3e3d8 0%,#f8ece4 40%,var(--screen) 78%)}
+.wash-watch{background:linear-gradient(160deg,var(--blush),#f3e6e0 55%,var(--lavender))}
+.wash-plain{background:var(--screen)}
+.wash-chat{background:#efe9e3}
+
+.persona,.view{display:none}
+.persona.on,.view.on{display:block}
+
+.status{display:flex;justify-content:space-between;font-size:12.5px;color:var(--soft);padding:2px 4px 0}
+.status b{color:var(--ink);font-weight:600}
+
+.topbar{display:grid;grid-template-columns:32px 1fr 32px;align-items:center;min-height:36px;padding:2px 2px 6px}
+.topbar .mid{text-align:center;font-weight:700;font-size:16px}
+.topbar .word{font:600 22px/1 Newsreader,serif;color:var(--plum);text-align:center}
+.topbar button{width:36px;height:36px;display:grid;place-items:center;color:var(--ink)}
+.topbar .side{width:36px}
+
+.tabbar{position:absolute;left:14px;right:14px;bottom:14px;display:grid;grid-template-columns:repeat(5,1fr);border-radius:24px;background:var(--paper);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.8);box-shadow:0 10px 26px rgba(60,40,80,.14);padding:8px 2px 8px}
+.tabbar button{display:grid;justify-items:center;gap:3px;font-size:10px;color:var(--soft);min-height:52px}
+.tabbar button.on{color:var(--plum);font-weight:700}
+.tabbar .icon{width:20px;height:20px}
+
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 8px}
+.sec h3{font-size:14px;font-weight:700}
+.sec a,.sec button{font-size:12px;color:var(--soft)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-top:10px}
+.card:first-child{margin-top:0}
+.tint-peach{background:var(--peach);border-color:transparent}
+.tint-blush{background:var(--blush);border-color:transparent}
+.tint-lav{background:var(--lavender);border-color:transparent}
+.tint-sage{background:var(--sage);border-color:transparent}
+.tint-butter{background:var(--butter);border-color:transparent}
+.tint-sky{background:var(--sky);border-color:transparent}
+.tap{cursor:pointer}
+.dashed{border:1.5px dashed #cfc1d9;background:transparent}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--plum);color:#fff;border-radius:999px;font:600 14px Outfit;padding:0 18px;min-height:44px}
+.btn.big{width:100%;min-height:56px;font-size:16px;border-radius:16px}
+.btn.line{background:var(--paper);color:var(--plum);border:1.5px solid var(--plum)}
+.btn.coral{background:#f7e4e1;color:#7a2e24}
+.btn.done{background:#e6f0e9;color:#2f6247}
+.btn.sm{min-height:40px;padding:0 14px;font-size:13px}
+.row2{display:flex;gap:10px}
+.muted{color:var(--soft);font-size:13px}
+
+.row{display:flex;align-items:center;gap:11px}
+.row .grow{flex:1;min-width:0}
+.row b{display:block;font-size:14px}
+.chip-icon{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;color:var(--plum);flex:none}
+.chip-icon.sm{width:30px;height:30px;border-radius:9px}
+.chip-icon .icon{width:18px;height:18px}
+
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.tile{border-radius:16px;padding:12px 6px 11px;display:grid;justify-items:center;text-align:center;gap:4px;min-height:88px}
+.tile .icon{width:22px;height:22px;color:var(--plum)}
+.tile b{font-size:12px}
+.tile span{font-size:10px;color:var(--soft);line-height:1.2}
+
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.chip{font-size:11.5px;background:var(--plum-wash);color:var(--plum);border-radius:999px;padding:6px 11px;font-weight:600;min-height:28px;display:inline-flex;align-items:center}
+.chip.on{background:var(--plum);color:#fff}
+
+.why{font-size:12px;color:var(--soft);margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.whybtn{font-size:11.5px;color:var(--plum);font-weight:600;margin-top:9px}
+
+.scene{border-radius:14px;height:104px;margin-top:10px;position:relative;overflow:hidden}
+.scene.morning{background:linear-gradient(135deg,#f6e6ec,#e6ddf1 55%,#dde9e1)}
+.scene.food{background:linear-gradient(135deg,#f7e7da,#f1dce6 60%,#e6ddf1)}
+.scene.clinic{background:linear-gradient(135deg,#e3e7f3,#ebe3f0 60%,#f3e6e0)}
+.scene.family{background:linear-gradient(135deg,#e9e2f1,#f4e4ea 60%,#dde9e1)}
+.scene.walk{background:linear-gradient(135deg,#dde9e1,#e9e2f1 60%,#f3e6e0)}
+.scene i{position:absolute;border-radius:50%;background:rgba(255,255,255,.55)}
+.scene i:nth-child(1){width:120px;height:120px;right:-30px;top:-46px}
+.scene i:nth-child(2){width:60px;height:60px;left:16px;bottom:-18px;background:rgba(78,58,120,.12)}
+.play{position:absolute;left:12px;bottom:10px;background:var(--paper);border-radius:999px;padding:6px 12px 6px 8px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.play::before{content:"";width:0;height:0;border-left:9px solid var(--plum);border-top:5.5px solid transparent;border-bottom:5.5px solid transparent}
+
+.ring{position:relative;width:104px;height:104px}
+.ring svg{position:absolute;inset:0}
+.ring .num{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.ring .num b{font:600 27px/1 Newsreader,serif;color:var(--plum-deep)}
+.ring .num small{display:block;font-size:10px;color:var(--soft);margin-top:2px}
+.overview{display:grid;grid-template-columns:104px 1fr;gap:10px;align-items:center}
+.metrics{display:grid;gap:7px}
+.metric{display:flex;gap:8px;align-items:center}
+.metric span{font-size:10.5px;color:var(--soft);display:block}
+.metric b{font-size:12.5px}
+
+.people{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.avatar{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;margin:0 auto 5px;font:600 17px Newsreader,serif;color:var(--plum-deep);border:2px solid #fff;box-shadow:0 2px 6px rgba(60,40,80,.08)}
+.avatar.add{background:transparent;border:1.5px dashed #c9bcd3;box-shadow:none;color:var(--plum)}
+.people b{font-size:11.5px;display:block}
+.people span{font-size:9.5px;color:var(--soft)}
+.msg{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line)}
+.msg:first-of-type{border-top:0;padding-top:2px}
+.msg .avatar{width:32px;height:32px;font-size:12px;margin:0}
+.msg b{font-size:12.5px}
+.msg .muted{font-size:11.5px}
+.msg time{font-size:10px;color:var(--soft);margin-left:auto;white-space:nowrap}
+
+.bubble{max-width:88%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.45;margin-top:10px}
+.bubble.me{margin-left:auto;background:var(--plum);color:#fff;border-bottom-right-radius:5px}
+.bubble.nura{background:var(--card);border:1px solid var(--line);border-bottom-left-radius:5px}
+.sources{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.src{font-size:10.5px;background:var(--plum-wash);color:var(--plum);border-radius:999px;padding:4px 9px;font-weight:600}
+.boundary{font-size:11.5px;color:var(--soft);margin-top:8px;font-style:italic}
+.looked{font-size:11px;color:var(--soft);margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.trace{background:var(--card);border:1px solid var(--line);border-radius:16px;border-bottom-left-radius:5px;padding:12px 14px;display:grid;gap:9px;margin-top:10px}
+.trace .head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--plum)}
+.step{display:flex;align-items:center;gap:8px;font-size:13px}
+.step.done{color:var(--soft)}
+.step .tick{width:17px;height:17px;border-radius:50%;background:var(--sage);color:var(--good);display:grid;place-items:center;flex:none}
+.step .tick .icon{width:11px;height:11px;stroke-width:2.6}
+.step .spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--plum-wash);border-top-color:var(--plum);flex:none;animation:spin .9s linear infinite}
+.dots{display:inline-flex;gap:3px}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--plum);opacity:.35;animation:pulse 1.2s ease-in-out infinite}
+.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+.composer{display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:8px 8px 8px 16px;font-size:13px;color:var(--soft);cursor:pointer;box-shadow:0 8px 20px rgba(60,40,80,.08)}
+.composer .send{width:38px;height:38px;border-radius:50%;background:var(--plum);color:#fff;display:grid;place-items:center;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-2px)}}
+
+.list{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:2px 14px;margin-top:10px}
+.li{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line);font-size:13.5px;min-height:56px}
+.li:first-child{border-top:0}
+.li .val{margin-left:auto;color:var(--soft);font-size:12px;text-align:right}
+.li .chev{width:15px;height:15px;color:#b9aec2;margin-left:auto;flex:none}
+.sw{width:40px;height:24px;border-radius:999px;background:#d9d0de;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15);transition:left .15s}
+.sw.on{background:var(--plum)}
+.sw.on::after{left:18px}
+
+.spark{width:100%;height:52px;margin-top:8px;display:block}
+.week{display:flex;gap:5px;margin-top:10px}
+.week div{flex:1;height:32px;border-radius:8px;background:#e6f0e9;display:flex;align-items:center;justify-content:center;font-size:11px;color:#2f6247}
+.week div.u{background:#f5ebd9;color:#7a4e0f}
+.week div.m{background:#f7e4e1;color:#7a2e24}
+
+.toast{position:absolute;left:20px;right:20px;top:16px;background:var(--plum-deep);color:#fff;border-radius:16px;padding:12px 15px;font-size:13.5px;line-height:1.4;display:none;z-index:20}
+.toast.on{display:block}
+
+.over{position:absolute;inset:0;border-radius:42px;background:rgba(43,39,51,.32);display:none;align-items:flex-end;z-index:15}
+.over.on{display:flex}
+.sheet{width:100%;max-height:90%;overflow-y:auto;background:#fbf8fa;border-radius:26px 26px 42px 42px;padding:14px 18px 26px;scrollbar-width:none;position:relative}
+.sheet::-webkit-scrollbar{display:none}
+.handle{width:42px;height:5px;border-radius:999px;background:#d9d2de;margin:0 auto 12px}
+.sheet h3{font-size:19px;font-weight:600;font-family:Newsreader,serif}
+.sheet .x{position:absolute;right:18px;top:16px;font-size:13px;color:var(--soft);min-height:32px}
+.opt{display:flex;align-items:center;gap:13px;padding:13px 4px;border-top:1px solid var(--line);font-size:15px;width:100%;text-align:left;min-height:56px}
+.opt:first-of-type{border-top:0}
+.opt i{width:36px;height:36px;border-radius:11px;background:var(--plum-wash);flex:none;display:grid;place-items:center;color:var(--plum)}
+.prog{list-style:none;margin:10px 0 0;padding:0}
+.prog li{font-size:14px;padding:8px 0;color:#b9b2c0;display:flex;gap:9px;align-items:center}
+.prog li::before{content:"";width:8px;height:8px;border-radius:50%;background:#ddd6e2;flex:none}
+.prog li.now{color:var(--ink)}.prog li.now::before{background:var(--plum)}
+.prog li.done{color:var(--ink)}.prog li.done::before{background:var(--good)}
+.field{display:flex;justify-content:space-between;padding:8px 0;font-size:14.5px;border-bottom:1px solid rgba(43,39,51,.07)}
+.field b{font-weight:600;border-bottom:2px solid var(--good)}
+.field b.ask{border-bottom:2px dotted var(--watch)}
+.emg{background:#fff;border-radius:20px;padding:16px;margin-top:10px;border:2px solid #7a2e24}
+.emg .t{font-size:20px;font-weight:600;font-family:Newsreader,serif}
+.emg .kv{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(43,39,51,.08);font-size:14.5px;gap:10px}
+.emg .kv:first-of-type{border-top:0}
+.emg .kv span:first-child{color:var(--soft)}
+
+.cloud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center}
+.w{background:var(--paper);border-radius:999px;padding:9px 14px;font-size:14px;box-shadow:0 3px 10px rgba(60,40,80,.06);border:1.5px solid transparent;min-height:38px;color:var(--ink)}
+.w.big{font-size:16px;font-weight:600}
+.w.on{background:var(--plum);color:#fff;border-color:var(--plum)}
+.w.new{animation:pop .35s ease-out;border-color:rgba(78,58,120,.45);background:#f3eef8}
+.w.new.on{background:var(--plum)}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.hint{font-size:13.5px;color:var(--soft);margin:10px 2px 0;line-height:1.45;min-height:18px}
+.ask-inline{margin-top:9px;background:#f3eef8;border-radius:14px;padding:11px 13px}
+.ask-inline .q{font-size:13.5px;font-weight:600}
+.ask-inline .opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ask-inline .opts button{background:#fff;border-radius:999px;padding:8px 12px;font-size:12.5px;border:1.5px solid transparent;min-height:32px}
+.ask-inline .opts button.on{border-color:var(--plum);color:var(--plum);font-weight:600}
+.stmt{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
+.stmt:first-child{border-top:0}
+.stmt p{flex:1;font-size:14.5px;line-height:1.4;margin:0}
+.stmt .yn{display:flex;gap:4px;flex:none}
+.stmt .yn button{width:36px;height:32px;border-radius:9px;background:#f3eef8;font-size:12px}
+.stmt .yn button.y.on{background:#e6f0e9;color:#2f6247;font-weight:600}
+.stmt .yn button.n.on{background:#f7e4e1;color:#7a2e24;font-weight:600}
+.learn{list-style:none;margin:8px 0 0;padding:0}
+.learn li{font-size:13.5px;padding:7px 0;border-top:1px solid rgba(43,39,51,.06);display:flex;gap:8px;align-items:flex-start;line-height:1.4;animation:pop .3s ease-out}
+.learn li:first-child{border-top:0}
+.learn li i{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none;margin-top:6px}
+.learn li i.w{background:var(--watch)}
+.bar{height:8px;border-radius:999px;background:rgba(43,39,51,.08);margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--plum);border-radius:999px;width:14%;transition:width .5s}
+.up{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.up button{min-height:58px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:12.5px;font-weight:600;padding:0 8px;line-height:1.25}
+.up button.done{background:#e6f0e9;color:#2f6247;border-color:transparent}
+.obar{display:flex;gap:5px;margin:10px 2px 0}
+.obar i{flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.6);cursor:pointer}
+.obar i.on{background:var(--plum)}
+.nav2{display:flex;gap:10px;margin-top:16px}
+.nav2 button{flex:1;min-height:52px;border-radius:999px;background:var(--paper);font-size:15px;font-weight:600;box-shadow:0 6px 16px rgba(60,40,80,.08)}
+.nav2 button.plum{background:var(--plum);color:#fff;flex:2}
+
+.chat-wrap{padding:10px 4px 90px}
+.cmsg{max-width:86%;padding:11px 14px;border-radius:18px;font-size:14px;line-height:1.45;margin-top:10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.cmsg.me{margin-left:auto;background:#dcf4d5}
+.cmsg .ts{font-size:10.5px;color:#8a8492;text-align:right;margin-top:4px}
+.cmsg .btns{display:flex;gap:8px;margin-top:9px}
+.cmsg .btns button{flex:1;background:#fff;border:1px solid #ddd6e2;border-radius:11px;min-height:44px;font-size:13px;color:var(--plum);font-weight:600}
+
+/* ---------- side panel ---------- */
+.panel{background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:20px 22px;position:sticky;top:20px;max-height:844px;display:flex;flex-direction:column}
+.panel h2{font-size:16px;font-weight:600}
+.panel .pl{font-size:12.5px;color:var(--soft);line-height:1.5;margin-top:5px}
+.simtag{display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:#8a5a2f;background:#fbeedb;border-radius:999px;padding:3px 8px;font-weight:700;flex:none}
+.plog{list-style:none;margin:14px 0 0;padding:0;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:12px;flex:1;min-height:120px}
+.plog li{border-top:1px solid rgba(43,39,51,.07);padding-top:12px}
+.plog li:last-child{border-top:0;padding-top:0}
+.pentry-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pentry-head b{font-size:13.5px;font-weight:600}
+.pentry .time{font-size:11px;color:#b3acba;margin-top:2px}
+.pentry p{font-size:13px;color:var(--soft);line-height:1.5;margin:5px 0 0}
+.panel .empty{color:#b3acba;font-size:13px;padding-top:8px}
+
+.notewrap{max-width:1180px;margin:6px auto 60px;padding:0 24px}
+.notewrap p{font-size:12.5px;color:var(--soft);max-width:90ch;line-height:1.55}
+
+@media (prefers-reduced-motion: reduce){
+  .step .spin,.dots i,.w.new,.learn li{animation:none}
+  .sw::after,.bar i{transition:none}
+}
+</style>
+</head>
+<body>
+
+<!-- icon defs, from the approved board -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-5h4v5"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.5 1.1 4.6 2.7 1.1-1.6 2.6-2.7 4.6-2.7 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20Z"/></symbol>
+    <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9-9.3C2 7.4 4.3 4.5 7.4 4.5c2 0 3.5 1.1 4.6 2.7 1.1-1.6 2.6-2.7 4.6-2.7 3.1 0 5.4 2.9 4.4 6.2C19.5 15.4 12 20 12 20Z"/><path d="M6 11.5h3l1.5-2.5 2 5 1.5-2.5h4"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.3c2.6.1 4.4 1.8 5 4.7"/></symbol>
+    <symbol id="i-services" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="3"/><path d="M8.5 7V5.5A2 2 0 0 1 10.5 3.5h3a2 2 0 0 1 2 2V7"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.9-4 3.8-6.2 7.5-6.2s6.6 2.2 7.5 6.2"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h11"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15Z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-pill" viewBox="0 0 24 24"><rect x="2.8" y="8.2" width="18.4" height="7.6" rx="3.8" transform="rotate(-40 12 12)"/><path d="m9.2 8.7 6.1 6.6"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5c-2-1.6-5-2-8-1.5v13c3-.5 6-.1 8 1.5 2-1.6 5-2 8-1.5V5c-3-.5-6-.1-8 1.5Z"/><path d="M12 6.5v13"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M12 19.5s-5-3.1-6-6.2C5.3 11 6.8 9 8.9 9c1.3 0 2.3.7 3.1 1.8C12.8 9.7 13.8 9 15.1 9c2.1 0 3.6 2 2.9 4.3-1 3.1-6 6.2-6 6.2Z"/><path d="M4 15.5 2.5 17M20 15.5l1.5 1.5"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 16.5h4"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4.5 14.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-4.5"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.5 16.5a8 8 0 1 1 15 0"/><path d="m12 12.5 3.5-3"/><circle cx="12" cy="12.5" r="1.2"/></symbol>
+    <symbol id="i-steps" viewBox="0 0 24 24"><path d="M8.5 3.5c-2 0-3 2.3-3 4.6 0 2 1 3.4 1.2 5h3.6c.3-1.6 1.2-3 1.2-5 0-2.3-1-4.6-3-4.6Z"/><path d="M6.8 15.4h3.4v1.4a1.7 1.7 0 0 1-3.4 0Z"/><path d="M15.5 7.5c2 0 3 2.3 3 4.6 0 2-1 3.4-1.2 5h-3.6c-.3-1.6-1.2-3-1.2-5 0-2.3 1-4.6 3-4.6Z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5s-6 6.4-6 10.6a6 6 0 0 0 12 0C18 9.9 12 3.5 12 3.5Z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5.5 3.5h3l1.5 4-2 1.5a11 11 0 0 0 7 7l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 3.5 5.5a2 2 0 0 1 2-2Z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 18 8.5 6h1L14 18M5.6 14h6.8"/><path d="M15.5 18l2.5-7h.6l2.4 7M16.3 15.8h3.8"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.6 5.2 3.6 8.5S14.5 18.2 12 20.5c-2.5-2.3-3.6-5.2-3.6-8.5S9.5 5.8 12 3.5Z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-house" viewBox="0 0 24 24"><path d="M4 11.5 12 4.5l8 7"/><path d="M6 10v9.5h12V10"/><path d="M10 19.5v-4.5h4v4.5"/></symbol>
+    <symbol id="i-bus" viewBox="0 0 24 24"><rect x="4.5" y="4" width="15" height="13" rx="3"/><path d="M4.5 11h15M8 17v2.5M16 17v2.5"/><circle cx="8.5" cy="14" r=".6"/><circle cx="15.5" cy="14" r=".6"/></symbol>
+    <symbol id="i-bowl" viewBox="0 0 24 24"><path d="M3.5 11.5h17a8.5 8.5 0 0 1-17 0Z"/><path d="M9 8c0-1.5 1-1.5 1-3M13 8c0-1.5 1-1.5 1-3"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12 20 3M16.5 6.5 19 9M13.5 9.5 16 12"/></symbol>
+    <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="14" cy="5" r="2"/><path d="M11 9l3-1 3 3-2 2 1 6M12 13l-4 2v5M8 15l-3 2"/></symbol>
+  </defs>
+</svg>
+
+<div class="strip">
+  <div class="band-l"><b>Nura</b> — full experience reference<span class="tag">2026-09-18 — for agreement</span></div>
+  <div class="legend">
+    <span><i class="lp"></i>Pa — signal &amp; owner of the record</span>
+    <span><i class="lm"></i>Mei — the chief, his daughter, sets things up</span>
+    <span><i class="ls"></i>Siti — helper, today's list on WhatsApp only</span>
+  </div>
+</div>
+
+<div class="header">
+  <div class="eyebrow">Nura · interactive reference</div>
+  <h1>Everything tappable, one file, real mechanism narrated</h1>
+  <p>The look is the approved board. The onboarding is the owner's mock. The traces, clips and reviews are the interaction prototype. Switch who is holding the phone; every tap on the left updates the "What Nura is doing" panel on the right with the real mechanism it stands in for.</p>
+</div>
+
+<div class="pswitch" id="pswitch">
+  <button class="on" data-p="pa" onclick="setPersona('pa',this)"><i class="lp"></i>Pa</button>
+  <button data-p="mei" onclick="setPersona('mei',this)"><i class="lm"></i>Mei, the chief</button>
+  <button data-p="siti" onclick="setPersona('siti',this)"><i class="ls"></i>Siti, on WhatsApp</button>
+</div>
+
+<div class="stage">
+<div class="phone">
+<div class="screen wash-home" id="screen">
+<div class="toast" id="toast"></div>
+
+<!-- ============================================================ PA ============================================================ -->
+<div class="persona on" id="p-pa">
+
+  <!-- ---------- 0 · Welcome ---------- -->
+  <div class="view on" data-v="welcome">
+    <div class="scr-pad">
+      <div class="scene morning" style="height:150px;margin-top:6px"><i></i><i></i></div>
+      <svg class="icon" style="width:28px;height:28px;color:var(--plum);stroke-width:2;margin-top:14px" aria-hidden="true"><use href="#i-heart"/></svg>
+      <div class="serif" style="font:600 38px/1 Newsreader,serif;color:var(--plum);margin-top:2px">Nura</div>
+      <p class="serif" style="font:500 22px/1.2 Newsreader,serif;color:var(--plum-deep);margin-top:10px">Your health, kept together. Your family, close by.</p>
+      <p class="muted" style="margin-top:4px">A caring companion for older adults and the family who look after them.</p>
+      <div class="grid6" style="grid-template-columns:repeat(3,1fr);margin-top:16px">
+        <div class="tile tint-blush"><svg class="icon"><use href="#i-pill"/></svg><b>Remember</b><span>Medicines and papers</span></div>
+        <div class="tile tint-lav"><svg class="icon"><use href="#i-people"/></svg><b>Share</b><span>With family you choose</span></div>
+        <div class="tile tint-sage"><svg class="icon"><use href="#i-cal"/></svg><b>Prepare</b><span>For every visit</span></div>
+      </div>
+      <button class="btn big" style="margin-top:18px" onclick="go('pa','signin')">Get started</button>
+      <div class="muted" style="text-align:center;margin-top:10px">Already have an account? <b style="color:var(--plum)">Sign in</b></div>
+    </div>
+  </div>
+
+  <!-- ---------- 0b · Sign in by phone ---------- -->
+  <div class="view" data-v="signin">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('pa','welcome')"><svg class="icon"><use href="#i-back"/></svg></button><span></span><span class="side"></span></div>
+      <h2 class="serif" style="font:500 24px/1.2 Newsreader,serif;margin-top:16px">Let's start with you</h2>
+      <p class="muted" style="margin-top:6px">Use a phone number you already have. No new password.</p>
+      <div class="card" style="margin-top:16px">
+        <div class="muted" style="margin-bottom:6px">Phone number</div>
+        <div style="font-size:19px;font-weight:600">+60 12 345 6789</div>
+      </div>
+      <button class="btn big" style="margin-top:14px" onclick="note('Sending a one-time code','A 6-digit SMS code is sent to the number on file. It is checked, never stored, and a session token is issued — no password to remember or leak.');go('pa','code')">Send me a code</button>
+      <div class="card tint-lav" style="margin-top:16px"><b style="font-size:14px">Setting up for someone else?</b><div class="muted" style="margin-top:3px">You can do that after you're in. It works the same way, in their name and language.</div></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="code">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('pa','signin')"><svg class="icon"><use href="#i-back"/></svg></button><span></span><span class="side"></span></div>
+      <h2 class="serif" style="font:500 24px/1.2 Newsreader,serif;margin-top:16px">Enter the code</h2>
+      <p class="muted" style="margin-top:6px">Sent to +60 12 345 6789</p>
+      <div class="card" style="margin-top:16px;text-align:center;letter-spacing:.5em;font-size:26px;font-weight:600">4 8 2 9 1 0</div>
+      <button class="btn big" style="margin-top:14px" onclick="note('Code verified','A short-lived session token is issued for this device only. Nothing about the person is inferred from the phone number itself — it is only a channel to reach him.');go('pa','ob0')">Confirm</button>
+    </div>
+  </div>
+
+  <!-- ---------- ONBOARDING (from the owner's mock) ---------- -->
+  <div class="view" data-v="ob0" data-ob="0">
+    <div class="scr-pad">
+      <div class="status"><b>Set up</b><span id="ob-name">About you</span></div>
+      <div class="obar" id="obbar"></div>
+      <h2 class="serif" style="font:500 22px/1.2 Newsreader,serif;margin-top:16px">A few things about you</h2>
+      <div class="muted" style="margin-top:6px">These set your reference ranges and how Nura talks to you.</div>
+      <div class="card" style="margin-top:12px">
+        <div class="muted" style="margin-bottom:2px">Name</div><div style="font-size:17px;font-weight:600" id="ob-fname">Lim Ah Kow</div>
+      </div>
+      <div class="row2" style="margin-top:8px">
+        <div class="card" style="flex:1"><div class="muted">Born</div><div style="font-size:17px;font-weight:600">1952</div></div>
+        <div class="card" style="flex:1"><div class="muted">Height / weight</div><div style="font-size:15px;font-weight:600">170 cm · 74 kg</div></div>
+      </div>
+      <div class="sec"><h3>Language you'd like to hear</h3></div>
+      <div class="chips" id="ob-lang">
+        <button class="chip on" onclick="segp(this,'ob-lang')">English</button><button class="chip" onclick="segp(this,'ob-lang')">Malay</button><button class="chip" onclick="segp(this,'ob-lang')">Mandarin</button><button class="chip" onclick="segp(this,'ob-lang')">Hokkien</button>
+      </div>
+      <div class="sec"><h3>How do you like things?</h3></div>
+      <div class="chips" id="ob-mode">
+        <button class="chip on" onclick="segp(this,'ob-mode')">Detailed</button><button class="chip" onclick="segp(this,'ob-mode')">Simple, one thing at a time</button>
+      </div>
+      <div class="nav2"><button onclick="go('pa','code')">Back</button><button class="plum" onclick="note('Writing the profile','Name, birth year, height and weight set his reference ranges. Language and pace are stored as preferences the whole app renders through, on every screen, not only here.');go('pa','ob1')">Next</button></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="ob1" data-ob="1">
+    <div class="scr-pad">
+      <div class="status"><b>Set up</b><span>Your health</span></div>
+      <div class="obar" id="obbar1"></div>
+      <h2 class="serif" style="font:500 22px/1.2 Newsreader,serif;margin-top:16px">What's part of your health?</h2>
+      <div class="row" style="align-items:flex-start;gap:10px;margin-top:10px">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--plum);flex:none"></div>
+        <p class="muted" id="cloudmsg" style="margin:0">Tap anything that applies. When you tap one, Nura shows what often goes with it. Nothing here is a diagnosis; it tells Nura where to look.</p>
+      </div>
+      <div class="cloud" id="cloud"></div>
+      <div id="askbox"></div>
+      <div class="row" style="margin-top:12px;justify-content:space-between">
+        <span class="muted" id="cnt">Nothing yet</span>
+        <button style="color:var(--plum);font-weight:600;font-size:13px" onclick="toast('Tell me in your own words and Nura will place them.')">Or just tell me</button>
+      </div>
+      <div class="nav2"><button onclick="go('pa','ob0')">Back</button><button class="plum" id="ob1next" onclick="note('Reading the taps','Each word you tapped becomes a fact: a condition, told by you, with today\'s date as when it was said and full confidence because you said it yourself — not inferred.');go('pa','ob2')">Next</button></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="ob2" data-ob="2">
+    <div class="scr-pad">
+      <div class="status"><b>Set up</b><span>Check</span></div>
+      <div class="obar" id="obbar2"></div>
+      <h2 class="serif" style="font:500 22px/1.2 Newsreader,serif;margin-top:16px">Here's what Nura understood</h2>
+      <div class="row" style="align-items:flex-start;gap:10px;margin-top:10px">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--plum);flex:none"></div>
+        <p class="muted" style="margin:0">Say if any of this isn't right. Better to fix it now than build on it.</p>
+      </div>
+      <div class="card" id="stmts" style="margin-top:12px"></div>
+      <div class="card" style="margin-top:10px"><b style="font-size:14px">What Nura doesn't know yet</b><ul class="muted" id="gaps" style="margin:8px 0 0 18px;padding:0;line-height:1.7"></ul></div>
+      <div class="nav2"><button onclick="go('pa','ob1')">Back</button><button class="plum" onclick="note('Read-back checkpoint','Every statement you confirmed becomes a fact with a validity window (today) and a confidence state (told-by-self, high). Anything you marked No is kept but never reasoned from until fixed.');go('pa','ob3')">Next</button></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="ob3" data-ob="3">
+    <div class="scr-pad">
+      <div class="status"><b>Set up</b><span>Records</span></div>
+      <div class="obar" id="obbar3"></div>
+      <h2 class="serif" style="font:500 22px/1.2 Newsreader,serif;margin-top:16px">Now, the fuller picture</h2>
+      <div class="row" style="align-items:flex-start;gap:10px;margin-top:10px">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--plum);flex:none"></div>
+        <p class="muted" id="recmsg" style="margin:0">Nura would like to build the history from your records — any year, no need to sort them.</p>
+      </div>
+      <div class="up">
+        <button onclick="learn(this,'dl')">Add a discharge letter</button>
+        <button onclick="learn(this,'lr')">Add lab results</button>
+        <button onclick="learn(this,'rx')">Snap the medicine bag</button>
+        <button onclick="learn(this,'cc')">Add a clinic card</button>
+        <button onclick="learn(this,'in')">Snap the insurance card</button>
+        <button onclick="toast('Forward anything to +60 12 345 6789 and Nura files it here.')">Forward on WhatsApp</button>
+      </div>
+      <div class="card" style="margin-top:12px"><b style="font-size:14px">What I've learned</b><div class="bar"><i id="obbarpct"></i></div><ul class="learn" id="learned"><li><i class="w"></i>Only what you told me so far. Records make it real.</li></ul></div>
+      <div class="nav2"><button onclick="go('pa','ob2')">Back</button><button class="plum" onclick="note('Reconciling records','Each upload runs the same pipeline the Add-a-record flow uses later: extract fields with a confidence per field, match against what you already said, keep the source page reference.');go('pa','ob4')">Next</button></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="ob4" data-ob="4">
+    <div class="scr-pad">
+      <div class="status"><b>Set up</b><span>A few questions</span></div>
+      <div class="obar" id="obbar4"></div>
+      <h2 class="serif" style="font:500 22px/1.2 Newsreader,serif;margin-top:16px">Your records raised a few questions</h2>
+      <div class="row" style="align-items:flex-start;gap:10px;margin-top:10px">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--plum);flex:none"></div>
+        <p class="muted" style="margin:0">Short ones. They close the gaps between the papers and today.</p>
+      </div>
+      <div id="rq" style="margin-top:8px"></div>
+      <div class="nav2"><button onclick="go('pa','ob3')">Back</button><button class="plum" onclick="note('Filing the first questions','Each answer becomes a fact too, and an unanswered gap is queued as a question for the next real visit — the same list the Services tab shows later.');go('pa','ob5')">Next</button></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="ob5" data-ob="5">
+    <div class="scr-pad">
+      <div class="status"><b>Set up</b><span>Ready</span></div>
+      <div class="obar" id="obbar5"></div>
+      <h2 class="serif" style="font:500 22px/1.2 Newsreader,serif;margin-top:16px">Your app is ready</h2>
+      <div class="row" style="align-items:flex-start;gap:10px;margin-top:10px">
+        <div style="width:30px;height:30px;border-radius:50%;background:var(--plum);flex:none"></div>
+        <p class="muted" style="margin:0">Everything you'll see is built from this. Nura will ask for the rest one thing at a time, when it's convenient: your day, your family, your doctors.</p>
+      </div>
+      <div class="card" id="summary" style="margin-top:12px"></div>
+      <div class="card tint-lav" style="margin-top:10px"><div class="muted">Your Today card</div>
+        <div class="card" style="margin-top:8px"><b style="font-size:17px" id="pv-t">Your blood pressure tablet</b><div class="muted" style="margin-top:3px" id="pv-s">One with breakfast.</div></div>
+      </div>
+      <button class="btn big" style="margin-top:16px" onclick="note('Opening the app','Session moves from onboarding to Home. Every card you will see now names the fact or record it was rendered from — nothing here is generic.');finishOnboarding()">Open Nura</button>
+    </div>
+  </div>
+
+  <!-- ---------- HOME ---------- -->
+  <div class="view" data-v="home">
+    <div class="scr-pad">
+      <div class="topbar"><button aria-label="Menu"><svg class="icon"><use href="#i-menu"/></svg></button><div class="word">Nura</div><button aria-label="Notifications"><svg class="icon"><use href="#i-bell"/></svg></button></div>
+      <div class="row" style="justify-content:space-between;align-items:flex-start;margin-top:8px">
+        <div><h2 class="serif" style="font:600 22px/1.2 Newsreader,serif">Good morning, Pa 👋</h2><p class="muted" style="margin-top:5px">How are you feeling today?</p></div>
+      </div>
+      <div class="card tint-peach row" style="margin-top:14px">
+        <div class="grow"><b>Daily check-in</b><div class="muted" style="margin:3px 0 9px">Tell Nura how you feel today</div><button class="btn sm" onclick="note('Opening the check-in','A short word-cloud, same mechanic as onboarding, tapped against today\'s date. It writes a SYMPTOM event, and — since RE-02 — a symptom.reported fact the visit brief actually reads.')">Check in</button></div>
+      </div>
+      <div class="composer tap" style="margin-top:14px" onclick="go('pa','ask')"><span>Ask about your health…</span><div class="send"><svg class="icon" style="width:16px;height:16px;color:#fff"><use href="#i-send"/></svg></div></div>
+      <div class="sec"><h3>What would you like to do?</h3></div>
+      <div class="grid6">
+        <div class="tile tint-blush tap" onclick="go('pa','health')"><svg class="icon"><use href="#i-pulse"/></svg><b>Health</b><span>Track and check</span></div>
+        <div class="tile tint-sky tap" onclick="push('pa','meds')"><svg class="icon"><use href="#i-pill"/></svg><b>Medicines</b><span>Doses and reminders</span></div>
+        <div class="tile tint-sage tap" onclick="go('pa','connect')"><svg class="icon"><use href="#i-people"/></svg><b>Connect</b><span>Family and friends</span></div>
+        <div class="tile tint-lav tap" onclick="push('pa','activity')"><svg class="icon"><use href="#i-walk"/></svg><b>Activities</b><span>Stay busy</span></div>
+        <div class="tile tint-peach tap" onclick="go('pa','services')"><svg class="icon"><use href="#i-hand"/></svg><b>Care services</b><span>Help at home</span></div>
+        <div class="tile tint-butter tap" onclick="go('pa','services')"><svg class="icon"><use href="#i-doc"/></svg><b>Guides</b><span>Read and learn</span></div>
+      </div>
+      <div class="card dashed row tap" style="margin-top:14px" onclick="openOv('add')">
+        <div class="chip-icon tint-lav"><svg class="icon"><use href="#i-upload"/></svg></div>
+        <div class="grow"><b>Add a health report</b><div class="muted">A PDF, or a photo of a paper</div></div>
+        <svg class="icon" style="width:16px;color:#b9aec2"><use href="#i-chev"/></svg>
+      </div>
+
+      <div class="sec"><h3>Coming up</h3><a>See all</a></div>
+      <div class="card tint-peach row"><div class="chip-icon" style="background:#fffaf6"><svg class="icon"><use href="#i-cal"/></svg></div><div class="grow"><b>Dr Tan, heart clinic</b><div class="muted">Thursday · 10:00 AM · Mei driving</div></div></div>
+
+      <div class="sec"><h3>For you today</h3></div>
+      <div class="card row" style="align-items:center">
+        <div class="chip-icon tint-butter"><svg class="icon"><use href="#i-pill"/></svg></div>
+        <div class="grow"><b>Your blood pressure tablet</b><div class="muted">One with breakfast. Amlodipine, 5 mg.</div></div>
+        <button class="btn sm" id="take-home" onclick="take(this)">Taken</button>
+      </div>
+
+      <div class="card tap" onclick="openOv('clip')">
+        <div class="scene morning"><i></i><i></i><div class="play">20 seconds</div></div>
+        <div style="margin-top:11px"><b>Your kidney check, explained</b><div class="muted" style="margin-top:3px">A little higher than June. Nothing urgent. One question for Thursday.</div></div>
+        <button class="whybtn" onclick="event.stopPropagation();whySheet('Because a new result came from Gleneagles on 9 Sep, matched against your kidney readings since 2024. Told in Hokkien, your set language.')">Why am I seeing this? ›</button>
+      </div>
+
+      <div class="card tap" onclick="openOv('healthhub')">
+        <div class="row" style="align-items:flex-start"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-book"/></svg></div><div class="grow"><b>Living well with a water pill</b><div class="muted" style="margin-top:3px">From HealthHub, Singapore</div></div></div>
+        <div class="chips"><span class="chip">HealthHub</span></div>
+        <button class="whybtn" onclick="event.stopPropagation();whySheet('You started furosemide (a water pill) on 1 Sep. Nura matched it to HealthHub\'s own page on water pills, published for the public.')">Why am I seeing this? ›</button>
+      </div>
+
+      <div class="card tint-sage tap" onclick="whySheet('A rotating fact, refreshed weekly, chosen because it touches a medicine or condition on your record — never a diagnosis, always a general fact.')">
+        <b>Did you know?</b><div class="muted" style="margin-top:3px">A short walk after dinner can help both your pressure and your sleep.</div>
+      </div>
+
+      <div class="card tap" onclick="whySheet('Because you live in Air Itam. From the Penang health office bulletin, published this week — a local, seasonal signal, not personal to your record.')">
+        <b>Dengue cases up in Air Itam</b><div class="muted" style="margin-top:3px">Check the pots on the balcony this week.</div>
+      </div>
+
+      <div class="card tap" onclick="openOv('clip3')">
+        <div class="scene walk"><i></i><i></i><div class="play">Your week, 30 seconds</div></div>
+        <div style="margin-top:11px"><b>Last week went well</b><div class="muted" style="margin-top:3px">Six of seven walks. Pressure steady. One late tablet.</div></div>
+      </div>
+
+      <button class="btn coral big" style="margin-top:16px" onclick="openOv('unwell')">I'm not feeling well</button>
+    </div>
+  </div>
+
+  <!-- ---------- HEALTH ---------- -->
+  <div class="view" data-v="health">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('pa','home')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Health</div><button onclick="push('pa','activity')" aria-label="Log"><svg class="icon"><use href="#i-cal"/></svg></button></div>
+      <div class="card tint-peach">
+        <b style="font-size:15px">This week</b><div class="muted" style="margin:2px 0 10px">You took most of your tablets.</div>
+        <div class="overview">
+          <div class="ring"><svg viewBox="0 0 104 104" width="104" height="104" aria-hidden="true"><circle cx="52" cy="52" r="42" fill="none" stroke="#fbe9d8" stroke-width="9"/><circle id="ringarc" cx="52" cy="52" r="42" fill="none" stroke="#4e3a78" stroke-width="9" stroke-linecap="round" stroke-dasharray="226.2 263.9" transform="rotate(-90 52 52)"/></svg>
+            <div class="num"><div><b id="ringnum">12</b><small>of <span id="ringtot">14</span> doses</small></div></div>
+          </div>
+          <div class="metrics">
+            <div class="metric"><div class="chip-icon sm tint-blush"><svg class="icon" style="width:15px;height:15px"><use href="#i-steps"/></svg></div><div><span>Steps</span><b>3,210</b></div></div>
+            <div class="metric"><div class="chip-icon sm tint-sage"><svg class="icon" style="width:15px;height:15px"><use href="#i-pulse"/></svg></div><div><span>Heart rate</span><b>76 bpm</b></div></div>
+            <div class="metric"><div class="chip-icon sm tint-lav"><svg class="icon" style="width:15px;height:15px"><use href="#i-moon"/></svg></div><div><span>Sleep</span><b>6h 40m</b></div></div>
+            <div class="metric"><div class="chip-icon sm tint-sky"><svg class="icon" style="width:15px;height:15px"><use href="#i-drop"/></svg></div><div><span>Water</span><b>5 of 8 cups</b></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="sec"><h3>Readings</h3><a>See all</a></div>
+      <div class="card row"><div class="chip-icon tint-blush"><svg class="icon"><use href="#i-gauge"/></svg></div><div class="grow"><b>Blood pressure</b><div class="muted">132/84 · this morning, typed by you</div></div></div>
+      <div class="card row"><div class="chip-icon tint-lav"><svg class="icon"><use href="#i-pulse"/></svg></div><div class="grow"><b>Kidney number</b><div class="muted">98 · Gleneagles, 9 Sep</div></div></div>
+      <div class="sec"><h3>Meals</h3></div>
+      <div class="card row"><div class="grow"><b>Breakfast</b><div class="muted">Not logged</div></div><span class="muted">Answered: no breakfast</span></div>
+      <div class="sec"><h3>Next tablet</h3><a>See all</a></div>
+      <div class="card row"><div class="chip-icon tint-butter"><svg class="icon"><use href="#i-bell"/></svg></div><div class="grow"><b>Blood pressure tablet</b><div class="muted">1 tablet · after breakfast</div></div><div style="font-weight:700;font-size:13px">8:00 AM</div></div>
+      <div class="card tint-sage"><b style="font-size:14px">Today's tip</b><div class="muted" style="margin-top:3px">A short walk after dinner is a good time to talk with family.</div></div>
+      <div class="sec"><h3>Ledger</h3></div>
+      <div class="card row tap" onclick="openOv('ledger')"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-shield"/></svg></div><div class="grow"><b>Costs this year</b><div class="muted">RM 4,860 · RM 3,200 claimed</div></div><svg class="icon" style="width:16px;color:#b9aec2"><use href="#i-chev"/></svg></div>
+    </div>
+  </div>
+
+  <!-- ---------- CONNECT ---------- -->
+  <div class="view" data-v="connect">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('pa','home')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Connect</div><button aria-label="Add"><svg class="icon"><use href="#i-plus"/></svg></button></div>
+      <div class="sec"><h3>Your family</h3><a>See all</a></div>
+      <div class="people">
+        <div><div class="avatar tint-blush">M</div><b>Mei</b><span>Daughter</span></div>
+        <div><div class="avatar tint-sky">K</div><b>Kit</b><span>Son</span></div>
+        <div><div class="avatar tint-sage">S</div><b>Siti</b><span>Helper</span></div>
+        <div><div class="avatar add"><svg class="icon"><use href="#i-plus"/></svg></div><b>Add</b><span>Someone new</span></div>
+      </div>
+      <div class="card tint-peach">
+        <div class="muted">Next call</div><b style="font-size:15px">Call with Mei</b><div class="muted" style="margin:2px 0 9px">Saturday 19 Sep · 7:30 PM</div>
+        <div class="row2"><button class="btn sm" onclick="toast('Calling Mei…')"><svg class="icon" style="width:13px;height:13px"><use href="#i-phone"/></svg>Call</button><button class="btn sm line" onclick="toast('Pick a new time — Mei will confirm.')">Change</button></div>
+      </div>
+      <div class="sec"><h3>Near you</h3><a>See all</a></div>
+      <div class="grid6" style="grid-template-columns:repeat(3,1fr)">
+        <div class="tile tint-blush"><svg class="icon"><use href="#i-pin"/></svg><b>Events</b><span>Things to do nearby</span></div>
+        <div class="tile tint-sage"><svg class="icon"><use href="#i-hand"/></svg><b>Volunteer</b><span>Give your time</span></div>
+        <div class="tile tint-butter"><svg class="icon"><use href="#i-people"/></svg><b>Groups</b><span>You're not alone</span></div>
+      </div>
+      <div class="sec"><h3>Messages</h3><a>See all</a></div>
+      <div class="card" style="padding:8px 14px" id="pa-messages">
+        <div class="msg"><div class="avatar tint-blush">M</div><div style="min-width:0"><b>Mei</b><div class="muted">I'll bring your tablets on Sunday.</div></div><time>10:30 AM</time></div>
+        <div class="msg"><div class="avatar tint-lav" style="color:var(--plum)"><svg class="icon" style="width:15px;height:15px"><use href="#i-heart"/></svg></div><div style="min-width:0"><b>Heart clinic</b><div class="muted">Your visit on Thursday is booked.</div></div><time>Yesterday</time></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------- SERVICES ---------- -->
+  <div class="view" data-v="services">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('pa','home')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Services</div><span class="side"></span></div>
+      <div class="sec"><h3>Your visits</h3><a>See all</a></div>
+      <div class="card tint-lav">
+        <div class="row" style="align-items:flex-start"><div class="chip-icon" style="background:#fffaf6"><svg class="icon"><use href="#i-cal"/></svg></div><div class="grow"><b>Dr Tan, heart clinic</b><div class="muted">Thursday 10:00 AM · Mei driving</div></div></div>
+        <div style="margin-top:9px;display:grid;gap:5px;font-size:12.5px">
+          <div class="row" style="gap:7px"><svg class="icon" style="width:14px;height:14px;color:var(--good)"><use href="#i-check"/></svg>Bring the pressure log</div>
+          <div class="row" style="gap:7px"><svg class="icon" style="width:14px;height:14px;color:var(--good)"><use href="#i-check"/></svg>Insurance letter approved</div>
+        </div>
+        <button class="btn sm" style="margin-top:10px" onclick="tog('svc-qs')"><span id="qs-count">Your questions, 3</span></button>
+        <ul class="list" id="svc-qs" style="display:none;margin-top:8px">
+          <li class="li">Is the water pill making my kidney number go up?</li>
+          <li class="li">My pressure is higher in the mornings. Is that OK?</li>
+          <li class="li">Do I still need both pressure tablets?</li>
+        </ul>
+      </div>
+      <div class="sec"><h3>Care services</h3><a>See all</a></div>
+      <div class="grid6" style="grid-template-columns:repeat(2,1fr)">
+        <div class="tile tint-blush tap" onclick="openOv('providers')" data-cat="Nursing at home"><svg class="icon"><use href="#i-house"/></svg><b>Nursing at home</b><span>A nurse comes to you</span></div>
+        <div class="tile tint-sage tap" onclick="openOv('providers')" data-cat="Physio"><svg class="icon"><use href="#i-steps"/></svg><b>Physio</b><span>Keep moving well</span></div>
+        <div class="tile tint-butter tap" onclick="openOv('providers')" data-cat="Meals"><svg class="icon"><use href="#i-bowl"/></svg><b>Meals</b><span>Delivered to you</span></div>
+        <div class="tile tint-sky tap" onclick="openOv('providers')" data-cat="Transport"><svg class="icon"><use href="#i-bus"/></svg><b>Transport</b><span>To your visits</span></div>
+      </div>
+      <div class="sec"><h3>Guides</h3><a>See all</a></div>
+      <div class="list">
+        <div class="li tap" onclick="openOv('clip')"><div class="chip-icon sm tint-peach"><svg class="icon" style="width:15px;height:15px"><use href="#i-book"/></svg></div>Understanding your kidney check<svg class="icon chev"><use href="#i-chev"/></svg></div>
+        <div class="li tap" onclick="openOv('clip2')"><div class="chip-icon sm tint-lav"><svg class="icon" style="width:15px;height:15px"><use href="#i-doc"/></svg></div>Your water pill and bananas<svg class="icon chev"><use href="#i-chev"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------- PROFILE ---------- -->
+  <div class="view" data-v="profile">
+    <div class="scr-pad">
+      <div class="topbar"><span class="side"></span><div class="mid">Profile</div><span class="side"></span></div>
+      <div class="row" style="margin-top:6px"><div class="avatar tint-peach" style="width:56px;height:56px;font-size:20px">P</div><div><b class="serif" style="font:600 19px/1.15 Newsreader,serif">Pa</b><div class="muted">Mei looks after your record with you</div></div></div>
+      <div class="list">
+        <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-globe"/></svg>Language<span class="val">English</span></div>
+        <div class="li"><svg class="icon" style="color:var(--plum)"><use href="#i-text"/></svg>Text size<span class="val">Large</span></div>
+        <div class="li tap" onclick="openOv('emergency')"><svg class="icon" style="color:var(--plum)"><use href="#i-heart"/></svg>Emergency card<svg class="icon chev"><use href="#i-chev"/></svg></div>
+        <div class="li tap" onclick="openOv('insurance')"><svg class="icon" style="color:var(--plum)"><use href="#i-shield"/></svg>Insurance<svg class="icon chev"><use href="#i-chev"/></svg></div>
+        <div class="li tap" onclick="openOv('keys')"><svg class="icon" style="color:var(--plum)"><use href="#i-lock"/></svg>Who can see what<svg class="icon chev"><use href="#i-chev"/></svg></div>
+        <div class="li tap" onclick="openOv('consents')"><svg class="icon" style="color:var(--plum)"><use href="#i-key"/></svg>Consents<svg class="icon chev"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="sec"><h3>What Nura uses</h3></div>
+      <div class="muted" style="margin:-2px 2px 0">Choose what Nura may use to suggest reads and videos for you.</div>
+      <div class="list">
+        <div class="li">Your medicines<span class="sw on" role="img" aria-label="On" onclick="this.classList.toggle('on');note('Preference changed','Written as a Fact under the preference dimension — the same mechanism as \'stop using my food for suggestions\'. It narrows what the recommendation engine may read, not what the record keeps.')"></span></div>
+        <div class="li">Your readings<span class="sw on" role="img" aria-label="On" onclick="this.classList.toggle('on')"></span></div>
+        <div class="li">What you eat<span class="sw on" role="img" aria-label="On" onclick="this.classList.toggle('on')"></span></div>
+        <div class="li">What you ask about<span class="sw" role="img" aria-label="Off" onclick="this.classList.toggle('on')"></span></div>
+      </div>
+      <button class="btn line big" style="margin-top:16px" onclick="toast('Signed out. This reference stays on this screen.')">Sign out</button>
+    </div>
+  </div>
+
+  <!-- ---------- pushed: Medicines ---------- -->
+  <div class="view" data-v="meds">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="pop('pa')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Medicines</div><button onclick="openOv('add')" aria-label="Add"><svg class="icon"><use href="#i-camera"/></svg></button></div>
+      <div class="sec"><h3>Morning</h3></div>
+      <div class="card row"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-pill"/></svg></div><div class="grow"><b>Blood pressure tablet</b><div class="muted">Amlodipine, 5 mg. <b id="cnt-c1">12</b> left, buy by Thu 25 Sep.</div></div><button class="btn sm" onclick="take(this)">Taken</button></div>
+      <div class="card row"><div class="chip-icon tint-blush"><svg class="icon"><use href="#i-pill"/></svg></div><div class="grow"><b>Heart tablet</b><div class="muted">Aspirin, 100 mg. After food.</div></div><button class="btn sm" onclick="take(this)">Taken</button></div>
+      <div class="sec"><h3>Dinner</h3></div>
+      <div class="card"><div class="row"><div class="chip-icon tint-butter"><svg class="icon"><use href="#i-pill"/></svg></div><div class="grow"><b>Sugar tablet</b><div class="muted">Metformin, 500 mg. With food. <b id="cnt-c3">3</b> left.</div></div></div>
+        <div class="row2" style="margin-top:8px"><button class="btn sm" onclick="toast('Mei has been asked to order. She usually does it the same day.')">Ask Mei to order</button><button class="btn sm line" onclick="toast('Snap the strip and Nura will recount.')">I have more</button></div>
+        <div class="why">Skip on fasting days. It can upset the stomach without food.</div>
+      </div>
+      <div class="card row"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-pill"/></svg></div><div class="grow"><b>Water pill</b><div class="muted">Furosemide, 20 mg. Morning, not after 2 pm.</div></div><button class="btn sm" onclick="take(this)">Taken</button></div>
+      <div class="sec"><h3>Ask about a pill</h3></div>
+      <div class="card tap" onclick="toast('Point the camera at the pill. Nura will tell you what it is for.')"><b>What is this white pill?</b><div class="muted" style="margin-top:3px">Take a photo and Nura will tell you.</div></div>
+    </div>
+  </div>
+
+  <!-- ---------- pushed: Activities ---------- -->
+  <div class="view" data-v="activity">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="pop('pa')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Activities</div><span class="side"></span></div>
+      <div class="card tint-sage"><b style="font-size:14px">This week</b><div class="week" style="margin-top:8px"><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div class="u">S</div></div></div>
+      <div class="sec"><h3>Log a walk</h3></div>
+      <div class="card scene walk" style="height:100px"><i></i><i></i></div>
+      <div class="row2" style="margin-top:10px">
+        <button class="btn big" onclick="note('Writing a lifestyle log','A steps/duration entry is written through the profile\'s own metrics endpoint on your explicit tap — never sent while you are still walking. It updates today\'s ring on the Health tab.');toast('Logged: 22-minute walk. Nice work, Pa.')">I walked today</button>
+      </div>
+      <div class="sec"><h3>Water</h3></div>
+      <div class="card row"><div class="grow"><b>5 of 8 cups</b></div><button class="btn sm" onclick="toast('Logged one more cup.')">+1 cup</button></div>
+      <div class="sec"><h3>Meals</h3></div>
+      <div class="card row"><div class="grow"><b>Breakfast</b><div class="muted">Not logged yet</div></div><button class="btn sm line" onclick="toast('Recorded: no breakfast today.')">No breakfast</button></div>
+    </div>
+  </div>
+
+  <!-- ---------- pushed: Ask Nura (Home tab stays highlighted, as the board draws it) ---------- -->
+  <div class="view" data-v="ask">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="pop('pa')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Ask Nura</div><span class="side"></span></div>
+      <div class="bubble me">When did my blood pressure tablet change?</div>
+      <div class="bubble nura">
+        Dr Tan changed it from 5 mg to 10 mg on Wednesday 2 September.
+        <div class="sources"><span class="src">Medicines</span><span class="src">Visit, 2 Sep</span></div>
+        <div class="boundary">This is not a doctor's advice. Ask Dr Tan.</div>
+        <div class="looked tap" onclick="tog('look1')">What Nura looked at ›</div>
+        <div id="look1" style="display:none;font-size:11.5px;color:var(--soft);margin-top:6px">Medicines (dose history), Visits (2 Sep transcript summary)</div>
+      </div>
+      <div class="bubble me">Should I bring anything to my visit on Thursday?</div>
+      <div class="trace" id="asktrace">
+        <div class="head"><span class="dots"><i></i><i></i><i></i></span>Nura is looking</div>
+        <div class="step" id="astep1"><span class="spin"></span><span id="astep1t">Reading your medicines — 4</span></div>
+        <div class="step" id="astep2"><span class="spin" style="visibility:hidden"></span><span id="astep2t">Checking your visits — 2</span></div>
+        <div class="step" id="astep3"><span class="spin" style="visibility:hidden"></span><span id="astep3t">Looking at your papers</span></div>
+      </div>
+      <div id="askanswer"></div>
+      <div class="composer" style="margin-top:14px" onclick="toast('Type or speak your question.')"><span>Ask about your health…</span><div class="send"><svg class="icon" style="width:16px;height:16px;color:#fff"><use href="#i-send"/></svg></div></div>
+    </div>
+  </div>
+
+</div><!-- /p-pa -->
+
+<!-- ============================================================ MEI ============================================================ -->
+<div class="persona" id="p-mei">
+
+  <div class="view on" data-v="home">
+    <div class="scr-pad">
+      <div class="topbar"><button aria-label="Menu"><svg class="icon"><use href="#i-menu"/></svg></button><div class="word">Nura</div><button aria-label="Notifications"><svg class="icon"><use href="#i-bell"/></svg></button></div>
+      <div class="composer tap" style="margin-top:6px" onclick="push('mei','askmei')"><span>Ask or find anything about Pa</span><div class="send"><svg class="icon" style="width:16px;height:16px;color:#fff"><use href="#i-send"/></svg></div></div>
+      <div class="card tint-lav" style="margin-top:14px">
+        <div class="muted">Pa's most likely state</div><b class="serif" style="font:600 30px/1 Newsreader,serif;display:block;margin-top:4px">Stable</b><div class="muted" style="margin-top:3px">watch blood pressure</div>
+        <svg class="spark" viewBox="0 0 320 60"><rect x="0" y="20" width="320" height="22" rx="6" fill="rgba(78,58,120,.08)"/><polyline fill="none" stroke="#2b2733" stroke-width="1.5" points="0,44 40,42 80,43 120,38 160,36 200,32 240,26 280,20 318,14"/><circle cx="318" cy="14" r="4" fill="#b8741a"/></svg>
+        <div class="chips"><span class="chip">148 this morning</span><span class="chip">Pressure tablet unchanged</span><span class="chip">Salty lunches, 3</span></div>
+      </div>
+      <div class="sec"><h3>What changed since Sunday</h3></div>
+      <div class="list">
+        <div class="li"><span style="width:9px;height:9px;border-radius:50%;background:var(--watch);flex:none"></span>Pa's kidney check arrived from Gleneagles. A little up.<span class="val">9 Sep</span></div>
+        <div class="li"><span style="width:9px;height:9px;border-radius:50%;background:var(--act);flex:none"></span>Sunday dinner tablet not confirmed. Helper was off.<span class="val">Sun</span></div>
+        <div class="li" id="mei-walk-line"><span style="width:9px;height:9px;border-radius:50%;background:var(--good);flex:none"></span>Pa logged a walk.<span class="val">Mon</span></div>
+      </div>
+      <div class="row2" style="margin-top:12px">
+        <div class="card tap" style="flex:1" onclick="go('mei','services')"><div class="muted" style="font-size:12px">Next visit</div><b style="font-size:18px">Thu 10:00</b><div class="why" style="margin-top:6px;padding-top:0;border:0">Dr Tan. Letter approved. 3 questions.</div></div>
+        <div class="card tap" style="flex:1" onclick="go('mei','health')"><div class="muted" style="font-size:12px">Reorder</div><b class="serif" style="font:600 26px/1 Newsreader,serif">3</b><div class="why" style="margin-top:6px;padding-top:0;border:0">Sugar tablets left. Order today.</div></div>
+      </div>
+      <div class="card" style="margin-top:12px"><b style="font-size:14px">Gap</b><div class="muted" style="margin-top:4px">No cholesterol check in 14 months. Added to Thursday's questions.</div></div>
+      <div class="sec"><h3>Watching for Pa</h3></div>
+      <div class="list">
+        <div class="li">Safety notices for his tablets<span class="val">daily</span></div>
+        <div class="li">Kidney-friendly hawker options<span class="val">weekly</span></div>
+        <div class="li">Dengue and haze, Air Itam<span class="val">daily</span></div>
+        <div class="li">Explainers for new results and medicines<span class="val">on change</span></div>
+      </div>
+      <div class="sec"><h3>Sent to Pa this week</h3></div>
+      <div class="list">
+        <div class="li"><span style="width:9px;height:9px;border-radius:50%;background:var(--good);flex:none"></span>Kidney check explainer, 20 s. Opened, played twice.</div>
+        <div class="li" id="mei-unwell-line" style="display:none"><span style="width:9px;height:9px;border-radius:50%;background:var(--act);flex:none"></span>Pa said he wasn't feeling well. Mei knows now.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" data-v="health">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('mei','home')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Pa's health</div><span class="side"></span></div>
+      <div class="chips" id="mei-sys"><button class="chip on" onclick="filt('all',this)">All</button><button class="chip" onclick="filt('heart',this)">Heart</button><button class="chip" onclick="filt('kidney',this)">Kidneys</button><button class="chip" onclick="filt('sugar',this)">Sugar</button></div>
+      <div class="sec"><h3>September</h3></div>
+      <div class="card" data-sys="kidney"><b style="font-size:14.5px">Kidney check, 9 Sep</b><div class="muted" style="margin-top:3px">Gleneagles. Kidney number 98, potassium 4.9. Ordered by Dr Tan.</div><div class="why">Linked to the swelling episode. Question added.</div></div>
+      <div class="card" data-sys="heart"><b style="font-size:14.5px">Morning readings, 9 days</b><div class="muted" style="margin-top:3px">131 to 148. Drifting up since the water pill started.</div></div>
+      <div class="sec"><h3>Pa's medicines</h3></div>
+      <div class="card"><div class="row"><div class="chip-icon tint-sky"><svg class="icon"><use href="#i-pill"/></svg></div><div class="grow"><b>Amlodipine 5 mg, morning</b><div class="muted">Blood pressure. Dr Tan, since Feb. 12 left.</div></div></div>
+        <button class="btn sm" style="margin-top:8px" onclick="tog('mei-story')">Medication story</button>
+        <div id="mei-story" style="display:none;margin-top:8px" class="muted">Started Feb 2026 after the discharge. Interacts with grapefruit. Ankle swelling is a known effect and is why the water pill was added.</div>
+      </div>
+      <div class="card row"><div class="chip-icon tint-butter"><svg class="icon"><use href="#i-pill"/></svg></div><div class="grow"><b>Metformin 500 mg, dinner</b><div class="muted">3 left</div></div><button class="btn sm" onclick="toast('Message to Guardian Gurney drafted. Confirm to send.')">Draft reorder</button></div>
+      <div class="sec"><h3>Things to raise Thursday</h3></div>
+      <div class="card"><div class="muted">Talking points only. Nothing here changes a dose.</div>
+        <ul style="margin:8px 0 0 18px;padding:0;font-size:13.5px;line-height:1.8"><li>Potassium rose to 4.9 after the water pill started.</li><li>Two pressure medicines plus a water pill at 74 — still all needed?</li></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" data-v="connect">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('mei','home')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Family</div><span class="side"></span></div>
+      <div class="list">
+        <div class="li">Mei<span class="val">Chief, everything</span></div>
+        <div class="li">Pa<span class="val">Owner of the record</span></div>
+        <div class="li">Aunt Lily<span class="val">Viewer, visits only</span></div>
+        <div class="li">Siti<span class="val">Helper, today's list</span></div>
+      </div>
+      <div class="sec"><h3>Helper on WhatsApp</h3></div>
+      <div class="card">
+        <div class="li" style="border:0;padding-top:0">Today's medicine list at 7 am<span class="sw on" onclick="this.classList.toggle('on')"></span></div>
+        <div class="li">"Given" replies count as confirmed<span class="sw on" onclick="this.classList.toggle('on')"></span></div>
+        <div class="li">"Pak tidak sehat" alerts Mei<span class="sw on" onclick="this.classList.toggle('on')"></span></div>
+        <div class="why">Bahasa Indonesia. No access to history.</div>
+      </div>
+      <div class="sec"><h3>Family thread</h3></div>
+      <div class="list" id="mei-thread">
+        <div class="li"><span style="width:9px;height:9px;border-radius:50%;background:var(--good);flex:none"></span>Pa walked 22 minutes, good mood.<span class="val">Mon</span></div>
+        <div class="li"><span style="width:9px;height:9px;border-radius:50%;background:var(--watch);flex:none"></span>Pa confirmed morning tablets.<span class="val">Tue</span></div>
+      </div>
+      <div class="sec"><h3>Who looked at what</h3></div>
+      <div class="card"><ul style="margin:0 0 0 18px;padding:0;font-size:13px;line-height:1.9"><li>Mei asked about potassium <span class="muted">Tue 8:15</span></li><li>Aunt Lily opened Thursday's visit <span class="muted">Mon</span></li><li>Pa marked one note "only me" <span class="muted">Sun</span></li></ul><div class="why">Pa sees this list too.</div></div>
+    </div>
+  </div>
+
+  <div class="view" data-v="services">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="go('mei','home')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Plan</div><span class="side"></span></div>
+      <div class="sec"><h3>Thursday's visit</h3></div>
+      <div class="card"><b style="font-size:14.5px">Dr Tan, 10:00, Gleneagles</b>
+        <div class="chips"><span class="chip on">Brief ready</span><span class="chip">3 questions</span><span class="chip">Mei driving</span></div>
+        <div class="row2" style="margin-top:10px"><button class="btn sm" onclick="toast('One-page brief opened. Share link expires in 72 hours.')">Doctor's page</button><button class="btn sm line" onclick="toast('Packet bundled: summary, medicines, key results, prior opinions.')">Second opinion</button></div>
+      </div>
+      <div class="sec"><h3>Insurance letter</h3></div>
+      <div class="card"><div class="week" style="grid-template-columns:none"><div class="muted">Requested Mon · Approved Wed · Expires 30 Sep · Not yet used.</div></div>
+        <button class="btn sm" style="margin-top:8px" onclick="openOv('ledger')">Track the claim</button>
+      </div>
+      <div class="sec"><h3>Costs this year</h3></div>
+      <div class="card tap" onclick="openOv('ledger')"><b class="serif" style="font:600 24px/1 Newsreader,serif">RM 4,860</b><div class="muted" style="margin-top:4px">RM 3,200 claimed, RM 1,660 out of pocket.</div></div>
+      <div class="sec"><h3>Routine</h3></div>
+      <div class="card">
+        <div class="li" style="border:0;padding-top:0">Morning tablets with breakfast<span class="sw on" onclick="this.classList.toggle('on')"></span></div>
+        <div class="li">Walk after dinner, 20 minutes<span class="sw on" onclick="this.classList.toggle('on')"></span></div>
+        <div class="li">Weigh on Mondays<span class="sw" onclick="this.classList.toggle('on')"></span></div>
+      </div>
+      <div class="sec"><h3>Send Pa something</h3></div>
+      <div class="card"><textarea id="compose" rows="3" style="width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;font-size:14px;resize:vertical">Pa, walk after dinner tonight? The grandkids want to come on Saturday.</textarea>
+        <div class="chips"><button class="chip on" id="fmt-card" onclick="fmt('card')">Card</button><button class="chip" id="fmt-voice" onclick="fmt('voice')">Voice note</button><button class="chip" id="fmt-clip" onclick="fmt('clip')">Short clip</button></div>
+        <div class="card tint-lav" id="preview" style="margin-top:10px"><div class="muted" style="font-size:11px">Pa will see</div><div class="card" style="margin-top:6px"><b id="pv-text" style="font-size:16px">Pa, walk after dinner tonight? The grandkids want to come on Saturday.</b><div class="muted" style="margin-top:4px">From Mei, in Hokkien</div></div></div>
+        <button class="btn big" style="margin-top:10px" onclick="note('Sending, in his format and language','The message is rendered once for the channel Pa actually uses — his own preferred language and pace from onboarding — and queued for 5pm, his usual reading time.');toast('Scheduled for 5 pm. You will see when Pa opens it.')">Send at 5 pm</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" data-v="profile">
+    <div class="scr-pad">
+      <div class="topbar"><span class="side"></span><div class="mid">Profile</div><span class="side"></span></div>
+      <div class="row" style="margin-top:6px"><div class="avatar tint-lav" style="width:56px;height:56px;font-size:20px">M</div><div><b class="serif" style="font:600 19px/1.15 Newsreader,serif">Mei</b><div class="muted">Chief for Pa's record</div></div></div>
+      <div class="sec"><h3>Who can see what</h3></div>
+      <div class="list">
+        <div class="li tap" onclick="openOv('keys')">Mei — Chief<span class="val">Everything</span></div>
+        <div class="li tap" onclick="openOv('keys')">Aunt Lily — Viewer<span class="val">Visits only</span></div>
+        <div class="li tap" onclick="openOv('keys')">Siti — Helper<span class="val">Today's list</span></div>
+      </div>
+      <div class="sec"><h3>Consents, whose act</h3></div>
+      <div class="card"><ul style="margin:0 0 0 18px;padding:0;font-size:13.5px;line-height:1.9">
+        <li>Sharing with Dr Tan — Pa's own act, 2 Sep</li>
+        <li>Aunt Lily's viewer key — Mei's act, on Pa's standing authority as chief</li>
+        <li>Insurance letter request — Mei's act, logged separately from Pa's</li>
+      </ul></div>
+      <button class="btn line big" style="margin-top:16px" onclick="toast('Signed out. This reference stays on this screen.')">Sign out</button>
+    </div>
+  </div>
+
+  <div class="view" data-v="askmei">
+    <div class="scr-pad">
+      <div class="topbar"><button onclick="pop('mei')"><svg class="icon"><use href="#i-back"/></svg></button><div class="mid">Ask or find</div><span class="side"></span></div>
+      <div class="chips"><span class="chip on">Records</span><span class="chip">Web</span><span class="chip">Doctors</span><span class="chip">Videos</span></div>
+      <div class="chips" style="margin-top:4px">
+        <button class="chip" style="min-height:44px" onclick="ansMei('b1',this)">Has his potassium ever been high?</button>
+        <button class="chip" style="min-height:44px" onclick="ansMei('b2',this)">Who for a second opinion?</button>
+      </div>
+      <div id="ansboxmei" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+</div><!-- /p-mei -->
+
+<!-- ============================================================ SITI ============================================================ -->
+<div class="persona" id="p-siti">
+  <div class="chat-wrap">
+    <div class="status"><b>Nura</b><span>WhatsApp · Bahasa Indonesia</span></div>
+    <div class="cmsg">Selamat pagi Siti. Obat Pak hari ini:<br><b>Pagi</b> tablet tekanan darah (putih, panjang), aspirin (bulat kecil), pil air.<br><b>Malam</b> tablet gula (oval, pink) bersama makan.<div class="ts">7:00</div></div>
+    <div class="cmsg me">Sudah diberi<div class="ts">7:48</div></div>
+    <div class="cmsg">Terima kasih. Dicatat: tablet pagi sudah diberi jam 7:48.
+      <div class="btns"><button onclick="note('A helper reply, out of scope','Siti\'s WhatsApp key can only write a dose-taken event and this one alert. It cannot read history — the message goes straight to Mei and Pa\'s record, never through Siti.');toast('Mei and Pa diberitahu. Alur \'tidak sehat\' Pa dibuka untuknya.')">Pak tidak sehat</button><button onclick="toast('Dicatat: tablet malam sudah diberi.')">Malam sudah diberi</button></div>
+      <div class="ts">7:48</div>
+    </div>
+    <div class="cmsg">Kamis: Pak ke klinik jam 10. Mei jemput jam 9. Tolong siapkan buku catatan tekanan darah.<div class="ts">7:49</div></div>
+  </div>
+</div>
+
+<!-- ============================================================ OVERLAYS (shared) ============================================================ -->
+
+<div class="over" id="ov-add"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('add')">Close</button>
+  <div id="add1"><h3>Add to Pa's record</h3>
+    <button class="opt" onclick="addStart()"><i><svg class="icon"><use href="#i-camera"/></svg></i>Take a photo</button>
+    <button class="opt" onclick="addStart()"><i><svg class="icon"><use href="#i-upload"/></svg></i>From photos or screenshots</button>
+    <button class="opt" onclick="addStart()"><i><svg class="icon"><use href="#i-doc"/></svg></i>A file or PDF</button>
+    <button class="opt" onclick="toast('Forward anything to +60 12 345 6789 and it files itself.')"><i><svg class="icon"><use href="#i-phone"/></svg></i>Forward it on WhatsApp</button>
+    <button class="opt" onclick="toast('Recording asks the doctor first, then listens.')"><i><svg class="icon"><use href="#i-mic"/></svg></i>Record a visit</button>
+  </div>
+  <div id="add2" style="display:none"><h3>Organising 3 pages</h3><ul class="prog" id="prog"><li>Reading the pages</li><li>Found a kidney check, 9 Sep, Gleneagles</li><li>Linked to Dr Tan's visit and the swelling episode</li><li>Checked against medicines and past results</li><li>Preparing a 20-second explainer</li></ul></div>
+  <div id="add3" style="display:none"><h3>Kidney check, 9 Sep</h3><p class="muted">Gleneagles Penang, ordered by Dr Tan</p>
+    <div style="margin-top:8px"><div class="field"><span>Kidney number</span><b>98</b></div><div class="field"><span>Kidney filter score</span><b>68</b></div><div class="field"><span>Potassium</span><b class="ask">4.9</b></div><div class="field"><span>Page reference</span><b style="border:0">Page 2 of 3</b></div></div>
+    <p class="muted" style="font-size:12px;margin-top:8px">Dotted underline means please check the number against the paper.</p>
+    <button class="btn big" style="margin-top:12px" onclick="addDone()">Looks right</button>
+  </div>
+</div></div>
+
+<div class="over" id="ov-unwell"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('unwell')">Close</button>
+  <div id="u1"><h3>What's wrong, Pa?</h3><p class="muted" style="margin-top:4px">Say it, or tap.</p>
+    <div class="chips" style="margin-top:6px"><button class="chip" style="min-height:44px" onclick="unwell(2)">Dizzy</button><button class="chip" style="min-height:44px" onclick="unwell(2)">Chest tight</button><button class="chip" style="min-height:44px" onclick="unwell(2)">Very tired</button><button class="chip" style="min-height:44px" onclick="unwell(2)">Swollen legs</button></div>
+  </div>
+  <div id="u2" style="display:none"><h3>Checking</h3><ul class="prog" id="uprog"><li>Your readings this week</li><li>Your tablets this morning</li><li>What Dr Tan said on 1 Sep</li></ul></div>
+  <div id="u3" style="display:none"><h3>Sit down and rest for 20 minutes</h3><p style="font-size:15.5px;line-height:1.5;margin-top:8px">Your pressure was 148 this morning and you took the water pill. Dizziness can happen with both. Drink a glass of water. If you are still dizzy in 20 minutes, or your chest hurts, we go to the clinic.</p>
+    <div class="card" style="margin-top:12px"><b style="font-size:14.5px">Mei knows now</b><div class="muted" style="margin-top:3px">She will call you in a few minutes.</div></div>
+    <div class="row2" style="margin-top:10px"><button class="btn" onclick="toast('Timer set. Nura will check on you at 8:20.')">Check on me in 20 minutes</button><button class="btn coral" onclick="toast('Calling Mei.')">Call Mei now</button></div>
+  </div>
+</div></div>
+
+<div class="over" id="ov-emergency"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('emergency')">Close</button><h3>Emergency card</h3>
+  <div class="chips" style="margin-top:8px"><button class="chip on" onclick="emgLang('en',this)">English</button><button class="chip" onclick="emgLang('ms',this)">Bahasa</button><button class="chip" onclick="emgLang('zh',this)">中文</button></div>
+  <div class="emg"><div class="t">Lim Ah Kow, 74</div>
+    <div class="kv"><span id="emg-l1">Conditions</span><span>Heart failure, high blood pressure, diabetes</span></div>
+    <div class="kv"><span id="emg-l2">Medicines</span><span>Amlodipine, furosemide, aspirin, metformin</span></div>
+    <div class="kv"><span id="emg-l3">Allergies</span><span>Penicillin</span></div>
+    <div class="kv"><span id="emg-l4">Blood</span><span>O positive</span></div>
+    <div class="kv"><span id="emg-l5">Call</span><span>Mei 012 345 6789</span></div>
+    <div class="kv"><span id="emg-l6">Insurer</span><span>AIA, policy on file</span></div>
+  </div>
+  <p class="muted" style="margin-top:10px">Works with no signal. Printed copy in his wallet.</p>
+</div></div>
+
+<div class="over" id="ov-insurance"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('insurance')">Close</button><h3>Insurance</h3>
+  <div class="card"><b style="font-size:14.5px">AIA, hospital &amp; surgical</b><div class="muted" style="margin-top:3px">Policy 88213-AA · Active · Renews March</div></div>
+  <div class="sec"><h3>Claims</h3></div>
+  <div class="list"><div class="li">Gleneagles, 2 Sep<span class="val">RM 620 · Paid</span></div><div class="li">Gleneagles, discharge Feb<span class="val">RM 2,580 · Paid</span></div></div>
+  <button class="btn sm" style="margin-top:10px" onclick="openOv('ledger')">Open the ledger</button>
+</div></div>
+
+<div class="over" id="ov-ledger"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('ledger')">Close</button><h3>Ledger</h3>
+  <div class="card"><b class="serif" style="font:600 24px/1 Newsreader,serif">RM 4,860</b><div class="muted" style="margin-top:4px">RM 3,200 claimed · RM 1,660 out of pocket · 2 receipts waiting</div></div>
+  <div class="list"><div class="li">Kidney check, Gleneagles<span class="val">RM 180</span></div><div class="li">Insurance letter, approved<span class="val">RM 0</span></div><div class="li">Discharge, Feb<span class="val">RM 2,580</span></div></div>
+</div></div>
+
+<div class="over" id="ov-keys"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('keys')">Close</button><h3>Who can see what</h3>
+  <p class="muted" style="margin-top:4px">Each key names a role and a window — never everything, by default.</p>
+  <div class="list">
+    <div class="li">Mei — Chief<span class="val">Everything, standing</span></div>
+    <div class="li">Siti — Helper<span class="val">Today's list only, WhatsApp</span></div>
+    <div class="li tap" onclick="toast('Aunt Lily\'s key has no readings scope: your blood pressure trend is kept to Pa.')">Aunt Lily — Viewer<span class="val">Visits, this month</span></div>
+  </div>
+  <div class="why">Tap Aunt Lily to see what a key without a scope is shown instead of the real value.</div>
+</div></div>
+
+<div class="over" id="ov-consents"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('consents')">Close</button><h3>Consents</h3>
+  <p class="muted" style="margin-top:4px">Every cross-entity act is logged as whose act it was — the person who tapped, not only the record it touched.</p>
+  <div class="list">
+    <div class="li">Shared with Dr Tan<span class="val">Pa's act, 2 Sep</span></div>
+    <div class="li">Aunt Lily's viewer key<span class="val">Mei's act, on Pa's standing authority</span></div>
+    <div class="li">Insurance letter requested<span class="val">Mei's act</span></div>
+  </div>
+</div></div>
+
+<div class="over" id="ov-providers"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('providers')">Close</button><h3 id="prov-title">Nursing at home</h3>
+  <div class="list">
+    <div class="li">Gentle Care Home Nursing<span class="val">1.2 km</span></div>
+    <div class="li">Penang Home Health<span class="val">2.8 km</span></div>
+  </div>
+</div></div>
+
+<div class="over" id="ov-clip"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('clip')">Close</button><h3>Your kidney check, explained</h3>
+  <div class="scene morning" style="height:150px"><i></i><i></i><div class="play tap" onclick="playClip('cap1')">Play, 20 seconds</div></div>
+  <p id="cap1" class="muted" style="font-size:15.5px;line-height:1.55;margin-top:12px">Captions appear here as it plays.</p>
+  <div class="why">In Hokkien. Made from your Gleneagles result on 9 Sep and the kidney pages at HealthHub. Not medical advice; ask Dr Tan on Thursday.</div>
+  <div class="row2" style="margin-top:10px"><button class="btn sm" onclick="toast('Sent to the family group.')">Send to family</button><button class="btn sm line" onclick="toast('Added: Is the water pill affecting my kidneys?')">Ask Dr Tan this</button></div>
+</div></div>
+
+<div class="over" id="ov-clip2"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('clip2')">Close</button><h3>Your water pill and bananas</h3>
+  <div class="scene food" style="height:150px"><i></i><i></i><div class="play tap" onclick="playClip('cap2')">Play, 30 seconds</div></div>
+  <p id="cap2" class="muted" style="font-size:15.5px;line-height:1.55;margin-top:12px">Captions appear here as it plays.</p>
+  <div class="why">The 30 seconds of a cardiologist's video that apply to you. Because you started this tablet on 1 Sep.</div>
+</div></div>
+
+<div class="over" id="ov-clip3"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('clip3')">Close</button><h3>Your week</h3>
+  <div class="scene walk" style="height:150px"><i></i><i></i><div class="play tap" onclick="playClip('cap3')">Play, 30 seconds</div></div>
+  <p id="cap3" class="muted" style="font-size:15.5px;line-height:1.55;margin-top:12px">Captions appear here as it plays.</p>
+  <button class="btn sm" style="margin-top:8px" onclick="toast('Sent to the family group.')">Send to family</button>
+</div></div>
+
+<div class="over" id="ov-healthhub"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('healthhub')">Close</button><h3>Living well with a water pill</h3>
+  <div class="chips"><span class="chip">HealthHub, Singapore</span></div>
+  <p class="muted" style="margin-top:10px;font-size:15px;line-height:1.55">Take it in the morning so it doesn't disturb your sleep. Eat a banana or leafy vegetable most days — the tablet can lower your potassium. Weigh yourself at the same time each morning.</p>
+</div></div>
+
+<div class="over" id="ov-why"><div class="sheet"><div class="handle"></div><button class="x" onclick="closeOv('why')">Close</button><h3>Why am I seeing this?</h3>
+  <p class="muted" style="margin-top:8px;font-size:15px;line-height:1.5" id="why-text"></p>
+</div></div>
+
+</div><!-- /screen -->
+</div><!-- /phone -->
+
+<!-- ============================================================ SIDE PANEL ============================================================ -->
+<aside class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+    <div><h2>What Nura is doing</h2><p class="pl">Narrates the real mechanism behind the tap you just made — the fact it wrote, the scope it checked, the reason a card was chosen.</p></div>
+    <span class="simtag" title="This reference plays back a fixed script. The built app runs the real reads, writes and policy checks.">Simulated</span>
+  </div>
+  <ul class="plog" id="plog"><li class="pentry"><div class="empty">Tap anything on the phone — the mechanism behind it appears here.</div></li></ul>
+</aside>
+</div><!-- /stage -->
+
+<div class="notewrap">
+  <p>A reference for agreement, not the built app. The look follows <code>nura-concept-board.html</code>, the onboarding follows <code>onboarding-mock.html</code>, and the traces, clips and reviews follow the interaction prototype. Every "simulated" entry in the side panel names the real mechanism from <code>docs/recommendation-engine.md</code> and <code>docs/design/conformance.md</code>; nothing here is wired to a live backend. Names, readings and visits are sample content.</p>
+</div>
+
+<script>
+/* ================= state ================= */
+var counts = {c1:12, c2:40, c3:3, c4:18};
+var dosesTaken = 12, dosesTotal = 14;
+var cur = 'pa';
+var stacks = {pa:['home'], mei:['home'], siti:['chat']};
+var screenEl = document.getElementById('screen');
+
+/* ---------- narration panel ---------- */
+function note(title, detail){
+  var log = document.getElementById('plog');
+  if(log.querySelector('.empty')) log.innerHTML = '';
+  var li = document.createElement('li'); li.className='pentry';
+  var t = new Date(); var ts = t.getHours()+':'+('0'+t.getMinutes()).slice(-2)+':'+('0'+t.getSeconds()).slice(-2);
+  li.innerHTML = '<div class="pentry-head"><b>'+title+'</b></div><div class="time">'+ts+'</div><p>'+detail+'</p>';
+  log.appendChild(li);
+  while(log.children.length>9) log.removeChild(log.firstChild);
+}
+var tt; function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(tt); tt=setTimeout(function(){t.classList.remove('on')},2600); }
+
+/* ---------- persona + navigation ---------- */
+function setPersona(p, btn){
+  cur = p;
+  document.querySelectorAll('.persona').forEach(function(e){e.classList.remove('on')});
+  document.getElementById('p-'+p).classList.add('on');
+  document.querySelectorAll('#pswitch button').forEach(function(b){b.classList.remove('on')});
+  btn.classList.add('on');
+  screenEl.className = 'screen ' + (p==='pa' ? 'wash-home' : p==='mei' ? 'wash-watch' : 'wash-chat');
+  closeAllOv();
+  screenEl.scrollTop = 0;
+  var names = {pa:'Pa', mei:'Mei, the chief', siti:'Siti, the helper'};
+  note('Switching who is holding the phone', 'The session re-authenticates as '+names[p]+'’s own key. Every screen from here renders under that key’s scope — the record itself does not change.');
+}
+function go(p, v){
+  var per = document.getElementById('p-'+p);
+  per.querySelectorAll('.view').forEach(function(e){ e.classList.toggle('on', e.dataset.v===v) });
+  stacks[p] = [v];
+  var tb = document.getElementById(p==='pa'?'tabbar-pa':'tabbar-mei');
+  screenEl.scrollTop = 0;
+  syncTabbar(p, v);
+}
+function push(p, v){
+  var per = document.getElementById('p-'+p);
+  per.querySelectorAll('.view').forEach(function(e){ e.classList.toggle('on', e.dataset.v===v) });
+  stacks[p].push(v);
+  screenEl.scrollTop = 0;
+}
+function pop(p){
+  var st = stacks[p]; if(st.length>1) st.pop();
+  var v = st[st.length-1];
+  var per = document.getElementById('p-'+p);
+  per.querySelectorAll('.view').forEach(function(e){ e.classList.toggle('on', e.dataset.v===v) });
+  screenEl.scrollTop = 0;
+  syncTabbar(p, v);
+}
+function syncTabbar(p, v){
+  var bar = document.getElementById('tabbar-'+p);
+  if(!bar) return;
+  bar.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.tab===v || (v==='ask'&&b.dataset.tab==='home')); });
+}
+
+/* ---------- overlays ---------- */
+function openOv(id){ document.getElementById('ov-'+id).classList.add('on'); }
+function closeOv(id){
+  document.getElementById('ov-'+id).classList.remove('on');
+  if(id==='add') resetAdd();
+  if(id==='unwell') unwell(1);
+}
+function closeAllOv(){ document.querySelectorAll('.over').forEach(function(e){ e.classList.remove('on') }); }
+function tog(id){ var e=document.getElementById(id); e.style.display = e.style.display==='none' ? 'block' : 'none'; }
+function segp(b, id){ document.getElementById(id).querySelectorAll('.chip').forEach(function(x){x.classList.remove('on')}); b.classList.add('on'); }
+function whySheet(text){ document.getElementById('why-text').textContent=text; openOv('why'); note('Why am I seeing this?', text); }
+
+/* ---------- medicine taken (shared ring + counts) ---------- */
+function take(btn){
+  if(btn.classList.contains('done')) return;
+  btn.classList.add('done'); var d=new Date();
+  btn.textContent = 'Taken ' + d.getHours()+':'+('0'+d.getMinutes()).slice(-2);
+  dosesTaken = Math.min(dosesTotal, dosesTaken+1);
+  var num=document.getElementById('ringnum'); if(num) num.textContent=dosesTaken;
+  var arc=document.getElementById('ringarc');
+  if(arc){ var frac=dosesTaken/dosesTotal; var circ=263.9; arc.setAttribute('stroke-dasharray', (circ*frac).toFixed(1)+' '+circ); }
+  var c1=document.getElementById('cnt-c1'); if(c1) c1.textContent = Math.max(0, parseInt(c1.textContent)-1);
+  note('Recording the tap', 'A DoseTaken row is written with this moment and a late/on-time bit. The Health ring re-renders from the same count — never a separate, made-up score. Mei and Siti can see this tap.');
+  toast('Mei and Siti can see this. Well done.');
+}
+
+/* ---------- word cloud (onboarding, condensed condition graph) ---------- */
+var N = {
+ bp:{l:'High blood pressure', kids:['bp_meds','bp_home','kidney_chk']},
+ chol:{l:'Cholesterol', kids:['statin','heart_doc']},
+ sugar:{l:'Diabetes, sugar', kids:['sugar_tabs','sugar_home']},
+ heart:{l:'Heart', kids:['hf','heart_doc']},
+ kidney:{l:'Kidneys', kids:['kidney_chk','swelling']},
+ joints:{l:'Joints, arthritis', kids:['knee']},
+ sleep:{l:'Sleep', kids:['snore']},
+ allergy:{l:'Allergies', kids:['drug_all']},
+ famhx:{l:'Family history', kids:['heart_fam']},
+ hosp:{l:'In hospital, last year', kids:['dl_have']},
+ bp_meds:{l:'On tablets for it', ask:{q:'For how long?', o:['Under a year','1 to 5 years','More than 5']}},
+ bp_home:{l:'Check it at home'},
+ kidney_chk:{l:'Kidney number watched'},
+ statin:{l:'On a statin'},
+ heart_doc:{l:'See a heart doctor', ask:{q:'How often?', o:['Every 3 months','Every 6','Yearly']}},
+ sugar_tabs:{l:'Sugar tablets'},
+ sugar_home:{l:'Check sugar at home'},
+ hf:{l:'Heart failure', kids:['water_pill']},
+ water_pill:{l:'Water pill'},
+ swelling:{l:'Swelling'},
+ knee:{l:'Knees'},
+ snore:{l:'Snore, stop breathing at night'},
+ drug_all:{l:'Allergic to a medicine', ask:{q:'Which one?', o:['Penicillin','Aspirin, NSAIDs','Not sure']}},
+ heart_fam:{l:'Heart disease in the family'},
+ dl_have:{l:'I have the discharge letter'}
+};
+var TOP = ['bp','chol','sugar','heart','kidney','joints','sleep','allergy','famhx','hosp'];
+var HINT = {bp:'High blood pressure, noted. A few things that often go with it appeared below.', chol:'Cholesterol, noted.', sugar:'Sugar, noted. Nura added the checks that go with it.', heart:'Heart, noted.', kidney:'Kidneys, noted. Often connected to pressure and sugar.', hosp:'Noted. That usually means a discharge letter exists.'};
+var sel = {}, answers = {}, order = [], lastPick=null;
+
+function renderCloud(){
+  var c = document.getElementById('cloud'); if(!c) return; c.innerHTML='';
+  var seen={};
+  function add(id, isNew){
+    if(seen[id]) return; seen[id]=true; var n=N[id];
+    var b=document.createElement('button');
+    b.className = 'w ' + (TOP.indexOf(id)>-1?'big':'') + (sel[id]?' on':'') + (isNew?' new':'');
+    b.textContent = n.l; b.onclick = function(){ pick(id) };
+    c.appendChild(b);
+    if(sel[id] && n.kids){ n.kids.forEach(function(k){ add(k, lastPick===id) }) }
+  }
+  TOP.forEach(function(id){ add(id, false) });
+  var n = Object.keys(sel).length;
+  document.getElementById('cnt').textContent = n ? n+' noted' : 'Nothing yet';
+  var nb = document.getElementById('ob1next'); if(nb) nb.textContent = n ? "That's everything" : 'Next';
+  renderAsk();
+}
+function pick(id){
+  if(sel[id]){
+    delete sel[id]; order = order.filter(function(x){return x!==id});
+    (N[id].kids||[]).forEach(function(k){ delete sel[k]; delete answers[k] });
+    delete answers[id]; lastPick=null;
+    document.getElementById('cloudmsg').textContent = 'Removed. Tap anything else that applies.';
+  } else {
+    sel[id]=true; order.push(id); lastPick=id;
+    var h = HINT[id] || (N[id].kids ? N[id].l+', noted. Nura added what often goes with it.' : N[id].l+', noted.');
+    document.getElementById('cloudmsg').textContent = h;
+    note('Deepening the word cloud', '"'+N[id].l+'" is written as a Fact — told by you, today’s date as validity, full confidence because you said it yourself. '+(N[id].kids?'Related terms open beneath it; nothing is inferred without another tap.':''));
+  }
+  renderCloud();
+}
+function renderAsk(){
+  var box = document.getElementById('askbox'); if(!box) return; box.innerHTML='';
+  order.forEach(function(id){
+    var n=N[id]; if(!n.ask) return;
+    var d=document.createElement('div'); d.className='ask-inline';
+    d.innerHTML='<div class="q">'+n.l+': '+n.ask.q+'</div>';
+    var o=document.createElement('div'); o.className='opts';
+    n.ask.o.forEach(function(opt){
+      var b=document.createElement('button'); b.textContent=opt;
+      if(answers[id]===opt) b.className='on';
+      b.onclick=function(){ answers[id]=opt; renderAsk(); };
+      o.appendChild(b);
+    });
+    d.appendChild(o); box.appendChild(d);
+  });
+}
+function statements(){
+  var out=[];
+  TOP.forEach(function(t){
+    if(!sel[t]) return; var n=N[t]; var parts=[];
+    (n.kids||[]).forEach(function(k){ if(sel[k]){ var s=N[k].l.toLowerCase(); if(answers[k]) s+=' ('+answers[k].toLowerCase()+')'; parts.push(s); } });
+    out.push({id:t, text:n.l + (parts.length? ': '+parts.join(', ')+'.' : '.')});
+  });
+  return out;
+}
+function gapsList(){
+  var g=[];
+  if(sel.bp_meds||sel.statin||sel.sugar_tabs) g.push('Which tablets exactly, and the doses. The medicine bag will tell Nura.');
+  if(sel.bp && !sel.bp_home) g.push('Your usual blood pressure numbers.');
+  if(sel.sugar) g.push('Your last three-month sugar number.');
+  if(sel.kidney||sel.kidney_chk) g.push('Your last kidney result.');
+  if(!g.length) g.push('Your doctors, your medicines, your last results.');
+  return g;
+}
+var verdict={};
+function renderReplay(){
+  var s=document.getElementById('stmts'); var st=statements();
+  if(!st.length){ s.innerHTML='<p class="muted">You didn\'t tap anything. That\'s fine; records can fill this in.</p>'; }
+  else { s.innerHTML=''; st.forEach(function(x){
+    var d=document.createElement('div'); d.className='stmt';
+    d.innerHTML='<p>'+x.text+'</p><div class="yn"><button class="y '+(verdict[x.id]!=='n'?'on':'')+'" onclick="vd(\''+x.id+'\',\'y\')">Yes</button><button class="n '+(verdict[x.id]==='n'?'on':'')+'" onclick="vd(\''+x.id+'\',\'n\')">No</button></div>';
+    s.appendChild(d);
+  }); }
+  document.getElementById('gaps').innerHTML = gapsList().map(function(x){return '<li>'+x+'</li>'}).join('');
+}
+function vd(id,v){ verdict[id]=v; renderReplay(); if(v==='n') note('Disputed statement', '"'+id+'" is kept but marked disputed — nothing downstream reasons from it until Pa corrects it.'); }
+
+var LEARN = {
+ dl: ['Gleneagles, Feb 2026: two nights for breathlessness. Heart failure confirmed.', 'Four medicines started or changed at discharge.'],
+ lr: ['Cholesterol: 6.1 in 2024, 5.2 in 2025, 4.8 in June. Going the right way.', 'Potassium 4.9 in June, at the top of the range.'],
+ rx: ['Amlodipine 5 mg, morning. Matches "on tablets for blood pressure".', 'Furosemide 20 mg, morning. Not something you mentioned.'],
+ cc: ['Dr Tan, heart, Gleneagles Penang. Next visit not on the card.'],
+ in: ['AIA policy on file. Gleneagles is on the panel.']
+};
+var learned={}, pct=14;
+function learn(btn, k){
+  if(learned[k]) return; learned[k]=true;
+  btn.classList.add('done'); btn.textContent = btn.textContent.replace('Add ','Added ').replace('Snap ','Snapped ');
+  var ul=document.getElementById('learned'); if(ul.querySelector('li i.w')) ul.innerHTML='';
+  LEARN[k].forEach(function(t,i){ setTimeout(function(){ var li=document.createElement('li'); li.innerHTML='<i'+(/Not something|top of the range|not on the card/.test(t)?' class="w"':'')+'></i>'+t; ul.appendChild(li); }, 300+i*450); });
+  pct=Math.min(95,pct+16); var bar=document.getElementById('obbarpct'); if(bar) bar.style.width=pct+'%';
+  note('Reading a record', 'Extraction runs page by page, each field carrying its own confidence and the page it came from; matched against what you already told Nura in the word cloud.');
+}
+function renderRQ(){
+  var box=document.getElementById('rq'); box.innerHTML=''; var qs=[];
+  if(learned.rx) qs.push({q:'The bag has a water pill, furosemide. You didn\'t mention it. Still taking it?', o:['Yes, every morning','Stopped it']});
+  if(learned.lr) qs.push({q:'Your June potassium was at the top of the range. Has anyone rechecked it?', o:['Yes','No']});
+  if(!qs.length) qs.push({q:'No records yet, so just one: who is the doctor you see most?', o:['A GP','A specialist']});
+  qs.forEach(function(x,i){
+    var d=document.createElement('div'); d.className='ask-inline'; d.style.marginTop='10px';
+    d.innerHTML='<div class="q">'+x.q+'</div>';
+    var o=document.createElement('div'); o.className='opts';
+    x.o.forEach(function(opt){ var b=document.createElement('button'); b.textContent=opt; b.onclick=function(){ o.querySelectorAll('button').forEach(function(z){z.classList.remove('on')}); b.classList.add('on'); }; o.appendChild(b); });
+    d.appendChild(o); box.appendChild(d);
+  });
+}
+function renderSummary(){
+  var ul=document.getElementById('summary'); var items=[];
+  items.push('Lim Ah Kow, born 1952, English, detailed');
+  var st=statements().filter(function(x){return verdict[x.id]!=='n'});
+  items.push(st.length+' things about his health, checked with him');
+  var r=Object.keys(learned).length;
+  items.push(r ? r+' kinds of records read, '+Object.keys(learned).reduce(function(a,k){return a+LEARN[k].length},0)+' facts learned' : 'No records yet; Nura will ask for them one at a time');
+  items.push('Watching for safety notices on his medicines');
+  ul.innerHTML = items.map(function(t){return '<li style="padding:6px 0;border-top:1px solid rgba(43,39,51,.06);font-size:13.5px">'+t+'</li>'}).join('');
+  if(learned.rx){ document.getElementById('pv-t').textContent='Your blood pressure tablet'; document.getElementById('pv-s').textContent='One with breakfast. Amlodipine, 5 mg.'; }
+}
+function finishOnboarding(){
+  go('pa','home');
+  toast('Welcome, Pa. Your Today card is ready.');
+}
+
+/* ---------- onboarding progress dots (jump to any step) ---------- */
+var OB = ['ob0','ob1','ob2','ob3','ob4','ob5'];
+function buildObBars(){
+  ['obbar','obbar1','obbar2','obbar3','obbar4','obbar5'].forEach(function(id, idx){
+    var el=document.getElementById(id); if(!el) return; el.innerHTML='';
+    OB.forEach(function(step, i){
+      var i2=document.createElement('i'); if(i<=idx) i2.className='on';
+      i2.onclick=function(){ go('pa', step); onObEnter(step); };
+      el.appendChild(i2);
+    });
+  });
+}
+function onObEnter(step){
+  if(step==='ob1') renderCloud();
+  if(step==='ob2') renderReplay();
+  if(step==='ob4') renderRQ();
+  if(step==='ob5') renderSummary();
+}
+var _origGo = go;
+go = function(p, v){ _origGo(p, v); if(p==='pa') onObEnter(v); };
+
+/* ---------- add-a-record flow ---------- */
+function addStart(){
+  document.getElementById('add1').style.display='none';
+  document.getElementById('add2').style.display='block';
+  var lis=document.querySelectorAll('#prog li');
+  lis.forEach(function(l,i){ setTimeout(function(){ lis.forEach(function(x){x.classList.remove('now')}); l.classList.add('now'); if(i>0) lis[i-1].classList.add('done'); }, 400+i*650); });
+  note('Organising the pages', 'Each page is read, matched to a known document type, and linked against existing records — medicines, visits, past results — before anything is shown to you.');
+  setTimeout(function(){ lis[lis.length-1].classList.add('done'); document.getElementById('add2').style.display='none'; document.getElementById('add3').style.display='block'; }, 400+lis.length*650+300);
+}
+function addDone(){
+  closeOv('add');
+  var rc=document.getElementById('qs-count'); if(rc) rc.textContent='Your questions, 4';
+  var svcqs=document.getElementById('svc-qs'); if(svcqs){ var li=document.createElement('li'); li.className='li'; li.textContent='Is the kidney number connected to the new water pill?'; svcqs.appendChild(li); }
+  note('Filed under Kidneys', 'A field with a dotted underline (confidence below the auto-file threshold) is queued for review; the rest is filed straight away. A 20-second explainer is queued for the Home feed, and one question is added for Thursday.');
+  toast('Filed under Kidneys. A 20-second explainer is on your feed. One question added for Thursday.');
+}
+function resetAdd(){
+  document.getElementById('add1').style.display='block';
+  document.getElementById('add2').style.display='none';
+  document.getElementById('add3').style.display='none';
+  document.querySelectorAll('#prog li').forEach(function(l){ l.className=''; });
+}
+
+/* ---------- not feeling well ---------- */
+function unwell(n){
+  ['u1','u2','u3'].forEach(function(id,i){ document.getElementById(id).style.display = (i===n-1) ? 'block':'none'; });
+  if(n===2){
+    var lis=document.querySelectorAll('#uprog li'); lis.forEach(function(l){l.className=''});
+    note('Checking, not diagnosing', 'Nura reads this week’s readings, this morning’s tablets and Dr Tan’s own note from 1 Sep — three real reads, never a guess at what is wrong.');
+    lis.forEach(function(l,i){ setTimeout(function(){ l.classList.add('done'); }, 400+i*500); });
+    setTimeout(function(){
+      unwell(3); screenEl.classList.add('wash-watch');
+      document.getElementById('mei-unwell-line').style.display='flex';
+      note('Mei knows now', 'A notice is sent to Mei’s Connect and Home feed the moment this screen shows — not after Pa closes the sheet. Switch to Mei to see it.');
+    }, 400+lis.length*500+400);
+  }
+}
+
+/* ---------- Ask Nura trace ---------- */
+var askPlayed=false;
+document.addEventListener('DOMContentLoaded', function(){ buildObBars(); renderCloud(); });
+var origPush = push;
+push = function(p, v){ origPush(p, v); if(p==='pa' && v==='ask') startAsk(); };
+function startAsk(){
+  if(askPlayed) return; askPlayed=true;
+  var s1=document.getElementById('astep1'), s2=document.getElementById('astep2'), s3=document.getElementById('astep3');
+  note('Nura is looking', 'Three real reads run in sequence: dose history, the visits spine, then the document store — each one narrated as it happens, exactly as it runs.');
+  setTimeout(function(){
+    s1.classList.add('done'); s1.innerHTML='<span class="tick"><svg class="icon"><use href="#i-check"/></svg></span><span>Read your medicines — 4 lines</span>';
+  }, 700);
+  setTimeout(function(){
+    s2.classList.add('done'); s2.innerHTML='<span class="tick"><svg class="icon"><use href="#i-check"/></svg></span><span>Checked your visits — 2 found</span>';
+    s2.querySelector('span:last-child') && (s2.querySelector('span.spin')||{}).style;
+  }, 1500);
+  setTimeout(function(){
+    s3.innerHTML='<span class="spin"></span><span>Looking at your papers, 3 pages</span>';
+  }, 1500);
+  setTimeout(function(){
+    s3.classList.add('done'); s3.innerHTML='<span class="tick"><svg class="icon"><use href="#i-check"/></svg></span><span>Looked at your papers — 3 pages</span>';
+    document.getElementById('asktrace').style.display='none';
+    var box=document.getElementById('askanswer');
+    var lines=['Bring the pressure log you\'ve been keeping.','The insurance letter is already approved \u2014 no need to bring anything for that.','Nothing to eat for two hours before, in case blood is drawn.'];
+    var b=document.createElement('div'); b.className='bubble nura'; box.appendChild(b);
+    lines.forEach(function(l,i){ setTimeout(function(){ b.innerHTML += (i?'<br>':'')+l; }, i*650); });
+    setTimeout(function(){
+      b.innerHTML += '<div class="sources"><span class="src">Medicines</span><span class="src">Visits</span><span class="src">Insurance</span></div><div class="boundary">This is not a doctor\'s advice. Ask Dr Tan.</div><div class="looked">What Nura looked at: medicines, visits, insurance</div>';
+      note('Answer complete', 'The answer streamed in line by line as each part resolved — never held back until everything was ready. Sources are the exact records read, shown as chips.');
+    }, lines.length*650+300);
+  }, 2600);
+}
+
+/* ---------- Ask (Mei) canned answers ---------- */
+var ANS = {
+ b1: ['4.9 on 9 Sep, the highest in two years.', 'Upper limit 5.0. It was 4.2 in June. Dr Tan said "we will recheck in a few weeks" at 4:12 in the recording.'],
+ b2: ['Dr Ong at Island Hospital, or Dr Wong at Penang Adventist.', 'Both heart specialists, both on the AIA panel, neither in Dr Tan\'s group.']
+};
+function ansMei(k, btn){
+  var r=ANS[k]; var box=document.getElementById('ansboxmei');
+  box.innerHTML='<div class="card"><b style="font-size:14.5px">'+r[0]+'</b><div class="muted" style="margin-top:5px">'+r[1]+'</div><div class="why">From Pa\'s record. Sources shown on tap.</div></div>';
+  note('Answering Mei', 'The same answer engine Pa uses, scoped to Mei’s chief key — wider reach, still logged as her own act, never presented as if Pa asked it.');
+}
+
+/* ---------- messaging preview (Mei -> Pa) ---------- */
+function fmt(f){
+  ['card','voice','clip'].forEach(function(x){ document.getElementById('fmt-'+x).classList.toggle('on', x===f); });
+  var pv=document.getElementById('preview'); var txt=document.getElementById('compose').value;
+  if(f==='card'){ pv.innerHTML='<div class="muted" style="font-size:11px">Pa will see</div><div class="card" style="margin-top:6px"><b id="pv-text" style="font-size:16px">'+txt+'</b><div class="muted" style="margin-top:4px">From Mei, in Hokkien</div></div>'; }
+  else if(f==='voice'){ pv.innerHTML='<div class="muted" style="font-size:11px">Pa will hear</div><div class="card row" style="margin-top:6px"><div class="chip-icon tint-lav">▶</div><div><b style="font-size:15px">Voice note, 12 seconds</b><div class="muted">In Hokkien, your words</div></div></div>'; }
+  else { pv.innerHTML='<div class="muted" style="font-size:11px">Pa will watch</div><div class="scene family" style="height:90px;margin-top:6px"><i></i><i></i><div class="play">15 seconds</div></div><div class="muted" style="margin-top:6px">Your message over the park photo, narrated in Hokkien</div>'; }
+}
+
+/* ---------- timeline filter (Mei / Health) ---------- */
+function filt(s, b){
+  b.parentNode.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')}); b.classList.add('on');
+  document.querySelectorAll('#p-mei [data-sys]').forEach(function(t){ t.style.display = (s==='all'||t.dataset.sys===s) ? 'block':'none'; });
+}
+
+/* ---------- providers sheet title ---------- */
+document.addEventListener('click', function(e){
+  var t = e.target.closest && e.target.closest('[data-cat]');
+  if(t){ document.getElementById('prov-title').textContent = t.dataset.cat; note('Searching the directory', 'The same provider directory backs every category; distance is computed from Pa’s own saved area, never a generic city-wide list.'); }
+});
+
+/* ---------- clip captions, line by line ---------- */
+var CAPS = {
+ cap1:['Pa, your kidney check came back on 9 September.','The kidney number is a little higher than in June.','Nothing urgent. It can happen with the new water pill.','Nura will ask Dr Tan about it on Thursday.'],
+ cap2:['The water pill makes your body lose potassium.','A banana or a small bowl of spinach most days puts it back.','Do not take extra potassium tablets unless your doctor says so.'],
+ cap3:['Six walks out of seven. Well done.','Your pressure stayed steady all week.','One dinner tablet was late on Sunday.']
+};
+function playClip(id){
+  var el=document.getElementById(id); var lines=CAPS[id];
+  el.style.color='var(--ink)';
+  note('Playing the clip', 'Captions are shown line by line, timed to the narration — the same script that drives the spoken track in Pa’s own language.');
+  lines.forEach(function(l,i){ setTimeout(function(){ el.textContent=l; }, i*1700); });
+  setTimeout(function(){ el.textContent=lines.join(' '); el.style.color='var(--soft)'; }, lines.length*1700);
+}
+
+/* ---------- emergency card language ---------- */
+var EMG = {
+ en:['Conditions','Medicines','Allergies','Blood','Call','Insurer'],
+ ms:['Keadaan','Ubat-ubatan','Alahan','Darah','Hubungi','Penanggung insurans'],
+ zh:['病症','药物','过敏','血型','联系','保险公司']
+};
+function emgLang(l, btn){
+  btn.parentNode.querySelectorAll('.chip').forEach(function(c){c.classList.remove('on')}); btn.classList.add('on');
+  EMG[l].forEach(function(t,i){ document.getElementById('emg-l'+(i+1)).textContent=t; });
+  note('Switching the card\'s language', 'Only the labels and the card’s own words change — the facts (name, dose, blood type) are language-independent and never re-typed per language.');
+}
+
+/* ---------- tabbars (built once, shared markup for Pa and Mei) ---------- */
+(function buildTabbars(){
+  var tabs = [
+    {t:'home', l:'Home', i:'i-home'},
+    {t:'health', l:'Health', i:'i-heart'},
+    {t:'connect', l:'Connect', i:'i-people'},
+    {t:'services', l:'Services', i:'i-services'},
+    {t:'profile', l:'Profile', i:'i-user'}
+  ];
+  ['pa','mei'].forEach(function(p){
+    var bar=document.createElement('div'); bar.className='tabbar'; bar.id='tabbar-'+p;
+    tabs.forEach(function(x){
+      var b=document.createElement('button'); b.dataset.tab=x.t; if(x.t==='home') b.classList.add('on');
+      b.innerHTML='<svg class="icon"><use href="#'+x.i+'"/></svg>'+x.l;
+      b.onclick=function(){ go(p, x.t); };
+      bar.appendChild(b);
+    });
+    document.getElementById('p-'+p).appendChild(bar);
+  });
+})();
+</script>
+</body>
+</html>

@@ -40,6 +40,8 @@ import type {
   FoodLogIn,
   HandedOverOut,
   HealthOverviewOut,
+  InsightsReportOut,
+  InsightsStreamEvent,
   ItemDecision,
   JobKind,
   KeyOut,
@@ -331,12 +333,14 @@ export const ask = (token: string, profileId: string, question: string, mode: As
   api<AnswerOut>(`/profiles/${profileId}/ask`, { method: "POST", token, body: { question, mode, language } });
 
 /** The same question, streamed (docs/design-direction.md "Conversation, waiting and
- *  thinking"): `onStep` for each real part of his record read as it happens, `onDelta` (when
- *  given) for each chunk of the agent asker's own answer text as it is sent — the rule-based
- *  asker never calls it, its answer arriving whole — resolving with the finished answer, the
- *  same `AnswerOut` `ask` returns, so a caller can treat the two the same once the promise
- *  settles. A refusal (`OutOfScope`, a malformed question) throws `Refused`, exactly as `ask`
- *  throws it. */
+ *  thinking"): `onStep` for each real part of his record read as it happens, `onStepLabel`
+ *  (when given) for a narrator's own rephrasing of a step already sent — it may arrive at any
+ *  point, including after the answer, and never holds anything back for it
+ *  (`app.search.narrate.narrate_step_label`) — `onDelta` (when given) for each chunk of the
+ *  agent asker's own answer text as it is sent — the rule-based asker never calls it, its
+ *  answer arriving whole — resolving with the finished answer, the same `AnswerOut` `ask`
+ *  returns, so a caller can treat the two the same once the promise settles. A refusal
+ *  (`OutOfScope`, a malformed question) throws `Refused`, exactly as `ask` throws it. */
 export function askStream(
   token: string,
   profileId: string,
@@ -345,12 +349,14 @@ export function askStream(
   language: string,
   onStep: (key: string, label: string, name: string) => void,
   onDelta?: (text: string) => void,
+  onStepLabel?: (key: string, label: string) => void,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
     apiStream(`/profiles/${profileId}/ask/stream`, { method: "POST", token, body: { question, mode, language } }, (event) => {
       const streamed = event as unknown as AskStreamEvent;
       if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
+      else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
       else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
       else if (streamed.type === "answer") {
         settled = true;
@@ -368,6 +374,36 @@ export function askStream(
 /** A card's pre-rendered voice (E11), when the backend has the route. */
 export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
   apiBlob(`/profiles/${profileId}/feed/${itemId}/voice`, { token, query: { language } });
+
+// --- W1: the weekly report (Insights) --------------------------------------------------------
+
+/** The last report written, if there is one (`GET /profiles/{id}/insights`); a profile with
+ *  none yet throws `Refused("NotFound", 404)`, exactly as `Visit.tsx`'s own "no summary" reads
+ *  it — a caller tells "nothing generated yet" from a real failure the same way it always does. */
+export const insightsLatest = (token: string, profileId: string) => api<InsightsReportOut>(`/profiles/${profileId}/insights`, { token });
+
+/** A new report, streamed (`POST /profiles/{id}/insights/stream`): `onStep` for each real part
+ *  of the week Nura looked at as it happens, resolving with the finished report — the same
+ *  shape `askStream` streams an answer in. A refusal throws `Refused`, as `apiStream` always
+ *  throws one. */
+export function insightsStream(token: string, profileId: string, onStep: (key: string, label: string) => void): Promise<InsightsReportOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/insights/stream`, { method: "POST", token }, (event) => {
+      const streamed = event as unknown as InsightsStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "report") {
+        settled = true;
+        resolve(streamed.report);
+      }
+      // A "refusal" event is thrown by `apiStream` itself before it ever reaches `onEvent`.
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no report"));
+      })
+      .catch(reject);
+  });
+}
 
 /** The keys on the profile with their holders' names: the owner reads whom to call. */
 export const keys = (token: string, profileId: string) =>
@@ -919,8 +955,11 @@ export const find = (token: string, profileId: string, q: string, where: FindWhe
   api<FindOut>(`/profiles/${profileId}/find`, { token, method: "POST", body: { q, where, language } });
 
 /** The web and video filters, streamed (docs/design-direction.md): one real step while the
- *  allowlisted search runs, then the results `find` returns. Providers is a directory lookup
- *  with nothing to stream — callers keep using `find` for it. */
+ *  allowlisted search runs, then the results `find` returns. `onStepLabel` (when given) is a
+ *  narrator's own later rephrasing of that one step (`AskStepLabelEvent`'s own twin,
+ *  `FindStepLabelEvent`) — may arrive at any point, including after the results, and never
+ *  holds anything back for it. Providers is a directory lookup with nothing to stream —
+ *  callers keep using `find` for it. */
 export function findStream(
   token: string,
   profileId: string,
@@ -928,12 +967,14 @@ export function findStream(
   where: "web" | "videos",
   language: string,
   onStep: (key: string, label: string) => void,
+  onStepLabel?: (key: string, label: string) => void,
 ): Promise<FindOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
     apiStream(`/profiles/${profileId}/find/stream`, { token, method: "POST", body: { q, where, language } }, (event) => {
       const streamed = event as unknown as FindStreamEvent;
       if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
       else if (streamed.type === "results") {
         settled = true;
         resolve({ where, results: streamed.results });
