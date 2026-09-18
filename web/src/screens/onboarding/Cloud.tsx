@@ -78,6 +78,9 @@ export function CloudStep(): JSX.Element {
         ))}
       </div>
       <Status text={status} testId="cloud-status" />
+      <p class="caption" data-testid="cloud-count">
+        {picked.value.length > 0 ? fill(c.count, { n: picked.value.length }) : c.countNone}
+      </p>
       <Pill quiet onClick={() => setShowAll(!showAll)} testId="more-words">
         {showAll ? c.fewer : c.more}
       </Pill>

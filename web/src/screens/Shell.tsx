@@ -6,7 +6,7 @@ import { speak } from "../speech/speak";
 import { emergencyOnly } from "../offline/emergencyCache";
 import { density, profile } from "../store/session";
 import { fill, language, t } from "../strings";
-import { AskBar, Icon, TabBar, Wordmark, type IconName } from "../ui/kit";
+import { AskBar, Icon, PaperTile, Sheet, TabBar, Wordmark, type IconName } from "../ui/kit";
 import { ProfileSwitcher } from "./Switcher";
 
 /** Ask or search (docs/ui-mockup-v2.html), wired: Enter or Ask opens the answer, E03's recall
@@ -38,6 +38,54 @@ export function AskField({ placeholder, testId }: { placeholder: string; testId?
   );
 }
 
+/** The bell (docs/design/nura-concept-board.html): what is new for him — the vertical feed's
+ *  own cards, and the weekly report's own row, added here so a fresh report is never only one
+ *  tap he has to already know to make on Health. A sheet, not a second screen: it opens
+ *  nothing itself, only names where to go next. */
+function BellButton(): JSX.Element {
+  const s = t();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" class="head-button" aria-label={s.shell.bell} aria-haspopup="dialog" onClick={() => setOpen(true)} data-testid="bell">
+        <Icon name="bell" />
+      </button>
+      <Sheet title={s.shell.bell} open={open} onClose={() => setOpen(false)} closeLabel={s.shell.close} testId="bell-sheet">
+        <PaperTile testId="bell-rows">
+          <nav class="place-rows" aria-label={s.shell.bell}>
+            <button
+              type="button"
+              class="place-row"
+              onClick={() => {
+                setOpen(false);
+                go({ name: "feed" });
+              }}
+              data-testid="bell-feed"
+            >
+              <Icon name="today" />
+              <span class="place-word">{s.shell.bellFeed}</span>
+              <Icon name="chevron" />
+            </button>
+            <button
+              type="button"
+              class="place-row"
+              onClick={() => {
+                setOpen(false);
+                go({ name: "insights" });
+              }}
+              data-testid="bell-insights"
+            >
+              <Icon name="trends" />
+              <span class="place-word">{s.shell.bellInsights}</span>
+              <Icon name="chevron" />
+            </button>
+          </nav>
+        </PaperTile>
+      </Sheet>
+    </>
+  );
+}
+
 /** The header on every screen with the tab bar (docs/design-direction.md, Reference B's top
  *  bar): the menu, which opens Me; the serif wordmark; then the switcher, which names whose
  *  papers are open and opens every other set this person can; and the bell, which opens what is
@@ -61,13 +109,7 @@ export function ShellHeader(): JSX.Element {
       <span class="head-mark">
         <Wordmark name={s.appName} mark={false} />
       </span>
-      <span class="head-end">
-        {bell && (
-          <button type="button" class="head-button" aria-label={s.shell.bell} onClick={() => go({ name: "feed" })} data-testid="bell">
-            <Icon name="bell" />
-          </button>
-        )}
-      </span>
+      <span class="head-end">{bell && <BellButton />}</span>
       {/* Whose papers are open, on every screen, just under the bar. */}
       {papers && (
         <span class="head-whose">
@@ -109,13 +151,7 @@ function BoardTopBar({ spec }: { spec: TopBarSpec }): JSX.Element {
         <span class="head-mark">
           <Wordmark name={s.appName} mark={false} />
         </span>
-        <span class="head-end">
-          {bell && (
-            <button type="button" class="head-button" aria-label={s.shell.bell} onClick={() => go({ name: "feed" })} data-testid="bell">
-              <Icon name="bell" />
-            </button>
-          )}
-        </span>
+        <span class="head-end">{bell && <BellButton />}</span>
         {/* Whose papers are open (product-reset.md §6): a real, load-bearing control the
             board's own single-profile mock never had to draw — kept here, as it was in the
             old global header, even though the board's Home topbar itself has no room for it.

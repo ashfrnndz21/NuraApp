@@ -51,6 +51,12 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
   const [busy, setBusy] = useState(false);
   const [sentQuestion, setSentQuestion] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
+  // The agent asker's own answer (`NURA_ASKER=claude`), as its lines actually land — never
+  // waited for whole: each is drawn the instant its `answer_delta` event arrives, no timer,
+  // no typewriter. The rule-based asker never sends one, so this stays empty for it and the
+  // screen behaves exactly as before (docs/design-direction.md "Conversation, waiting and
+  // thinking").
+  const [deltaLines, setDeltaLines] = useState<string[]>([]);
   // The one thing a screen reader hears while Nura works: that she started, and that the
   // answer is there — never a line per step (docs/design-direction.md "Conversation, waiting
   // and thinking").
@@ -71,14 +77,24 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     setFound(null);
     setSentQuestion(text);
     setSteps([]);
+    setDeltaLines([]);
     setAnnounce(s.feed.askThinking);
     try {
       if (where === "records") {
         // Streamed (docs/design-direction.md "Conversation, waiting and thinking"): a step
         // the instant each real part of his record is read, the answer the instant it is
-        // ready — never held back to make the trace look slower.
-        const heard = await nura.askStream(bearer, papers.profile_id, text, mode, language.value, (key, label, name) =>
-          setSteps((was) => [...was, { key, label, name }]),
+        // ready — never held back to make the trace look slower. A narrator's own rephrasing
+        // of a step (`onStepLabel`) may follow well after that step, even after the answer;
+        // it only ever replaces that step's label in place.
+        const heard = await nura.askStream(
+          bearer,
+          papers.profile_id,
+          text,
+          mode,
+          language.value,
+          (key, label, name) => setSteps((was) => [...was, { key, label, name }]),
+          (text) => setDeltaLines((was) => [...was, text]),
+          (key, label) => setSteps((was) => was.map((step) => (step.key === key ? { ...step, label } : step))),
         );
         // A red flag heard in the question went the red-flag path on the backend first: what to
         // do now, the backend's card, exactly as after a red word tapped on Today.
@@ -99,8 +115,14 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
         setAnnounce(s.feed.askAnswered);
       } else {
         setFound(
-          await nura.findStream(bearer, papers.profile_id, text, where, language.value, (key, label) =>
-            setSteps((was) => [...was, { key, label, name: label }]),
+          await nura.findStream(
+            bearer,
+            papers.profile_id,
+            text,
+            where,
+            language.value,
+            (key, label) => setSteps((was) => [...was, { key, label, name: label }]),
+            (key, label) => setSteps((was) => was.map((step) => (step.key === key ? { ...step, label, name: label } : step))),
           ),
         );
         setAnnounce(s.feed.askAnswered);
@@ -165,6 +187,19 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
             <p>{sentQuestion}</p>
           </MessageBubble>
           {busy && <StepTrace steps={traceSteps} working={s.feed.askThinking} testId="ask-trace" />}
+          {/* The agent asker's own answer, drawn as it lands (`onDelta`): each line the
+             instant its own event arrives, the pulsing dots (inside `StepTrace`, above)
+             still showing until the final `answer` event replaces all of this with the
+             finished, cited answer below. Never shown once the answer itself has arrived. */}
+          {busy && deltaLines.length > 0 && (
+            <div class="lines" data-testid="answer-delta-lines">
+              {deltaLines.map((line, at) => (
+                <p key={at} data-testid="answer-delta-line">
+                  {line}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {view && (
