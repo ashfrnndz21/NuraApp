@@ -499,3 +499,26 @@ def test_claude_builds_on_the_sdks_own_anthropic_api_key_env_var(
 def test_an_unknown_extractor_name_refuses_to_start() -> None:
     with pytest.raises(NoExtractor):
         extractor_for(_settings(extractor="ocr-3000"))
+
+
+
+def _every_schema(node: object):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _every_schema(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _every_schema(value)
+
+
+def test_the_structured_output_schema_is_one_the_api_accepts() -> None:
+    """Hit live on the owner's key (2026-09-18): a property without a `type`, and `minimum`/
+    `maximum` on a number, are both refused by the API's structured output — every upload was
+    a 500. Every property carries a type; no numeric bounds ride in the schema."""
+    from app.ingestion.claude_extract import _SCHEMA
+
+    for props in (node["properties"] for node in _every_schema(_SCHEMA) if isinstance(node, dict) and "properties" in node):
+        for name, prop in props.items():
+            assert "type" in prop, name
+            assert "minimum" not in prop and "maximum" not in prop, name
