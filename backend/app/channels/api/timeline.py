@@ -21,9 +21,10 @@ The yeses — for a visit, a step of its status, and hanging a paper — are min
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import Sequence
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import StreamingResponse
@@ -36,6 +37,7 @@ from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.refusals import refused
+from app.channels.api.sse_pump import stream_with_background_pump
 from app.channels.api.timeline_schemas import (
     AnswerOut,
     AppointmentIn,
@@ -71,7 +73,7 @@ from app.reasoning.feelings.service import record_tap
 from app.safety.red_flags import detect
 from app.search.ask import AskStep, recall
 from app.search.asker import AnswerDelta
-from app.search.narrate import NarratedStep, Narrator
+from app.search.narrate import NarratedStep, Narrator, narrate_step_label
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
 
@@ -319,40 +321,49 @@ async def ask(body: AskIn, request: Request, context: Context, session: Db) -> A
     return AnswerOut.of(answer)
 
 
-async def _step_event(
-    narrator: Narrator,
-    steps_so_far: list[NarratedStep],
-    step: AskStep,
-    lang: str,
-    reader: Reader,
-) -> bytes:
+def _step_event_now(step: AskStep, steps_so_far: list[NarratedStep], lang: str, reader: Reader) -> bytes:
     """One `AskStep` off `recall_stream`, in his words (or the caregiver's twin, by his
     name): the label the trace shows while it works, and the short name the collapsed "What
     Nura looked at" line joins. `key` is a part of `app.search.ask.STEP_KEYS` — never a row,
     never a value off his record, so a step carries nothing beyond which part was read and how
     many things it held (`step.count`).
 
-    `narrator` may rephrase that label livelier, the way the owner wants the trace to feel in
-    the demo (`app.search.narrate.Narrator`); on the fixture narrator, or on any doubt a
-    Claude-backed one has, it stays the catalogue's own words, unchanged — nothing here ever
-    waits on the narrator, it only ever changes which words are already on the wire.
-    `steps_so_far` is every step already streamed this ask, oldest first, appended to here, so
-    a narrator sees the whole trace so far, not just the newest step; only the line for this
-    step is used, so words already sent for an earlier step never change under it."""
+    Sent at once, with the catalogue's own label — a step is never held back for a narrator
+    (`app.search.narrate.narrate_step_label`'s own docstring), however long a Claude-backed
+    one takes to answer. `steps_so_far` is every step already streamed this ask, oldest first,
+    appended to here, so a narrator asked about this step later sees the whole trace so far,
+    not just the newest one."""
     label = reader.says(ASK_STEPS[lang][step.key])
     steps_so_far.append(NarratedStep(key=step.key, label=label, count=step.count))
-    text = label
-    async for line in narrator.narrate(steps_so_far, language=lang, reader=reader):
-        if line.key == step.key:
-            text = line.text
     return _sse(
         {
             "type": "step",
             "key": step.key,
-            "label": text,
+            "label": label,
             "name": ASK_STEP_NAMES[lang][step.key],
         }
     )
+
+
+async def _narrate_step_later(
+    queue: asyncio.Queue[bytes | object],
+    narrator: Narrator,
+    steps_so_far: Sequence[NarratedStep],
+    step: AskStep,
+    label: str,
+    lang: str,
+    reader: Reader,
+) -> None:
+    """Awaited in the background, never in the stream's own path (`_step_event_now` already
+    sent the step, with its catalogue label, before this is even scheduled). Puts a
+    `step_label` follow-up on `queue` only when the narrator actually had something different
+    to say; an older web client that has never seen this event type simply ignores it
+    (`web/src/screens/Ask.tsx`, `Thinking.tsx`)."""
+    new_label = await narrate_step_label(
+        narrator, steps_so_far, step.key, label, language=lang, reader=reader
+    )
+    if new_label is not None:
+        await queue.put(_sse({"type": "step_label", "key": step.key, "label": new_label}))
 
 
 @router.post("/{profile_id}/ask/stream")
@@ -368,14 +379,21 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
     nothing: it is answered before any part of the record is looked up, same as `ask` above,
     so there is nothing to trace.
 
+    Zero or more `step_label` events may follow any `step`, whenever — even after the final
+    `answer` — a Claude-backed narrator (`NURA_NARRATOR=claude`) actually rephrases that step's
+    label; the narrator's own call runs in the background (`_narrate_step_later`,
+    `app.search.narrate.narrate_step_label`) and never holds the step itself, a tool call or
+    the answer back, however long it takes (`app.llm.narrate.NARRATE_DEADLINE_S`). An older web
+    client that has never seen `step_label` simply ignores it.
+
     Opens its own session (`session_scope`), never `Depends(db)`: FastAPI closes a `yield`
     dependency the moment this function returns the `StreamingResponse` object, well before
-    Starlette actually drives `events()` to send the body — a session from `Depends(db)` would
+    Starlette actually drives the pump to send the body — a session from `Depends(db)` would
     already be closed by the time a step tried to read with it (`app.channels.api.deps.
     session_scope`)."""
     outside = providers_of(request)
 
-    async def events() -> AsyncIterator[bytes]:
+    async def pump(queue: asyncio.Queue[bytes | object]) -> None:
         try:
             async with session_scope(request) as session:
                 heard = detect(body.question)
@@ -392,12 +410,13 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                         said=body.question,
                     )
                     answer_out = AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
-                    yield _sse({"type": "answer", "answer": answer_out.model_dump(mode="json")})
+                    await queue.put(_sse({"type": "answer", "answer": answer_out.model_dump(mode="json")}))
                     return
                 lang = await language_for(session, context, body.language)
                 reader = await reader_of(session, context, body.language)
                 steps_so_far: list[NarratedStep] = []
                 reached_out = False
+                narration_tasks: list[asyncio.Task[None]] = []
                 async for event in outside.asker.ask_stream(
                     session,
                     context=context,
@@ -427,12 +446,32 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
                                 shared_with_label=outside.narrator.external_processor,
                             )
                             reached_out = True
-                        yield await _step_event(outside.narrator, steps_so_far, event, lang, reader)
+                        await queue.put(_step_event_now(event, steps_so_far, lang, reader))
+                        # A snapshot of the trace so far: `steps_so_far` keeps growing after
+                        # this, and a narrator asked about an earlier step must still see the
+                        # trace as it stood when that step was streamed, not a later one.
+                        snapshot = list(steps_so_far)
+                        label = snapshot[-1].label
+                        narration_tasks.append(
+                            asyncio.create_task(
+                                _narrate_step_later(
+                                    queue, outside.narrator, snapshot, event, label, lang, reader
+                                )
+                            )
+                        )
                     elif isinstance(event, AnswerDelta):
-                        yield _sse({"type": "answer_delta", "text": event.text})
+                        await queue.put(_sse({"type": "answer_delta", "text": event.text}))
                     else:
-                        yield _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
+                        await queue.put(
+                            _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
+                        )
+                if narration_tasks:
+                    # Nothing here delayed a step, a tool call or the answer — every one of
+                    # those already went out above. This only delays the stream's own close,
+                    # so a still-running narration's `step_label` still reaches the wire
+                    # instead of being cancelled the instant the answer is sent.
+                    await asyncio.gather(*narration_tasks, return_exceptions=True)
         except Refusal as refusal:
-            yield await _refusal_event(request, refusal)
+            await queue.put(await _refusal_event(request, refusal))
 
-    return StreamingResponse(events(), media_type="text/event-stream")
+    return StreamingResponse(stream_with_background_pump(pump), media_type="text/event-stream")
