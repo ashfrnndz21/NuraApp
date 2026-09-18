@@ -77,6 +77,7 @@ from anthropic import (
 
 from app.channels.about_him import Reader
 from app.delivery.timeline_strings import ASK_STEP_NAMES, verified
+from app.llm.blocks import answer_text
 from app.llm.prompts import load_prompt
 from app.search.narrate import NarratedLine, NarratedStep
 
@@ -382,7 +383,7 @@ class ClaudeNarrator:
             return
 
         try:
-            text = message.content[0].text  # type: ignore[union-attr]
+            text = answer_text(message)
             payload = json.loads(text)
             if not isinstance(payload, Mapping):
                 raise TypeError("the model's answer was not a JSON object")
