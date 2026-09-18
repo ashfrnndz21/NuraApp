@@ -264,6 +264,20 @@ async def get_job(session: AsyncSession, *, context: KeyContext, job_id: uuid.UU
     return found[0]
 
 
+async def jobs_looking_today(session: AsyncSession, *, context: KeyContext, day: Day) -> bool:
+    """Whether any of his self-searches is due to run today and has not run yet — for the
+    feed's own "Nura is looking for today's reads" line (docs/design-direction.md,
+    'Conversation, waiting and thinking'), never the watches list itself (`list_jobs`,
+    owner/chief only, #185): a plain read of the same rows `_learning` already runs inline,
+    synchronously, within `GET /feed` (`app.delivery.feed.compose._learning`'s own module
+    docstring: "a daily or weekly one that has not run today or this week runs again") — so
+    this is never a guess at what the request that follows will actually do, only a read of
+    whether it has work left before it runs. `due` is the exact rule `_learning` itself
+    calls; this changes nothing and writes nothing."""
+    jobs = await audited_read(session, SearchJob, context, Scope.RECORDS)
+    return any(due(job, day) for job in jobs)
+
+
 async def pause_job(
     session: AsyncSession, *, context: KeyContext, job_id: uuid.UUID, enabled: bool
 ) -> SearchJob:
