@@ -78,6 +78,7 @@ from app.onboarding.models import (
     PlanPrompt,
     ProfileSettings,
 )
+from app.reasoning.analyst.models import InsightReport
 from app.reasoning.feelings.models import FeelingNote, FeelingTap
 from app.reasoning.models import TrendCard
 from app.reasoning.visits.models import (
@@ -172,6 +173,7 @@ TABLES: tuple[Table, ...] = (
     InsuranceClaim.__table__,
     ScheduledCall.__table__,
     DoseQuestion.__table__,
+    InsightReport.__table__,
 )
 
 
@@ -251,7 +253,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0048_provider_category"]
+    assert heads == ["0049_health_analyst"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(

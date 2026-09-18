@@ -318,6 +318,10 @@ CLASSES: dict[str, str] = {
     # Whether a product is a prescription medicine, a supplement or a TCM remedy (E04-03) is a
     # fact about the person's health — what he takes — not an operational detail.
     "medication_line.product_kind": HEALTH,
+    # The Health Analyst's own question about a line, "is this something to ask about the
+    # way a supplement is" (migration 0049): still what he takes, the same standing as
+    # `product_kind` above.
+    "medication_line.category": HEALTH,
     "medication_line.dose": HEALTH,
     "medication_line.prescriber": HEALTH,
     "medication_line.source_kind": HEALTH,
@@ -1102,6 +1106,20 @@ CLASSES: dict[str, str] = {
     "insurance_claim.status_changed_by_person_id": IDENTIFIER,
     "insurance_claim.status_changed_confirmation_id": CONSENT,
     "insurance_claim.status_changed_at": OPERATIONAL,
+    # --- the Health Analyst's weekly report (`app.reasoning.analyst`) -----------------------
+    "insight_report.id": HEALTH,
+    "insight_report.generated_at": OPERATIONAL,
+    "insight_report.week_of": OPERATIONAL,
+    "insight_report.language": OPERATIONAL,
+    # Which analyst wrote it, "rule" or "claude" (`app.reasoning.analyst.provider`):
+    # provenance of the row, not itself a fact about his health.
+    "insight_report.source": OPERATIONAL,
+    # The boundary line the report carried (`Surface.INSIGHT`), the same standing as
+    # `feed_item.boundary` above.
+    "insight_report.boundary": HEALTH,
+    # Every section and insight the report holds: composed, already-verified text about his
+    # week — health, the same standing as `trend_card.lines`.
+    "insight_report.sections": HEALTH,
 }
 
 
