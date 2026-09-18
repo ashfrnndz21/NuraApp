@@ -970,7 +970,9 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/notes"): "writes his own note; returns it",
     ("POST", f"{P}/readings"): "writes a reading; returns the event and fact it wrote",
     ("POST", f"{P}/photos"): "keeps a photo; returns its card",
+    ("POST", f"{P}/photos/stream"): "keeps a photo, streamed; returns its card (see /photos)",
     ("POST", f"{P}/imports"): "keeps a PDF; returns its card",
+    ("POST", f"{P}/imports/stream"): "keeps a PDF, streamed; returns its card (see /imports)",
     ("POST", f"{P}/readings/photo"): "keeps a photo of a machine; returns its card",
     (
         "POST",
