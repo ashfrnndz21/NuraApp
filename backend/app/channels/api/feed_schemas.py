@@ -6,7 +6,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
@@ -75,6 +75,19 @@ class FeedItemOut(BaseModel):
     """The watch that found this card, when a search made it; None for his own record's."""
 
 
+class FeedJobsOut(BaseModel):
+    """Whether today's self-searches are still to run, in the background
+    (`app.delivery.feed.background`), never inline in this request: "looking" while a run is
+    scheduled or in flight, "done" once it has finished (however many of its jobs made a
+    card), "none" when nothing was ever due today. What the honest "Nura is looking for
+    today's reads" line binds to (docs/design-direction.md, "Conversation, waiting and
+    thinking") — a real read of the run's own record, never a guess or a timer."""
+
+    state: Literal["looking", "done", "none"]
+    started_at: datetime | None = None
+    done_at: datetime | None = None
+
+
 class FeedPageOut(BaseModel):
     audience: str
     items: list[FeedItemOut]
@@ -82,9 +95,10 @@ class FeedPageOut(BaseModel):
     next_cursor: str | None
     quiet: bool
     held_by_caps: dict[str, int]
+    jobs: FeedJobsOut = FeedJobsOut(state="none")
 
     @classmethod
-    def of(cls, page: Page) -> FeedPageOut:
+    def of(cls, page: Page, *, jobs: FeedJobsOut | None = None) -> FeedPageOut:
         return cls(
             audience=page.audience.value,
             items=[
@@ -95,6 +109,7 @@ class FeedPageOut(BaseModel):
             next_cursor=page.next_cursor,
             quiet=page.quiet,
             held_by_caps=page.held_by_caps,
+            jobs=jobs if jobs is not None else FeedJobsOut(state="none"),
         )
 
 
