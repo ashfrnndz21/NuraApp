@@ -43,6 +43,7 @@ from app.drugs.registry import (
 )
 from app.errors import Refusal
 from app.ingestion.models import CONFIDENCE_THRESHOLD
+from app.insurance.ledger import medicine_monthly_costs
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.language.review import queue_pending_interaction
@@ -786,6 +787,9 @@ class LineView:
     """One of today's doses of this line has passed its window untapped."""
     source: str = ""
     """Where the line came from and on which day, in his words: the card's source line."""
+    monthly_cost_said: str | None = None
+    """"S$15 a month", from a pharmacy receipt's matched lines (`app.insurance.ledger.
+    medicine_monthly_costs`); None where no receipt has ever matched this generic."""
 
 
 async def _his_day(session: AsyncSession, context: KeyContext) -> Day:
@@ -921,6 +925,7 @@ async def active_lines(
     lines = await _active_lines(session, context=context)
     if not lines:
         return []
+    costs = {cost.generic: cost.monthly_said for cost in await medicine_monthly_costs(session, context=context, language=lang)}
     ids = [line.id for line in lines]
     supplies = await audited_read(
         session, Supply, context, Scope.MEDICINES, where=(Supply.line_id.in_(ids),)
@@ -1005,6 +1010,7 @@ async def active_lines(
                     window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[1]
                     for a in Dose.from_json(line.dose).scheduled_anchors
                 ),
+                monthly_cost_said=costs.get(line.generic),
             )
         )
     return views

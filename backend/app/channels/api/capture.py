@@ -115,6 +115,7 @@ async def add_photo(
         extractor=providers.extractor,
         language=await _language(session, context),
         asked_as=body.document_kind,
+        registry=providers.drug_registry,
     )
     return await _card_out(session, context, card)
 
@@ -146,6 +147,7 @@ async def import_pdf(
         language=await _language(session, context),
         asked_as=body.document_kind,
         source=body.source,
+        registry=providers.drug_registry,
     )
     return await _card_out(session, context, card)
 
@@ -215,15 +217,17 @@ async def type_in(
 
 @router.post("/{profile_id}/review-cards/{card_id}/confirm")
 async def confirm_card(
-    card_id: uuid.UUID, body: ReviewConfirmIn, context: Context, session: Db
+    card_id: uuid.UUID, body: ReviewConfirmIn, request: Request, context: Context, session: Db
 ) -> ReviewConfirmedOut:
     """Close the card on the yes minted for exactly these decisions. Each confirmed or
     corrected field becomes a fact with the photo as provenance and the caller as its
     confirmer; a rejected one writes nothing; State recomputes as each lands. A machine's
     screen becomes one reading event and its facts; a hospital letter or a clinic slip the
-    event it records. A yes for other decisions is `NotWhatWasConfirmed` (400); a field Nura
-    could not read and nobody typed, confirmed as read, is `UnreadableField` (400); a card
-    already closed is `AlreadyConfirmed` (409)."""
+    event it records; a pharmacy receipt's matched lines also a cost entry
+    (`app.ingestion.review._write_receipt`). A yes for other decisions is
+    `NotWhatWasConfirmed` (400); a field Nura could not read and nobody typed, confirmed as
+    read, is `UnreadableField` (400); a card already closed is `AlreadyConfirmed` (409)."""
+    providers = providers_of(request)
     card, fields, facts = await confirm_review_card(
         session,
         context=context,
@@ -231,6 +235,7 @@ async def confirm_card(
         decisions=[decision.as_decision() for decision in body.decisions],
         confirmation_id=body.confirmation_id,
         episode_id=body.episode_id,
+        registry=providers.drug_registry,
     )
     return ReviewConfirmedOut(
         card=ReviewCardOut.of(card, fields, language=await capture_language(session, context)),

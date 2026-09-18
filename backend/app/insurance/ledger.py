@@ -33,6 +33,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,16 +43,23 @@ from app.insurance.claim import CLAIM_SCOPE, ClaimStatus, InsuranceClaim
 from app.insurance.policy import Policy, PolicyType
 from app.insurance.strings import CURRENCY_BY_REGION, claim_status_word, say_money
 from app.keys.context import KeyContext
-from app.medicines.strings import say_date
+from app.medicines.strings import say_date, say_monthly_cost
 from app.memory.models import Appointment
+from app.memory.semantic import current_facts
 from app.regions import REGION_TZ, Region
 
 __all__ = [
     "Ledger",
     "LedgerLine",
+    "MedicineMonthlyCost",
     "PolicyTotal",
     "insurance_ledger",
+    "medicine_monthly_costs",
 ]
+
+MEDICINE_COST_SUBJECT = "medicine_cost"
+"""What `app.ingestion.review._write_receipt` writes a matched pharmacy receipt line's cost
+under: subject `medicine_cost`, attribute the generic, value carrying `total_cents`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,3 +227,44 @@ async def insurance_ledger(
 
 def _said(cents: int | None, region: Region) -> str | None:
     return None if cents is None else say_money(cents, region)
+
+
+@dataclass(frozen=True, slots=True)
+class MedicineMonthlyCost:
+    """What one medicine or supplement on his list costs a month, from every pharmacy
+    receipt line matched to it (`app.ingestion.review._write_receipt`), summed and spread
+    over the calendar months a receipt actually fell in — one receipt alone stands for what
+    a month costs; more receipts refine it, never inflate it."""
+
+    generic: str
+    monthly_cents: int
+    monthly_said: str
+
+
+async def medicine_monthly_costs(
+    session: AsyncSession, *, context: KeyContext, language: str
+) -> Sequence[MedicineMonthlyCost]:
+    """Every medicine or supplement with at least one matched pharmacy receipt line, and what
+    it costs a month. Read under `Scope.MEDICINES` — the same door the medicines list already
+    stands behind, not this module's own `Scope.MONEY`: a key that can see what he takes can
+    see what it costs to keep taking it; the claims ledger above is untouched by this."""
+    facts = await current_facts(session, context=context, subject=MEDICINE_COST_SUBJECT)
+    by_generic: dict[str, list[Any]] = {}
+    for fact in facts:
+        by_generic.setdefault(fact.attribute, []).append(fact)
+    zone = REGION_TZ[context.region]
+    out: list[MedicineMonthlyCost] = []
+    for generic in sorted(by_generic):
+        rows = by_generic[generic]
+        months = {as_utc(row.valid_from).astimezone(zone).strftime("%Y-%m") for row in rows}
+        total_cents = sum(int((row.value or {}).get("total_cents", 0)) for row in rows)
+        monthly_cents = round(total_cents / max(1, len(months)))
+        out.append(
+            MedicineMonthlyCost(
+                generic=generic,
+                monthly_cents=monthly_cents,
+                monthly_said=say_monthly_cost(say_money(monthly_cents, context.region), language),
+            )
+        )
+    # A deterministic order, the ledger's own rule for any sum: by generic name.
+    return out

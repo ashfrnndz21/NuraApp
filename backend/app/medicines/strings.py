@@ -897,6 +897,24 @@ def say_doctor(prescriber: str | None, language: str) -> str:
     return prescriber if prescriber else YOUR_DOCTOR[language]
 
 
+# @patient phrase
+MONTHLY_COST: Mapping[str, Mapping[str, str]] = {
+    "en": {"a_month": "{amount} a month"},
+    "ms": {"a_month": "{amount} sebulan"},
+    "zh": {"a_month": "每月{amount}"},
+}
+"""What a pharmacy receipt's matched cost entries add up to, for the Medicines screen
+(`app.insurance.ledger.medicine_monthly_costs`): his own currency amount, said once, in
+words that never change with the number."""
+
+
+def say_monthly_cost(amount_said: str, language: str) -> str:
+    """'S$15 a month': an amount already in his own currency (`app.insurance.strings.
+    say_money`), never a bare number."""
+    lang = language if language in MONTHLY_COST else DEFAULT_LANGUAGE
+    return MONTHLY_COST[lang]["a_month"].format(amount=amount_said)
+
+
 def anchor_slots(anchors: Sequence[str], language: str) -> dict[str, str]:
     """`{anchor1}`, `{anchor2}`… for the HOW_OFTEN line: his words for each moment."""
     return {

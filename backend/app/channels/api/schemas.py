@@ -1260,6 +1260,8 @@ class LineOut(BaseModel):
     missed: bool = False
     source: str = ""
     """Where the line came from and on which day, in his words: the card's source line."""
+    monthly_cost_said: str | None = None
+    """"S$15 a month", from a pharmacy receipt's matched lines; None where none has matched."""
     withheld: list[str] = []
     """The source the reader's key may not read — `artifact` (the label photo is the
     record's), `event` — by name, its id left out."""
@@ -1277,6 +1279,7 @@ class LineOut(BaseModel):
             due_now=view.due_now,
             missed=view.missed,
             source=view.source,
+            monthly_cost_said=view.monthly_cost_said,
             withheld=list(withheld),
         )
 
