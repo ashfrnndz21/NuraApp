@@ -571,3 +571,34 @@ test("a question kept with a visit booked goes on that visit's list at once (E05
   expect(kept!.added_by_person_id).toBeTruthy();
   expect((await sitting(request, pa)).questions[0]!.handed_over_to).toBe(list.appointment);
 });
+
+/** The owner's report: he signed in on a fresh number and landed on Home, with nothing on
+ *  it — his account had no name at all. A bare profile (no name typed anywhere: not at sign
+ *  in, not on the "for me" door) must go to onboarding first, and stay there through a
+ *  relaunch, until it is finished (E01-01's gate). Once he has a name, he lands on Home,
+ *  never back in onboarding. */
+test("a bare profile always opens onboarding, never Home, and stays that way through a relaunch (E01-01)", async ({ page }) => {
+  const phone = freshPhone("+659883");
+  await captureSpeech(page);
+  // No name at sign in, and none on the "for me" door either: nothing types his name anywhere.
+  await signInThroughTheApp(page, phone, "");
+  await page.getByTestId("door-for-me").click();
+  await page.getByTestId("agree").click();
+
+  const main = page.locator("main.onboarding");
+  await expect(main).toHaveAttribute("data-stage", "about");
+  await expect(page.locator("nav.tabbar")).toHaveCount(0);
+
+  // A relaunch — closing the app mid-way and opening it again — restores the session and must
+  // land him back in onboarding, not on Home with nothing on it: the bug as the owner saw it.
+  await page.reload();
+  await expect(main).toHaveAttribute("data-stage", "about");
+  await expect(page.locator("nav.tabbar")).toHaveCount(0);
+
+  // He gives his name; onboarding still has more to ask (About you has more of its own
+  // questions before the cloud), so he stays in it, not Home.
+  await page.getByLabel("The name Nura uses").fill("Pa");
+  await page.getByTestId("about-next").click();
+  await expect(main).not.toHaveAttribute("data-item", "name");
+  await expect(page.locator("nav.tabbar")).toHaveCount(0);
+});
