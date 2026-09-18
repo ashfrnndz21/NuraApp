@@ -681,6 +681,9 @@ export interface Strings {
       kindInsuranceClaim: string;
       kindDeviceScreen: string;
       kindOther: string;
+      kindPillPhoto: string;
+      kindPharmacyReceipt: string;
+      pillProposal: string;
       unreadable: string;
       typeIt: string;
       fromPage: string;

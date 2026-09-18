@@ -239,6 +239,15 @@ label.pill:focus-within {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
 }
+/* Tap feedback (docs/design/motion.md): a pill presses in under a finger, 0.98 scale over
+   --press (90ms) — real touch feedback, never a hover trick, since a touch has no hover. Reduce
+   Motion drops `transform` from what transitions (the global rule below), so this is instant. */
+.pill:not(:disabled) {
+  transition: transform var(--press);
+}
+.pill:not(:disabled):active {
+  transform: scale(0.98);
+}
 .pill svg {
   width: var(--icon-size);
   height: var(--icon-size);

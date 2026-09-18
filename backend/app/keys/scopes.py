@@ -77,6 +77,12 @@ and there is no patient here yet to have written any or to have let anyone read 
 _SUBJECT_SCOPES: dict[str, Scope] = {
     "medicine": Scope.MEDICINES,
     "medication": Scope.MEDICINES,
+    "pill": Scope.MEDICINES,
+    "medicine_cost": Scope.MEDICINES,
+    # A pill photo's own fields (`app.ingestion.review`) and the cost entry a matched
+    # pharmacy receipt line derives sit under the same door as any other medicine fact —
+    # never RECORDS: a key that cannot see his medicines should not see what they cost or
+    # what a loose pill was guessed to be either.
     "blood_pressure": Scope.READINGS,
     "blood_sugar": Scope.READINGS,
     "heart_rate": Scope.READINGS,

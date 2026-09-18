@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, apiBlob, apiUpload, CALL_DEADLINE_MS, Refused, Unreachable } from "../../src/api/client";
+import { api, apiBlob, apiUpload, CALL_DEADLINE_MS, isPending, pendingSignal, Refused, Unreachable } from "../../src/api/client";
 
 /** A "no" is always a refusal the screen can say, whatever the body it came in. */
 
@@ -134,5 +134,73 @@ describe("a stalled blob or upload gives up at the deadline, not for ever (#193)
     expect(await sent).toBeInstanceOf(Unreachable);
     expect(aborted).toEqual(["/api/profiles/p/appointments/a1/recording"]);
     vi.useRealTimers();
+  });
+});
+
+/** `pendingSignal`/`isPending`: the one motion mechanism (docs/design/motion.md) — `client.ts`'s
+ *  own count of calls out under a key, which `ui/kit/Pending.tsx`'s `PendingCard` reads live to
+ *  stand its Skeleton in a card's shape, and to know the instant to stop. Never a screen's own
+ *  loading flag, never a timer: a plain count, up when a tagged call is made and down however it
+ *  settles. */
+describe("pendingSignal: the API client's own pending count, per key (docs/design/motion.md)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function pending(status = 200, body: unknown = { ok: true }) {
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:8124" } });
+    let resolveFetch: (value: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    return {
+      settle: () => resolveFetch(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } })),
+    };
+  }
+
+  it("is false before a tagged call, true the instant it is made — queueing time included, not only once it lands — and false again once it settles", async () => {
+    const { settle } = pending();
+    expect(isPending("today")).toBe(false);
+    const call = api("/profiles/p/today", { key: "today" });
+    expect(isPending("today")).toBe(true);
+    expect(pendingSignal("today").value).toBe(1);
+    settle();
+    await call;
+    expect(isPending("today")).toBe(false);
+    expect(pendingSignal("today").value).toBe(0);
+  });
+
+  it("never touches a different key, or a call with no key at all", async () => {
+    const { settle } = pending();
+    const call = api("/profiles/p/today", { key: "today" });
+    expect(isPending("medicines")).toBe(false);
+    settle();
+    await call;
+
+    vi.unstubAllGlobals();
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:8124" } });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })));
+    await api("/profiles/p/today");
+    expect(isPending("today")).toBe(false);
+  });
+
+  it("clears on a refusal and on an unreachable network too — a failure is still a settle", async () => {
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:8124" } });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ refusal: "NotAllowed" }), { status: 403, headers: { "Content-Type": "application/json" } })));
+    await expect(api("/profiles/p/today", { key: "today" })).rejects.toBeInstanceOf(Refused);
+    expect(isPending("today")).toBe(false);
+
+    vi.unstubAllGlobals();
+    vi.stubGlobal("window", { location: { origin: "http://127.0.0.1:8124" } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("network down");
+      }),
+    );
+    await expect(api("/profiles/p/today", { key: "today" })).rejects.toBeInstanceOf(Unreachable);
+    expect(isPending("today")).toBe(false);
   });
 });

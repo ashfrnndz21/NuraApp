@@ -1466,6 +1466,10 @@ export const en = {
       // @patient
       kindOther: "This is a health paper.",
       // @patient
+      kindPillPhoto: "This is a photo of a pill.",
+      // @patient
+      kindPharmacyReceipt: "This is a pharmacy receipt.",
+      // @patient
       unreadable: "Nura could not read this one.",
       // @patient
       typeIt: "Please type what the paper says.",
@@ -1479,6 +1483,8 @@ export const en = {
       dated: "The paper is dated {date}.",
       // @patient
       highRisk: "Nura takes extra care with this medicine.",
+      // @patient
+      pillProposal: "This looks like {medicine} — check with the pharmacist.",
       // @patient
       fromPhoto: "From the photo you added on {date}.",
       // @patient phrase
@@ -1632,6 +1638,22 @@ export const en = {
         amount: "The amount",
         date: "The date",
         for: "What the claim was for",
+      },
+      pill: {
+        imprint: "What is printed on it",
+        colour: "Its colour",
+        shape: "Its shape",
+        score_line: "Whether it can be split",
+      },
+      receipt: {
+        pharmacy: "The pharmacy",
+        currency: "The currency",
+      },
+      item: {
+        name: "What was bought",
+        quantity: "How many",
+        unit_price: "The price each",
+        total: "The total price",
       },
     },
   },

@@ -230,6 +230,10 @@ def test_claude_searcher_returns_the_ports_found_shape() -> None:
     tool_types = {tool["type"] for tool in call["tools"]}
     assert tool_types == {"web_search_20260209", "web_fetch_20260209"}
     assert call["output_config"]["format"]["type"] == "json_schema"
+    # The SDK's `JSONOutputFormatParam` reads `schema`, not `json_schema` — the shape a
+    # 400 was hit live on (2026-09-18) until this was fixed.
+    assert "schema" in call["output_config"]["format"]
+    assert "json_schema" not in call["output_config"]["format"]
 
 
 def test_claude_searcher_drops_a_result_off_the_allowlist() -> None:
@@ -515,6 +519,8 @@ def test_claude_compressor_returns_the_ports_compressed_shape() -> None:
     call = client.messages.calls[0]
     assert call["model"] == "claude-opus-5"
     assert call["output_config"]["format"]["type"] == "json_schema"
+    assert "schema" in call["output_config"]["format"]
+    assert "json_schema" not in call["output_config"]["format"]
 
 
 def test_claude_compressor_refuses_cleanly_on_stop_reason_refusal() -> None:
@@ -677,3 +683,30 @@ def test_searcher_for_an_unknown_name_refuses() -> None:
 def test_compressor_for_an_unknown_name_refuses() -> None:
     with pytest.raises(NoCompressor, match="madeup"):
         compressor_for(_settings(compressor="madeup"))
+
+
+def _every_schema(node: object):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _every_schema(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _every_schema(value)
+
+
+def test_the_structured_output_schemas_are_ones_the_api_accepts() -> None:
+    """Hit live on the owner's key (2026-09-18): `output_config.format` with a `json_schema`
+    wrapper key instead of `schema` was refused outright (`Unexpected key 'json_schema'`),
+    and separately, a property without a `type`, or `minimum`/`maximum` on a number, are also
+    refused by the API's structured output — every searcher and compressor call was a 400.
+    Every property carries a type; no numeric bounds ride in either schema."""
+    from app.delivery.feed.claude_adapters import COMPRESS_SCHEMA, SEARCH_SCHEMA
+
+    for schema in (SEARCH_SCHEMA, COMPRESS_SCHEMA):
+        for node in _every_schema(schema):
+            if not (isinstance(node, dict) and "properties" in node):
+                continue
+            for name, prop in node["properties"].items():
+                assert "type" in prop, name
+                assert "minimum" not in prop and "maximum" not in prop, name
