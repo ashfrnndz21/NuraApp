@@ -413,7 +413,11 @@ async def expect_cost(
     else:
         covered_low_cents = 0
         covered_high_cents = 0
-        cover_note = Line("cost.no_cover_on_file", render("cost.no_cover_on_file", lang, name=name))
+        # The same line `app.insurance.relevance` already shows when no policy is on file —
+        # rule 13 (docs/plain-words.md §13), the same words every time, not a near-duplicate.
+        cover_note = Line(
+            "insurance.no_cover_on_file", render("insurance.no_cover_on_file", lang, name=name)
+        )
 
     return CostExpectation(
         appointment_id=appointment_id,

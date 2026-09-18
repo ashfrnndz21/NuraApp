@@ -176,12 +176,15 @@ COST_TYPICAL_NOT_A_QUOTE: Mapping[str, str] = {
 
 # @patient line
 COST_ASK_THE_CLINIC: Mapping[str, str] = {
-    "en": "Ask what this visit will cost before he goes.",
-    "ms": "Tanya berapa kos lawatan ini sebelum dia pergi.",
-    "zh": "在他去看诊之前，先问清楚费用。",
+    "en": "Ask what it will cost before the visit.",
+    "ms": "Tanya berapa kosnya sebelum lawatan itu.",
+    "zh": "看诊前先问清楚费用。",
 }
-"""Rule 13 (docs/plain-words.md §13) reserves "the clinic" for the doctor's own name; this
-line names no place at all, only when to ask."""
+"""Rule 13 (docs/plain-words.md §13) reserves "the clinic" for the doctor's own name, so this
+line names no place at all. It also names no "you" or "he": this line is shown to the owner
+reading about himself and to a caregiver reading about him alike (`expect_cost`'s
+`base_note`), the same impersonal register `CONFIRM_WITH_INSURER` already uses for the same
+reason — a "he" here would read as the owner talking about himself in the third person."""
 
 # @patient line
 COST_NO_BENCHMARK_FOUND: Mapping[str, str] = {
@@ -195,13 +198,6 @@ COST_MAY_BE_COVERED: Mapping[str, str] = {
     "en": "{name}'s cover on file may pay part of this.",
     "ms": "Perlindungan insurans {name} yang direkod mungkin membayar sebahagiannya.",
     "zh": "{name}记录中的保险可能会支付部分费用。",
-}
-
-# @patient line
-COST_NO_COVER_ON_FILE: Mapping[str, str] = {
-    "en": "Nura has no insurance on file for {name} to check this against.",
-    "ms": "Nura tiada rekod insurans untuk {name} bagi menyemak perkara ini.",
-    "zh": "Nura没有{name}的保险记录可以用来核对这项费用。",
 }
 
 # @patient line
@@ -228,7 +224,6 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "cost.ask_the_clinic": COST_ASK_THE_CLINIC,
     "cost.no_benchmark_found": COST_NO_BENCHMARK_FOUND,
     "cost.may_be_covered": COST_MAY_BE_COVERED,
-    "cost.no_cover_on_file": COST_NO_COVER_ON_FILE,
     "cost.covered_needs_money_scope": COST_COVER_NEEDS_MONEY_SCOPE,
 }
 
