@@ -131,6 +131,11 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   // what changed, his next visit and what to buy, what Nura is watching for him and what was
   // sent to him this week, all above the warm check-in and "What to do for Pa" grid.
   const main = page.locator("main");
+  // His visits and his medicines are their own reads after Today is ready (`useToday`'s
+  // `visits` and `page.lines`), so the row they make is awaited before its place is checked.
+  for (const id of ["what-changed", "next-visit-and-reorder", "watching", "sent", "daily-check-in"]) {
+    await expect(page.getByTestId(id)).toBeAttached();
+  }
   for (const [before, after] of [
     ["what-changed", "next-visit-and-reorder"],
     ["next-visit-and-reorder", "watching"],

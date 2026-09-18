@@ -87,7 +87,12 @@ async function readingsFor(request: Parameters<typeof seedFeed>[0], family: Fami
     const added = await request.post(`${API}/profiles/${family.profileId}/readings`, { ...his, data: { systolic, diastolic, taken_at } });
     expect(added.status()).toBe(201);
   }
-  expect((await request.get(`${API}/profiles/${family.profileId}/feed`, his)).status()).toBe(200);
+  // The first open of a day schedules its self-searches in the background (#286) — the clips
+  // among them included — so the feed is read until that run has settled, and what the test
+  // then opens is the whole day's supply in the broker's order, not whatever landed first.
+  await expect
+    .poll(async () => ((await (await request.get(`${API}/profiles/${family.profileId}/feed`, his)).json()) as { jobs: { state: string } }).jobs.state, { timeout: 30_000 })
+    .not.toBe("looking");
 }
 
 const NURA = new Set([new URL(API).host, new URL(BASE_URL).host]);

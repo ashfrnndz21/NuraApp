@@ -155,12 +155,17 @@ async def test_a_slow_job_hits_its_deadline_is_logged_and_the_others_still_compl
     profile_id = await own_profile(deployment, pa)
     await _medicine(deployment, profile_id, pa)
 
-    monkeypatch.setattr(background, "JOB_DEADLINE_SECONDS", 0.05)
+    # The deadline binds every job of the run, not only the stalled one: set too tight (it
+    # was 0.05s) a slow CI runner's real explainer job is cancelled mid-query, which
+    # invalidates the served deployment's one StaticPool connection — a fresh in-memory
+    # database with no tables, "no such table" for everything after, the test's own request
+    # included. Two seconds is far past any fixture job and still a tenth of the real value.
+    monkeypatch.setattr(background, "JOB_DEADLINE_SECONDS", 2)
     real_run_job = background.run_job
 
     async def _slow_the_safety_job(*args: object, job: object, **kwargs: object) -> list[object]:
         if getattr(job, "kind", None) is JobKind.SAFETY:
-            await asyncio.sleep(1)
+            await asyncio.sleep(30)  # well past the deadline; cancelled by it, never finishes
             return []
         return await real_run_job(*args, job=job, **kwargs)  # type: ignore[arg-type]
 
