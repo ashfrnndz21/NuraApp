@@ -2288,6 +2288,22 @@ export const en = {
     // @patient phrase
     callLabelLabel: "What to call it",
   },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "From your hospital letter",
+    // @patient phrase
+    medicineReviewWhy: "From your medicines",
+    // @patient phrase
+    testComingWhy: "From your blood test",
+    // @patient phrase
+    screeningDueWhy: "From your papers",
+    // @patient
+    rowOther: "Nura suggests {name} sees the doctor.",
+    // @patient phrase
+    bookIt: "Book it",
+    // @patient phrase
+    notNow: "Not now",
+  },
   review: {
     // @patient headline
     title: "Pharmacist's queue",

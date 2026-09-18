@@ -973,6 +973,20 @@ export interface Strings {
     linkLabel: string;
     callLabelLabel: string;
   };
+  /** T2's "Nura suggests" rows (Health's Coming up, Connect's next-visit tile): what the
+   *  planner found, in the screen's own words — the backend's own line (`purpose`) is shown
+   *  to the owner as it is written; a caregiver's key reads `rowOther` by name instead, never
+   *  the backend's "you" line. "Book it" opens the visits tab with the proposal ready to
+   *  book; "Not now" hides it for 90 days (`app.reasoning.visits.planner`). */
+  visitSuggest: {
+    followUpWhy: string;
+    medicineReviewWhy: string;
+    testComingWhy: string;
+    screeningDueWhy: string;
+    rowOther: string;
+    bookIt: string;
+    notNow: string;
+  };
   review: {
     title: string;
     tokenLabel: string;

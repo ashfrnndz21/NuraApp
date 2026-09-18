@@ -497,6 +497,38 @@ export interface AppointmentOut {
   doctor?: string | null;
 }
 
+/** One id a visit proposal rests on, and the scope it was read under
+ *  (`app.delivery.recommend.models.Evidence`, `EvidenceOut`). */
+export interface VisitEvidenceOut {
+  kind: string;
+  id: string;
+  scope: string;
+}
+
+/** Where a proposal's evidence came from (T2, `app.reasoning.visits.planner.VisitSource`). */
+export type VisitSource = "follow_up" | "medicine_review" | "test_coming" | "screening_due";
+
+/** One visit Nura proposes (T2, `GET /profiles/{id}/visits/proposed`): never booked, never a
+ *  claim about what is wrong — only what the record already holds that a visit would follow
+ *  up on, cited. `purpose` is the backend's own plain-words line, in his voice, pre-filled
+ *  into the booking screen on "Book it"; the row itself says whose suggestion it is in the
+ *  screen's own words (caregiver by name), never this line verbatim to a caregiver. */
+export interface VisitProposalOut {
+  proposal_id: string;
+  source: VisitSource;
+  purpose: string;
+  provider_kind: string | null;
+  suggested_at: string | null;
+  why: VisitEvidenceOut[];
+}
+
+/** Every proposal a key may see right now, and which scopes held none back
+ *  (`app.reasoning.visits.planner.ProposedVisits`). */
+export interface ProposedVisitsOut {
+  proposals: VisitProposalOut[];
+  withheld: string[];
+}
+
 /** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */
 export interface LogisticsLineOut {
   section: "when" | "place" | "note" | "driver" | "bring" | string;

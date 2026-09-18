@@ -66,6 +66,7 @@ import type {
   PlanOut,
   PolicyOut,
   ProfileOut,
+  ProposedVisitsOut,
   ProudOut,
   ProviderHistoryOut,
   ProviderSummaryOut,
@@ -288,6 +289,16 @@ export const proud = (token: string, profileId: string) =>
  *  `Scope.MONEY`, the door already reserved for his insurance letters. */
 export const policies = (token: string, profileId: string) =>
   api<PolicyOut[]>(`/profiles/${profileId}/insurance/policies`, { token });
+
+/** Every visit Nura proposes right now (T2, `app.reasoning.visits.planner`), cited, in the
+ *  profile's own language unless one is named — never a booking. */
+export const visitsProposed = (token: string, profileId: string, language?: string) =>
+  api<ProposedVisitsOut>(`/profiles/${profileId}/visits/proposed`, { token, query: { language } });
+
+/** "Not now": hides one proposal for 90 days. His own tap is the yes — no confirmation to
+ *  mint, the way declining a feed card already works. */
+export const declineVisitProposal = (token: string, profileId: string, proposalId: string) =>
+  api<void>(`/profiles/${profileId}/visits/proposed/${proposalId}/decline`, { method: "POST", token });
 
 /** The first page of the feed: today's cards, rendered by the backend from a State. */
 export const feed = (token: string, profileId: string) =>
