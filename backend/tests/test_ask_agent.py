@@ -26,7 +26,14 @@ from app.delivery.timeline_strings import honest_lines
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.scopes import KeyRole, Scope
-from app.llm.ask_agent import Cite, ClaudeAsker, _answer_from_payload, _ToolLine, _tools_for
+from app.llm.ask_agent import (
+    Cite,
+    ClaudeAsker,
+    _answer_from_payload,
+    _boundary_rewrite,
+    _ToolLine,
+    _tools_for,
+)
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.ask import Answer, AskStep, Mode, recall
@@ -409,8 +416,8 @@ async def test_a_line_that_fails_plain_words_is_repaired_and_then_shown(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     """Defect: "the agent still returns an empty answer" — five lines dropped, no repair. The
-    fix gives the model one more try, told which rule its line broke (never the words), before
-    ever falling back."""
+    fix gives the model one more try, told the verifier's own problem and rewrite for the rule
+    its line broke (never the line itself), before ever falling back."""
     rec = await record(sg)
     client = FakeClient(
         [
@@ -429,8 +436,10 @@ async def test_a_line_that_fails_plain_words_is_repaired_and_then_shown(
     repair_messages = client.messages.calls[2]["messages"]
     repair_ask = repair_messages[-1]
     assert repair_ask["role"] == "user"
-    # The rule is named; the line that broke it is not.
-    assert "short words" in repair_ask["content"]
+    # The verifier's own problem and rewrite for the rule are named; the line that broke it
+    # is not.
+    assert "20 words on one line" in repair_ask["content"]
+    assert "cut it into two lines, one idea each" in repair_ask["content"]
     assert _TOO_LONG_LINE not in repair_ask["content"]
     assert [line.text for line in answer.lines] == [_SHORT_LINE]
 
@@ -490,6 +499,147 @@ async def test_when_the_fallback_itself_fails_the_catalogue_line_is_still_sent(
         asker, sg, rec.owner, "what was my blood pressure", tmp_path
     )
 
+    assert answer.lines == ()
+    assert list(answer.honest) == honest_lines("en", None)
+    assert answer.boundary
+
+
+def _every_schema(node: object):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _every_schema(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _every_schema(value)
+
+
+def test_the_structured_output_schema_is_one_the_api_accepts() -> None:
+    """The same lint every Claude-backed structured-output adapter carries
+    (`tests/test_claude_extractor.py`, `tests/test_claude_feed_adapters.py`,
+    `tests/test_clipmaker.py`, `tests/test_narrator.py`): a property without a `type`, and
+    `minimum`/`maximum` on a number, are both refused by the API's structured output (hit
+    live on the owner's key, 2026-09-18, for the extractor and the feed adapters). Every
+    property carries a type; no numeric bounds ride in this schema."""
+    from app.llm.ask_agent import ANSWER_SCHEMA
+
+    for node in _every_schema(ANSWER_SCHEMA):
+        if not (isinstance(node, dict) and "properties" in node):
+            continue
+        for name, prop in node["properties"].items():
+            assert "type" in prop, name
+            assert "minimum" not in prop and "maximum" not in prop, name
+
+
+# Rule 14 (`docs/plain-words.md`: the boundary — no line starts, stops or changes a medicine)
+# on its own, nothing else wrong with the line: `test_plain_words.py` pins this string to rule
+# 14 alone, the same way `_TOO_LONG_LINE` above is pinned to rule 3 alone.
+_BOUNDARY_LINE = "Your doctor stopped the water pill on Monday."
+_BOUNDARY_AND_TOO_LONG_LINE = (
+    "Your doctor stopped the water pill on Monday and told the nurse to write it in your "
+    "blood pressure book for next time."
+)
+
+
+def test_boundary_rewrite_turns_a_treatment_change_into_a_question_for_the_doctor() -> None:
+    """The verifier's own rewrite for rule 14 ('a question for the doctor') built for real: no
+    chemical name, no invented medicine — only the one `_MEDICINE_NOUNS` the offending line
+    already named."""
+    from app.safety.plain_words import verify
+
+    rewritten = _boundary_rewrite(_BOUNDARY_LINE, "en")
+    assert rewritten == "Ask your doctor about the water pill."
+    assert not any(f.severity == "fail" for f in verify(rewritten, "en", "line"))
+
+
+async def test_a_line_that_fails_only_rule_14_is_rewritten_not_dropped(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Defect: every line the model wrote about a medicine was dropped outright, on both the
+    first round and the one repair round, and the reader heard nothing (live evidence:
+    ``dropped a line, reason=plain_words_failed, rules=[14]`` for every line, after the
+    repair round too). The fix: a line whose only problem is rule 14 is rewritten into the
+    catalogue's own question-for-the-doctor shape instead — it reaches him, and no repair
+    round is even needed for it."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _BOUNDARY_LINE, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    assert steps == ["medicines"]
+    # One round only: the rewrite means the first answer already survives, no repair needed.
+    assert len(client.messages.calls) == 2
+    assert [line.text for line in answer.lines] == ["Ask your doctor about the water pill."]
+    assert deltas == ["Ask your doctor about the water pill."]
+    # The rewritten line still rests on the same cite the model actually gave it.
+    assert answer.lines[0].cites
+
+
+async def test_a_line_failing_rule_14_and_another_rule_is_still_dropped(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The rewrite is only for a line whose one and only problem is rule 14 — never a patch
+    over a line broken some other way too. This line fails rule 14 and rule 3 (over fifteen
+    words) at once, so it is dropped, exactly as an ordinary plain-words failure is; the model
+    gets one repair round, and when that also fails, the rule-based fallback answers instead."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _BOUNDARY_AND_TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _BOUNDARY_AND_TOO_LONG_LINE, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, _deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    assert steps == ["medicines"]
+    # The repair round still ran (never rewritten, so the model got a real second try), and
+    # still failed — the rule-based fallback answered instead, never nothing.
+    assert len(client.messages.calls) == 3
+    assert answer.answered
+    assert _BOUNDARY_AND_TOO_LONG_LINE not in " ".join(line.text for line in answer.lines)
+
+
+async def test_every_line_failing_rule_14_still_reaches_him_through_the_fallback(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Live evidence, reproduced and fixed: a client whose every line fails rule 14, on both
+    rounds, and whose rewrite cannot save it either (paired with a second failing rule here,
+    so the rewrite path is never taken) — even then, the reader must hear the rule-based
+    fallback's own answer, never silence. Belt and braces on top of it: if the fallback itself
+    had nothing to say, the catalogue's own honest line still reaches him."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _BOUNDARY_AND_TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _BOUNDARY_AND_TOO_LONG_LINE, "cites": ["m1"]}]),
+        ]
+    )
+
+    async def _honest_only_recall(*_args: Any, **_kwargs: Any) -> Answer:
+        return Answer(
+            question_artifact_id=uuid.uuid4(),
+            mode=Mode.TEXT,
+            language="en",
+            lines=(),
+            honest=tuple(honest_lines("en", None)),
+            boundary=boundary_lines(Surface.RECALL, "en", doctor=None),
+            withheld=(),
+            dropped=0,
+        )
+
+    monkeypatch.setattr("app.llm.ask_agent.recall", _honest_only_recall)
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, _deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    assert len(client.messages.calls) == 3
     assert answer.lines == ()
     assert list(answer.honest) == honest_lines("en", None)
     assert answer.boundary

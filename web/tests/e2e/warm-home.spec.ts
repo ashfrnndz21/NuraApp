@@ -127,6 +127,28 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   const hero = page.getByTestId("home-hero");
   await expect(hero.locator(".hero-greeting")).toHaveText("Good morning, Mei.");
   await expect(hero.locator(".hero-ask")).toHaveText("How is Pa feeling today?");
+  // The reference's own reading order (docs/design/full-experience.html, the Mei persona):
+  // what changed, his next visit and what to buy, what Nura is watching for him and what was
+  // sent to him this week, all above the warm check-in and "What to do for Pa" grid.
+  const main = page.locator("main");
+  for (const [before, after] of [
+    ["what-changed", "next-visit-and-reorder"],
+    ["next-visit-and-reorder", "watching"],
+    ["watching", "sent"],
+    ["sent", "daily-check-in"],
+  ] as const) {
+    const order = await main.evaluate(
+      (el, [a, b]) => {
+        const first = el.querySelector(`[data-testid="${a}"]`);
+        const second = el.querySelector(`[data-testid="${b}"]`);
+        if (!first || !second) return "missing";
+        const position = first.compareDocumentPosition(second);
+        return position & Node.DOCUMENT_POSITION_FOLLOWING ? "in order" : "out of order";
+      },
+      [before, after],
+    );
+    expect(order, `${before} before ${after}`).toBe("in order");
+  }
   await expect(page.getByTestId("daily-check-in")).toContainText("Tell Nura how Pa feels today");
   // The caregiver twin (bcd96c99): "What to do for Pa.", not the generic second-person line.
   await expect(page.locator("#do-title")).toHaveText("What to do for Pa.");
