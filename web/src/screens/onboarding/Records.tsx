@@ -1,35 +1,40 @@
 import { useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { batch } from "../../capture/session";
+import { batch, sendPaperStream } from "../../capture/session";
 import { PaperBatchView } from "../PaperBatch";
 import { Refused } from "../../api/client";
 import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
-import { closeSitting, refreshBiography, refreshPlan, sendPaper, who } from "../../onboarding/actions";
+import { closeSitting, refreshBiography, refreshPlan, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
 import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, pillProposalLine, provenanceLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { fill, language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
 import { Hear, Notice, Pill } from "../../ui/components";
+import { StepTrace } from "../../ui/kit";
+import { usePaperTrace } from "./paperTrace";
 import { Capture, Sheet, Status, StepTitle } from "./parts";
 
 /** The assistant-led records step (E01-02): the backend's next prompt, shown with its
  *  spoken twin; a photo or a file; the review card; one yes; what Nura learned; the next
  *  prompt; and "That is all for today", which closes the session. */
+
 export function RecordsStep(): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
   const bio = biography.value;
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const paper = usePaperTrace();
 
   const upload = async (file: File) => {
     setBusy(true);
     setError(null);
     try {
       returnTo.value = "records";
-      const card = await sendPaper(file);
+      paper.start();
+      const card = await sendPaperStream(file, paper.onStep);
       to({ name: "review", card });
     } catch (failure) {
       setError(failure);
@@ -62,7 +67,7 @@ export function RecordsStep(): JSX.Element {
       <StepTitle title={inPapers ? bio.prompt.headline : say(r.titleSelf, r.titleOther)} />
       <Status text={lastPaper.value ? r.saved : null} testId="saved" />
       {inPapers && bio.prompt.lines.length > 0 && <Sheet lines={bio.prompt.lines} testId="prompt" />}
-      {busy && <Status text={r.looking} testId="looking" />}
+      {busy && <StepTrace steps={paper.trace} working={r.looking} testId="looking" />}
       <Notice error={error} />
       <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
       <Pill onClick={() => to({ name: "batch" })} disabled={busy} testId="choose-many">
@@ -126,6 +131,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const paper = usePaperTrace();
   const back = onBack ?? (() => to({ name: returnTo.value }));
 
   const upload = async (file: File) => {
@@ -133,7 +139,10 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
     setError(null);
     try {
       if (onPaper) await onPaper(file);
-      else to({ name: "review", card: await sendPaper(file) });
+      else {
+        paper.start();
+        to({ name: "review", card: await sendPaperStream(file, paper.onStep) });
+      }
     } catch (failure) {
       setError(failure);
     } finally {
@@ -146,7 +155,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
       <main class="screen onboarding" data-stage="review">
         <StepTitle title={r.reviewTitle} />
         <Sheet lines={card.notice?.length ? card.notice : [kindLine(card.document_kind, s), r.unknownHint]} testId="review-unreadable" />
-        {busy && <Status text={r.looking} />}
+        {busy && <StepTrace steps={paper.trace} working={r.looking} testId="looking-again" />}
         <Notice error={error} />
         <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
         <Pill quiet onClick={back}>

@@ -2,13 +2,16 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { PromptOut } from "../../api/types";
-import { planInMyLanguage, refreshPlan, sendPaper, who } from "../../onboarding/actions";
+import { sendPaperStream } from "../../capture/session";
+import { planInMyLanguage, refreshPlan, who } from "../../onboarding/actions";
 import { dayLine } from "../../onboarding/dates";
 import { cardsToShow, invites, opensCamera, opensFile, tapsSetting } from "../../onboarding/plan";
 import { closed, finish, plan, planNote, returnTo, to, whose } from "../../onboarding/state";
 import { density, profile } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
 import { Hear, Notice, Pill } from "../../ui/components";
+import { StepTrace } from "../../ui/kit";
+import { usePaperTrace } from "./paperTrace";
 import { Capture, Sheet, Status, StepTitle } from "./parts";
 
 /** The Ready screen (#117's close and first week, docs/gaps-and-unlocks.md): the sitting's own
@@ -25,6 +28,7 @@ export function PlanStep(): JSX.Element {
   const [status, setStatus] = useState<string | null>(planNote.value);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const paper = usePaperTrace();
 
   useEffect(() => {
     if (!plan.value) refreshPlan().catch(setError);
@@ -52,7 +56,12 @@ export function PlanStep(): JSX.Element {
   const doItNow = (file: File) =>
     act(async () => {
       returnTo.value = "plan";
-      to({ name: "review", card: await sendPaper(file) });
+      paper.start();
+      try {
+        to({ name: "review", card: await sendPaperStream(file, paper.onStep) });
+      } finally {
+        paper.stop();
+      }
     });
 
   const done = closed.value;
@@ -111,6 +120,7 @@ export function PlanStep(): JSX.Element {
         </p>
       )}
       {plan.value && shown.length === 0 && <Sheet lines={[p.nothing]} testId="plan-nothing" />}
+      {paper.sending && <StepTrace steps={paper.trace} working={r.looking} testId="plan-looking" />}
       <Status text={status} testId="plan-status" />
       <Notice error={error} />
       <Pill plum={!patient} onClick={finish} disabled={busy} testId="open-nura">

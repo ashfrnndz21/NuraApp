@@ -26,7 +26,7 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024;
  *  instant each real stage finishes, and the promise settles with the same review card the
  *  plain routes give. A file past the backend's own size cap goes through the plain route
  *  instead, with no step: there is no real trace to show for a page that is refused outright. */
-async function sendPaperStream(file: File, onStep: (key: string, label: string) => void): Promise<ReviewCardOut> {
+export async function sendPaperStream(file: File, onStep: (key: string, label: string) => void): Promise<ReviewCardOut> {
   const { bearer, profileId } = who();
   const data = await base64Of(file);
   const taken = new Date(file.lastModified || Date.now()).toISOString();
