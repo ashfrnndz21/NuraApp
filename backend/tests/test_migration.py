@@ -78,6 +78,7 @@ from app.onboarding.models import (
     PlanPrompt,
     ProfileSettings,
 )
+from app.reasoning.analyst.models import InsightReport
 from app.reasoning.feelings.models import FeelingNote, FeelingTap
 from app.reasoning.models import TrendCard
 from app.reasoning.visits.models import (
@@ -90,6 +91,7 @@ from app.reasoning.visits.models import (
 from app.routines.models import Routine
 from app.safety.models import EmergencyCard, Notice, WhatToDoCard
 from app.safety.red_flags import Escalation, Flag
+from app.search.models import Conversation, Turn
 from app.state.models import StateSnapshot
 from tests.conftest import on_an_empty_database
 
@@ -172,6 +174,9 @@ TABLES: tuple[Table, ...] = (
     InsuranceClaim.__table__,
     ScheduledCall.__table__,
     DoseQuestion.__table__,
+    InsightReport.__table__,
+    Conversation.__table__,
+    Turn.__table__,
 )
 
 
@@ -251,7 +256,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0048_provider_category"]
+    assert heads == ["0051_health_analyst"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(
@@ -326,6 +331,8 @@ async def test_the_migrations_build_the_tables_the_models_declare(
             Task,
             Policy,
             InsuranceClaim,
+            Conversation,
+            Turn,
         ):
             assert _tied(built, table.__table__) == _tied_by_model(table.__table__), table.name
         assert {check["name"] for check in built.get_check_constraints("fact")} >= {

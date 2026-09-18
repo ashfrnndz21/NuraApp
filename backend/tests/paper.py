@@ -61,6 +61,20 @@ INSURANCE_POLICY = "insurance-policy-2026-09-13"
 INSURANCE_CLAIM = "insurance-claim-2026-09-14"
 """A claim letter, 14 September 2026."""
 
+PILL_PHOTO = "pill-photo-2026-09-15"
+"""A loose white round tablet, imprint 'IP 190', scored, 15 September 2026: a vision model's
+guess at paracetamol 500 mg, matched against the licensed registry and held below the
+confirmation threshold either way (#pill-receipt)."""
+
+PHARMACY_RECEIPT = "pharmacy-receipt-2026-08-25"
+"""A pharmacy receipt, 25 August 2026: one line naming a medicine already on his list
+(Panadol, matched to paracetamol) and one line naming something not on it (a hand sanitiser)
+(#pill-receipt)."""
+
+PHARMACY_RECEIPT_RED_FLAG = "pharmacy-receipt-red-flag-2026-08-26"
+"""A pharmacy receipt whose item name names a red-flag word, 26 August 2026
+(#pill-receipt)."""
+
 PDF_HEADER = b"%PDF-1.4\n"
 
 

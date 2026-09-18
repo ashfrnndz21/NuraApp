@@ -173,9 +173,27 @@ html {
 .list-row:focus-visible,
 .head-button:focus-visible,
 .link-button:focus-visible,
+.insights-card-open:focus-visible,
 .action-row:focus-within {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
+}
+/* Tap feedback (docs/design/motion.md): the same 0.98-over-90ms press as a pill, on every other
+   real tap target — a row, the round arrow, the section's "View all". Reduce Motion collapses it
+   through the same global rule as the pill's (base.css). */
+.card-button,
+.view-all,
+button.list-row,
+.arrow-button,
+.insights-card-open {
+  transition: transform var(--press);
+}
+.card-button:active,
+.view-all:active,
+button.list-row:active,
+.arrow-button:active,
+.insights-card-open:active {
+  transform: scale(0.98);
 }
 
 /* --- The feature tile and its grid ----------------------------------------------------------- */
@@ -215,7 +233,7 @@ html {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: transform var(--settle);
+  transition: transform var(--press);
 }
 .feature-tile:active {
   transform: scale(0.98);
@@ -348,6 +366,75 @@ button.list-row {
   color: var(--ink-quiet);
   align-self: flex-start;
   padding-top: 4px;
+}
+/* The Insights card (Health, W1): its own open button, the same row shape as `.list-row`
+   (icon, text stack, real touch target) but its own class since a second control, "Generate
+   now", sits beside it in the same tint card rather than after it in a list. */
+.insights-card-open {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: start;
+  cursor: pointer;
+}
+.insights-card-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.insights-card-title {
+  font-weight: 700;
+}
+/* The Insights card's own headline line (Health, W1): the one insight the card leads with,
+   set apart from the caption lines around it in the card's own ink, not the quiet one. */
+.insights-card-headline {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- The weekly report: one line per insight, its "Why" opening to its evidence ------------- */
+.insight-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-1) 0;
+}
+.insight-row + .insight-row {
+  border-top: 1px solid var(--card-line);
+}
+.insight-text {
+  margin: 0;
+}
+.insight-why {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.insight-why summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  cursor: pointer;
+  list-style: none;
+}
+.insight-why summary::-webkit-details-marker {
+  display: none;
+}
+.insight-why summary:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.insight-why p {
+  margin: 4px 0;
 }
 .metric-row {
   display: flex;
@@ -1036,6 +1123,13 @@ img.avatar {
   place-items: center;
   background: var(--tint-sage);
   color: var(--good);
+  /* The tick's own entrance (docs/design/motion.md): it plays the instant a step's `done` flag
+     really flips — the class swap from `.trace-spin` is the trigger, never a delay of its own. */
+  animation: tick-pop 180ms ease-out;
+}
+@keyframes tick-pop {
+  from { transform: scale(0.6); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 .trace-tick .icon {
   width: 12px;
@@ -1103,6 +1197,29 @@ img.avatar {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 6rem), 1fr));
   gap: 10px;
+}
+
+/* --- Pending → Skeleton → content (docs/design/motion.md, `ui/kit/Pending.tsx`) --------------- */
+/* `PendingCard` renders this the instant `client.ts` says a request key is on the wire — always,
+   not only past 150ms. Its own fade-in is what waits: `animation-delay: 150ms` means a call that
+   answers sooner never draws a frame of it at all (the component unmounts first), and one that
+   is really slow earns its placeholder at the moment it is actually slow — no timer decides this,
+   the browser's own animation clock does, started by a real state change. */
+.pending-skeleton {
+  animation: skeleton-appear 1ms 150ms both;
+}
+@keyframes skeleton-appear {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+/* The real content, the instant the pending count for its key reaches zero: a fade/slide up,
+   160–220ms (--settle), never longer than the wait it ends. */
+.card-enter {
+  animation: card-enter var(--settle) both;
+}
+@keyframes card-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
 }
 
 /* --- Reduce Motion: nothing pulses, turns or shimmers ----------------------------------------- */

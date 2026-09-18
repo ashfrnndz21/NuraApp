@@ -32,12 +32,14 @@ import app.medicines.models
 import app.memory.models
 import app.notes.models
 import app.onboarding.models
+import app.reasoning.analyst.models
 import app.reasoning.feelings.models
 import app.reasoning.models
 import app.reasoning.visits.models
 import app.routines.models
 import app.safety.models
 import app.safety.red_flags
+import app.search.models
 import app.state.models  # noqa: F401
 from app.db import Base
 

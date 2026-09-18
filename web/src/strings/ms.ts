@@ -59,6 +59,10 @@ export const ms = {
     bell: "Lagi untuk anda",
     // @patient phrase
     back: "Kembali",
+    // @patient phrase
+    bellFeed: "Lagi untuk anda",
+    // @patient phrase
+    bellInsights: "Minggu anda, dilihat dengan teliti",
   },
   welcome: {
     // @patient headline
@@ -304,6 +308,26 @@ export const ms = {
     // @patient
     noneOther: "Nura tiada apa-apa berhampiran {name} untuk ini lagi.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Tulis draf mesej",
+    // @patient headline
+    sheetTitle: "Draf mesej anda",
+    // @patient phrase
+    copy: "Salin",
+    // @patient
+    copied: "Sudah disalin, sedia untuk ditampal di tempat anda mahu hantar.",
+    // @patient phrase
+    sendBySms: "Hantar melalui mesej teks",
+    // @patient phrase
+    sendByWhatsApp: "Hantar melalui WhatsApp",
+    // @patient
+    copyOnly: "Tiada nombor untuk tempat ini, jadi salin mesej ini dan hantar sendiri.",
+    // @patient
+    loading: "Nura sedang menulis mesej.",
+    // @patient
+    error: "Nura tidak dapat menulis mesej buat masa ini.",
+  },
   health: {
     // @patient headline
     title: "Kesihatan anda",
@@ -343,6 +367,60 @@ export const ms = {
     comingUpTitle: "Akan datang",
     // @patient phrase
     addReading: "Tulis tekanan darah",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "Minggu anda, dilihat dengan teliti",
+    // @patient headline
+    cardTitleOther: "Minggu {name}, dilihat dengan teliti",
+    // @patient
+    cardNone: "Nura belum melihat minggu anda.",
+    // @patient
+    cardNoneOther: "Nura belum melihat minggu {name}.",
+    // @patient phrase
+    cardLastLooked: "Nura melihat ini pada {date}",
+    // @patient phrase
+    generate: "Jana sekarang",
+    // @patient headline
+    screenTitle: "Minggu anda",
+    // @patient headline
+    screenTitleOther: "Minggu {name}",
+    // @patient
+    working: "Nura sedang melihat minggu ini.",
+    // @patient phrase
+    weekOf: "Minggu bermula {date}",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "Apa yang berubah",
+      // @patient headline
+      worth_a_look: "Patut dilihat",
+      // @patient headline
+      medicines_and_supplements: "Ubat dan suplemen",
+      // @patient headline
+      what_you_pay: "Apa yang anda bayar",
+      // @patient headline
+      screenings_due: "Saringan yang perlu dibuat",
+      // @patient headline
+      questions_for_the_doctor: "Soalan untuk doktor",
+    },
+    // @patient
+    sectionWithheld: "Kunci ini tidak meliputi bahagian minggu {name} ini.",
+    // @patient
+    sectionEmpty: "Tiada apa untuk ditandakan minggu ini.",
+    // @patient phrase
+    why: "Sebab",
+    // @patient phrase
+    sure: "Pasti",
+    // @patient phrase
+    likely: "Berkemungkinan",
+    // @patient phrase
+    worthALook: "Patut dilihat",
+    // @patient phrase
+    askThis: "Tanya {who} soalan ini",
+    // @patient
+    asked: "Nura menyimpan soalan ini untuk lawatan anda.",
+    // @patient
+    noVisit: "Belum ada lawatan ditempah untuk bawa soalan ini.",
   },
   signIn: {
     // @patient headline
@@ -679,9 +757,15 @@ export const ms = {
     // @patient
     askThinking: "Nura sedang mencari.",
     // @patient
+    lookingForToday: "Nura sedang mencari bacaan hari ini.",
+    // @patient
     askAnswered: "Nura sudah menjawab.",
     // @patient phrase
     askLookedAt: "Apa yang Nura lihat: {parts}",
+    // @patient phrase
+    newConversation: "Soalan baharu",
+    // @patient headline
+    earlierInConversation: "Apa yang anda tanya sebelum ini",
     // @patient phrase
     back: "Kembali ke kad anda",
     // @patient
@@ -696,6 +780,8 @@ export const ms = {
     statusDismissed: "{name} tekan Bukan untuk saya pada kad ini.",
     // @patient phrase
     play: "Main",
+    // @patient phrase
+    watchAgain: "Tonton semula",
     // @patient phrase
     watchWhole: "Tonton seluruh video di {publisher}",
     // @patient phrase
@@ -1002,6 +1088,8 @@ export const ms = {
     send: "Hantar {count} surat",
     // @patient
     sending: "Nura sedang menghantar surat {n} daripada {total}.",
+    // @patient
+    working: "Nura sedang membuatnya.",
     // @patient headline
     found: "Apa yang Nura jumpa",
     // @patient
@@ -1103,6 +1191,16 @@ export const ms = {
     questionsOpenOther: "Soalan untuk doktor {patient}",
     // @patient headline
     questionsTitle: "Soalan untuk lawatan anda",
+    // @patient phrase
+    costOpen: "Anggaran kosnya",
+    // @patient phrase
+    costOpenOther: "Anggaran kos lawatan {patient}",
+    // @patient headline
+    costTitle: "Anggaran kosnya",
+    // @patient phrase
+    costCoveredLabel: "Perlindungan insurans anda mungkin membayar",
+    // @patient phrase
+    costCoveredLabelOther: "Perlindungan insurans {patient} mungkin membayar",
     // @patient phrase
     questionLabel: "Soalan anda",
     // @patient phrase
@@ -1275,6 +1373,22 @@ export const ms = {
       countNone: "Nura belum tulis apa-apa lagi.",
       // @patient
       count: "Nura sudah tulis {n} perkara.",
+      // @patient phrase
+      tellMe: "Atau beritahu saja",
+      // @patient
+      tellMeLead: "Cakap dengan kata-kata anda sendiri.",
+      // @patient phrase
+      tellMeLabel: "Dengan kata-kata anda sendiri",
+      // @patient phrase
+      tellMeSend: "Hantar",
+      // @patient
+      tellMeNothing: "Nura tidak jumpa perkataan di atas untuk itu.",
+      // @patient
+      tellMeNothingSub: "Cuba tekan sahaja.",
+      // @patient
+      tellMeSafety: "Nura tidak akan jadikan itu satu perkataan di sini.",
+      // @patient
+      tellMeSafetySub: "Sila beritahu seseorang yang anda percaya, atau dapatkan bantuan sekarang.",
     },
     asks: {
       // @patient
@@ -1366,6 +1480,10 @@ export const ms = {
       // @patient
       kindOther: "Ini surat kesihatan.",
       // @patient
+      kindPillPhoto: "Ini gambar sebiji pil.",
+      // @patient
+      kindPharmacyReceipt: "Ini resit farmasi.",
+      // @patient
       unreadable: "Nura tidak dapat membaca yang ini.",
       // @patient
       typeIt: "Sila taip apa yang tertulis pada surat itu.",
@@ -1379,6 +1497,8 @@ export const ms = {
       dated: "Surat ini bertarikh {date}.",
       // @patient
       highRisk: "Nura lebih berhati-hati dengan ubat ini.",
+      // @patient
+      pillProposal: "Ini kelihatan seperti {medicine} — semak dengan ahli farmasi.",
       // @patient
       fromPhoto: "Daripada gambar yang anda tambah pada {date}.",
       // @patient phrase
@@ -1530,6 +1650,22 @@ export const ms = {
         amount: "Jumlah wang",
         date: "Tarikh",
         for: "Untuk apa tuntutan itu",
+      },
+      pill: {
+        imprint: "Apa yang tertera padanya",
+        colour: "Warnanya",
+        shape: "Bentuknya",
+        score_line: "Sama ada ia boleh dibelah",
+      },
+      receipt: {
+        pharmacy: "Farmasi",
+        currency: "Mata wang",
+      },
+      item: {
+        name: "Apa yang dibeli",
+        quantity: "Berapa banyak",
+        unit_price: "Harga seunit",
+        total: "Jumlah harga",
       },
     },
   },
@@ -2289,6 +2425,22 @@ export const ms = {
     linkLabel: "Pautan panggilan, jika ada",
     // @patient phrase
     callLabelLabel: "Nama untuk panggilan ini",
+  },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "Daripada surat hospital anda",
+    // @patient phrase
+    medicineReviewWhy: "Daripada ubat anda",
+    // @patient phrase
+    testComingWhy: "Daripada ujian darah anda",
+    // @patient phrase
+    screeningDueWhy: "Daripada surat-surat anda",
+    // @patient
+    rowOther: "Nura mencadangkan {name} berjumpa doktor.",
+    // @patient phrase
+    bookIt: "Tempahkan",
+    // @patient phrase
+    notNow: "Bukan sekarang",
   },
   review: {
     // @patient headline

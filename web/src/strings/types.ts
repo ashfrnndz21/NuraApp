@@ -22,7 +22,7 @@ export interface Strings {
   tabs: { today: string; record: string; family: string; me: string; home: string; medicines: string; records: string; visits: string; timeline: string; plan: string; health: string; connect: string; services: string; profile: string };
   /** The shell (D1): the ask bar on top of Today and Home, its voice button, the sheet's Close;
    *  the header's bell, which opens what is new for him (docs/design-direction.md). */
-  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string; bell: string; back: string };
+  shell: { askNura: string; askAbout: string; voice: string; voiceSaid1: string; voiceSaid2: string; close: string; bell: string; back: string; bellFeed: string; bellInsights: string };
   /** The welcome screen before sign-in (docs/design-direction.md, Reference B's first screen):
    *  a two-line tagline, the line under it, three value tiles, Get started and Sign in. */
   welcome: {
@@ -125,6 +125,20 @@ export interface Strings {
     near: string; nearOther: string;
     none: string; noneOther: string;
   };
+  /** Care navigation with drafted messages (T3): "Draft a message" on a provider row or a
+   *  letter's follow-up line, and the sheet it opens. Nura only ever drafts; the send links
+   *  and "Copy" say plainly that he or his chief sends it themselves. */
+  navigation: {
+    draftAction: string;
+    sheetTitle: string;
+    copy: string;
+    copied: string;
+    sendBySms: string;
+    sendByWhatsApp: string;
+    copyOnly: string;
+    loading: string;
+    error: string;
+  };
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his day
    *  and Coming up. Every figure and status word beside these is the backend's own
    *  (`health_tab.py`); these are only the screen's own headings and the few lines the backend
@@ -149,6 +163,30 @@ export interface Strings {
     mealNotHadOther: string;
     comingUpTitle: string;
     addReading: string;
+  };
+  /** The weekly report (W1, docs/design/nura-concept-board.html): the Health card, the live
+   *  trace while it builds, the report itself, and the bell's row that opens it. */
+  insights: {
+    cardTitle: string;
+    cardTitleOther: string;
+    cardNone: string;
+    cardNoneOther: string;
+    cardLastLooked: string;
+    generate: string;
+    screenTitle: string;
+    screenTitleOther: string;
+    working: string;
+    weekOf: string;
+    sectionTitles: Record<"what_changed" | "worth_a_look" | "medicines_and_supplements" | "what_you_pay" | "screenings_due" | "questions_for_the_doctor", string>;
+    sectionWithheld: string;
+    sectionEmpty: string;
+    why: string;
+    sure: string;
+    likely: string;
+    worthALook: string;
+    askThis: string;
+    asked: string;
+    noVisit: string;
   };
   signIn: {
     title: string;
@@ -300,8 +338,11 @@ export interface Strings {
     sourceVisits: string;
     askWithheld: string;
     askThinking: string;
+    lookingForToday: string;
     askAnswered: string;
     askLookedAt: string;
+    newConversation: string;
+    earlierInConversation: string;
     back: string;
     statusHeld: string;
     statusSent: string;
@@ -309,6 +350,7 @@ export interface Strings {
     statusPlayed: string;
     statusDismissed: string;
     play: string;
+    watchAgain: string;
     watchWhole: string;
     askOrSearch: string;
     filterLabel: string;
@@ -446,6 +488,7 @@ export interface Strings {
     sendOne: string;
     send: string;
     sending: string;
+    working: string;
     found: string;
     read: string;
     check: string;
@@ -501,6 +544,11 @@ export interface Strings {
     questionsOpen: string;
     questionsOpenOther: string;
     questionsTitle: string;
+    costOpen: string;
+    costOpenOther: string;
+    costTitle: string;
+    costCoveredLabel: string;
+    costCoveredLabelOther: string;
     questionLabel: string;
     questionAdd: string;
     questionCheck: string;
@@ -580,6 +628,14 @@ export interface Strings {
       term: string;
       countNone: string;
       count: string;
+      tellMe: string;
+      tellMeLead: string;
+      tellMeLabel: string;
+      tellMeSend: string;
+      tellMeNothing: string;
+      tellMeNothingSub: string;
+      tellMeSafety: string;
+      tellMeSafetySub: string;
     };
     asks: { lead: string };
     readBack: {
@@ -632,6 +688,9 @@ export interface Strings {
       kindInsuranceClaim: string;
       kindDeviceScreen: string;
       kindOther: string;
+      kindPillPhoto: string;
+      kindPharmacyReceipt: string;
+      pillProposal: string;
       unreadable: string;
       typeIt: string;
       fromPage: string;
@@ -974,6 +1033,20 @@ export interface Strings {
     whenLabel: string;
     linkLabel: string;
     callLabelLabel: string;
+  };
+  /** T2's "Nura suggests" rows (Health's Coming up, Connect's next-visit tile): what the
+   *  planner found, in the screen's own words — the backend's own line (`purpose`) is shown
+   *  to the owner as it is written; a caregiver's key reads `rowOther` by name instead, never
+   *  the backend's "you" line. "Book it" opens the visits tab with the proposal ready to
+   *  book; "Not now" hides it for 90 days (`app.reasoning.visits.planner`). */
+  visitSuggest: {
+    followUpWhy: string;
+    medicineReviewWhy: string;
+    testComingWhy: string;
+    screeningDueWhy: string;
+    rowOther: string;
+    bookIt: string;
+    notNow: string;
   };
   review: {
     title: string;

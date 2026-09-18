@@ -28,9 +28,10 @@ on the date on the paper, and its facts name that event beside the page.
 
 from __future__ import annotations
 
+import re
 import uuid
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import AsyncIterator, Mapping, Sequence
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, time
 from enum import StrEnum
 from typing import Any
@@ -42,9 +43,18 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import DecidedField, FactDraft, ReviewDraft
+from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
-from app.ingestion.extract import DocumentKind, Extraction, Extractor, Hints, check_value
+from app.ingestion.extract import (
+    DocumentKind,
+    ExtractedField,
+    Extraction,
+    Extractor,
+    Hints,
+    check_value,
+)
 from app.ingestion.models import (
+    CONFIDENCE_THRESHOLD,
     DECISIONS,
     REVIEW_IN_PROGRESS,
     DocumentSource,
@@ -65,9 +75,10 @@ from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext
 from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
+from app.medicines.models import LineStatus, MedicationLine
 from app.memory.attach import attach_from_ingestion
 from app.memory.episodic import held_here, record_event, require_artifact
-from app.memory.models import Artifact, ConfidenceState, EventKind, Fact
+from app.memory.models import Appointment, Artifact, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact
 from app.memory.working import require_open_episode
 from app.regions import REGION_TZ
@@ -84,6 +95,24 @@ writes no such line at all (`review_artifact`)."""
 
 MEDICINE_NAME = ("medicine", "name")
 """The field a label's drug is named in; what the high-risk lookup reads."""
+MEDICINE_STRENGTH = ("medicine", "strength")
+
+PILL_MAX_CONFIDENCE = 0.79
+"""A pill photo names a drug by how it looks, never by reading it. Even a confident match
+against the licensed registry is held here — below `app.ingestion.models.CONFIDENCE_THRESHOLD`
+— so `needs_confirm` is always set and a person, then a pharmacist, always decides (docs:
+"a proposal ... matched against the licensed registry; confidence forced below the
+confirmation threshold so it always needs a person's decision")."""
+
+ITEM_SUBJECT = re.compile(r"^item_\d+$")
+"""One line of a pharmacy receipt (`app.ingestion.review._write_receipt`): every field of one
+purchased line shares this subject, numbered in the order the receipt prints them."""
+
+MEDICINE_COST_SUBJECT = "medicine_cost"
+"""The subject a matched pharmacy receipt line's derived cost fact is written under
+(`app.insurance.ledger.medicine_monthly_costs` reads it back), attribute the generic it was
+matched to. Distinct from the line's own plain paper fact (`item_N`), which is always written
+too — the receipt's own words are never replaced by the match."""
 
 
 class NoSuchReviewCard(Refusal):
@@ -158,16 +187,26 @@ plain facts on the paper's date (`_write_paper`'s fallback), a lab report's know
 readings apart (`_LAB_READING_BY_UNIT`)."""
 
 
-async def _red_flag_lab_report(
+RED_FLAG_SCANNED_KINDS = frozenset(
+    {DocumentKind.LAB_REPORT, DocumentKind.PILL_PHOTO, DocumentKind.PHARMACY_RECEIPT}
+)
+"""Every kind whose proposed fields are scanned for a red-flag word before the card is even
+shown (`_red_flag_scan`) — a lab report's own facility remark (documents-lab-reports-and-
+insurance), and, the same way, a pill photo's free-text guess or a pharmacy receipt's item
+name: "whichever way one comes in, it comes here first" (`app.safety.red_flags`)."""
+
+
+async def _red_flag_scan(
     session: AsyncSession, *, context: KeyContext, artifact: Artifact, extraction: Extraction
 ) -> None:
-    """Every red-flag word anywhere in a lab report's proposed fields, raised before the card
+    """Every red-flag word anywhere in a scanned kind's proposed fields, raised before the card
     is even shown — the same rule free text and a visit's transcript already keep
     (`app.safety.red_flags` module docstring): "whichever way one comes in, it comes here
-    first". One flag per code, naming the artefact (never an appointment: a lab report is not
-    tied to a visit) so it still surfaces on `open_flags` (`Flag.artifact_id.is_not(None)`).
-    No medicine names are passed in: a lab report's fever rule, if any, waits for a person's
-    own word the way any paper field does — the report is read here, not reasoned about."""
+    first". One flag per code, naming the artefact (never an appointment: a lab report or a
+    receipt is not tied to a visit) so it still surfaces on `open_flags`
+    (`Flag.artifact_id.is_not(None)`). No medicine names are passed in: a fever rule, if any,
+    waits for a person's own word the way any paper field does — the page is read here, not
+    reasoned about."""
     seen: set[str] = set()
     for field in extraction.fields:
         for hit in red_flags_in(field.subject.replace("_", " "), field.attribute.replace("_", " "), field.value):
@@ -265,8 +304,75 @@ def _cards_held_here(context: KeyContext) -> Any:
     )
 
 
-@audited(Action.WRITE, Scope.RECORDS, CARD)
-async def review_artifact(
+class ImportStepKey(StrEnum):
+    """One real stage of turning a stored photo or PDF into a review card, in the order
+    `review_artifact_stream` yields them. Never every stage runs for every artefact: a
+    document kind outside `RED_FLAG_SCANNED_KINDS` never raises `RED_FLAG_CHECKED` (only a
+    lab report, a pill photo, or a pharmacy receipt is scanned, `_red_flag_scan`), and
+    `LINKED` is yielded only when a real match was found — no invented step, no step for a
+    check that did not run."""
+
+    STORED = "stored"
+    READING = "reading"
+    FOUND = "found"
+    RED_FLAG_CHECKED = "red_flag_checked"
+    LINKED = "linked"
+    READY = "ready"
+
+
+@dataclass(frozen=True, slots=True)
+class ImportStep:
+    """One `ImportStepKey`, with the short, already-checked strings a step may carry so the
+    trace can say what it found — never a row, the way `app.search.ask.AskStep` carries only
+    a count. `document_kind`/`document_date`/`facility` are the paper's own real fields
+    (`FOUND`); `linked_kind` is `"medicine"` or `"visit"` and `linked_label` is the matched
+    line's or visit's own name (`LINKED`)."""
+
+    key: ImportStepKey
+    document_kind: str | None = None
+    facility: str | None = None
+    document_date: str | None = None
+    linked_kind: str | None = None
+    linked_label: str | None = None
+
+
+async def _linked_match(
+    session: AsyncSession, *, context: KeyContext, extraction: Extraction
+) -> ImportStep | None:
+    """Whether this page's own fields name a medicine already on the record, or land on the
+    same day as a visit already on the spine — read-only, from the profile's own rows alone
+    (the signal-locality rule), never written anywhere. `None` when neither matches: the
+    trace shows a link only when one is real (module docstring)."""
+    named = next(
+        (field.value for field in extraction.fields if (field.subject, field.attribute) == MEDICINE_NAME),
+        None,
+    )
+    if isinstance(named, str) and named.strip() and context.allows(Scope.MEDICINES):
+        word = named.strip().lower()
+        lines = await audited_read(
+            session,
+            MedicationLine,
+            context,
+            Scope.MEDICINES,
+            where=(MedicationLine.superseded_at.is_(None),),
+        )
+        for line in lines:
+            if word in line.generic.lower() or (line.brand is not None and word in line.brand.lower()):
+                return ImportStep(key=ImportStepKey.LINKED, linked_kind="medicine", linked_label=line.generic)
+    if extraction.document_date is not None and context.allows(Scope.VISITS):
+        tz = REGION_TZ[context.region]
+        visits = await audited_read(session, Appointment, context, Scope.VISITS)
+        for visit in visits:
+            if as_utc(visit.scheduled_at).astimezone(tz).date() == extraction.document_date:
+                return ImportStep(
+                    key=ImportStepKey.LINKED,
+                    linked_kind="visit",
+                    linked_label=as_utc(visit.scheduled_at).astimezone(tz).date().isoformat(),
+                )
+    return None
+
+
+async def review_artifact_stream(
     session: AsyncSession,
     *,
     context: KeyContext,
@@ -276,12 +382,24 @@ async def review_artifact(
     language: str,
     asked_as: DocumentKind | None = None,
     source: DocumentSource | None = None,
-) -> ReviewCard:
-    """Read a stored photo or PDF into a review card: one field per extracted statement, the
-    extractor's confidence on each, the kind and date of the paper, and — from the drug the
-    card names — whether the label rule guards it. `asked_as` goes to the extractor as the
-    hint and onto the card; `source` is where an imported PDF came from."""
+    registry: DrugRegistry | None = None,
+) -> AsyncIterator[ImportStep | ReviewCard]:
+    """`review_artifact`, streamed: an `ImportStep` the instant each real stage of turning a
+    stored photo or PDF into a review card finishes, then the `ReviewCard` itself, last.
+    `review_artifact` is this, drained — the relationship `recall`/`recall_stream` already
+    have (`app.search.ask`) — so the plain route and the streamed one can never answer the
+    pipeline two different ways.
+
+    The order is the pipeline's own, unchanged from `review_artifact`: stored, then read,
+    then what it found, then the red-flag check where one really runs, then a real link if
+    one exists, then the card. Nothing here waits to look slower and nothing is skipped to
+    look faster — a caller that never reads the generator (`review_artifact`) still does
+    every step, in the same order, in the same unit of work. `registry` is what a pill
+    photo's guess is matched against (`_capped_pill_fields`); omitted, a pill photo's fields
+    still reach the card, unmatched and still capped."""
+    context.require(Scope.RECORDS)
     artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
+    yield ImportStep(key=ImportStepKey.STORED)
     data = await store.get(artifact.storage_key)
     if extractor.external_processor is not None:
         # Written before the call, in the same unit of work as the card: a reach that sends
@@ -298,25 +416,87 @@ async def review_artifact(
             rows=1,
             shared_with_label=extractor.external_processor,
         )
+    yield ImportStep(key=ImportStepKey.READING)
     extraction = await extractor.extract(
         data,
         artifact.content_type,
         Hints(language=language, region=context.region, expected=asked_as),
     )
-    if extraction.document_kind is DocumentKind.LAB_REPORT:
+    facility = next(
+        (
+            field.value
+            for field in extraction.fields
+            if field.attribute == "facility" and isinstance(field.value, str)
+        ),
+        None,
+    )
+    yield ImportStep(
+        key=ImportStepKey.FOUND,
+        document_kind=extraction.document_kind.value,
+        facility=facility,
+        document_date=None if extraction.document_date is None else extraction.document_date.isoformat(),
+    )
+    if extraction.document_kind in RED_FLAG_SCANNED_KINDS:
         # The red-flag path first, exactly like typed free text (`app.safety.red_flags`
         # module docstring): before the card is even written, not held for the person's
         # review. A lab report rarely carries a red word, but a facility's own remark
-        # ("breathless at rest", "chest pain") is read the same way a transcript is.
-        await _red_flag_lab_report(session, context=context, artifact=artifact, extraction=extraction)
-    return await card_from(
+        # ("breathless at rest", "chest pain") is read the same way a transcript is — and so
+        # is a pill photo's free-text guess or a pharmacy receipt's item name.
+        await _red_flag_scan(session, context=context, artifact=artifact, extraction=extraction)
+        yield ImportStep(key=ImportStepKey.RED_FLAG_CHECKED)
+    linked = await _linked_match(session, context=context, extraction=extraction)
+    if linked is not None:
+        yield linked
+    card = await card_from(
         session,
         context=context,
         artifact=artifact,
         extraction=extraction,
         asked_as=asked_as,
         source=source,
+        registry=registry,
     )
+    yield ImportStep(key=ImportStepKey.READY)
+    yield card
+
+
+@audited(Action.WRITE, Scope.RECORDS, CARD)
+async def review_artifact(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    artifact_id: uuid.UUID,
+    store: ObjectStore,
+    extractor: Extractor,
+    language: str,
+    asked_as: DocumentKind | None = None,
+    source: DocumentSource | None = None,
+    registry: DrugRegistry | None = None,
+) -> ReviewCard:
+    """`review_artifact_stream`, drained: the card alone, for a caller that does not stream
+    (the existing `POST /profiles/{id}/photos` and `/imports` routes, unchanged). Read a
+    stored photo or PDF into a review card: one field per extracted statement, the
+    extractor's confidence on each, the kind and date of the paper, and — from the drug the
+    card names — whether the label rule guards it. `asked_as` goes to the extractor as the
+    hint and onto the card; `source` is where an imported PDF came from. `registry` is what a
+    pill photo's guess is matched against (`_capped_pill_fields`); omitted, a pill photo's
+    fields still reach the card, unmatched and still capped."""
+    card: ReviewCard | None = None
+    async for event in review_artifact_stream(
+        session,
+        context=context,
+        artifact_id=artifact_id,
+        store=store,
+        extractor=extractor,
+        language=language,
+        asked_as=asked_as,
+        source=source,
+        registry=registry,
+    ):
+        if isinstance(event, ReviewCard):
+            card = event
+    assert card is not None
+    return card
 
 
 async def review_photo(
@@ -328,6 +508,7 @@ async def review_photo(
     extractor: Extractor,
     language: str,
     asked_as: DocumentKind | None = None,
+    registry: DrugRegistry | None = None,
 ) -> ReviewCard:
     """Read a stored photo into a review card (`review_artifact`)."""
     return await review_artifact(
@@ -338,7 +519,50 @@ async def review_photo(
         extractor=extractor,
         language=language,
         asked_as=asked_as,
+        registry=registry,
     )
+
+
+def _capped_pill_fields(
+    fields: Sequence[ExtractedField], registry: DrugRegistry | None
+) -> list[ExtractedField]:
+    """A pill's identity is never read off it, only guessed from what is visible — the
+    imprint, the colour, the shape point at a product, but nothing about a loose pill proves
+    it. The guess (`medicine`/`name`, `medicine`/`strength`) is matched against the licensed
+    registry, when one is given: a match narrows the guess to the register's own generic and
+    strength — a canonical answer, not the model's free text — and an unmatched guess is kept
+    exactly as guessed. Either way, every `medicine` field is held at most at
+    `PILL_MAX_CONFIDENCE`: a pill photo never earns the confidence a printed label can. The
+    raw `pill` fields (imprint, colour, shape, score line) pass through unchanged — they are
+    what was actually seen, not a guess."""
+    name_field = next((f for f in fields if (f.subject, f.attribute) == MEDICINE_NAME), None)
+    if registry is not None and name_field is not None and isinstance(name_field.value, str):
+        strength_field = next((f for f in fields if (f.subject, f.attribute) == MEDICINE_STRENGTH), None)
+        strength = strength_field.value if strength_field and isinstance(strength_field.value, str) else None
+        matches = registry.identify(LabelFields(generic=name_field.value, strength=strength))
+        if not matches:
+            matches = registry.identify(LabelFields(brand=name_field.value, strength=strength))
+        # Only a match the register itself is confident of narrows the guess — the same
+        # floor `app.medicines.service._one_product` holds a label to (#206): a wrong
+        # strength or a bare high-risk name scores below it, and the guess is kept as
+        # guessed rather than swapped for a product it likely is not.
+        if matches and matches[0].confidence >= CONFIDENCE_THRESHOLD:
+            best = matches[0]
+
+            def _matched(field: ExtractedField) -> ExtractedField:
+                if (field.subject, field.attribute) == MEDICINE_NAME:
+                    return replace(field, value=best.generic)
+                if (field.subject, field.attribute) == MEDICINE_STRENGTH:
+                    return replace(field, value=best.strength, unit=None)
+                return field
+
+            fields = [_matched(field) for field in fields]
+    return [
+        replace(field, confidence=min(field.confidence, PILL_MAX_CONFIDENCE)).checked()
+        if field.subject == "medicine"
+        else field
+        for field in fields
+    ]
 
 
 async def card_from(
@@ -349,6 +573,7 @@ async def card_from(
     extraction: Extraction,
     asked_as: DocumentKind | None = None,
     source: DocumentSource | None = None,
+    registry: DrugRegistry | None = None,
 ) -> ReviewCard:
     """Write the card and its fields for an extraction of this artefact. Every field is
     checked (`ExtractedField.checked`) before it is written: codes are codes, values short.
@@ -356,6 +581,8 @@ async def card_from(
     fields = [field.checked() for field in extraction.fields]
     if _nothing_to_take(extraction, asked_as):
         fields = []
+    if extraction.document_kind is DocumentKind.PILL_PHOTO:
+        fields = _capped_pill_fields(fields, registry)
     named = next(
         (field.value for field in fields if (field.subject, field.attribute) == MEDICINE_NAME),
         None,
@@ -607,8 +834,14 @@ async def confirm_review_card(
     decisions: Sequence[Decision],
     confirmation_id: uuid.UUID,
     episode_id: uuid.UUID | None = None,
+    registry: DrugRegistry | None = None,
 ) -> tuple[ReviewCard, Sequence[ReviewField], Sequence[Fact]]:
     """Close the card on the person's yes and write the facts it decided.
+
+    `registry` is what a pharmacy receipt's item lines are matched against — the same
+    register a pill photo's guess is matched against at read time — so a line naming a
+    medicine or supplement already on his list also writes a cost entry
+    (`_write_receipt`); omitted, every line still writes as a plain paper fact.
 
     The yes must be for exactly these decisions on exactly this card (`ReviewDraft`); a
     decision changed since is `NotWhatWasConfirmed`. Then, field by field: a confirmed or
@@ -660,6 +893,7 @@ async def confirm_review_card(
                 artifact=artifact,
                 draft=draft,
                 episode_id=episode_id,
+                registry=registry,
             )
         written = list(dict.fromkeys(fact_of.values()))
         for field in fields:
@@ -770,6 +1004,124 @@ async def _write_lab_readings(
     return fact_of
 
 
+async def _his_generics(session: AsyncSession, *, context: KeyContext) -> frozenset[str]:
+    """The generics on his active list now — what a pharmacy receipt line's match is checked
+    against (`_write_receipt`): a receipt names a real product, but it becomes a cost entry
+    only for something he is actually recorded as taking, never a new medicine of its own
+    (a receipt is never how a medicine is added; the medicines module's own flow is)."""
+    found = await audited_read(
+        session,
+        MedicationLine,
+        context,
+        Scope.MEDICINES,
+        where=(
+            MedicationLine.superseded_at.is_(None),
+            MedicationLine.status == LineStatus.ACTIVE,
+        ),
+    )
+    return frozenset(line.generic for line in found)
+
+
+def _receipt_currency(kept: Sequence[DecidedField]) -> str | None:
+    for decided in kept:
+        if decided.subject == "receipt" and decided.attribute == "currency" and isinstance(decided.value, str):
+            return decided.value
+    return None
+
+
+def _cents(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return round(value * 100)
+
+
+async def _write_receipt(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    card: ReviewCard,
+    kept: Sequence[DecidedField],
+    opens: datetime,
+    episode_id: uuid.UUID | None,
+    registry: DrugRegistry | None,
+) -> dict[uuid.UUID, Fact]:
+    """A pharmacy receipt's kept fields: every one a plain paper fact, exactly as printed
+    (the receipt's own words are never replaced) — and, for an item line whose name matches a
+    medicine or supplement already on his list, one more fact besides:
+    `medicine_cost`/<generic>, the line's price, for the ledger to sum
+    (`app.insurance.ledger.medicine_monthly_costs`). A line that matches nothing on his list,
+    or a receipt with no registry to match against, stays a plain fact only — never held back
+    for that (#pill-receipt, "unmatched items stay as paper facts")."""
+    fact_of: dict[uuid.UUID, Fact] = {}
+    for decided in kept:
+        fact_of[decided.field_id] = await _write_fact_for(
+            session,
+            context=context,
+            card=card,
+            subject=decided.subject,
+            attribute=decided.attribute,
+            value=decided.value,
+            unit=decided.unit,
+            event_id=None,
+            valid_from=opens,
+            episode_id=episode_id,
+        )
+    if registry is None:
+        return fact_of
+    currency = _receipt_currency(kept)
+    his_generics = await _his_generics(session, context=context)
+    by_item: dict[str, dict[str, DecidedField]] = {}
+    for decided in kept:
+        if ITEM_SUBJECT.match(decided.subject):
+            by_item.setdefault(decided.subject, {})[decided.attribute] = decided
+    for item in by_item.values():
+        name = item.get("name")
+        if name is None or not isinstance(name.value, str):
+            continue
+        matches = registry.identify(LabelFields(generic=name.value)) or registry.identify(
+            LabelFields(brand=name.value)
+        )
+        matched = next(
+            (m for m in matches if m.generic in his_generics and m.confidence >= CONFIDENCE_THRESHOLD),
+            None,
+        )
+        if matched is None:
+            continue
+        quantity_field = item.get("quantity")
+        quantity = (
+            quantity_field.value
+            if quantity_field is not None and isinstance(quantity_field.value, int | float)
+            else None
+        )
+        total_field = item.get("total")
+        total_cents = _cents(total_field.value) if total_field is not None else None
+        if total_cents is None:
+            unit_price = item.get("unit_price")
+            unit_price_cents = _cents(unit_price.value) if unit_price is not None else None
+            if unit_price_cents is None:
+                continue
+            count = quantity if quantity is not None else 1
+            total_cents = round(unit_price_cents * count)
+        cost_fact = await _write_fact_for(
+            session,
+            context=context,
+            card=card,
+            subject=MEDICINE_COST_SUBJECT,
+            attribute=matched.generic,
+            value={"total_cents": total_cents, "item": name.value, "quantity": quantity},
+            unit=currency,
+            event_id=None,
+            valid_from=opens,
+            episode_id=episode_id,
+        )
+        # Kept apart from the field->fact_id map on purpose: the cost fact is derived from a
+        # whole line, not one field, so no single field's `fact_id` is overwritten to point
+        # at it — every field still names the plain fact it actually became. The cost fact
+        # itself still reaches `written` below (and the trail), under a key of its own.
+        fact_of[uuid.uuid4()] = cost_fact
+    return fact_of
+
+
 async def _write_paper(
     session: AsyncSession,
     *,
@@ -778,14 +1130,26 @@ async def _write_paper(
     artifact: Artifact,
     draft: ReviewDraft,
     episode_id: uuid.UUID | None = None,
+    registry: DrugRegistry | None = None,
 ) -> dict[uuid.UUID, Fact]:
     """One fact per kept field, valid from the date on the paper; for a paper that records a
     moment (`DOCUMENT_EVENTS`), the event first, on that date, and every fact names it. A lab
     report is its own case: its known-unit rows become reading facts on one READING event
     (`_write_lab_readings`), everything else on it a plain fact exactly like any other kind
-    (a header field, a reference range, an insurance line) — the same fallback below."""
+    (a header field, a reference range, an insurance line) — the same fallback below. A
+    pharmacy receipt is its own case too (`_write_receipt`)."""
     opens = _opens_at(card, artifact, context)
     kept = [decided for decided in draft.fields if decided.decision != FieldState.REJECTED]
+    if card.document_kind is DocumentKind.PHARMACY_RECEIPT:
+        return await _write_receipt(
+            session,
+            context=context,
+            card=card,
+            kept=kept,
+            opens=opens,
+            episode_id=episode_id,
+            registry=registry,
+        )
     if card.document_kind is DocumentKind.LAB_REPORT:
         reading_fields, plain_fields = _lab_reading_split(kept)
         lab_fact_of: dict[uuid.UUID, Fact] = {}

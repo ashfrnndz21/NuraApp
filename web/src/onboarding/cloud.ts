@@ -110,3 +110,13 @@ export function asksFor(words: readonly ConditionOut[], picked: readonly string[
   const byCode = index(words);
   return picked.map((code) => byCode.get(code)).filter((word): word is ConditionOut => Boolean(word?.ask));
 }
+
+/** "Or just tell me": the codes `POST /onboarding/tell-me` tagged, folded into what is already
+ *  picked — each once, already-picked ones kept where they were, new ones added at the end in
+ *  the order the backend named them. Every code it names is already one of the cloud's own
+ *  words (the backend's own guarantee), so nothing here checks the graph again. */
+export function foldTold(picked: readonly string[], told: readonly string[]): string[] {
+  const next = [...picked];
+  for (const code of told) if (!next.includes(code)) next.push(code);
+  return next;
+}

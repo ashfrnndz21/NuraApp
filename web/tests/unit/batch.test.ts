@@ -144,3 +144,53 @@ describe("a PDF", () => {
     expect(isPdf({ type: "image/jpeg", name: "IMG_1.jpg" })).toBe(false);
   });
 });
+
+describe("the trace while a paper is sent", () => {
+  it("shows every real step the backend gave, oldest first, done as the next one starts", async () => {
+    const steps: [string, string][] = [
+      ["stored", "Nura is keeping your paper safe."],
+      ["reading", "Nura is looking at your paper."],
+      ["found", "Nura found a blood test in your paper."],
+    ];
+    const seenAtEachStep: { key: string; text: string; done: boolean }[][] = [];
+    const deps: BatchDeps = {
+      thumb: () => null,
+      revoke: vi.fn(),
+      send: async (_each, onStep) => {
+        for (const [key, text] of steps) {
+          onStep(key, text);
+          seenAtEachStep.push(batch.trace.value);
+        }
+        return card("a");
+      },
+      readable: () => true,
+    };
+    const batch = new PaperBatch(deps);
+    batch.pick([file("a.png")]);
+    await batch.send();
+    // At the first step, one row, in progress. By the last, every earlier row is done.
+    expect(seenAtEachStep[0]).toEqual([{ key: "stored", text: steps[0]![1], done: false }]);
+    expect(seenAtEachStep[2]).toEqual([
+      { key: "stored", text: steps[0]![1], done: true },
+      { key: "reading", text: steps[1]![1], done: true },
+      { key: "found", text: steps[2]![1], done: false },
+    ]);
+  });
+
+  it("clears before the next paper in the batch, so one paper's steps never bleed into another's", async () => {
+    const deps: BatchDeps = {
+      thumb: () => null,
+      revoke: vi.fn(),
+      send: async (each, onStep) => {
+        onStep("stored", `stored ${each.name}`);
+        return card(each.name);
+      },
+      readable: () => true,
+    };
+    const batch = new PaperBatch(deps);
+    batch.pick([file("a.png"), file("b.png")]);
+    await batch.send();
+    // Sending finished: nothing of the last paper's trace is left showing.
+    expect(batch.trace.value).toEqual([]);
+  });
+});

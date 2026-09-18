@@ -59,6 +59,10 @@ export const zh = {
     bell: "更多给您的",
     // @patient phrase
     back: "返回",
+    // @patient phrase
+    bellFeed: "更多给您的",
+    // @patient phrase
+    bellInsights: "您这一周，仔细看过了",
   },
   welcome: {
     // @patient headline
@@ -304,6 +308,26 @@ export const zh = {
     // @patient
     noneOther: "Nura 在{name}附近暂时还没有这项服务。",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "写一条消息草稿",
+    // @patient headline
+    sheetTitle: "您的消息草稿",
+    // @patient phrase
+    copy: "复制",
+    // @patient
+    copied: "已复制，可以粘贴到您要发送的地方。",
+    // @patient phrase
+    sendBySms: "用短信发送",
+    // @patient phrase
+    sendByWhatsApp: "用 WhatsApp 发送",
+    // @patient
+    copyOnly: "这个地方没有号码，请自行复制并发送这条消息。",
+    // @patient
+    loading: "Nura 正在写这条消息。",
+    // @patient
+    error: "Nura 现在无法写这条消息。",
+  },
   health: {
     // @patient headline
     title: "您的健康",
@@ -343,6 +367,60 @@ export const zh = {
     comingUpTitle: "接下来",
     // @patient phrase
     addReading: "写下血压读数",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "您这一周，仔细看过了",
+    // @patient headline
+    cardTitleOther: "{name}这一周，仔细看过了",
+    // @patient
+    cardNone: "Nura还没看过您这一周。",
+    // @patient
+    cardNoneOther: "Nura还没看过{name}这一周。",
+    // @patient phrase
+    cardLastLooked: "Nura在{date}看过这个",
+    // @patient phrase
+    generate: "现在生成",
+    // @patient headline
+    screenTitle: "您这一周",
+    // @patient headline
+    screenTitleOther: "{name}这一周",
+    // @patient
+    working: "Nura正在看这一周。",
+    // @patient phrase
+    weekOf: "这一周从{date}开始",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "有什么变化",
+      // @patient headline
+      worth_a_look: "值得留意",
+      // @patient headline
+      medicines_and_supplements: "药物和补充品",
+      // @patient headline
+      what_you_pay: "您付的钱",
+      // @patient headline
+      screenings_due: "该做的检查",
+      // @patient headline
+      questions_for_the_doctor: "给医生的问题",
+    },
+    // @patient
+    sectionWithheld: "这把钥匙不包括{name}这一周的这部分。",
+    // @patient
+    sectionEmpty: "这一周没有要提的事。",
+    // @patient phrase
+    why: "原因",
+    // @patient phrase
+    sure: "确定",
+    // @patient phrase
+    likely: "可能",
+    // @patient phrase
+    worthALook: "值得留意",
+    // @patient phrase
+    askThis: "问{who}这个",
+    // @patient
+    asked: "Nura把这个问题留给您的就诊。",
+    // @patient
+    noVisit: "还没有预约的看诊可以带上这个问题。",
   },
   signIn: {
     // @patient headline
@@ -679,9 +757,15 @@ export const zh = {
     // @patient
     askThinking: "Nura 正在找。",
     // @patient
+    lookingForToday: "Nura正在为您找今天的内容。",
+    // @patient
     askAnswered: "Nura回答了。",
     // @patient phrase
     askLookedAt: "Nura查看了：{parts}",
+    // @patient phrase
+    newConversation: "新的问题",
+    // @patient headline
+    earlierInConversation: "之前问过的",
     // @patient phrase
     back: "回到您的卡",
     // @patient
@@ -696,6 +780,8 @@ export const zh = {
     statusDismissed: "{name} 按了“不适合我”。",
     // @patient phrase
     play: "播放",
+    // @patient phrase
+    watchAgain: "再看一次",
     // @patient phrase
     watchWhole: "在{publisher}看完整的视频",
     // @patient phrase
@@ -1002,6 +1088,8 @@ export const zh = {
     send: "发 {count} 份文件",
     // @patient
     sending: "Nura 正在发第 {n} 份，共 {total} 份。",
+    // @patient
+    working: "Nura正在处理。",
     // @patient headline
     found: "Nura 找到的",
     // @patient
@@ -1103,6 +1191,16 @@ export const zh = {
     questionsOpenOther: "要问{patient}医生的问题",
     // @patient headline
     questionsTitle: "看诊时要问的问题",
+    // @patient phrase
+    costOpen: "大概的费用",
+    // @patient phrase
+    costOpenOther: "{patient}这次看诊大概的费用",
+    // @patient headline
+    costTitle: "大概的费用",
+    // @patient phrase
+    costCoveredLabel: "您的保险可能支付",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}的保险可能支付",
     // @patient phrase
     questionLabel: "您的问题",
     // @patient phrase
@@ -1275,6 +1373,22 @@ export const zh = {
       countNone: "Nura 还没有记下什么。",
       // @patient
       count: "Nura 已经记下 {n} 项。",
+      // @patient phrase
+      tellMe: "或者直接告诉我",
+      // @patient
+      tellMeLead: "用您自己的话说。",
+      // @patient phrase
+      tellMeLabel: "用您自己的话",
+      // @patient phrase
+      tellMeSend: "发送",
+      // @patient
+      tellMeNothing: "Nura 没有找到对应的词。",
+      // @patient
+      tellMeNothingSub: "请试试点选。",
+      // @patient
+      tellMeSafety: "Nura 不会把这个变成上面的词。",
+      // @patient
+      tellMeSafetySub: "请告诉您信任的人，或现在就寻求帮助。",
     },
     asks: {
       // @patient
@@ -1366,6 +1480,10 @@ export const zh = {
       // @patient
       kindOther: "这是一份健康文件。",
       // @patient
+      kindPillPhoto: "这是一颗药丸的照片。",
+      // @patient
+      kindPharmacyReceipt: "这是一张药房收据。",
+      // @patient
       unreadable: "这一条 Nura 看不清。",
       // @patient
       typeIt: "请输入文件上写的。",
@@ -1379,6 +1497,8 @@ export const zh = {
       dated: "这份文件的日期是 {date}。",
       // @patient
       highRisk: "这种药 Nura 会格外小心。",
+      // @patient
+      pillProposal: "这看起来像{medicine}——请向药剂师确认。",
       // @patient
       fromPhoto: "来自您在 {date} 加的照片。",
       // @patient phrase
@@ -1530,6 +1650,22 @@ export const zh = {
         amount: "金额",
         date: "日期",
         for: "这次理赔是为了什么",
+      },
+      pill: {
+        imprint: "上面印的字",
+        colour: "颜色",
+        shape: "形状",
+        score_line: "是否有刻痕可以掰开",
+      },
+      receipt: {
+        pharmacy: "药房",
+        currency: "货币",
+      },
+      item: {
+        name: "买了什么",
+        quantity: "数量",
+        unit_price: "单价",
+        total: "总价",
       },
     },
   },
@@ -2288,6 +2424,22 @@ export const zh = {
     linkLabel: "通话链接，如果有的话",
     // @patient phrase
     callLabelLabel: "给这通电话取个名字",
+  },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "来自您的出院信",
+    // @patient phrase
+    medicineReviewWhy: "来自您的药",
+    // @patient phrase
+    testComingWhy: "来自您的验血",
+    // @patient phrase
+    screeningDueWhy: "来自您的文件",
+    // @patient
+    rowOther: "Nura建议{name}去看医生。",
+    // @patient phrase
+    bookIt: "预约",
+    // @patient phrase
+    notNow: "现在不用",
   },
   review: {
     // @patient headline

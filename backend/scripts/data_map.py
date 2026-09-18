@@ -318,6 +318,10 @@ CLASSES: dict[str, str] = {
     # Whether a product is a prescription medicine, a supplement or a TCM remedy (E04-03) is a
     # fact about the person's health — what he takes — not an operational detail.
     "medication_line.product_kind": HEALTH,
+    # The Health Analyst's own question about a line, "is this something to ask about the
+    # way a supplement is" (migration 0049): still what he takes, the same standing as
+    # `product_kind` above.
+    "medication_line.category": HEALTH,
     "medication_line.dose": HEALTH,
     "medication_line.prescriber": HEALTH,
     "medication_line.source_kind": HEALTH,
@@ -843,6 +847,7 @@ CLASSES: dict[str, str] = {
     # what is missing from it: health.
     "profile_settings.id": HEALTH,
     "profile_settings.conditions": HEALTH,
+    "profile_settings.answers": HEALTH,
     "profile_settings.language": OPERATIONAL,
     "profile_settings.density": HEALTH,
     "profile_settings.large_text": HEALTH,
@@ -1102,6 +1107,48 @@ CLASSES: dict[str, str] = {
     "insurance_claim.status_changed_by_person_id": IDENTIFIER,
     "insurance_claim.status_changed_confirmation_id": CONSENT,
     "insurance_claim.status_changed_at": OPERATIONAL,
+    # --- the Health Analyst's weekly report (`app.reasoning.analyst`) -----------------------
+    "insight_report.id": HEALTH,
+    "insight_report.generated_at": OPERATIONAL,
+    "insight_report.week_of": OPERATIONAL,
+    "insight_report.language": OPERATIONAL,
+    # Which analyst wrote it, "rule" or "claude" (`app.reasoning.analyst.provider`):
+    # provenance of the row, not itself a fact about his health.
+    "insight_report.source": OPERATIONAL,
+    # The boundary line the report carried (`Surface.INSIGHT`), the same standing as
+    # `feed_item.boundary` above.
+    "insight_report.boundary": HEALTH,
+    # Every section and insight the report holds: composed, already-verified text about his
+    # week — health, the same standing as `trend_card.lines`.
+    "insight_report.sections": HEALTH,
+    # Ask becomes a conversation (W2, `app.search.models`). Neither table holds a question's
+    # or an answer's own words — those stay in the MESSAGE artefacts the two id columns below
+    # point at (`event.artifact_id`'s own standing, HEALTH: a reference to health data). Who
+    # is asking is an identifier the same way a note's writer already is; when, operational;
+    # `written_scope` the consent door it was kept under, the same as `artifact.written_scope`.
+    # `summary` is the one free-text column: a deterministic, rule-written line naming what
+    # was asked and found, by cite id — the record's own standing (health), never the record
+    # itself.
+    "conversation.id": HEALTH,
+    "conversation.written_scope": CONSENT,
+    "conversation.person_id": IDENTIFIER,
+    "conversation.started_at": OPERATIONAL,
+    "conversation.last_turn_at": OPERATIONAL,
+    "conversation.closed_at": OPERATIONAL,
+    "conversation.turn_count": OPERATIONAL,
+    "conversation.summarized_through": OPERATIONAL,
+    "conversation.summary": HEALTH,
+    "turn.id": HEALTH,
+    "turn.written_scope": CONSENT,
+    "turn.conversation_id": HEALTH,
+    "turn.person_id": IDENTIFIER,
+    "turn.mode": OPERATIONAL,
+    "turn.language": OPERATIONAL,
+    "turn.question_artifact_id": HEALTH,
+    "turn.answer_artifact_id": HEALTH,
+    "turn.answered": OPERATIONAL,
+    "turn.line_count": OPERATIONAL,
+    "turn.created_at": OPERATIONAL,
 }
 
 

@@ -79,9 +79,11 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
 
 test("Add a health report: a PDF or a photo, through the one upload path, straight onto its review card", async ({ page, request }) => {
   const pa = await seedOwner(request, "Pa", []);
+  // The one upload path (`papers.spec.ts`'s own `captures`): `photos` or `imports`, whether
+  // the plain route answers at once or the streamed twin narrates its trace first.
   const sent: string[] = [];
   page.on("request", (each) => {
-    const found = new URL(each.url()).pathname.match(/\/(photos|imports)$/);
+    const found = new URL(each.url()).pathname.match(/\/(photos|imports)(?:\/stream)?$/);
     if (each.method() === "POST" && found) sent.push(found[1]!);
   });
   await signInThroughTheApp(page, pa.phone, "Pa");
@@ -125,6 +127,33 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   const hero = page.getByTestId("home-hero");
   await expect(hero.locator(".hero-greeting")).toHaveText("Good morning, Mei.");
   await expect(hero.locator(".hero-ask")).toHaveText("How is Pa feeling today?");
+  // The reference's own reading order (docs/design/full-experience.html, the Mei persona):
+  // what changed, his next visit and what to buy, what Nura is watching for him and what was
+  // sent to him this week, all above the warm check-in and "What to do for Pa" grid.
+  const main = page.locator("main");
+  // His visits and his medicines are their own reads after Today is ready (`useToday`'s
+  // `visits` and `page.lines`), so the row they make is awaited before its place is checked.
+  for (const id of ["what-changed", "next-visit-and-reorder", "watching", "sent", "daily-check-in"]) {
+    await expect(page.getByTestId(id)).toBeAttached();
+  }
+  for (const [before, after] of [
+    ["what-changed", "next-visit-and-reorder"],
+    ["next-visit-and-reorder", "watching"],
+    ["watching", "sent"],
+    ["sent", "daily-check-in"],
+  ] as const) {
+    const order = await main.evaluate(
+      (el, [a, b]) => {
+        const first = el.querySelector(`[data-testid="${a}"]`);
+        const second = el.querySelector(`[data-testid="${b}"]`);
+        if (!first || !second) return "missing";
+        const position = first.compareDocumentPosition(second);
+        return position & Node.DOCUMENT_POSITION_FOLLOWING ? "in order" : "out of order";
+      },
+      [before, after],
+    );
+    expect(order, `${before} before ${after}`).toBe("in order");
+  }
   await expect(page.getByTestId("daily-check-in")).toContainText("Tell Nura how Pa feels today");
   // The caregiver twin (bcd96c99): "What to do for Pa.", not the generic second-person line.
   await expect(page.locator("#do-title")).toHaveText("What to do for Pa.");

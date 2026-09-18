@@ -24,6 +24,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.access import audited_read
 from app.audit.models import Action, Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
@@ -32,11 +33,15 @@ from app.delivery.feed import search as search_module
 from app.delivery.feed.compose import (
     DECLINED_TOPIC,
     Day,
+    LearningPlan,
     _broker_wanted,
     _declined_topics,
     around_for,
+    household,
     plain_day,
+    plan_learning_jobs,
     refresh,
+    say_ahead,
     today_for,
 )
 from app.delivery.feed.compress import (
@@ -90,6 +95,7 @@ from app.identity.service import create_own_profile, register_person
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.language.models import ReviewItem
+from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import ArtifactKind, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
@@ -124,6 +130,57 @@ async def _pa(
     return await resolve_key_context(
         session, region=Region.SG, person_id=pa.id, profile_id=profile.id
     )
+
+
+async def _run_learning(
+    session: AsyncSession, *, context: KeyContext, engine: Engine, day: Day
+) -> list[FeedItem]:
+    """Today's self-searches, run synchronously on this same session — what
+    `app.delivery.feed.background._run` does on its own session, per job, off the request
+    entirely. These tests are about which cards a job makes (`plan_learning_jobs`, `run_job`,
+    `say_ahead`), not about the background module's own scheduling, concurrency or deadlines
+    (`tests/test_feed_background.py` covers that), so there is no task, no timeout, no second
+    session here — just the same calls, in order, on `session`.
+
+    Calls `search_module.run_job` (the module, not the name this file also imports) so a test
+    that monkeypatches `search_module.run_job` still reaches every job run through here."""
+    house = await household(session, context=context)
+    state = await current_state(session, context=context)
+    medicines: list[LineView] = (
+        await active_lines(session, context=context, registry=engine.registry, language=house.language)
+        if context.allows(Scope.MEDICINES)
+        else []
+    )
+    every = await audited_read(session, FeedItem, context, Scope.PROFILE)
+    keys = {item.dedupe_key for item in every}
+    plan: LearningPlan = await plan_learning_jobs(
+        session,
+        context=context,
+        engine=engine,
+        state=state,
+        day=day,
+        house=house,
+        keys=keys,
+        medicines=medicines,
+    )
+    made: list[FeedItem] = []
+    for job in plan.jobs:
+        items = await search_module.run_job(
+            session,
+            context=context,
+            job=job,
+            engine=engine,
+            state=await current_state(session, context=context),
+            language=house.language,
+            around=plan.around,
+            doctor=house.doctor,
+            existing=set(keys),
+        )
+        if items:
+            await say_ahead(session, engine, context, items)
+            made.extend(items)
+            keys.update(item.dedupe_key for item in items)
+    return made
 
 
 async def _label(session: AsyncSession, context: KeyContext, **fields: object) -> None:
@@ -289,6 +346,7 @@ async def test_learning_cards_carry_the_boundary_line_and_cards_that_infer_nothi
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     line = boundary_line(Surface.LEARNING_CARD, "en")
     assert line.splitlines() == [
         "Nura explains one thing in simple words.",
@@ -406,6 +464,7 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="230001")
     _, made = await refresh(sg, context=context, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     jobs = {
         (job.kind, tuple(job.terms), job.cadence, job.status.value)
         for job in await list_jobs(sg, context=context)
@@ -546,6 +605,7 @@ async def test_a_food_page_that_would_change_treatment_is_held_for_his_chief_alo
         registry=FixtureRegistry.load(),
     )
     _, made = await refresh(sg, context=context, engine=engine)
+    made = list(made) + await _run_learning(sg, context=context, engine=engine, day=today_for(context))
     food = next(item for item in made if item.type is CardType.FOOD)
     assert food.deliver_to is DeliverTo.CAREGIVER
     assert CardType.QUESTION not in {item.type for item in made}, "no orphaned FeedItem question"
@@ -588,6 +648,7 @@ async def test_a_notice_that_matches_the_batch_on_his_pack_gives_him_the_action_
     context = await _pa(sg)
     await _label(sg, context, name="Warfarin", strength=5, batch="240077")
     _, made = await refresh(sg, context=context, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     notice = next(item for item in made if item.type is CardType.NOTICE)
     assert notice.deliver_to is DeliverTo.CAREGIVER and notice.supply is Supply.TODAY
     assert notice.why["suppressed"] is None
@@ -846,6 +907,7 @@ async def test_a_treatment_changing_notice_on_his_own_box_still_reaches_his_chie
         registry=FixtureRegistry.load(),
     )
     _, made = await refresh(sg, context=context, engine=engine)
+    made = list(made) + await _run_learning(sg, context=context, engine=engine, day=today_for(context))
 
     # The caregiver notice: still made, still hers, and the match is on it — this is the
     # confirmed-his-own-box case, not a maybe.
@@ -1103,6 +1165,7 @@ async def test_a_new_medicines_explainer_and_its_clip_lead_the_learning_supply_t
     )
     await new_medicine(sg, context)  # amlodipine, started now — inside the 14-day window
     _, made = await refresh(sg, context=context, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
 
     supply = [item for item in made if item.type in (CardType.LEARNING, CardType.CLIP)]
     assert len(supply) >= 3, "the medicine's explainer, its clip, and the diabetes explainer"
@@ -1167,6 +1230,7 @@ async def test_a_dismissed_topic_comes_back_no_sooner_than_30_days(sg: AsyncSess
     assert ("amlodipine",) in {terms for _, terms, *_ in before}
 
     _, made = await refresh(sg, context=other, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=other, engine=ENGINE, day=today_for(other))
     [card] = [
         item
         for item in made
@@ -1245,6 +1309,7 @@ async def test_a_private_candidates_card_is_unreadable_to_his_chief_and_readable
     monkeypatch.setattr(broker_module, "slate", _privately)
 
     _, made = await refresh(sg, context=context, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     cards = [item for item in made if item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER]
     assert cards, "the medicine's explainer and clip are still made, now privately"
     for card in cards:
@@ -1282,7 +1347,11 @@ async def test_a_did_you_know_card_names_its_topic_and_coexists_with_a_same_day_
     # most one a day" actually lives (`rank._patient_supply`'s `CapsClass.ONE`) — a job can
     # still turn up more than one page (an article and a clip both about the same medicine,
     # here), so the cap is checked on what he is actually shown, not on every row `refresh`
-    # wrote.
+    # wrote. `refresh` no longer runs today's self-searches inline (`app.delivery.feed.
+    # background`, #269/#276, #280), so this test runs them itself, on this session, before
+    # `feed_page` builds the capped page from what is now on the record.
+    await refresh(sg, context=context, engine=ENGINE)
+    await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     page = await feed_page(sg, context=context, engine=ENGINE)
     on_his_page = [item for item in page.items if item.why.get("rule") == RULE_DID_YOU_KNOW]
     assert len(on_his_page) <= 1, "at most one did-you-know card a day"
@@ -1342,6 +1411,7 @@ async def test_a_candidate_without_private_to_is_unchanged(sg: AsyncSession) -> 
     await new_medicine(sg, context)  # amlodipine — fires RULE_NEW_MEDICINE_EXPLAINER
 
     _, made = await refresh(sg, context=context, engine=ENGINE)
+    made = list(made) + await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     cards = [item for item in made if item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER]
     assert cards
     for card in cards:
@@ -1591,6 +1661,9 @@ async def test_when_nothing_is_due_a_bounded_catch_up_still_runs_the_stale_job(
 
     clock.step(timedelta(days=2))
     _, second_load = await refresh(sg, context=context, engine=engine)
+    second_load = list(second_load) + await _run_learning(
+        sg, context=context, engine=engine, day=today_for(context)
+    )
 
     caught_up = [item for item in second_load if item.search_job_id == job.id]
     assert caught_up, "the catch-up should have run the stale on_change job again"
@@ -1603,6 +1676,97 @@ async def test_when_nothing_is_due_a_bounded_catch_up_still_runs_the_stale_job(
     jobs_after = await list_jobs(sg, context=context)
     [reran] = [one for one in jobs_after if one.id == job.id]
     assert reran.last_run_at is not None and reran.last_run_at > first_last_run_at
+
+
+async def test_a_job_that_ran_but_found_nothing_still_lets_the_catch_up_run(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """Live-run defect, part two ("Pa's feed never creates learning jobs"): the catch-up guard
+    used to be "did a job run today" (`not ran`), not "does he have a learning card today". A
+    job that runs but finds nothing new to say — the search came back empty, or everything it
+    found is already shown — still landed in `ran`, so a day where the one due job came up
+    empty looked, wrongly, like a day that needed no catching up at all, and a second,
+    genuinely stale job never got its turn. `plan_learning_jobs` reads his own day's cards
+    back instead of the jobs' bookkeeping — read at plan time, before either job's next run,
+    so what proves the read is the jobs' own bookkeeping and not "what came back today": a
+    job that already ran once, today, and found nothing (`empty`, no usable source of its
+    own — the search itself has nothing to search), sitting right next to one that is
+    genuinely stale (`stale`, `on_change`, never due again on its own). Neither is due when
+    the plan is made two days on; the catch-up still reaches the stale one."""
+    context = await _pa(sg)
+    source = Source(
+        name="Catch-up Example",
+        domain="catchup.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_RotatingSearcher(), compressor=_PlainCompressor(), registry=FixtureRegistry.load()
+    )
+    state = await current_state(sg, context=context)
+    day = today_for(context)
+    around = await around_for(sg, context=context, engine=engine, state=state, day=day)
+
+    # A stale job (`on_change`, `_gaps`/`_broker_wanted` never propose it again): the one only
+    # a catch-up can ever revive.
+    stale = await create_job(
+        sg, context=context, kind=JobKind.EXPLAINER, terms=["a stale tip"], reason={"gap": "test"}
+    )
+    first = await run_job(
+        sg,
+        context=context,
+        job=stale,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    assert len(first) == 1, "ran once already — the baseline this test starts stale from"
+
+    # A second job, run the same day, `on_change` too (so it never becomes independently due
+    # again either) and pinned to no usable source of its own (`source_ids=[]`): its own run
+    # today genuinely finds nothing, the same as a live search that came up empty — not a
+    # stand-in, a real empty result.
+    empty = await create_job(
+        sg,
+        context=context,
+        kind=JobKind.SAFETY,
+        terms=["a checked tip"],
+        reason={"gap": "test"},
+        source_ids=[],
+        cadence="on_change",
+    )
+    second = await run_job(
+        sg,
+        context=context,
+        job=empty,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    assert second == [], "no usable source: this job's own search has nothing to find"
+
+    clock.step(timedelta(days=2))
+    _, second_load = await refresh(sg, context=context, engine=engine)
+    second_load = list(second_load) + await _run_learning(
+        sg, context=context, engine=engine, day=today_for(context)
+    )
+
+    caught_up = [item for item in second_load if item.search_job_id == stale.id]
+    assert caught_up, (
+        "the other job ran today and found nothing, but the stale job — read back from his "
+        "day's own cards, not the jobs' bookkeeping — should still have been caught up"
+    )
 
 
 async def test_the_catch_up_is_bounded_to_max_catch_up_jobs(sg: AsyncSession, clock: FrozenClock) -> None:

@@ -77,9 +77,13 @@ from app.memory.semantic import assert_fact, current_facts
 from app.memory.spine import add_provider
 from app.memory.timeline import gather
 from app.memory.working import open_episode
+from app.reasoning.analyst.port import Report
+from app.reasoning.analyst.rule import RuleAnalyst
+from app.reasoning.analyst.service import save_report
 from app.regions import Region
 from app.safety.red_flags import Flag
 from app.search.ask import Mode, recall
+from app.search.conversation import start_new_conversation
 from app.state.service import current_state
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.capture_support import agree_to_recording, b64, confirm, decide, photo
@@ -617,6 +621,16 @@ async def _seed(deployment: Deployment) -> Seeded:
             claim_reference="CLM-1",
             confirmation_id=claim_yes.id,
         )
+        # The Health Analyst's own row (`app.reasoning.analyst`): whatever it cites is a mix
+        # of MEDICINES, READINGS, RECORDS and MONEY, so a leak of any one id anywhere in its
+        # saved report is its own finding, the same standing the policy and the claim above
+        # already have.
+        insight_report: Report | None = None
+        async for event in RuleAnalyst().report_stream(session, context=owner, language="en"):
+            if isinstance(event, Report):
+                insight_report = event
+        assert insight_report is not None
+        saved_report = await save_report(session, context=owner, report=insight_report)
         await session.commit()
     await _ok(
         await client.post(
@@ -729,6 +743,13 @@ async def _seed(deployment: Deployment) -> Seeded:
         seeded.kinds[str(policy.id)] = "policy"
         seeded.scopes[str(claim.id)] = Scope.MONEY
         seeded.kinds[str(claim.id)] = "insurance_claim"
+        seeded.scopes[str(saved_report.id)] = Scope.PROFILE
+        seeded.kinds[str(saved_report.id)] = "insight_report"
+        # Ask as a conversation (W2, `app.search.conversation`): the thread row itself sits
+        # under ASK, the same door its questions were always kept behind.
+        conversation = await start_new_conversation(session, context=owner)
+        seeded.scopes[str(conversation.id)] = Scope.ASK
+        seeded.kinds[str(conversation.id)] = "conversation"
         seeded.params = {
             "event_id": [str(e.id) for e in events],
             "episode_id": [str(illness.id)],
@@ -746,6 +767,8 @@ async def _seed(deployment: Deployment) -> Seeded:
             "upload_id": [upload_id],
             "photo_id": [shared["photo"]["photo_id"]],
             "kind": ["steps", "heart_rate", "sleep", "water"],
+            "report_id": [str(saved_report.id)],
+            "conversation_id": [str(conversation.id)],
         }
     return seeded
 
@@ -848,6 +871,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/events/{{event_id}}/notes"),
     Walk("GET", f"{P}/events/{{event_id}}/notes/{{note_id}}/content"),
     Walk("GET", f"{P}/feed"),
+    Walk("GET", f"{P}/feed/jobs/status"),
     Walk("GET", f"{P}/feed/cached"),
     Walk("GET", f"{P}/feed/today"),
     Walk("GET", f"{P}/feed/{{item_id}}/voice"),
@@ -867,6 +891,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
     Walk("GET", f"{P}/reach"),
+    Walk("GET", f"{P}/visits/proposed"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),
@@ -907,6 +932,13 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/emergency-card.html", card=True),
     Walk("GET", f"{P}/symptoms", params={"since": "2026-08-01T00:00:00Z"}),
     Walk("POST", f"{P}/not-feeling-well", json={"words": "he is shaky and sweaty"}, button=True),
+    Walk(
+        "POST",
+        f"{P}/not-feeling-well/stream",
+        json={"words": "he is shaky and sweaty"},
+        button=True,
+        stream=True,
+    ),
     Walk("POST", f"{P}/symptoms", json={"words": "he is shaky and sweaty"}, button=True),
     Walk("GET", f"{P}/appointments"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/brief"),
@@ -933,14 +965,14 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/me-summary"),
     Walk("GET", f"{P}/nudges"),
     Walk("GET", f"{P}/not-feeling-well/offline"),
-    # The fuller insurance record (E13-03): money, not the emergency card's EMERGENCY.
-    Walk("GET", f"{P}/insurance/policies"),
-    Walk("GET", f"{P}/insurance/appointments/{{appointment_id}}/claims"),
-    Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
-    Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
     Walk("GET", f"{P}/calls/upcoming"),
     Walk("GET", f"{P}/health/overview"),
     Walk("GET", f"{P}/health/insights"),
+    # The Health Analyst's weekly report (`app.reasoning.analyst`): a mix of MEDICINES,
+    # READINGS, RECORDS and MONEY, saved the moment the stream finishes.
+    Walk("POST", f"{P}/insights/stream", json={}, stream=True),
+    Walk("GET", f"{P}/insights"),
+    Walk("GET", f"{P}/insights/{{report_id}}"),
     Walk("GET", f"{P}/medication-reminder"),
     Walk("GET", f"{P}/metrics/{{kind}}"),
     Walk("GET", f"{P}/food"),
@@ -950,10 +982,30 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
     Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
     Walk("GET", f"{P}/insurance/ledger"),
+    # Ask as a conversation (W2): the thread read back, and a turn asked on it — the same
+    # event contract as /ask/stream above.
+    Walk("GET", f"{P}/conversations/{{conversation_id}}"),
+    Walk(
+        "POST",
+        f"{P}/conversations/{{conversation_id}}/turns/stream",
+        json={"question": "what papers do I have", "mode": "text"},
+        stream=True,
+    ),
+    # Care navigation drafts (T3), the planner's proposed visits and a visit's cost
+    # expectation (T2): reads over VISITS, with MONEY deciding whether cover is shown.
+    Walk("GET", f"{P}/navigation/drafts"),
+    Walk("GET", f"{P}/visits/proposed"),
+    Walk("GET", f"{P}/visits/{{appointment_id}}/cost"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
 NOT_WALKED: dict[tuple[str, str], str] = {
+    ("POST", f"{P}/conversations"): "starts a fresh thread; returns its empty shell",
+    ("POST", f"{P}/navigation/drafts/{{need_id}}"): "drafts a message for a need; returns the draft",
+    (
+        "POST",
+        f"{P}/visits/proposed/{{proposal_id}}/decline",
+    ): "declines a proposed visit; returns what it declined",
     ("POST", f"{P}/confirmations"): "mints a yes for a draft the caller sends; returns its id",
     ("POST", f"{P}/claim"): "the patient claims his graph; returns the profile row",
     ("POST", f"{P}/keys"): "cuts a key; returns the key",
@@ -970,7 +1022,9 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/notes"): "writes his own note; returns it",
     ("POST", f"{P}/readings"): "writes a reading; returns the event and fact it wrote",
     ("POST", f"{P}/photos"): "keeps a photo; returns its card",
+    ("POST", f"{P}/photos/stream"): "keeps a photo, streamed; returns its card (see /photos)",
     ("POST", f"{P}/imports"): "keeps a PDF; returns its card",
+    ("POST", f"{P}/imports/stream"): "keeps a PDF, streamed; returns its card (see /imports)",
     ("POST", f"{P}/readings/photo"): "keeps a photo of a machine; returns its card",
     (
         "POST",

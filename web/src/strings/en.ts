@@ -59,6 +59,10 @@ export const en = {
     bell: "More for you",
     // @patient phrase
     back: "Go back",
+    // @patient phrase
+    bellFeed: "More for you",
+    // @patient phrase
+    bellInsights: "Your week, looked at closely",
   },
   welcome: {
     // @patient headline
@@ -304,6 +308,26 @@ export const en = {
     // @patient
     noneOther: "Nura has nothing near {name} for this yet.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Draft a message",
+    // @patient headline
+    sheetTitle: "Your drafted message",
+    // @patient phrase
+    copy: "Copy",
+    // @patient
+    copied: "It is copied, ready to paste where you send it.",
+    // @patient phrase
+    sendBySms: "Send by text message",
+    // @patient phrase
+    sendByWhatsApp: "Send by WhatsApp",
+    // @patient
+    copyOnly: "There is no number for this place, so copy the message and send it yourself.",
+    // @patient
+    loading: "Nura is writing the message.",
+    // @patient
+    error: "Nura could not write the message just now.",
+  },
   health: {
     // @patient headline
     title: "Your health",
@@ -343,6 +367,60 @@ export const en = {
     comingUpTitle: "Coming up",
     // @patient phrase
     addReading: "Write down a blood pressure",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "Your week, looked at closely",
+    // @patient headline
+    cardTitleOther: "{name}'s week, looked at closely",
+    // @patient
+    cardNone: "Nura has not looked at your week yet.",
+    // @patient
+    cardNoneOther: "Nura has not looked at {name}'s week yet.",
+    // @patient phrase
+    cardLastLooked: "Nura looked at this on {date}",
+    // @patient phrase
+    generate: "Generate now",
+    // @patient headline
+    screenTitle: "Your week",
+    // @patient headline
+    screenTitleOther: "{name}'s week",
+    // @patient
+    working: "Nura is looking at this week.",
+    // @patient phrase
+    weekOf: "The week of {date}",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "What changed",
+      // @patient headline
+      worth_a_look: "Worth a look",
+      // @patient headline
+      medicines_and_supplements: "Medicines and supplements",
+      // @patient headline
+      what_you_pay: "What you pay",
+      // @patient headline
+      screenings_due: "Screenings due",
+      // @patient headline
+      questions_for_the_doctor: "Questions for the doctor",
+    },
+    // @patient
+    sectionWithheld: "This key does not cover this part of {name}'s week.",
+    // @patient
+    sectionEmpty: "There is nothing here this week.",
+    // @patient phrase
+    why: "Why",
+    // @patient phrase
+    sure: "Sure",
+    // @patient phrase
+    likely: "Likely",
+    // @patient phrase
+    worthALook: "Worth a look",
+    // @patient phrase
+    askThis: "Ask {who} this",
+    // @patient
+    asked: "Nura kept this question for your visit.",
+    // @patient
+    noVisit: "There is no visit booked yet to take this to.",
   },
   signIn: {
     // @patient headline
@@ -679,9 +757,15 @@ export const en = {
     // @patient
     askThinking: "Nura is looking.",
     // @patient
+    lookingForToday: "Nura is looking for today's reads.",
+    // @patient
     askAnswered: "Nura answered.",
     // @patient phrase
     askLookedAt: "What Nura looked at: {parts}",
+    // @patient phrase
+    newConversation: "New questions",
+    // @patient headline
+    earlierInConversation: "What you asked before",
     // @patient phrase
     back: "Back to your cards",
     // @patient
@@ -696,6 +780,8 @@ export const en = {
     statusDismissed: "{name} tapped Not for me on this card.",
     // @patient phrase
     play: "Play",
+    // @patient phrase
+    watchAgain: "Watch again",
     // @patient phrase
     watchWhole: "Watch the whole video at {publisher}",
     // @patient phrase
@@ -1002,6 +1088,8 @@ export const en = {
     send: "Send {count} papers",
     // @patient
     sending: "Nura is sending paper {n} of {total}.",
+    // @patient
+    working: "Nura is working on it.",
     // @patient headline
     found: "What Nura found",
     // @patient
@@ -1103,6 +1191,16 @@ export const en = {
     questionsOpenOther: "Questions for {patient}'s doctor",
     // @patient headline
     questionsTitle: "Questions for your visit",
+    // @patient phrase
+    costOpen: "What it may cost",
+    // @patient phrase
+    costOpenOther: "What {patient}'s visit may cost",
+    // @patient headline
+    costTitle: "What it may cost",
+    // @patient phrase
+    costCoveredLabel: "Your cover may pay",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}'s cover may pay",
     // @patient phrase
     questionLabel: "Your question",
     // @patient phrase
@@ -1275,6 +1373,22 @@ export const en = {
       countNone: "Nura has not written anything down yet.",
       // @patient
       count: "Nura has written {n} things down.",
+      // @patient phrase
+      tellMe: "Or just tell me",
+      // @patient
+      tellMeLead: "Say it in your own words.",
+      // @patient phrase
+      tellMeLabel: "In your own words",
+      // @patient phrase
+      tellMeSend: "Send",
+      // @patient
+      tellMeNothing: "Nura found no word above for that.",
+      // @patient
+      tellMeNothingSub: "Try tapping instead.",
+      // @patient
+      tellMeSafety: "Nura will not turn that into a word here.",
+      // @patient
+      tellMeSafetySub: "Please tell someone you trust, or get help now.",
     },
     asks: {
       // @patient
@@ -1366,6 +1480,10 @@ export const en = {
       // @patient
       kindOther: "This is a health paper.",
       // @patient
+      kindPillPhoto: "This is a photo of a pill.",
+      // @patient
+      kindPharmacyReceipt: "This is a pharmacy receipt.",
+      // @patient
       unreadable: "Nura could not read this one.",
       // @patient
       typeIt: "Please type what the paper says.",
@@ -1379,6 +1497,8 @@ export const en = {
       dated: "The paper is dated {date}.",
       // @patient
       highRisk: "Nura takes extra care with this medicine.",
+      // @patient
+      pillProposal: "This looks like {medicine} — check with the pharmacist.",
       // @patient
       fromPhoto: "From the photo you added on {date}.",
       // @patient phrase
@@ -1532,6 +1652,22 @@ export const en = {
         amount: "The amount",
         date: "The date",
         for: "What the claim was for",
+      },
+      pill: {
+        imprint: "What is printed on it",
+        colour: "Its colour",
+        shape: "Its shape",
+        score_line: "Whether it can be split",
+      },
+      receipt: {
+        pharmacy: "The pharmacy",
+        currency: "The currency",
+      },
+      item: {
+        name: "What was bought",
+        quantity: "How many",
+        unit_price: "The price each",
+        total: "The total price",
       },
     },
   },
@@ -2291,6 +2427,22 @@ export const en = {
     linkLabel: "Call link, if there is one",
     // @patient phrase
     callLabelLabel: "What to call it",
+  },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "From your hospital letter",
+    // @patient phrase
+    medicineReviewWhy: "From your medicines",
+    // @patient phrase
+    testComingWhy: "From your blood test",
+    // @patient phrase
+    screeningDueWhy: "From your papers",
+    // @patient
+    rowOther: "Nura suggests {name} sees the doctor.",
+    // @patient phrase
+    bookIt: "Book it",
+    // @patient phrase
+    notNow: "Not now",
   },
   review: {
     // @patient headline

@@ -45,7 +45,7 @@ from app.delivery.feed.models import (
     SearchJob,
     Supply,
 )
-from app.delivery.feed.search import Around, Engine, create_job, due, pause_job, run_job
+from app.delivery.feed.search import Around, Engine, create_job, due, pause_job
 from app.delivery.strings import (
     CAREGIVER_DUTY_HEADLINE,
     CAREGIVER_DUTY_LINES,
@@ -330,18 +330,16 @@ async def refresh(
         ],
         as_cards=_clips_as_cards(state),
     )
-    made.extend(
-        await _learning(
-            session,
-            context=context,
-            engine=engine,
-            state=state,
-            day=day,
-            house=house,
-            keys=keys,
-            medicines=medicines,
-        )
-    )
+    # The day's self-searches (`_learning`) used to run right here, inline: real web search,
+    # fetch and compression, one call per job, sometimes a dozen or more on a profile's first
+    # open of a day (#269/#276). That held the request open for as long as every job took —
+    # over 400s, live, hung the client — and the searcher's own synchronous call blocked this
+    # process's whole event loop while it ran, not just this request. `_learning` is no longer
+    # called from here: `app.delivery.feed.background.ensure_learning_scheduled` runs it, on
+    # its own session, as its own background task, kicked off by the route
+    # (`app.channels.api.feed.feed`) after this page is built, never awaited before the
+    # response goes out. A card `_learning` finds today lands in storage the moment its job
+    # finishes and shows on the next page load, the same as any other card here.
     await _say_ahead(session, engine, context, made)
     return state, made
 
@@ -1897,6 +1895,13 @@ async def around_for(
     )
 
 
+LEARNING_CARD_TYPES = frozenset(
+    {CardType.LEARNING, CardType.CLIP, CardType.LOCAL, CardType.SEASONAL, CardType.FOOD}
+)
+"""What a `run_job` call can turn a job into (`_shape`, `app/delivery/feed/search.py`) —
+every card type that counts as "a learning card today" for the catch-up check below. `NOTICE`
+and `RECALL_ACTION` are a safety job's own cards, never this supply's, so they are not here."""
+
 MAX_CATCH_UP_JOBS = 3
 """When nothing has run for him today at all — not a new gap, not a job whose own cadence
 made it due — force at most this many of the oldest enabled jobs to run anyway, so the first
@@ -1914,7 +1919,17 @@ def _last_run(job: SearchJob, day: Day) -> datetime | None:
     return job.last_run_at if job.last_run_at.tzinfo else job.last_run_at.replace(tzinfo=day.now.tzinfo)
 
 
-async def _learning(
+@dataclass(frozen=True, slots=True)
+class LearningPlan:
+    """What `plan_learning_jobs` found there was work to do: the jobs to run and the `around`
+    they run against. `app.delivery.feed.background` is the only caller that runs them — never
+    here, never inline in a request (#269/#276, #280)."""
+
+    jobs: tuple[SearchJob, ...]
+    around: Around
+
+
+async def plan_learning_jobs(
     session: AsyncSession,
     *,
     context: KeyContext,
@@ -1924,19 +1939,25 @@ async def _learning(
     house: Household,
     keys: set[str],
     medicines: Sequence[LineView] = (),
-) -> list[FeedItem]:
-    """The self-searches his record calls for, run against the allowlist, their findings made
-    into cards (or questions for the memo, or notices for his chief):
+) -> LearningPlan:
+    """The self-searches his record calls for, queued but never run here: a new gap gets a
+    job (`create_job`, a plain DB write — cheap, and still done inline, the same call a
+    person's own `POST /search-jobs` makes), and a daily or weekly job whose own cadence has
+    come due is added to the plan. Running a job — the real web search, fetch and compression
+    behind it — is `app.delivery.feed.background`'s alone, off this request entirely
+    (#269/#276 postmortem: the old inline run here, sometimes a dozen jobs deep, once held a
+    request open past 400s and blocked the process's whole event loop while it ran).
+
+    What a plan can hold, by kind:
 
     - an explainer for each gap State shows, and a daily safety job for each medicine;
     - a daily local watch for each hazard a condition or medicine of his makes relevant
       (E09-07) — the bulletins matched to his area here, never searched by it;
     - a weekly watch for each season his conditions make relevant, where the planner may add
       it (the fasting month is added by a person, never guessed);
-    - one weekly food watch across his conditions (a new one pauses the one it replaces).
-
-    A new job runs now; a daily or weekly one that has not run today or this week runs again;
-    a paused one does not run."""
+    - one weekly food watch across his conditions (a new one pauses the one it replaces);
+    - when nothing above is due and he has no learning card at all today yet, the most
+      overdue enabled jobs (`MAX_CATCH_UP_JOBS`), so a new day is never met with nothing."""
     # #236: ordered, and with `SearchJob.id` as a tie-break — two jobs created in the same
     # transaction can share a `created_at` to the microsecond, and a job's own dedupe key is
     # now scoped to it (`search._key_for`), but the order jobs run in still decides the order
@@ -1996,8 +2017,8 @@ async def _learning(
     if food:
         ids = sorted({one for code in FOOD_TERMS for one in around.fact_ids.get(code, ())})
         wanted.append((JobKind.FOOD, food, "records", ids, {}))
-    found: list[FeedItem] = []
-    ran: set[uuid.UUID] = set()
+    to_run: list[SearchJob] = []
+    queued: set[uuid.UUID] = set()
     for kind, terms, scope_word, fact_ids, extra in wanted:
         if (kind, terms) in have:
             continue
@@ -2020,65 +2041,57 @@ async def _learning(
             },
         )
         have.add((kind, terms))
-        ran.add(job.id)
-        found.extend(
-            await run_job(
-                session,
-                context=context,
-                job=job,
-                engine=engine,
-                state=state,
-                language=house.language,
-                around=around,
-                doctor=house.doctor,
-                existing=keys,
-            )
-        )
+        queued.add(job.id)
+        to_run.append(job)
     for job in jobs:
-        if job.id in ran or not due(job, day):
+        if job.id in queued or not due(job, day):
             continue
-        found.extend(
-            await run_job(
-                session,
-                context=context,
-                job=job,
-                engine=engine,
-                state=state,
-                language=house.language,
-                around=around,
-                doctor=house.doctor,
-                existing=keys,
-            )
+        to_run.append(job)
+        queued.add(job.id)
+    if not to_run:
+        # Nothing new opened a job and nothing already his is due today. Whether that is
+        # really nothing to catch up on depends on whether he has a learning card at all
+        # today yet — read back, never guessed at from the jobs' own bookkeeping, the same
+        # check the live defect ("Pa's feed never creates learning jobs") was found by.
+        today_cards = await audited_read(
+            session,
+            FeedItem,
+            context,
+            Scope.PROFILE,
+            where=(FeedItem.day == day.key, FeedItem.type.in_(LEARNING_CARD_TYPES)),
         )
-        ran.add(job.id)
-    if not ran and not any(
-        (last := _last_run(job, day)) is not None and last >= day.starts_at for job in jobs
-    ):
-        # Nothing at all ran for him today: no new gap opened a job, and no existing job's own
-        # cadence said it was due (an "on_change" explainer that already ran once, a weekly
-        # watch not due till later this week, ...). Rather than the first open of the day
-        # showing only yesterday's cards — or nothing, once they expire — force the most
-        # overdue enabled jobs to run anyway, oldest first, capped at `MAX_CATCH_UP_JOBS` so
-        # this can never fan out into an unbounded run of searches.
-        overdue = sorted(
-            (job for job in jobs if job.enabled),
-            key=lambda job: _last_run(job, day) or datetime.min.replace(tzinfo=UTC),
-        )
-        for job in overdue[:MAX_CATCH_UP_JOBS]:
-            found.extend(
-                await run_job(
-                    session,
-                    context=context,
-                    job=job,
-                    engine=engine,
-                    state=state,
-                    language=house.language,
-                    around=around,
-                    doctor=house.doctor,
-                    existing=keys,
-                )
+        if not today_cards:
+            # Force the most overdue enabled jobs to run anyway, oldest first, capped at
+            # `MAX_CATCH_UP_JOBS` so a plan can never fan out into an unbounded run.
+            overdue = sorted(
+                (job for job in jobs if job.enabled and job.id not in queued),
+                key=lambda job: _last_run(job, day) or datetime.min.replace(tzinfo=UTC),
             )
-    return found
+            to_run.extend(overdue[:MAX_CATCH_UP_JOBS])
+    return LearningPlan(jobs=tuple(to_run), around=around)
 
 
-__all__ = ["Day", "Event", "Flag", "Key", "can_compose", "plain_day", "refresh", "today_for"]
+household = _household
+"""Public name for `app.delivery.feed.background`, which needs the same household read on its
+own session that `refresh` uses on the request's — never the underscored name across a module
+boundary."""
+
+say_ahead = _say_ahead
+"""Public name for `app.delivery.feed.background`: the cards a background learning run makes
+get their spoken twin pre-rendered the same way `refresh` already does for every other card."""
+
+__all__ = [
+    "Day",
+    "Event",
+    "Flag",
+    "Household",
+    "Key",
+    "LearningPlan",
+    "can_compose",
+    "household",
+    "plain_day",
+    "plan_learning_jobs",
+    "refresh",
+    "say_ahead",
+    "today_for",
+]

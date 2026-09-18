@@ -1,6 +1,7 @@
 """Onboarding over HTTP (E01-02, E01-03, E01-04): the routes docs/onboarding.html is built on.
 
     GET  /onboarding/conditions?language=          the word cloud; public, no profile data
+    POST /onboarding/tell-me                       "Or just tell me": free text into pills
     GET  /profiles/{id}/settings                   the settings, as the caller's key reads them
     PUT  /profiles/{id}/settings                   save them (owner or chief)
     POST /profiles/{id}/biography                  open a sitting
@@ -49,6 +50,8 @@ from app.channels.api.onboarding_schemas import (
     SettingsIn,
     SettingsOut,
     SummaryOut,
+    TellMeIn,
+    TellMeOut,
 )
 from app.channels.api.schemas import ReviewCardOut
 from app.db import utcnow
@@ -73,6 +76,7 @@ from app.onboarding.settings import (
     settings_language,
 )
 from app.onboarding.strings import language_for
+from app.onboarding.tell_me import tell_me
 
 router = APIRouter(tags=["onboarding"])
 
@@ -92,6 +96,17 @@ async def conditions(
         top=list(held.top),
         conditions=[ConditionOut.of(one, code) for one in held.conditions.values()],
     )
+
+
+@router.post("/onboarding/tell-me")
+async def tell_me_route(body: TellMeIn) -> TellMeOut:
+    """"Or just tell me" (docs/onboarding.html): free text tagged into the word cloud's own
+    condition codes by RE-04's `TopicTagger`. Public, like the cloud itself: nothing is read
+    from or written to a profile, and nothing he typed is echoed back or stored — only the
+    codes it tagged. A red word (one of RE-04's six sensitive families) never becomes a pill:
+    `conditions` is empty and `red_flag` is true, so the screen sends him to the safety path
+    instead of tagging his own words as a diagnosis."""
+    return TellMeOut.of(tell_me(body.text))
 
 
 @router.get("/profiles/{profile_id}/settings")
@@ -149,6 +164,7 @@ async def add_sitting_paper(
             content_type=body.content_type,
             captured_at=body.captured_at,
             paper=body.paper,
+            registry=providers.drug_registry,
         )
     return PaperAddedOut(
         paper=PaperOut.of(PaperView(paper=paper, card=card)),

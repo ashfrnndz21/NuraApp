@@ -239,6 +239,15 @@ label.pill:focus-within {
   outline: 3px solid var(--plum);
   outline-offset: 2px;
 }
+/* Tap feedback (docs/design/motion.md): a pill presses in under a finger, 0.98 scale over
+   --press (90ms) — real touch feedback, never a hover trick, since a touch has no hover. Reduce
+   Motion drops `transform` from what transitions (the global rule below), so this is instant. */
+.pill:not(:disabled) {
+  transition: transform var(--press);
+}
+.pill:not(:disabled):active {
+  transform: scale(0.98);
+}
 .pill svg {
   width: var(--icon-size);
   height: var(--icon-size);
@@ -782,4 +791,46 @@ a.pill.plum {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+/* A Nura-made clip's warm scene (RE-07 item 1): the same five gradients docs/prototype.html
+   already draws for it — never a photo of him or of his medicine. */
+.scene {
+  border-radius: 16px;
+  height: 110px;
+  margin-top: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.scene.morning {
+  background: linear-gradient(135deg, #f6e6ec, #e6ddf1 55%, #dde9e1);
+}
+.scene.food {
+  background: linear-gradient(135deg, #f7e7da, #f1dce6 60%, #e6ddf1);
+}
+.scene.clinic {
+  background: linear-gradient(135deg, #e3e7f3, #ebe3f0 60%, #f3e6e0);
+}
+.scene.family {
+  background: linear-gradient(135deg, #e9e2f1, #f4e4ea 60%, #dde9e1);
+}
+.scene.walk {
+  background: linear-gradient(135deg, #dde9e1, #e9e2f1 60%, #f3e6e0);
+}
+.scene i {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+.scene i:nth-child(1) {
+  width: 140px;
+  height: 140px;
+  right: -30px;
+  top: -50px;
+}
+.scene i:nth-child(2) {
+  width: 70px;
+  height: 70px;
+  left: 20px;
+  bottom: -20px;
+  background: rgba(78, 58, 120, 0.12);
 }

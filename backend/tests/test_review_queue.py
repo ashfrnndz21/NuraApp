@@ -19,6 +19,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.delivery.feed import background as feed_background
 from app.delivery.feed.models import (
     SUPPLY_OF,
     CardType,
@@ -88,6 +89,17 @@ async def _feed(deployment: Deployment, profile_id: str, token: str) -> dict[str
     assert answer.status_code == 200, answer.text
     page: dict[str, Any] = answer.json()
     return page
+
+
+async def _feed_settled(deployment: Deployment, profile_id: str, token: str) -> dict[str, Any]:
+    """The settled first page: `GET /feed` starts today's self-searches in the background and
+    returns at once (#269/#276, #280, `app.delivery.feed.background`) — a learning card is not
+    on the page that started the run that made it. Waits for that run, then asks again."""
+    page = await _feed(deployment, profile_id, token)
+    await feed_background.drain()
+    if page["jobs"]["state"] == "none":
+        return page
+    return await _feed(deployment, profile_id, token)
 
 
 # --- who may ------------------------------------------------------------------------------------
@@ -609,7 +621,7 @@ async def test_a_rewrite_proposes_a_catalogue_change_and_changes_nothing_he_sees
 
 async def test_every_card_on_the_feed_carries_its_voice_script(deployment: Deployment) -> None:
     pa, profile_id = await _pa_and_mei(deployment)
-    page = await _feed(deployment, profile_id, pa["token"])
+    page = await _feed_settled(deployment, profile_id, pa["token"])
     assert page["items"]
     for item in page["items"]:
         expected = script_for(item["voice"], item["language"], boundary=item["boundary"]).as_json()

@@ -35,6 +35,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from anthropic import APIStatusError
+
 from app.delivery.feed.compress import (
     Compressed,
     Compressor,
@@ -93,50 +95,49 @@ def _client(api_key: str) -> Any:
 
 
 SEARCH_SCHEMA: dict[str, Any] = {
-    "name": "feed_search_results",
-    "schema": {
-        "type": "object",
-        "properties": {
-            "results": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "title": {"type": "string"},
-                        "url": {"type": "string"},
-                        "publisher": {"type": "string"},
-                        "text": {"type": "string"},
-                        "published_at": {"type": "string"},
-                        "media": {"type": "string", "enum": ["article", "video"]},
-                        "licence": {"type": ["string", "null"]},
-                    },
-                    "required": ["title", "url", "publisher", "text", "media"],
-                    "additionalProperties": False,
+    "type": "object",
+    "properties": {
+        "results": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "url": {"type": "string"},
+                    "publisher": {"type": "string"},
+                    "text": {"type": "string"},
+                    "published_at": {"type": "string"},
+                    "media": {"type": "string", "enum": ["article", "video"]},
+                    "licence": {"type": ["string", "null"]},
                 },
-            }
-        },
-        "required": ["results"],
-        "additionalProperties": False,
+                "required": ["title", "url", "publisher", "text", "media"],
+                "additionalProperties": False,
+            },
+        }
     },
-    "strict": True,
+    "required": ["results"],
+    "additionalProperties": False,
 }
+"""The raw JSON schema `output_config.format.schema` asks for — a flat schema, never the
+`{"name", "schema", "strict"}` wrapper an OpenAI-shaped `response_format` uses: the Anthropic
+SDK's `JSONOutputFormatParam` only recognises `type` and `schema`, so that wrapper's `schema`
+key was silently invisible to the API and every property lacked a `type` from the API's own
+point of view — every searcher and compressor call read as `output_config.format:
+Unexpected key 'json_schema'` and was refused with a 400 before the model ever ran (caught
+live 2026-09-18; see `test_the_structured_output_schema_is_one_the_api_accepts` below)."""
 
 COMPRESS_SCHEMA: dict[str, Any] = {
-    "name": "feed_compressed_card",
-    "schema": {
-        "type": "object",
-        "properties": {
-            "headline": {"type": "string"},
-            "body": {"type": "array", "items": {"type": "string"}},
-            "why_topic": {"type": "string"},
-            "passage": {"type": "string"},
-            "start_sec": {"type": ["integer", "null"]},
-            "end_sec": {"type": ["integer", "null"]},
-        },
-        "required": ["headline", "body", "why_topic", "passage"],
-        "additionalProperties": False,
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "body": {"type": "array", "items": {"type": "string"}},
+        "why_topic": {"type": "string"},
+        "passage": {"type": "string"},
+        "start_sec": {"type": ["integer", "null"]},
+        "end_sec": {"type": ["integer", "null"]},
     },
-    "strict": True,
+    "required": ["headline", "body", "why_topic", "passage"],
+    "additionalProperties": False,
 }
 
 
@@ -358,11 +359,19 @@ class ClaudeSearcher:
                     {"type": WEB_SEARCH_TOOL, "name": "web_search"},
                     {"type": WEB_FETCH_TOOL, "name": "web_fetch"},
                 ],
-                output_config={"format": {"type": "json_schema", "json_schema": SEARCH_SCHEMA}},
+                output_config={"format": {"type": "json_schema", "schema": SEARCH_SCHEMA}},
                 messages=[{"role": "user", "content": prompt}],
             )
-        except Exception:  # noqa: BLE001 — a call that fails answers nothing, never a guess
-            log.warning("claude searcher call failed for %r", query)
+        except Exception as failed:  # noqa: BLE001 — a call that fails answers nothing, never a guess
+            # Never the query's own words past this line — only the exception's own class
+            # and, for an API refusal, its status and message (never the request content),
+            # so a schema the API rejects (a 400) is distinguishable in the log from a
+            # timeout or a connection drop, instead of one identical silent line either way.
+            log.warning(
+                "claude searcher call failed (%s%s)",
+                type(failed).__name__,
+                f": {failed}" if isinstance(failed, APIStatusError) else "",
+            )
             return []
         payload = _structured_json(response)
         if payload is None:
@@ -423,11 +432,19 @@ class ClaudeCompressor:
             response = self._client.messages.create(
                 model=MODEL,
                 max_tokens=4096,
-                output_config={"format": {"type": "json_schema", "json_schema": COMPRESS_SCHEMA}},
+                output_config={"format": {"type": "json_schema", "schema": COMPRESS_SCHEMA}},
                 messages=[{"role": "user", "content": _compress_prompt(text, language, facts)}],
             )
-        except Exception:  # noqa: BLE001 — a call that fails compresses nothing, never a guess
-            log.warning("claude compressor call failed")
+        except Exception as failed:  # noqa: BLE001 — a call that fails compresses nothing, never a guess
+            # Same rule as the searcher above: the page text and the facts never reach the
+            # log, only the exception's own class and, for an API refusal, its status and
+            # message — so a rejected schema (a 400) reads as its own case, not a silent
+            # line indistinguishable from a timeout.
+            log.warning(
+                "claude compressor call failed (%s%s)",
+                type(failed).__name__,
+                f": {failed}" if isinstance(failed, APIStatusError) else "",
+            )
             return None
         stop_reason = getattr(response, "stop_reason", None)
         if stop_reason == "refusal":

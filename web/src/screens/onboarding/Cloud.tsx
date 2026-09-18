@@ -2,12 +2,12 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import { saveWordsAndGoOn } from "../../onboarding/actions";
-import { asksFor, cloudView, toggle, type CloudWord } from "../../onboarding/cloud";
+import { asksFor, cloudView, foldTold, toggle, type CloudWord } from "../../onboarding/cloud";
 import { answers, conditions, picked, say, to } from "../../onboarding/state";
 import { speak } from "../../speech/speak";
 import { token } from "../../store/session";
 import { fill, language, t } from "../../strings";
-import { Notice, Pill } from "../../ui/components";
+import { Field, Notice, Pill } from "../../ui/components";
 import { Sheet, Status, StepTitle } from "./parts";
 
 /** The word cloud (#117's graph): plain words, the most common biggest and first, so they are
@@ -24,6 +24,10 @@ export function CloudStep(): JSX.Element {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [tellOpen, setTellOpen] = useState(false);
+  const [tellText, setTellText] = useState("");
+  const [tellBusy, setTellBusy] = useState(false);
+  const [tellSafety, setTellSafety] = useState(false);
 
   useEffect(() => {
     if (!bearer || conditions.value?.language === language.value) return;
@@ -41,6 +45,41 @@ export function CloudStep(): JSX.Element {
     setLastPicked(nowPicked ? word.code : null);
     setStatus(nowPicked ? c.noted : c.removed);
     if (nowPicked) speak({ lines: word.term ? [word.name, fill(c.term, { term: word.term })] : [word.name], language: language.value });
+  };
+
+  /** "Or just tell me": free text run through the backend's tagger (`POST /onboarding/tell-
+   *  me`). Nothing he typed leaves this function once it returns — only the codes it tagged
+   *  are kept, folded into what is already picked, exactly as a tap would leave it. A red word
+   *  tags no pill at all: the safety line shows instead, and his words are cleared, never sent
+   *  anywhere else. */
+  const sendTellMe = async () => {
+    const said = tellText.trim();
+    if (!said) return;
+    setTellBusy(true);
+    setError(null);
+    try {
+      const told = await nura.tellMe(said);
+      setTellText("");
+      if (told.red_flag) {
+        setTellSafety(true);
+        setStatus(null);
+        return;
+      }
+      setTellSafety(false);
+      if (told.conditions.length === 0) {
+        setStatus(`${c.tellMeNothing} ${c.tellMeNothingSub}`);
+        return;
+      }
+      const next = foldTold(picked.value, told.conditions);
+      picked.value = next;
+      setLastPicked(told.conditions[told.conditions.length - 1] ?? null);
+      setStatus(c.noted);
+      setTellOpen(false);
+    } catch (failure) {
+      setError(failure);
+    } finally {
+      setTellBusy(false);
+    }
   };
 
   const done = async () => {
@@ -84,6 +123,25 @@ export function CloudStep(): JSX.Element {
       <Pill quiet onClick={() => setShowAll(!showAll)} testId="more-words">
         {showAll ? c.fewer : c.more}
       </Pill>
+      <Pill quiet onClick={() => setTellOpen(!tellOpen)} testId="tell-me-open">
+        {c.tellMe}
+      </Pill>
+      {tellOpen && (
+        <Sheet lines={[c.tellMeLead]} testId="tell-me">
+          <Field
+            name="tell-me"
+            label={c.tellMeLabel}
+            value={tellText}
+            onInput={setTellText}
+            disabled={tellBusy}
+            big
+          />
+          <Pill plum onClick={() => void sendTellMe()} disabled={tellBusy || !tellText.trim()} testId="tell-me-send">
+            {c.tellMeSend}
+          </Pill>
+        </Sheet>
+      )}
+      {tellSafety && <Sheet lines={[c.tellMeSafety, c.tellMeSafetySub]} testId="tell-me-safety" />}
       <Sheet glass lines={[c.lead, c.lead2, c.lead3]} testId="cloud-lead" />
       <Notice error={error} />
       <Pill plum onClick={() => void done()} disabled={busy || !conditions.value} testId="cloud-done">

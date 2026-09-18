@@ -14,6 +14,7 @@ real drug name known or not — becomes a real question for the doctor
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import uuid
@@ -264,6 +265,20 @@ async def get_job(session: AsyncSession, *, context: KeyContext, job_id: uuid.UU
     return found[0]
 
 
+async def jobs_looking_today(session: AsyncSession, *, context: KeyContext, day: Day) -> bool:
+    """Whether any of his self-searches is due to run today and has not run yet — for the
+    feed's own "Nura is looking for today's reads" line (docs/design-direction.md,
+    'Conversation, waiting and thinking'), never the watches list itself (`list_jobs`,
+    owner/chief only, #185): a plain read of the same rows `_learning` already runs inline,
+    synchronously, within `GET /feed` (`app.delivery.feed.compose._learning`'s own module
+    docstring: "a daily or weekly one that has not run today or this week runs again") — so
+    this is never a guess at what the request that follows will actually do, only a read of
+    whether it has work left before it runs. `due` is the exact rule `_learning` itself
+    calls; this changes nothing and writes nothing."""
+    jobs = await audited_read(session, SearchJob, context, Scope.RECORDS)
+    return any(due(job, day) for job in jobs)
+
+
 async def pause_job(
     session: AsyncSession, *, context: KeyContext, job_id: uuid.UUID, enabled: bool
 ) -> SearchJob:
@@ -383,7 +398,14 @@ async def run_job(
     moment = utcnow()
     code = language_for(language)
     day = around.day
-    found_pages = list(engine.searcher.search(job.kind.value, job.terms, domains))
+    # `Searcher.search` is a synchronous port (the real adapter's own `messages.create` call,
+    # `ClaudeSearcher._ask`), so awaiting it directly would block this event loop — every
+    # other request on the process, not just this job — for as long as the search and fetch
+    # take. `asyncio.to_thread` runs it off-thread; the fixture searcher in tests pays a
+    # thread hop for nothing, which is cheap next to never blocking the real one.
+    found_pages = list(
+        await asyncio.to_thread(engine.searcher.search, job.kind.value, job.terms, domains)
+    )
     reasons: list[str] = []
     if job.kind is JobKind.LOCAL:
         reasons = relevant_to(job.terms[0], around.conditions, around.medicines)
@@ -434,7 +456,11 @@ async def run_job(
             # with diabetes"): not for him, however the watch was added.
             rejected.append({"url": found.url, "because": "not_relevant_to_his_record"})
             continue
-        compressed = engine.compressor.compress(found.text, code, _facts_for(state))
+        # Same reason as the search call above: `Compressor.compress` is synchronous too
+        # (the real adapter's own model call), so it also runs off-thread.
+        compressed = await asyncio.to_thread(
+            engine.compressor.compress, found.text, code, _facts_for(state)
+        )
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
             continue

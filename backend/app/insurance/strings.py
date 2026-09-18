@@ -32,11 +32,31 @@ CURRENCY_BY_REGION: Mapping[Region, str] = {
 never a symbol hard-coded at a call site (the ledger, `app.insurance.ledger`): a policy
 carries no currency of its own, so the region is the one source of truth for it."""
 
+CURRENCY_SYMBOL_BY_CODE: Mapping[str, str] = {
+    "SGD": "S$",
+    "MYR": "RM",
+}
+"""The same symbols as `CURRENCY_BY_REGION`, keyed by the three-letter code a pharmacy
+receipt's own `currency` field carries (`app.ingestion.review._write_receipt`) rather than
+his profile's region: a receipt from across the causeway is still his own money, read in the
+currency printed on it, never folded into his home region's symbol (#pill-receipt)."""
+
 
 def say_money(cents: int, region: Region) -> str:
     """An amount in minor units, in his own currency: 'S$420', 'S$420.50' — cents in, never a
     float, never a bare number with nothing to say what it is."""
-    symbol = CURRENCY_BY_REGION[region]
+    return _say_money(cents, CURRENCY_BY_REGION[region])
+
+
+def say_money_in(cents: int, currency: str) -> str:
+    """`say_money`, for an amount whose currency is a receipt's own three-letter code
+    (`app.insurance.ledger.medicine_monthly_costs`) rather than his profile's region: 'S$13',
+    'RM26'. A code Nura does not carry a symbol for is still shown honestly, as printed
+    ('AUD13'), never silently read as his home currency."""
+    return _say_money(cents, CURRENCY_SYMBOL_BY_CODE.get(currency, currency))
+
+
+def _say_money(cents: int, symbol: str) -> str:
     sign = "-" if cents < 0 else ""
     whole, remainder = divmod(abs(cents), 100)
     if remainder:
@@ -167,6 +187,50 @@ BRING_GUARANTEE_LETTER: Mapping[str, str] = {
 "the insurance letter" — the same words `Scope.MONEY` already uses for it
 (`app.consent.texts.SCOPE_WORDS`)."""
 
+# @patient line
+COST_TYPICAL_NOT_A_QUOTE: Mapping[str, str] = {
+    "en": "This is a typical range, not a quote.",
+    "ms": "Ini anggaran biasa, bukan sebut harga.",
+    "zh": "这是一般范围，不是报价。",
+}
+
+# @patient line
+COST_ASK_THE_CLINIC: Mapping[str, str] = {
+    "en": "Ask what it will cost before the visit.",
+    "ms": "Tanya berapa kosnya sebelum lawatan itu.",
+    "zh": "看诊前先问清楚费用。",
+}
+"""Rule 13 (docs/plain-words.md §13) reserves "the clinic" for the doctor's own name, so this
+line names no place at all. It also names no "you" or "he": this line is shown to the owner
+reading about himself and to a caregiver reading about him alike (`expect_cost`'s
+`base_note`), the same impersonal register `CONFIRM_WITH_INSURER` already uses for the same
+reason — a "he" here would read as the owner talking about himself in the third person."""
+
+# @patient line
+COST_NO_BENCHMARK_FOUND: Mapping[str, str] = {
+    "en": "Nura could not find a typical fee for this.",
+    "ms": "Nura tidak menjumpai anggaran kos biasa untuk ini.",
+    "zh": "Nura找不到这项的一般费用范围。",
+}
+
+# @patient line
+COST_MAY_BE_COVERED: Mapping[str, str] = {
+    "en": "{name}'s cover on file may pay part of this.",
+    "ms": "Perlindungan insurans {name} yang direkod mungkin membayar sebahagiannya.",
+    "zh": "{name}记录中的保险可能会支付部分费用。",
+}
+
+# @patient line
+COST_COVER_NEEDS_MONEY_SCOPE: Mapping[str, str] = {
+    "en": "Ask whoever manages {name}'s insurance letters what this may cost him.",
+    "ms": "Tanya sesiapa yang menguruskan surat insurans {name} berapa kos ini mungkin baginya.",
+    "zh": "请询问管理{name}保险信件的人，这可能要花多少钱。",
+}
+"""Named, never silent: the same words `Scope.MONEY` already carries
+(`app.consent.texts.SCOPE_WORDS`, "insurance letters") for the one caller who cannot see the
+covered part at all — a key without `Scope.MONEY` learns that it is withheld and who to ask,
+never a blank field with no line about it."""
+
 TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.bring_card": BRING_CARD,
     "insurance.has_cover": HAS_COVER,
@@ -176,6 +240,11 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.confirm_if_any": CONFIRM_IF_ANY,
     "insurance.bring_policy_card": BRING_POLICY_CARD,
     "insurance.bring_guarantee_letter": BRING_GUARANTEE_LETTER,
+    "cost.typical_not_a_quote": COST_TYPICAL_NOT_A_QUOTE,
+    "cost.ask_the_clinic": COST_ASK_THE_CLINIC,
+    "cost.no_benchmark_found": COST_NO_BENCHMARK_FOUND,
+    "cost.may_be_covered": COST_MAY_BE_COVERED,
+    "cost.covered_needs_money_scope": COST_COVER_NEEDS_MONEY_SCOPE,
 }
 
 def language_of(asked: str | None) -> str:

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.channels.api.schemas import PhotoIn, ReviewCardOut, utc
 from app.onboarding.biography import BiographyView, LineView, PaperView, Question, Summary
-from app.onboarding.conditions import Condition, name_of
+from app.onboarding.conditions import Ask, Condition, name_of
 from app.onboarding.gaps import BY_CODE
 from app.onboarding.models import Answer, Density, PaperKind, PlanPrompt, PromptStatus
 from app.onboarding.plan import PlanView
@@ -27,6 +27,7 @@ from app.onboarding.settings import (
     clock_time,
     parse_clock_time,
 )
+from app.onboarding.tell_me import ToldFreely
 from app.onboarding.words import prompt as prompt_words
 from app.regions import REGION_TZ, Region
 
@@ -37,15 +38,39 @@ CLOCK = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
 # --- E01-03: the word cloud and the settings ---------------------------------------------------
 
 
+class AskOptionOut(BaseModel):
+    """One choice of a follow-up question: its id (what an answer names) and his words for it."""
+
+    id: str
+    text: str
+
+
+class AskOut(BaseModel):
+    """The one follow-up question a word of the cloud carries once it is tapped ("On tablets
+    for it" -> "For how long?"), and its options, in his language."""
+
+    question: str
+    options: list[AskOptionOut]
+
+    @classmethod
+    def of(cls, ask: Ask, language: str) -> AskOut:
+        return cls(
+            question=ask.question(language),
+            options=[AskOptionOut(id=option.id, text=option.text(language)) for option in ask.options],
+        )
+
+
 class ConditionOut(BaseModel):
     """One word of the cloud: its code, his name for it, how large it sits, what appears
-    beside it once tapped, and whether the cloud shows it first."""
+    beside it once tapped, whether the cloud shows it first, and the follow-up question it
+    carries, when it has one."""
 
     code: str
     name: str
     weight: int
     related: list[str]
     top: bool
+    ask: AskOut | None = None
 
     @classmethod
     def of(cls, condition: Condition, language: str) -> ConditionOut:
@@ -55,6 +80,7 @@ class ConditionOut(BaseModel):
             weight=condition.weight,
             related=list(condition.related),
             top=condition.top,
+            ask=None if condition.ask is None else AskOut.of(condition.ask, language),
         )
 
 
@@ -68,12 +94,37 @@ class ConditionsOut(BaseModel):
     conditions: list[ConditionOut]
 
 
+class TellMeIn(BaseModel):
+    """"Or just tell me": what he typed in his own words, free text."""
+
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class TellMeOut(BaseModel):
+    """What his own words told the cloud (`app.onboarding.tell_me`): the condition codes they
+    tagged — already his graph's own words, never a new one — and `red_flag`, true when a red
+    word means `conditions` is deliberately empty: the screen sends him to the safety path
+    instead of tagging it."""
+
+    conditions: list[str]
+    red_flag: bool
+
+    @classmethod
+    def of(cls, told: ToldFreely) -> TellMeOut:
+        return cls(conditions=list(told.conditions), red_flag=told.red_flag)
+
+
 class SettingsIn(BaseModel):
     """The settings screen, whole (a PUT replaces it). Everything but the language has a
     default: nothing tapped, detailed, every help off, no names, no breakfast time."""
 
     language: str = Field(min_length=2, max_length=16)
     conditions: list[str] = Field(default_factory=list, max_length=80)
+    answers: dict[str, str] = Field(default_factory=dict, max_length=80)
+    """His answer to a tapped word's follow-up question, by the word's code (docs/onboarding.
+    html's `ask`): "On tablets for it" -> "1 to 5 years". Written as a `condition_answer`
+    fact (`app.onboarding.settings`). `NotAnAnswer` for a code not tapped, one with no
+    question, or an option its question does not offer."""
     density: Density = Density.DETAILED
     large_text: bool = False
     high_contrast: bool = False
@@ -94,6 +145,7 @@ class SettingsIn(BaseModel):
         return SettingsValues(
             language=self.language,
             conditions=tuple(self.conditions),
+            answers=dict(self.answers),
             density=self.density,
             large_text=self.large_text,
             high_contrast=self.high_contrast,
@@ -120,6 +172,7 @@ class SettingsOut(BaseModel):
     profile_id: uuid.UUID
     language: str
     conditions: list[str] | None
+    answers: dict[str, str] | None
     density: Density
     large_text: bool
     high_contrast: bool
@@ -145,6 +198,7 @@ class SettingsOut(BaseModel):
             profile_id=profile_id,
             language=values.language,
             conditions=None if "conditions" in view.withheld else list(values.conditions),
+            answers=None if "conditions" in view.withheld else dict(values.answers),
             density=values.density,
             large_text=values.large_text,
             high_contrast=values.high_contrast,

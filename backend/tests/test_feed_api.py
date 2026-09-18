@@ -19,6 +19,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.clock import FrozenClock
+from app.delivery.feed import background as feed_background
 from app.delivery.feed import items
 from app.delivery.feed.models import (
     CardType,
@@ -49,6 +50,26 @@ async def _feed(
     assert answer.status_code == 200, answer.text
     page: dict[str, Any] = answer.json()
     return page
+
+
+async def _feed_settled(
+    deployment: Deployment, profile_id: str, token: str, **params: Any
+) -> dict[str, Any]:
+    """The first page of the day, once whatever self-searches it owes have actually run.
+
+    `GET /feed` (`app.channels.api.feed.feed`) starts today's catch-up in the background and
+    returns at once — `jobs.state` is `"looking"` while it is still going, `"none"` when
+    nothing was due, `"done"` once it has (#269/#276, #280, `app.delivery.feed.background`).
+    A card the run makes is not on the page that started it; it lands in storage the moment
+    its job finishes and shows on the next page load, the same as any other card. So: ask,
+    wait for the run this call itself started (or found already running/done) to finish, ask
+    again — the page a test that means to see today's learning cards actually wants."""
+    first = await _feed(deployment, profile_id, token, **params)
+    assert first["jobs"]["state"] in ("looking", "done", "none"), first["jobs"]
+    await feed_background.drain()
+    if first["jobs"]["state"] == "none":
+        return first
+    return await _feed(deployment, profile_id, token, **params)
 
 
 async def _reading(
@@ -90,7 +111,7 @@ async def test_a_new_reading_produces_a_card_in_his_language_with_a_voice_twin_a
     profile_id = await own_profile(deployment, pa, language="en")
     reading = await _reading(deployment, profile_id, pa["token"], 138, 84)
 
-    page = await _feed(deployment, profile_id, pa["token"])
+    page = await _feed_settled(deployment, profile_id, pa["token"])
     assert page["audience"] == "patient"
     cards = {item["type"]: item for item in page["items"]}
     card = cards["reading"]
@@ -155,7 +176,7 @@ async def test_now_then_at_most_two_new_cards_then_the_gate_then_endless_story_a
     await _reading(deployment, hers, mei["token"], 120, 70)
     await _feed(deployment, hers, mei["token"])
 
-    first = await _feed(deployment, profile_id, his)
+    first = await _feed_settled(deployment, profile_id, his)
     types = _types(first)
     assert types[0] == "now"
     assert types[1] == "reading"
@@ -193,7 +214,7 @@ async def test_the_same_cursor_is_the_same_page(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)
     await _reading(deployment, profile_id, pa["token"], 138, 84)
-    first = await _feed(deployment, profile_id, pa["token"])
+    first = await _feed_settled(deployment, profile_id, pa["token"])
     cursor = first["next_cursor"]
     once = await _feed(deployment, profile_id, pa["token"], cursor=cursor)
     # Something lands in between; the page under that cursor does not move.
@@ -248,13 +269,13 @@ async def test_two_unopened_text_cards_switch_the_profile_to_voice_first(
     profile_id = await own_profile(deployment, pa)
     his = pa["token"]
     await _reading(deployment, profile_id, his, 138, 84)
-    day_one = await _feed(deployment, profile_id, his)
+    day_one = await _feed_settled(deployment, profile_id, his)
     # The text cards (a clip is its own format, and has its own switch: test_feed_formats).
     assert {item["format"] for item in day_one["items"] if item["format"] != "clip"} == {"text"}
     # He hears nothing, taps nothing. A day passes.
     clock.step(timedelta(days=1))
     await _reading(deployment, profile_id, his, 140, 86)
-    day_two = await _feed(deployment, profile_id, his)
+    day_two = await _feed_settled(deployment, profile_id, his)
     today = [item for item in day_two["items"] if item["type"] in ("now", "reading")]
     assert today and all(item["format"] == "voice_first" for item in today)
     state = (
@@ -272,7 +293,7 @@ async def test_a_card_he_heard_does_not_count_as_unopened(
     profile_id = await own_profile(deployment, pa)
     his = pa["token"]
     await _reading(deployment, profile_id, his, 138, 84)
-    day_one = await _feed(deployment, profile_id, his)
+    day_one = await _feed_settled(deployment, profile_id, his)
     heard = next(item for item in day_one["items"] if item["type"] == "reading")
     posted = await deployment.client.post(
         f"/profiles/{profile_id}/feed/{heard['item_id']}/engagement",
@@ -281,7 +302,7 @@ async def test_a_card_he_heard_does_not_count_as_unopened(
     )
     assert posted.status_code == 201, posted.text
     clock.step(timedelta(days=1))
-    day_two = await _feed(deployment, profile_id, his)
+    day_two = await _feed_settled(deployment, profile_id, his)
     assert {item["format"] for item in day_two["items"] if item["format"] != "clip"} == {"text"}
 
 
@@ -297,7 +318,7 @@ async def test_the_cached_page_is_the_last_first_page_rendered(deployment: Deplo
     )
     assert nothing.status_code == 404 and nothing.json() == {"refusal": "NoCachedPage"}
     await _reading(deployment, profile_id, his, 138, 84)
-    first = await _feed(deployment, profile_id, his)
+    first = await _feed_settled(deployment, profile_id, his)
     await _feed(deployment, profile_id, his, cursor=first["next_cursor"])  # a later page
     cached = await deployment.client.get(f"/profiles/{profile_id}/feed/cached", headers=bearer(his))
     assert cached.status_code == 200, cached.text
@@ -316,7 +337,7 @@ async def test_nothing_is_delivered_in_quiet_hours_except_a_red_flag(
     his = pa["token"]
     await _reading(deployment, profile_id, his, 138, 84)
     clock.set(datetime(2026, 9, 3, 14, 30, tzinfo=UTC))  # 22:30 in Singapore
-    night = await _feed(deployment, profile_id, his)
+    night = await _feed_settled(deployment, profile_id, his)
     assert night["quiet"] is True
     assert night["items"] == []
     assert night["held_by_caps"]["reading"] == 1 and night["held_by_caps"]["now"] == 1
@@ -362,7 +383,7 @@ async def test_a_red_flag_jumps_the_queue_and_is_not_capped_and_the_family_is_to
     )
     for top, bottom in ((138, 84), (140, 86)):
         await _reading(deployment, profile_id, his, top, bottom)
-    before = await _feed(deployment, profile_id, his)
+    before = await _feed_settled(deployment, profile_id, his)
     assert _types(before)[:3] == ["now", "reading", "gate"]
 
     felt = await deployment.client.post(
@@ -437,7 +458,7 @@ async def test_not_for_me_holds_that_kind_of_card_for_the_rest_of_the_day(
     profile_id = await own_profile(deployment, pa)
     his = pa["token"]
     await _reading(deployment, profile_id, his, 138, 84)
-    page = await _feed(deployment, profile_id, his)
+    page = await _feed_settled(deployment, profile_id, his)
     reading = next(item for item in page["items"] if item["type"] == "reading")
     dismissed = await deployment.client.post(
         f"/profiles/{profile_id}/feed/{reading['item_id']}/engagement",
@@ -486,7 +507,7 @@ async def test_a_caregiver_key_reads_the_caregiver_supply_narrowed_and_sees_no_n
         headers=bearer(his),
     )
     assert noted.status_code == 201
-    mine = await _feed(deployment, profile_id, his)
+    mine = await _feed_settled(deployment, profile_id, his)
     assert any(item["type"] == "story" and item["scope"] == "notes" for item in mine["items"]), (
         "his own words come back to him as a story card"
     )
@@ -663,7 +684,7 @@ async def test_a_medicine_running_low_makes_a_reorder_card_from_the_count(
         photo,
     )
     assert added.status_code == 201, added.text
-    page = await _feed(deployment, profile_id, his)
+    page = await _feed_settled(deployment, profile_id, his)
     types = _types(page)
     assert types[:3] == ["now", "reorder", "gate"], types
     reorder = page["items"][1]

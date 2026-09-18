@@ -136,6 +136,8 @@ export interface LineOut {
   missed: boolean;
   /** The backend's source line: where the line came from and on which day, in his words. */
   source: string;
+  /** "S$15 a month", from a pharmacy receipt's matched lines; null where none has matched. */
+  monthly_cost_said?: string | null;
   /** The `medication` fact the line is the typed view of (a reorder card cites it). */
   fact_id?: string;
   /** How sure, as a number and in words (E04-01): a line written on a person's yes is
@@ -235,6 +237,14 @@ export interface ClipOut {
   doctor: string;
 }
 
+/** A next step offered alongside an answer (W2), never taken by itself: the pill the screen
+ *  shows, confirmed through the existing confirm flow before anything is written, booked or
+ *  sent. */
+export interface ProposalOut {
+  kind: string;
+  label: string;
+}
+
 export interface AnswerOut {
   /** The question as it was kept; null when a red word in it took the red-flag path instead. */
   question_artifact_id: string | null;
@@ -250,10 +260,41 @@ export interface AnswerOut {
   spoken: string[];
   /** Parts of the record this key does not reach, so not read. */
   withheld: string[];
+  /** Zero or more next steps offered alongside this answer (W2). Always empty from the
+   *  rule-based asker. */
+  proposals?: ProposalOut[];
+  /** Which conversation thread this turn landed on (W2); set only by the streaming ask
+   *  routes, null from the plain, non-streaming `POST .../ask`. */
+  conversation_id?: string | null;
   /** A red flag heard in the question: the red-flag path it took first, as the same word
    *  tapped on the feeling cloud would (the moment written, the flag raised, the family told).
    *  Null when the question carries none. */
   red_flag?: FeelingOut | null;
+}
+
+/** One turn on a conversation thread (W2), read back from `GET
+ *  /profiles/{id}/conversations/{id}`: the question and the answer's own lines — never a raw
+ *  row, the same as every other line here. */
+export interface TurnOut {
+  turn_id: string;
+  created_at: string;
+  mode: AskMode;
+  language: string;
+  question: string;
+  answered: boolean;
+  answer_lines: string[];
+  honest: string[];
+}
+
+/** A thread with Nura (W2): every turn on it, oldest first, and the plain summary of whatever
+ *  was folded out of the last six turns' verbatim window. */
+export interface ConversationOut {
+  conversation_id: string;
+  started_at: string;
+  last_turn_at: string;
+  closed_at: string | null;
+  summary: string | null;
+  turns: TurnOut[];
 }
 
 /** One real stage of an ask or a search, streamed the instant it finishes (docs/design-
@@ -324,6 +365,106 @@ export interface FindStepLabelEvent {
   label: string;
 }
 export type FindStreamEvent = FindStepEvent | FindStepLabelEvent | FindResultsEvent | AskRefusalEvent;
+
+/** How sure Nura is of one line of the weekly report (W1): the backend's own word, never a
+ *  score. Drawn as a chip, never as a colour that reads like a health state. */
+export type InsightConfidence = "sure" | "likely" | "worth_a_look";
+
+/** One part of the record an insight rests on ("Your blood pressure book", "Monday's visit"),
+ *  the backend's own name for it — the same idea as `AnswerLineOut.cites`, in the shape the
+ *  weekly report sends. */
+export interface InsightEvidenceOut {
+  id: string;
+  kind: string;
+  label: string;
+}
+
+/** One line of the weekly report: the backend's sentence, who to ask about it (a doctor's
+ *  name) when there is a question worth taking to a visit, what it rests on, the plain reason,
+ *  and how sure Nura is. */
+export interface InsightOut {
+  insight_id: string;
+  kind: string;
+  text: string;
+  ask_who: string | null;
+  evidence: InsightEvidenceOut[];
+  why_plain: string;
+  confidence: InsightConfidence;
+}
+
+/** The report's fixed sections, in the order they are always shown. A section left out of
+ *  `InsightsReportOut.sections` entirely is one this key's scope does not cover; a section
+ *  present with an empty `insights` list is one Nura looked at and found nothing to say. */
+export type InsightSectionKey = "what_changed" | "worth_a_look" | "medicines_and_supplements" | "what_you_pay" | "screenings_due" | "questions_for_the_doctor";
+
+export interface InsightsSectionOut {
+  key: InsightSectionKey | string;
+  title: string;
+  insights: InsightOut[];
+}
+
+/** The weekly report (W1, `GET /profiles/{id}/insights`): the week it covers, only the
+ *  sections this key's scope opens, and the boundary line last, exactly as `AnswerOut` ends
+ *  its own. */
+export interface InsightsReportOut {
+  report_id: string;
+  generated_at: string;
+  week_of: string;
+  boundary: string[];
+  sections: InsightsSectionOut[];
+}
+
+/** One real stage of building the report, streamed the instant it finishes (`POST
+ *  /profiles/{id}/insights/stream`), the same trace pattern as `AskStepEvent`. */
+export interface InsightsStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished report, exactly `GET /profiles/{id}/insights` would
+ *  return once it is written. */
+export interface InsightsReportEvent {
+  type: "report";
+  report: InsightsReportOut;
+}
+
+export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
+
+/** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step
+ *  the instant each real stage of turning a stored photo or PDF into a review card finishes
+ *  — stored, reading, what it found, the red-flag check where one runs, a real link to a
+ *  medicine or visit where one exists, ready — then the card itself. */
+export interface ImportStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+export interface ImportCardEvent {
+  type: "card";
+  card: ReviewCardOut;
+}
+export type ImportStreamEvent = ImportStepEvent | ImportCardEvent | AskRefusalEvent;
+
+/** The not-feeling-well trace (`POST /profiles/{id}/not-feeling-well/stream`): the button
+ *  runs first, entirely unchanged — the red-flag path, the family told — and only then a
+ *  step per real check it made, then the card itself. */
+export interface NfwStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+export interface NfwCardEvent {
+  type: "card";
+  card: WhatToDoOut;
+}
+export type NfwStreamEvent = NfwStepEvent | NfwCardEvent | AskRefusalEvent;
+
+/** Whether the day's self-searches are still to run (`GET /profiles/{id}/feed/jobs/status`):
+ *  the feed's own "Nura is looking for today's reads" line, bound to a real read. */
+export interface JobsStatusOut {
+  looking: boolean;
+}
 
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
@@ -431,6 +572,38 @@ export interface PolicyOut {
   set_at: string;
 }
 
+/** A typical fee range's own source (T3): who published it, the page, and the day it was
+ *  read — always shown beside the range, never a bare number. */
+export interface CostSourceOut {
+  publisher: string;
+  url: string;
+  fetched_at: string;
+}
+
+/** The cost expectation (T3, `GET /profiles/{id}/visits/{appointmentId}/cost`,
+ *  `app.insurance.cost_expectation`): a typical fee range from a public fee benchmark, cited
+ *  and dated, never a quote. `found=false` means no benchmark matched — `low_cents`,
+ *  `high_cents` and `source` are all null, said plainly in `note`, never guessed at.
+ *  `covered_shown=false` means the caller does not hold `Scope.MONEY` — `covered_low_cents`
+ *  and `covered_high_cents` are null, and `note` names who to ask instead. `*_said` are the
+ *  backend's own rendered amounts, in his region's currency — never formatted here. */
+export interface CostExpectationOut {
+  appointment_id: string;
+  found: boolean;
+  low_cents: number | null;
+  high_cents: number | null;
+  low_said: string | null;
+  high_said: string | null;
+  currency: string;
+  source: CostSourceOut | null;
+  covered_shown: boolean;
+  covered_low_cents: number | null;
+  covered_high_cents: number | null;
+  covered_low_said: string | null;
+  covered_high_said: string | null;
+  note: string[];
+}
+
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
  *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
 export interface EmergencyCardOut {
@@ -513,6 +686,38 @@ export interface AppointmentOut {
   /** The doctor's or clinic's name as the family wrote it (the provider's); absent where the
    *  route does not read it. */
   doctor?: string | null;
+}
+
+/** One id a visit proposal rests on, and the scope it was read under
+ *  (`app.delivery.recommend.models.Evidence`, `EvidenceOut`). */
+export interface VisitEvidenceOut {
+  kind: string;
+  id: string;
+  scope: string;
+}
+
+/** Where a proposal's evidence came from (T2, `app.reasoning.visits.planner.VisitSource`). */
+export type VisitSource = "follow_up" | "medicine_review" | "test_coming" | "screening_due";
+
+/** One visit Nura proposes (T2, `GET /profiles/{id}/visits/proposed`): never booked, never a
+ *  claim about what is wrong — only what the record already holds that a visit would follow
+ *  up on, cited. `purpose` is the backend's own plain-words line, in his voice, pre-filled
+ *  into the booking screen on "Book it"; the row itself says whose suggestion it is in the
+ *  screen's own words (caregiver by name), never this line verbatim to a caregiver. */
+export interface VisitProposalOut {
+  proposal_id: string;
+  source: VisitSource;
+  purpose: string;
+  provider_kind: string | null;
+  suggested_at: string | null;
+  why: VisitEvidenceOut[];
+}
+
+/** Every proposal a key may see right now, and which scopes held none back
+ *  (`app.reasoning.visits.planner.ProposedVisits`). */
+export interface ProposedVisitsOut {
+  proposals: VisitProposalOut[];
+  withheld: string[];
 }
 
 /** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */
@@ -678,6 +883,8 @@ export type DocumentKind =
   | "insurance_policy"
   | "insurance_claim"
   | "device_screen"
+  | "pill_photo"
+  | "pharmacy_receipt"
   | "other"
   | "not_health"
   | "unknown"
@@ -751,6 +958,14 @@ export interface ConditionsOut {
   conditions: ConditionOut[];
 }
 
+/** "Or just tell me" (`POST /onboarding/tell-me`): the condition codes his own words tagged —
+ *  already the cloud's own words, never a new one — and `red_flag`, true when a red word means
+ *  `conditions` is deliberately empty and he is sent to the safety path instead. */
+export interface TellMeOut {
+  conditions: string[];
+  red_flag: boolean;
+}
+
 export type Density = "detailed" | "simple";
 
 /** The settings screen, whole (`PUT /profiles/{id}/settings` replaces it). The words he
@@ -758,6 +973,8 @@ export type Density = "detailed" | "simple";
 export interface SettingsIn {
   language: string;
   conditions: string[];
+  /** His answer to a tapped word's follow-up question, by the word's code (`ConditionOut.ask`). */
+  answers: Record<string, string>;
   density: Density;
   large_text: boolean;
   high_contrast: boolean;
@@ -775,10 +992,12 @@ export interface SettingsIn {
 }
 
 /** The settings as the caller's key reads them; `withheld` names what it does not open. */
-export interface SettingsOut extends Omit<SettingsIn, "conditions" | "doctor_name" | "birth_decade"> {
+export interface SettingsOut extends Omit<SettingsIn, "conditions" | "answers" | "doctor_name" | "birth_decade"> {
   settings_id: string | null;
   profile_id: string;
   conditions: string[] | null;
+  /** Null exactly when `conditions` is: the same key's read withholds both together. */
+  answers: Record<string, string> | null;
   doctor_name: string | null;
   birth_decade: number | null;
   set_by_person_id: string | null;
@@ -1808,4 +2027,38 @@ export interface LedgerOut {
   total_paid_by_patient_cents: number;
   total_paid_by_patient_said: string;
   by_policy: PolicyTotalOut[];
+}
+
+/** Care navigation with drafted messages (T3): one real need on the record a message could
+ *  be drafted for — no drafted text yet (`GET /profiles/{id}/navigation/drafts`). */
+export interface NavigationNeedOut {
+  id: string;
+  kind: "follow_up" | "new_medicine" | "test_due" | "home_care";
+  evidence_kind: string;
+  evidence_id: string;
+  provider_id: string | null;
+  doctor: string | null;
+  when: string | null;
+  category: string | null;
+}
+
+/** One way to reach the provider, built from its own directory contact — `sms:` or
+ *  `https://wa.me/`, never a number typed for the occasion. */
+export interface NavigationContactLinkOut {
+  kind: "sms" | "whatsapp";
+  href: string;
+}
+
+/** The drafted message (`POST /profiles/{id}/navigation/drafts/{need_id}`): text only. Nura
+ *  never sends it — `links` is empty and `copy_only` is true when the provider has no phone
+ *  on file. */
+export interface NavigationDraftOut {
+  need_id: string;
+  kind: "follow_up" | "new_medicine" | "test_due" | "home_care";
+  language: string;
+  text: string;
+  drafted_by: "self" | "caregiver";
+  links: NavigationContactLinkOut[];
+  copy_only: boolean;
+  cites: string[];
 }

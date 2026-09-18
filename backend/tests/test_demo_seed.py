@@ -15,15 +15,24 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.access import audited_read
 from app.audit.models import AuditEntry
 from app.channels.api import Providers
 from app.channels.whatsapp.provider import FixtureProvider
 from app.clock import now
 from app.db import as_utc
-from app.delivery.feed.compose import refresh
+from app.delivery.feed.compose import (
+    Day,
+    household,
+    plan_learning_jobs,
+    refresh,
+    say_ahead,
+    today_for,
+)
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
-from app.delivery.feed.models import CardType
+from app.delivery.feed.models import CardType, FeedItem
 from app.delivery.feed.search import Engine
+from app.delivery.feed.search import run_job as search_run_job
 from app.delivery.recommend.rules import NEW_MEDICINE_WINDOW, RULE_NEW_MEDICINE_EXPLAINER
 from app.demo_numbers import DEMO_NUMBERS, mei_number, pa_number
 from app.demo_seed import (
@@ -40,14 +49,15 @@ from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.transcribe import FixtureTranscriber
-from app.keys.context import owned_profile, resolve_key_context
+from app.keys.context import KeyContext, owned_profile, resolve_key_context
 from app.keys.scopes import ALL_SCOPES, KeyRole, Scope
 from app.medicines.models import LineStatus, MedicationLine
-from app.medicines.service import active_lines
+from app.medicines.service import LineView, active_lines
 from app.reasoning.ranges import FixtureRanges
 from app.reasoning.visits.summary import FixtureSummariser
 from app.regions import Region
 from app.settings import Settings
+from app.state.service import current_state
 from tests.conftest import FEED, SPEAKERS, VISITS, WHATSAPP_FIXTURES, WHATSAPP_SECRET
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
@@ -188,6 +198,52 @@ async def test_the_seeded_blood_pressure_tablet_is_started_this_week(sg: AsyncSe
         assert now() - as_utc(view.line.started_at) < timedelta(minutes=1), "started at seed time, as before"
 
 
+async def _run_learning(
+    session: AsyncSession, *, context: KeyContext, engine: Engine, day: Day
+) -> list[FeedItem]:
+    """Today's self-searches, run synchronously on this same session — what
+    `app.delivery.feed.background._run` does on its own session, off the request entirely, for
+    a test that means to check what a first feed load makes, not the background module's own
+    scheduling (`tests/test_feed_background.py` covers that)."""
+    house = await household(session, context=context)
+    state = await current_state(session, context=context)
+    medicines: list[LineView] = (
+        await active_lines(session, context=context, registry=engine.registry, language=house.language)
+        if context.allows(Scope.MEDICINES)
+        else []
+    )
+    every = await audited_read(session, FeedItem, context, Scope.PROFILE)
+    keys = {item.dedupe_key for item in every}
+    plan = await plan_learning_jobs(
+        session,
+        context=context,
+        engine=engine,
+        state=state,
+        day=day,
+        house=house,
+        keys=keys,
+        medicines=medicines,
+    )
+    made: list[FeedItem] = []
+    for job in plan.jobs:
+        items = await search_run_job(
+            session,
+            context=context,
+            job=job,
+            engine=engine,
+            state=await current_state(session, context=context),
+            language=house.language,
+            around=plan.around,
+            doctor=house.doctor,
+            existing=set(keys),
+        )
+        if items:
+            await say_ahead(session, engine, context, items)
+            made.extend(items)
+            keys.update(item.dedupe_key for item in items)
+    return made
+
+
 async def test_a_freshly_seeded_profiles_first_feed_load_shows_a_learning_card(
     sg: AsyncSession,
 ) -> None:
@@ -208,6 +264,7 @@ async def test_a_freshly_seeded_profiles_first_feed_load_shows_a_learning_card(
     )
 
     _, made = await refresh(sg, context=owner_ctx, engine=engine)
+    made = list(made) + await _run_learning(sg, context=owner_ctx, engine=engine, day=today_for(owner_ctx))
 
     learning = [item for item in made if item.type in (CardType.LEARNING, CardType.CLIP)]
     assert learning, "the first feed load made no READ or CLIP card at all"

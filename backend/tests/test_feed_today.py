@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tests.api import bearer, own_profile, register_by_phone
 from tests.conftest import Deployment
-from tests.test_feed_api import _caregiver_key, _reading
+from tests.test_feed_api import _caregiver_key, _feed_settled, _reading
 
 PA = "+6591119911"
 MEI = "+6591119912"
@@ -17,6 +17,11 @@ async def test_the_top_three_are_an_alert_a_reminder_and_an_insight_each_with_it
     profile_id = await own_profile(deployment, pa, language="en")
     his = pa["token"]
     await _reading(deployment, profile_id, his, 138, 84)
+    # `GET /feed/today` (`rank.top_three`) never starts today's self-searches itself — only
+    # `GET /feed`'s own first, cursor-less page does that (#269/#276, #280,
+    # `app.delivery.feed.background`) — so a test after the insight cards those searches make
+    # has to start and settle that run first, the same as `GET /feed` itself would.
+    await _feed_settled(deployment, profile_id, his)
     quiet = await deployment.client.get(f"/profiles/{profile_id}/feed/today", headers=bearer(his))
     assert quiet.status_code == 200, quiet.text
     assert [item["category"] for item in quiet.json()["items"]] == [

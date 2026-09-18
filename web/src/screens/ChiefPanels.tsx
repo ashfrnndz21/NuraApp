@@ -4,9 +4,23 @@ import * as nura from "../api/nura";
 import type { JobKind, ProfileOut, SearchJobOut } from "../api/types";
 import { statusLine } from "../feed/model";
 import { feedLines } from "../today/model";
-import { fill, language, t } from "../strings";
+import { fill, language, t, type Strings } from "../strings";
 import { Hear, Notice, Pill, Tile } from "../ui/components";
 import { NoticeAt, useAct, useRead } from "./family/common";
+
+/** How often a watch runs, in the backend's own cadence word ("daily", "weekly", …) turned into
+ *  the caregiver's plain word — or the backend's own word verbatim when it names a cadence Nura
+ *  has not given a translation for, so a new cadence never disappears silently. */
+export function cadenceWord(cadence: string, s: Strings): string {
+  const every: Record<string, string> = { on_change: s.chief.onChange, daily: s.chief.daily, weekly: s.chief.weekly, before_visits: s.chief.beforeVisits, once: s.chief.once };
+  return every[cadence] ?? cadence;
+}
+
+/** A watch about his faith (the fasting month) is his yes or his no alone: she sees it on the
+ *  list, and neither stops nor resumes it — Nura never guesses whether he fasts. */
+export function isHisWatch(job: Pick<SearchJobOut, "kind" | "terms">): boolean {
+  return job.kind === "seasonal" && job.terms.includes("fasting month");
+}
 
 /** The chief's panels on Home (docs/health-feed-spec.md §1, mockup v2 "Ash — Home"):
  *
@@ -30,7 +44,6 @@ export function ChiefPanels({ bearer, papers }: { bearer: string; papers: Profil
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
   const a = useAct();
-  const every: Record<string, string> = { on_change: s.chief.onChange, daily: s.chief.daily, weekly: s.chief.weekly, before_visits: s.chief.beforeVisits, once: s.chief.once };
   const toggle = (job: SearchJobOut) =>
     a.act(job.job_id, async () => {
       await nura.pauseSearchJob(bearer, id, job.job_id, !job.enabled, language.value);
@@ -55,9 +68,8 @@ export function ChiefPanels({ bearer, papers }: { bearer: string; papers: Profil
     ["seasonal", "festive food", s.chief.festiveFood],
   ];
   // A watch about his faith (the fasting month) is his yes or his no alone: she sees it on the
-  // list, and neither stops nor resumes it (`FastingIsHisToSay`).
-  const his = (job: SearchJobOut) => job.kind === "seasonal" && job.terms.includes("fasting month");
-  const paused = new Map((jobs.value ?? []).filter((job) => !his(job)).map((job) => [job.job_id, !job.enabled]));
+  // list, and neither stops nor resumes it (`FastingIsHisToSay`, `isHisWatch` above).
+  const paused = new Map((jobs.value ?? []).filter((job) => !isHisWatch(job)).map((job) => [job.job_id, !job.enabled]));
   return (
     <>
       <Tile glass testId="watching">
@@ -67,9 +79,9 @@ export function ChiefPanels({ bearer, papers }: { bearer: string; papers: Profil
           <div key={job.job_id} class="lines" data-testid="watch" data-kind={job.kind} data-enabled={job.enabled ? "true" : "false"}>
             <p data-testid="watch-label">{job.label}</p>
             <p class="provenance" data-testid="watch-meta">
-              {[job.sources.join(", "), every[job.cadence] ?? job.cadence, job.enabled ? null : s.chief.paused].filter(Boolean).join(" · ")}
+              {[job.sources.join(", "), cadenceWord(job.cadence, s), job.enabled ? null : s.chief.paused].filter(Boolean).join(" · ")}
             </p>
-            {!his(job) && (
+            {!isHisWatch(job) && (
               <Pill quiet onClick={() => void toggle(job)} disabled={a.busy} testId="watch-toggle">
                 {job.enabled ? s.chief.pause : s.chief.resume}
               </Pill>

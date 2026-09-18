@@ -12,7 +12,9 @@ import { language, LOCALE, t } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, Tile } from "../ui/components";
 import { Avatar, FeatureTile, Icon, IconBadge, ListRow, PillButton, SectionHeader, TintCard } from "../ui/kit";
+import { NextVisitTile } from "./Today";
 import { Shell } from "./Shell";
+import { VisitSuggestions } from "./VisitSuggest";
 
 /** Connect (docs/design/nura-concept-board.html, the Connect screen): his family, his next
  *  call, what is near him, and the family thread, one glance each, before the existing Family
@@ -27,6 +29,8 @@ export function ConnectScreen(): JSX.Element | null {
   const lang = language.value;
   const locale = LOCALE[lang];
   const pid = papers.profile_id;
+  const owner = papers.standing === "owner";
+  const name = papers.display_name;
   return (
     <Shell
       tab="connect"
@@ -34,10 +38,39 @@ export function ConnectScreen(): JSX.Element | null {
       topBar={{ variant: "board", title: s.tabs.connect, back: true, action: { icon: "add", label: s.connect.addPerson, onClick: () => go({ name: "family", part: "keys" }) } }}
     >
       <FamilySection bearer={bearer} profileId={pid} lang={lang} />
+      <ComingUpSection bearer={bearer} profileId={pid} owner={owner} name={name} />
       <NextCallSection bearer={bearer} profileId={pid} lang={lang} locale={locale} />
       <NearYouSection bearer={bearer} profileId={pid} />
       <MessagesSection bearer={bearer} profileId={pid} lang={lang} locale={locale} />
     </Shell>
+  );
+}
+
+/** "Coming up": the next visit still to come, and — under it — T2's "Nura suggests" rows
+ *  (`VisitSuggestions`, the same widget Health's own Coming up shows), by name for a
+ *  caregiver's key. Nothing here when there is neither a visit nor a suggestion: Connect's
+ *  own tiles never draw an empty frame. */
+function ComingUpSection({
+  bearer,
+  profileId,
+  owner,
+  name,
+}: {
+  bearer: string;
+  profileId: string;
+  owner: boolean;
+  name: string;
+}): JSX.Element | null {
+  const s = t();
+  const read = useRead(() => nura.appointments(bearer, profileId), [profileId]);
+  const next = (read.value ?? [])[0] ?? null;
+  return (
+    <section class="do-section" data-testid="connect-coming-up">
+      <SectionHeader title={s.health.comingUpTitle} />
+      <Notice error={read.error} />
+      {next && <NextVisitTile visit={next} />}
+      <VisitSuggestions owner={owner} name={name} />
+    </section>
   );
 }
 

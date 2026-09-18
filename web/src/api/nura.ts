@@ -17,7 +17,9 @@ import type {
   ConditionsOut,
   ConfirmationOut,
   ConsentOut,
+  ConversationOut,
   ConsultOut,
+  CostExpectationOut,
   DayNudgesOut,
   DecisionIn,
   DeploymentOut,
@@ -40,8 +42,12 @@ import type {
   FoodLogIn,
   HandedOverOut,
   HealthOverviewOut,
+  ImportStreamEvent,
+  InsightsReportOut,
+  InsightsStreamEvent,
   ItemDecision,
   JobKind,
+  JobsStatusOut,
   KeyOut,
   LabelIn,
   LedgerOut,
@@ -55,6 +61,9 @@ import type {
   MetricKind,
   MetricLogIn,
   MoreOut,
+  NavigationDraftOut,
+  NavigationNeedOut,
+  NfwStreamEvent,
   NoticeOut,
   NowOut,
   NudgeAnswer,
@@ -66,6 +75,7 @@ import type {
   PlanOut,
   PolicyOut,
   ProfileOut,
+  ProposedVisitsOut,
   ProudOut,
   ProviderHistoryOut,
   ProviderSummaryOut,
@@ -94,6 +104,7 @@ import type {
   SymptomLogOut,
   SymptomLoggedOut,
   TakenOut,
+  TellMeOut,
   ThreadCardKind,
   ThreadEntryOut,
   TimelineOut,
@@ -289,6 +300,16 @@ export const proud = (token: string, profileId: string) =>
 export const policies = (token: string, profileId: string) =>
   api<PolicyOut[]>(`/profiles/${profileId}/insurance/policies`, { token });
 
+/** Every visit Nura proposes right now (T2, `app.reasoning.visits.planner`), cited, in the
+ *  profile's own language unless one is named — never a booking. */
+export const visitsProposed = (token: string, profileId: string, language?: string) =>
+  api<ProposedVisitsOut>(`/profiles/${profileId}/visits/proposed`, { token, query: { language } });
+
+/** "Not now": hides one proposal for 90 days. His own tap is the yes — no confirmation to
+ *  mint, the way declining a feed card already works. */
+export const declineVisitProposal = (token: string, profileId: string, proposalId: string) =>
+  api<void>(`/profiles/${profileId}/visits/proposed/${proposalId}/decline`, { method: "POST", token });
+
 /** The first page of the feed: today's cards, rendered by the backend from a State. */
 export const feed = (token: string, profileId: string) =>
   api<FeedPageOut>(`/profiles/${profileId}/feed`, { token });
@@ -297,6 +318,11 @@ export const feed = (token: string, profileId: string) =>
  *  cursor answers the page it names, as of when it was minted — the same cursor, the same page. */
 export const feedPage = (token: string, profileId: string, cursor?: string) =>
   api<FeedPageOut>(`/profiles/${profileId}/feed`, { token, query: { cursor } });
+
+/** Whether the day's self-searches are still to run: the feed's own honest "Nura is looking
+ *  for today's reads" line, bound to a real read — never a guess or a timer of its own. */
+export const feedJobsStatus = (token: string, profileId: string) =>
+  api<JobsStatusOut>(`/profiles/${profileId}/feed/jobs/status`, { token });
 
 /** The last first page rendered for this person, as it was: the page kept for offline. */
 export const feedCached = (token: string, profileId: string) =>
@@ -358,9 +384,84 @@ export function askStream(
   });
 }
 
+/** His own "New conversation" (W2): close whichever thread is open now, if any, and start a
+ *  fresh, empty one. */
+export const startConversation = (token: string, profileId: string) =>
+  api<ConversationOut>(`/profiles/${profileId}/conversations`, { method: "POST", token });
+
+/** The thread (W2): every turn on it, oldest first. */
+export const getConversation = (token: string, profileId: string, conversationId: string) =>
+  api<ConversationOut>(`/profiles/${profileId}/conversations/${conversationId}`, { token });
+
+/** A turn on a named thread (W2), streamed exactly like `askStream` — the only difference is
+ *  which conversation the answer lands on. */
+export function turnStream(
+  token: string,
+  profileId: string,
+  conversationId: string,
+  question: string,
+  mode: AskMode,
+  language: string,
+  onStep: (key: string, label: string, name: string) => void,
+  onDelta?: (text: string) => void,
+  onStepLabel?: (key: string, label: string) => void,
+): Promise<AnswerOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(
+      `/profiles/${profileId}/conversations/${conversationId}/turns/stream`,
+      { method: "POST", token, body: { question, mode, language } },
+      (event) => {
+        const streamed = event as unknown as AskStreamEvent;
+        if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
+        else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
+        else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
+        else if (streamed.type === "answer") {
+          settled = true;
+          resolve(streamed.answer);
+        }
+      },
+    )
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no answer"));
+      })
+      .catch(reject);
+  });
+}
+
 /** A card's pre-rendered voice (E11), when the backend has the route. */
 export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
   apiBlob(`/profiles/${profileId}/feed/${itemId}/voice`, { token, query: { language } });
+
+// --- W1: the weekly report (Insights) --------------------------------------------------------
+
+/** The last report written, if there is one (`GET /profiles/{id}/insights`); a profile with
+ *  none yet throws `Refused("NotFound", 404)`, exactly as `Visit.tsx`'s own "no summary" reads
+ *  it — a caller tells "nothing generated yet" from a real failure the same way it always does. */
+export const insightsLatest = (token: string, profileId: string) => api<InsightsReportOut>(`/profiles/${profileId}/insights`, { token });
+
+/** A new report, streamed (`POST /profiles/{id}/insights/stream`): `onStep` for each real part
+ *  of the week Nura looked at as it happens, resolving with the finished report — the same
+ *  shape `askStream` streams an answer in. A refusal throws `Refused`, as `apiStream` always
+ *  throws one. */
+export function insightsStream(token: string, profileId: string, onStep: (key: string, label: string) => void): Promise<InsightsReportOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/insights/stream`, { method: "POST", token }, (event) => {
+      const streamed = event as unknown as InsightsStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "report") {
+        settled = true;
+        resolve(streamed.report);
+      }
+      // A "refusal" event is thrown by `apiStream` itself before it ever reaches `onEvent`.
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no report"));
+      })
+      .catch(reject);
+  });
+}
 
 /** The keys on the profile with their holders' names: the owner reads whom to call. */
 export const keys = (token: string, profileId: string) =>
@@ -382,6 +483,12 @@ export const appointments = (token: string, profileId: string) =>
 /** The logistics card: when, where, the chief's note, who drives him, what to bring. */
 export const logistics = (token: string, profileId: string, appointmentId: string) =>
   api<LogisticsOut>(`/profiles/${profileId}/appointments/${appointmentId}/logistics`, { token });
+
+/** The cost expectation (T3): a typical fee range for this visit, cited, and what his cover
+ *  on file would likely pay for a key that holds `Scope.MONEY` (`app.insurance.
+ *  cost_expectation`). Never a quote. */
+export const costExpectation = (token: string, profileId: string, appointmentId: string) =>
+  api<CostExpectationOut>(`/profiles/${profileId}/visits/${appointmentId}/cost`, { token });
 
 /** The chief's yes to one person driving him to one visit (subject `drive`). */
 export const mintDrive = (token: string, profileId: string, appointmentId: string, personId: string) =>
@@ -486,6 +593,36 @@ export const addPhoto = (token: string, profileId: string, data: string, content
     body: { data, content_type, captured_at },
   });
 
+/** The same photo, streamed (docs/design-direction.md "Conversation, waiting and thinking"):
+ *  `onStep` for each real stage `review_artifact_stream` finishes as it happens — stored,
+ *  reading, what it found, the red-flag check where one runs, a real link where one exists —
+ *  resolving with the same `ReviewCardOut` `addPhoto` gives. A refusal throws `Refused`,
+ *  exactly as `addPhoto` throws it. */
+export function addPhotoStream(
+  token: string,
+  profileId: string,
+  data: string,
+  content_type: string,
+  captured_at: string,
+  onStep: (key: string, label: string) => void,
+): Promise<ReviewCardOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/photos/stream`, { method: "POST", token, body: { data, content_type, captured_at } }, (event) => {
+      const streamed = event as unknown as ImportStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "card") {
+        settled = true;
+        resolve(streamed.card);
+      }
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no card"));
+      })
+      .catch(reject);
+  });
+}
+
 export const mintReviewYes = (token: string, profileId: string, card_id: string, decisions: DecisionIn[]) =>
   api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
     method: "POST",
@@ -511,6 +648,11 @@ export const confirmReviewCard = (
 /** The word cloud: public, in his language. */
 export const conditions = (token: string, language: string) =>
   api<ConditionsOut>("/onboarding/conditions", { token, query: { language } });
+
+/** "Or just tell me" (docs/onboarding.html): free text tagged into the cloud's own condition
+ *  codes by the backend's `TopicTagger`. Public, like the cloud itself — nothing he typed is
+ *  sent with a bearer, and nothing comes back but the codes and the flag. */
+export const tellMe = (text: string) => api<TellMeOut>("/onboarding/tell-me", { method: "POST", token: null, body: { text } });
 
 export const settings = (token: string, profileId: string) =>
   api<SettingsOut>(`/profiles/${profileId}/settings`, { token });
@@ -567,6 +709,37 @@ export const addImport = (
     token,
     body: { data, content_type, captured_at, source },
   });
+
+/** The same PDF, streamed — the same trace `addPhotoStream` gives. */
+export function addImportStream(
+  token: string,
+  profileId: string,
+  data: string,
+  content_type: string,
+  captured_at: string,
+  source: DocumentSource,
+  onStep: (key: string, label: string) => void,
+): Promise<ReviewCardOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(
+      `/profiles/${profileId}/imports/stream`,
+      { method: "POST", token, body: { data, content_type, captured_at, source } },
+      (event) => {
+        const streamed = event as unknown as ImportStreamEvent;
+        if (streamed.type === "step") onStep(streamed.key, streamed.label);
+        else if (streamed.type === "card") {
+          settled = true;
+          resolve(streamed.card);
+        }
+      },
+    )
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no card"));
+      })
+      .catch(reject);
+  });
+}
 
 // --- E12: letting one person in ------------------------------------------------------
 
@@ -789,6 +962,39 @@ export const memoCard = (token: string, profileId: string) => api<MemoCardOut>(`
 export const notFeelingWell = (token: string, profileId: string, said: Said, language: string) =>
   api<WhatToDoOut>(`/profiles/${profileId}/not-feeling-well`, { method: "POST", token, body: { ...said, language }, urgent: true });
 
+/** The same button, streamed (docs/design-direction.md "Conversation, waiting and
+ *  thinking"): the whole button runs first, entirely unchanged — the red-flag path, the
+ *  family told — and only then `onStep` for each real check it made, resolving with the
+ *  same `WhatToDoOut` the plain route gives. Still urgent: it goes ahead of every read still
+ *  waiting, the same as `notFeelingWell`. */
+export function notFeelingWellStream(
+  token: string,
+  profileId: string,
+  said: Said,
+  language: string,
+  onStep: (key: string, label: string) => void,
+): Promise<WhatToDoOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(
+      `/profiles/${profileId}/not-feeling-well/stream`,
+      { method: "POST", token, body: { ...said, language }, urgent: true },
+      (event) => {
+        const streamed = event as unknown as NfwStreamEvent;
+        if (streamed.type === "step") onStep(streamed.key, streamed.label);
+        else if (streamed.type === "card") {
+          settled = true;
+          resolve(streamed.card);
+        }
+      },
+    )
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no card"));
+      })
+      .catch(reject);
+  });
+}
+
 /** The two cards the phone keeps for when it cannot reach Nura (W7). */
 export const offlineCards = (token: string, profileId: string, language: string) =>
   api<OfflineCardsOut>(`/profiles/${profileId}/not-feeling-well/offline`, { token, query: { language } });
@@ -943,3 +1149,17 @@ export function findStream(
       .catch(reject);
   });
 }
+
+/** Care navigation (T3): every real need on the record right now, no drafted text yet
+ *  (`app.reasoning.navigation.needs.list_needs`). */
+export const navigationNeeds = (token: string, profileId: string) =>
+  api<NavigationNeedOut[]>(`/profiles/${profileId}/navigation/drafts`, { token });
+
+/** The drafted message for one need: text and a link built from the provider's own contact,
+ *  never sent (`app.reasoning.navigation.service.draft_message`). */
+export const draftNavigationMessage = (token: string, profileId: string, needId: string, language?: string) =>
+  api<NavigationDraftOut>(`/profiles/${profileId}/navigation/drafts/${needId}`, {
+    method: "POST",
+    token,
+    query: language ? { language } : undefined,
+  });

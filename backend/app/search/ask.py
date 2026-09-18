@@ -207,6 +207,17 @@ class AnswerLine:
 
 
 @dataclass(frozen=True, slots=True)
+class Proposal:
+    """A next step the agent asker offered, never taken by itself (W2, `app.llm.ask_agent`'s
+    `propose_action` tool): `kind` is one of the confirm flow's own action kinds, `label` the
+    pill's own words. Produced only by `ClaudeAsker`; `recall_stream`'s own answers never
+    carry one."""
+
+    kind: str
+    label: str
+
+
+@dataclass(frozen=True, slots=True)
 class Answer:
     question_artifact_id: uuid.UUID
     mode: Mode
@@ -219,6 +230,9 @@ class Answer:
     boundary: tuple[str, ...]
     withheld: tuple[Scope, ...]
     dropped: int
+    proposals: tuple[Proposal, ...] = ()
+    """Zero or more next steps offered alongside the answer (W2) — never written, booked or
+    sent by themselves; each still needs his own yes through the existing confirm flow."""
 
     @property
     def answered(self) -> bool:
@@ -962,6 +976,7 @@ __all__ = [
     "ClipRef",
     "Mode",
     "NotAQuestion",
+    "Proposal",
     "recall",
     "recall_stream",
     "writer_name",

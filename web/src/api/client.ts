@@ -1,3 +1,4 @@
+import { signal, type Signal } from "@preact/signals";
 import type { RefusalBody } from "./types";
 
 /** The API is on the same origin as the app, under `/api` (see
@@ -37,6 +38,12 @@ export interface Call {
   /** Waits as long as the server takes: putting a visit's recording together and hearing it
    *  (#129). Any other call gives up after `CALL_DEADLINE_MS`. */
   slow?: boolean;
+  /** The one motion mechanism (docs/design/motion.md, `ui/kit/Pending.tsx`): while a call
+   *  tagged with this key is out — from the moment it is made to the moment it settles, queueing
+   *  time included — `pendingSignal(key)` is above zero. A screen names its own key ("today",
+   *  "medicines"); the kit's `PendingCard` reads it and stands in the card's own shape until the
+   *  real content is there. Omit it and a call tracks nothing, exactly as before. */
+  key?: string;
 }
 
 function isRefusalBody(value: unknown): value is RefusalBody {
@@ -205,11 +212,53 @@ async function pump(): Promise<void> {
   }
 }
 
+/** Every key a call is presently out under, and how many calls are out under it — a screen can
+ *  ask the same key twice at once (a tab left and reopened while the first read is still on the
+ *  wire) and the skeleton stands until the last one settles, not the first. One signal per key,
+ *  made the first time it is asked for and kept for the page's life: there are only ever a
+ *  handful of keys, one per card. */
+const pendingCounts = new Map<string, Signal<number>>();
+
+function pendingCountSignal(key: string): Signal<number> {
+  let count = pendingCounts.get(key);
+  if (!count) {
+    count = signal(0);
+    pendingCounts.set(key, count);
+  }
+  return count;
+}
+
+/** Whether a call under `key` is out right now, live: `ui/kit/Pending.tsx` reads `.value` from a
+ *  component's own render, which is all a signal needs to be read reactively (docs/design/motion.md;
+ *  no hook, no timer — Preact's signals integration re-renders on a change to what was read). */
+export function pendingSignal(key: string): Signal<number> {
+  return pendingCountSignal(key);
+}
+
+/** A snapshot, for anywhere that is not a render (a test, a plain function). */
+export function isPending(key: string): boolean {
+  return pendingCountSignal(key).value > 0;
+}
+
+/** Counts `call.key` in for the life of `promise`, out again however it settles. Never throws
+ *  for the caller's sake — a bookkeeping failure must never turn a real answer into a rejection —
+ *  and never swallows the promise's own outcome. */
+function trackPending<T>(key: string | undefined, promise: Promise<T>): Promise<T> {
+  if (!key) return promise;
+  const count = pendingCountSignal(key);
+  count.value += 1;
+  const settle = () => {
+    count.value -= 1;
+  };
+  promise.then(settle, settle);
+  return promise;
+}
+
 /** One call to the API. Bearer token in a header, never a cookie; JSON in and out. A `GET` is
  *  the only shape a background read takes here, and the only shape it is safe to abort for an
  *  urgent call arriving behind it (see `enqueue`). */
 export function api<T>(path: string, call: Call = {}): Promise<T> {
-  return enqueue((signal) => send<T>(path, call, signal), call.urgent, (call.method ?? "GET") === "GET");
+  return trackPending(call.key, enqueue((signal) => send<T>(path, call, signal), call.urgent, (call.method ?? "GET") === "GET"));
 }
 
 function urlFor(path: string, call: Call): URL {

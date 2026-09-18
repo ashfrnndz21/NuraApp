@@ -1,6 +1,7 @@
 """The feed over HTTP (E21).
 
     GET  /profiles/{id}/feed?cursor=            one page: now, today, the gate, story, learning
+    GET  /profiles/{id}/feed/jobs/status        whether today's self-searches are still to run
     GET  /profiles/{id}/feed/today              today's top three: alert, reminder, insight
     GET  /profiles/{id}/feed/{item}/voice       the card's spoken twin, as audio (E11-04)
     GET  /profiles/{id}/feed/cached             the last first page rendered for this person
@@ -53,9 +54,11 @@ from app.channels.api.feed_schemas import (
     EventsIn,
     EventsOut,
     FeedItemOut,
+    FeedJobsOut,
     FeedPageOut,
     FindIn,
     FindOut,
+    JobsStatusOut,
     ResultOut,
     SearchJobIn,
     SearchJobOut,
@@ -68,8 +71,9 @@ from app.channels.api.feed_schemas import (
 from app.channels.api.refusals import refused
 from app.channels.api.sse_pump import stream_with_background_pump
 from app.delivery.feed.area import read_area, set_area
+from app.delivery.feed.background import ensure_learning_scheduled
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
-from app.delivery.feed.compose import around_for, today_for
+from app.delivery.feed.compose import around_for, can_compose, today_for
 from app.delivery.feed.engagement import record_engagement, record_events
 from app.delivery.feed.find import FindStep, find_stream
 from app.delivery.feed.find import find as find_pages
@@ -82,7 +86,14 @@ from app.delivery.feed.rank import (
     sent_this_week,
     top_three,
 )
-from app.delivery.feed.search import Engine, create_job, get_job, list_jobs, pause_job
+from app.delivery.feed.search import (
+    Engine,
+    create_job,
+    get_job,
+    jobs_looking_today,
+    list_jobs,
+    pause_job,
+)
 from app.delivery.feed.sources import list_sources, usable_sources
 from app.delivery.feed.twin import one_card, spoken_twin
 from app.delivery.feed.why_sheet import why_lines
@@ -164,8 +175,32 @@ async def feed(
     page = await feed_page(
         session, context=context, engine=_engine(request), cursor=cursor, pretend_local=pretend
     )
+    jobs = FeedJobsOut(state="none")
+    if cursor is None and await can_compose(context):
+        # The first page of the day: whatever cards exist already answer at once (`feed_page`
+        # above never runs a self-search). If today's are missing, this starts them on their
+        # own background task (`app.delivery.feed.background`, #269/#276/#280) and returns
+        # immediately — never awaited here, never on this request's own slow path.
+        day = today_for(context)
+        run = ensure_learning_scheduled(
+            context=context, engine=_engine(request), day=day, sessions=request.app.state.session_factory
+        )
+        if run is not None:
+            jobs = FeedJobsOut(state=run.state, started_at=run.started_at, done_at=run.done_at)
     reader = await reader_of(session, context, None)
-    return reader.page(_with_why_sheet(FeedPageOut.of(page), context=context, reader=reader))
+    return reader.page(
+        _with_why_sheet(FeedPageOut.of(page, jobs=jobs), context=context, reader=reader)
+    )
+
+
+@router.get("/{profile_id}/feed/jobs/status")
+async def feed_jobs_status(context: Context, session: Db) -> JobsStatusOut:
+    """Whether the day's self-searches are still to run (docs/design-direction.md,
+    'Conversation, waiting and thinking'): the honest "Nura is looking for today's reads"
+    line binds to this, a real read of the same jobs `GET /feed` runs inline
+    (`app.delivery.feed.search.jobs_looking_today`), never a guess or a timer. A read:
+    nothing is written."""
+    return JobsStatusOut(looking=await jobs_looking_today(session, context=context, day=today_for(context)))
 
 
 @router.get("/{profile_id}/feed/today")

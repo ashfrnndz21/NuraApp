@@ -18,6 +18,8 @@ laptop.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import shutil
 import tempfile
@@ -27,7 +29,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -44,6 +46,7 @@ from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import FixtureProvider
 from app.clock import FrozenClock, SystemClock, set_clock
 from app.db import Base, make_session_factory, take_keepers
+from app.delivery.feed import background as feed_background
 from app.delivery.feed.clips import FixtureClipRenderer
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.drugs.fixture import FixtureRegistry
@@ -63,6 +66,8 @@ from app.settings import Settings, database_url_for
 from tests import support  # noqa: F401
 from tests.paper import PAPER
 from tests.voice_notes import VOICE
+
+log = logging.getLogger("tests.conftest")
 
 VISITS = Path(__file__).resolve().parent / "fixtures" / "visits"
 """The visit transcripts the fixture summariser knows (E05-05)."""
@@ -107,6 +112,21 @@ def _enforce_foreign_keys(dbapi_connection: Any, _record: Any) -> None:
     cursor.close()
 
 
+async def _settle_background() -> None:
+    """Before a test's database goes: await the feed's background learning tasks the app
+    started on it (`app.delivery.feed.background`, one per profile and day, from `GET /feed`).
+    The autouse `_feed_background_isolation` drains them too, but it was set up before the
+    `deployment` fixture and so tears down after it — after the engine is disposed and, on
+    Postgres, after `empty_database` has counted every connection still inside a transaction
+    as one the test left open and dropped the schema under it (CI's backend-postgres round
+    on #285: 20 teardown errors, every one a run still reading). Here is the one place that
+    runs first. A run that crashes is its own log line, never this teardown's error."""
+    try:
+        await feed_background.drain()
+    except Exception:  # noqa: BLE001 — the run's own failure is logged where it happened
+        log.warning("feed background: a run could not be drained before its database went")
+
+
 @asynccontextmanager
 async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[AsyncEngine]:
     """A database with no tables in it, for the length of one test, and gone after it.
@@ -123,6 +143,7 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
         try:
             yield engine
         finally:
+            await _settle_background()
             await engine.dispose()
         return
     schema = f"test_{uuid.uuid4().hex}"
@@ -142,6 +163,7 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
     try:
         yield engine
     finally:
+        await _settle_background()
         await engine.dispose()
         async with admin.begin() as connection:
             # Tests run one at a time, so any other connection still inside a transaction or
@@ -209,6 +231,37 @@ FROZEN_AT = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
 
 
 @pytest.fixture(autouse=True)
+async def _feed_background_isolation() -> AsyncIterator[None]:
+    """One process's feed background module (`app.delivery.feed.background`) has one `_runs`
+    table and one set of in-flight tasks — module-level, because that is exactly what a
+    process restart or a second profile racing to schedule the same day's run is meant to
+    share (the module's own docstring). A test suite is many tests in one process, so without
+    this a run scheduled by one test would still be "today's run" for the next test that
+    reuses the same profile id (unlikely but not impossible) or would simply leak a task past
+    its test's own database session, which closes at teardown — a task still reading or
+    writing through it then fails with "Cannot operate on a closed database", attributed to
+    whatever test happened to be running when it got there.
+
+    Cleared before every test, and drained (awaited, not cancelled — a cancelled task banked
+    on that request's `KeptSession.close()` guard, see `app.db`, and half a savepoint is worse
+    than a slow one) after, as a safety net: a test that schedules a run and means to check
+    what it made should call `feed_background.drain()` itself, in the middle of the test,
+    before it reads anything back — this fixture's own `drain` here is only for a run nothing
+    in the test awaited. By the time it runs, `deployment`/`sg`'s own teardown may already
+    have closed the database a still-running task reads through (fixture teardown order is
+    not this fixture's to pick), so a failure here is swallowed, not raised: it would only
+    ever hide a second failure behind whatever the test itself already reported, real or
+    none."""
+    feed_background._runs.clear()
+    yield
+    try:
+        await feed_background.drain()
+    except Exception:  # noqa: BLE001 — a safety net only; the test's own failure, if any, stands
+        log.warning("feed background: a task outlived its test and could not be drained cleanly")
+    feed_background._runs.clear()
+
+
+@pytest.fixture(autouse=True)
 def clock() -> Iterator[FrozenClock]:
     """The one clock, frozen: a test moves it, nothing else does, and no service takes a time.
 
@@ -233,6 +286,59 @@ class Deployment:
     whatsapp: FixtureProvider
 
 
+class _SerializedSession:
+    """One checkout from a `_serialized` session factory: the real session, held open only
+    for as long as this one is, behind a lock every checkout from the same factory shares."""
+
+    def __init__(self, factory: async_sessionmaker[AsyncSession], lock: asyncio.Lock) -> None:
+        self._factory = factory
+        self._lock = lock
+        self._session: AsyncSession | None = None
+
+    async def __aenter__(self) -> AsyncSession:
+        await self._lock.acquire()
+        session = self._factory()
+        try:
+            self._session = await session.__aenter__()
+        except BaseException:
+            self._lock.release()
+            raise
+        return self._session
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        assert self._session is not None
+        try:
+            await self._session.__aexit__(*exc_info)
+        finally:
+            self._lock.release()
+
+
+def _serialized(
+    factory: async_sessionmaker[AsyncSession],
+) -> Callable[[], _SerializedSession]:
+    """A session factory that never lets two of its own sessions be open at once.
+
+    A served test deployment's engine is one StaticPool connection (`regional_database`) —
+    fine for a channel's own request, one session at a time, the whole point of the pool
+    class. `app.delivery.feed.background` breaks that assumption on purpose: a run opens its
+    own session, off the request's, and its jobs each open one of their own too, genuinely
+    concurrently (`MAX_CONCURRENT_JOBS`) — exactly what a deployment's real connection pool
+    is for. Two `AsyncSession`s actually open at once on the one StaticPool connection corrupt
+    each other's savepoint stack instead (`OperationalError: no such savepoint`, or worse, a
+    shared-cache `database table is locked` that python's `sqlite3` never clears on its own —
+    both tried, both worse than this). Not a bug in the background module, a StaticPool one:
+    a real deployment's pool hands out a real connection per session and none of this applies.
+    So here, for a served test deployment only, every session waits its turn — the request's,
+    and the background run's, and each of the run's own job sessions in turn behind it. Slower
+    than real concurrency would be; correct, which a fixture has to be first."""
+    lock = asyncio.Lock()
+
+    def make() -> _SerializedSession:
+        return _SerializedSession(factory, lock)
+
+    return make
+
+
 async def _serve(
     region: Region, *, review_origin: str | None = None, narrator: Narrator | None = None
 ) -> AsyncIterator[Deployment]:
@@ -249,6 +355,12 @@ async def _serve_on(
     narrator: Narrator | None = None,
 ) -> AsyncIterator[Deployment]:
     sessions = make_session_factory(engine)
+    # A served deployment's own connection is one StaticPool connection; `_serialized` is
+    # what lets `app.delivery.feed.background`'s genuinely concurrent sessions (the run's
+    # own, and each job's) share it safely instead of corrupting each other — see its
+    # docstring. `app` gets the serialized factory; `Deployment.sessions` below is the real
+    # one, for a test that reads the database directly, sequentially, itself.
+    serialized_sessions = cast("async_sessionmaker[AsyncSession]", _serialized(sessions))
     sender = LoggingCodeSender(reveal=True)
     settings = Settings(
         region=region,
@@ -279,7 +391,7 @@ async def _serve_on(
         clips=FixtureClipRenderer(FEED),
         **({"narrator": narrator} if narrator is not None else {}),
     )
-    app = create_app(settings, sessions, providers)
+    app = create_app(settings, serialized_sessions, providers)
     try:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://nura.test"
