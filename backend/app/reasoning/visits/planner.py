@@ -59,7 +59,6 @@ one write this module owns.
 from __future__ import annotations
 
 import hashlib
-import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta

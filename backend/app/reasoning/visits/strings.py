@@ -624,7 +624,7 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "visit_suggestion_test_coming": {
         "en": "Nura suggests you see your doctor again about your blood test.",
         "ms": "Nura mencadangkan anda jumpa doktor anda lagi tentang ujian darah anda.",
-        "zh": "Nura建议您为血液检验再看一次医生。",
+        "zh": "Nura建议您为验血再看一次医生。",
     },
     "visit_suggestion_screening": {
         "en": "Nura suggests a visit to your doctor.",

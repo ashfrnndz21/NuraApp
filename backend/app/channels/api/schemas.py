@@ -26,6 +26,7 @@ from app.consent.models import (
 )
 from app.consent.service import RecordConsent
 from app.db import as_utc
+from app.delivery.recommend.models import Evidence as VisitEvidence
 from app.drafts import ConfirmSubject
 from app.drugs.registry import ProductKind, ReviewState
 from app.family.documents import Backing, DocumentView
@@ -92,7 +93,6 @@ from app.medicines.service import (
 from app.medicines.service import Outcome as MedicineOutcome
 from app.medicines.story import Story, voice_parts
 from app.memory.episodic import WITHHELD_ARTIFACT, WITHHELD_EVENT
-from app.delivery.recommend.models import Evidence
 from app.memory.models import (
     LABEL_LENGTH,
     Appointment,
@@ -2057,7 +2057,7 @@ class EvidenceOut(BaseModel):
     scope: Scope
 
     @classmethod
-    def of(cls, evidence: Evidence) -> EvidenceOut:
+    def of(cls, evidence: VisitEvidence) -> EvidenceOut:
         return cls(kind=evidence.kind, id=evidence.id, scope=evidence.scope)
 
 
