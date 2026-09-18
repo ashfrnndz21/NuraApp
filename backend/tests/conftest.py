@@ -112,6 +112,21 @@ def _enforce_foreign_keys(dbapi_connection: Any, _record: Any) -> None:
     cursor.close()
 
 
+async def _settle_background() -> None:
+    """Before a test's database goes: await the feed's background learning tasks the app
+    started on it (`app.delivery.feed.background`, one per profile and day, from `GET /feed`).
+    The autouse `_feed_background_isolation` drains them too, but it was set up before the
+    `deployment` fixture and so tears down after it — after the engine is disposed and, on
+    Postgres, after `empty_database` has counted every connection still inside a transaction
+    as one the test left open and dropped the schema under it (CI's backend-postgres round
+    on #285: 20 teardown errors, every one a run still reading). Here is the one place that
+    runs first. A run that crashes is its own log line, never this teardown's error."""
+    try:
+        await feed_background.drain()
+    except Exception:  # noqa: BLE001 — the run's own failure is logged where it happened
+        log.warning("feed background: a run could not be drained before its database went")
+
+
 @asynccontextmanager
 async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[AsyncEngine]:
     """A database with no tables in it, for the length of one test, and gone after it.
@@ -128,6 +143,7 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
         try:
             yield engine
         finally:
+            await _settle_background()
             await engine.dispose()
         return
     schema = f"test_{uuid.uuid4().hex}"
@@ -147,6 +163,7 @@ async def empty_database(*, sqlite_foreign_keys: bool = True) -> AsyncIterator[A
     try:
         yield engine
     finally:
+        await _settle_background()
         await engine.dispose()
         async with admin.begin() as connection:
             # Tests run one at a time, so any other connection still inside a transaction or
