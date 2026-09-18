@@ -907,6 +907,13 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/emergency-card.html", card=True),
     Walk("GET", f"{P}/symptoms", params={"since": "2026-08-01T00:00:00Z"}),
     Walk("POST", f"{P}/not-feeling-well", json={"words": "he is shaky and sweaty"}, button=True),
+    Walk(
+        "POST",
+        f"{P}/not-feeling-well/stream",
+        json={"words": "he is shaky and sweaty"},
+        button=True,
+        stream=True,
+    ),
     Walk("POST", f"{P}/symptoms", json={"words": "he is shaky and sweaty"}, button=True),
     Walk("GET", f"{P}/appointments"),
     Walk("GET", f"{P}/appointments/{{appointment_id}}/brief"),
