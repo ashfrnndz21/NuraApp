@@ -151,7 +151,6 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const furniture = heroFurnitureAllowed({ flagged });
   const hero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
   const locale = LOCALE[language.value];
-  const supply = page ? <SupplyTile lines={page.lines} /> : null;
   const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
   return (
     <Shell tab="home" testId="home-screen" topBar={{ variant: "home" }}>
@@ -213,26 +212,26 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               <FeedItemCard key={item.item_id} item={item} v={v} testId="flag-card" />
             ))}
             {(stateAt === "top" || stateAt === "forYou") && <StateCard v={v} />}
-            {furniture && <CheckInCard papers={papers} />}
-            <DoGrid papers={papers} />
-            <AddReport papers={papers} />
+            {/* The reference's own order for her Home (docs/design/full-experience.html, the
+                Mei persona): under the State, what changed since she last looked, his next
+                visit and what to buy side by side, the gap in his papers, then what Nura is
+                watching for him and what was sent to him this week — before the warm grid
+                everyone's Home shares. */}
             {/* "What changed since you last looked" (docs/design-system.md §3): a peek, not a
                 look (#207) — `GET /changes` is the looking, and a tile that draws itself on
                 every Home render is not her choosing to look, so it reads with `peek=true`
                 and marks nothing. The Record's own "what changed" screen is the one place
                 that marks a look, because reading it is what she came there to do. */}
             <WhatChanged />
-            {nextVisit && !fromPhone && (
-              <Upcoming papers={papers}>
-                <NextVisitTile visit={nextVisit} />
-              </Upcoming>
-            )}
-            {supply}
+            <NextVisitAndReorder visit={!fromPhone ? nextVisit : null} lines={page.lines} />
             {nextVisit && !fromPhone && <GapsTile visit={nextVisit} />}
-            <AskAboutPill />
             {/* The chief's Home (F1, #177): what was sent to him this week, and what Nura is
                 watching for him. Her key's and his steward's; nobody else's. */}
             {!fromPhone && bearer && v.papers && (v.papers.role === "chief" || v.papers.standing === "steward") && <ChiefPanels bearer={bearer} papers={v.papers} />}
+            <AskAboutPill />
+            {furniture && <CheckInCard papers={papers} />}
+            <DoGrid papers={papers} />
+            <AddReport papers={papers} />
             {/* His doses, only for a key that may tap Taken for him (one that opens the medicines). */}
             {v.papers?.scopes.includes("medicines") && <DoseSection v={v} />}
             <SectionLabel>{s.today.forYou}</SectionLabel>
@@ -604,6 +603,21 @@ export function NextVisitTile({ visit }: { visit: AppointmentOut }): JSX.Element
       </button>
       {visit.purpose && <p class="card-line">{visit.purpose}</p>}
     </TintCard>
+  );
+}
+
+/** The reference's row of two on her Home (docs/design/full-experience.html, the Mei persona):
+ *  his next visit and what to buy, side by side, neither under "Coming up" — each a small card
+ *  of its own. Either may be missing (no visit booked, nothing near running out); with only one,
+ *  it takes the row alone rather than leaving an empty column beside it. */
+export function NextVisitAndReorder({ visit, lines }: { visit: AppointmentOut | null; lines: readonly LineOut[] }): JSX.Element | null {
+  const showSupply = Boolean(nearestToRunOut(lines)?.count);
+  if (!visit && !showSupply) return null;
+  return (
+    <div class={visit && showSupply ? "two-up" : undefined} data-testid="next-visit-and-reorder">
+      {visit && <NextVisitTile visit={visit} />}
+      {showSupply && <SupplyTile lines={lines} />}
+    </div>
   );
 }
 

@@ -62,6 +62,18 @@ class DocumentKind(StrEnum):
     date and what it was for (`app.insurance.claim`). Read into facts here, the same way."""
     DEVICE_SCREEN = "device_screen"
     """The screen of a blood pressure machine, a glucometer or a scale (E02-08)."""
+    PILL_PHOTO = "pill_photo"
+    """A loose pill or tablet, no label in view: what a person can actually see of it — the
+    imprint, the colour, the shape, a score line — read as a `pill` field each, never a name.
+    Routed to a proposal matched against the licensed registry (`app.drugs.registry`) and
+    held at most at `app.ingestion.review.PILL_MAX_CONFIDENCE`, always below the confirmation
+    threshold: a pill's identity is a guess from what it looks like, never a read, so it
+    always needs the person's own look and the pharmacist's, not a silent assumption."""
+    PHARMACY_RECEIPT = "pharmacy_receipt"
+    """A pharmacy's own receipt: which pharmacy, the date, the currency, and each line bought
+    — item, quantity, unit price, total (`app.ingestion.review`). A line naming a medicine or
+    supplement already on his list becomes a cost entry the ledger sums; a line that matches
+    nothing on his list is kept as a plain paper fact, same as any other kind's fallback."""
     OTHER = "other"
     """A health paper read as itself, and not one of the named kinds above — an X-ray
     report, a referral letter, a general clinical note. Its fields are kept as plain facts
@@ -90,6 +102,8 @@ PHOTO_HINTS = frozenset(
         DocumentKind.INSURANCE_LETTER,
         DocumentKind.INSURANCE_POLICY,
         DocumentKind.INSURANCE_CLAIM,
+        DocumentKind.PILL_PHOTO,
+        DocumentKind.PHARMACY_RECEIPT,
     }
 )
 """What a person may say a photo of a page is. A device screen has its own route."""

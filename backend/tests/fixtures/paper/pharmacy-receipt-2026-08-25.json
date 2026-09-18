@@ -1,0 +1,140 @@
+{
+  "placeholder": "pharmacy-receipt-2026-08-25",
+  "sha256": "83e1562fa7af017b3a57027c0d61e44c5ee6466b54819a1e67f866613850ae92",
+  "format": "png",
+  "note": "Synthetic fixture (no real patient), for the pill-and-receipt story: a pharmacy receipt with one line naming a medicine already on his list (Panadol, matched to paracetamol) and one line naming something not on it (a hand sanitiser), so the ledger sums the first and leaves the second a plain paper fact.",
+  "document_kind": "pharmacy_receipt",
+  "document_date": "2026-08-25",
+  "fields": [
+    {
+      "subject": "receipt",
+      "attribute": "pharmacy",
+      "value": "Guardian Pharmacy",
+      "unit": null,
+      "confidence": 0.92,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.05,
+        "x1": 0.9,
+        "y1": 0.12
+      }
+    },
+    {
+      "subject": "receipt",
+      "attribute": "currency",
+      "value": "SGD",
+      "unit": null,
+      "confidence": 0.95,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.9,
+        "x1": 0.9,
+        "y1": 0.95
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "name",
+      "value": "Panadol",
+      "unit": null,
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.3,
+        "x1": 0.6,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "quantity",
+      "value": 2,
+      "unit": null,
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.6,
+        "y0": 0.3,
+        "x1": 0.7,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "unit_price",
+      "value": 6.5,
+      "unit": "SGD",
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.7,
+        "y0": 0.3,
+        "x1": 0.8,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "total",
+      "value": 13.0,
+      "unit": "SGD",
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.8,
+        "y0": 0.3,
+        "x1": 0.9,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_2",
+      "attribute": "name",
+      "value": "Hand sanitiser 250ml",
+      "unit": null,
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.4,
+        "x1": 0.6,
+        "y1": 0.45
+      }
+    },
+    {
+      "subject": "item_2",
+      "attribute": "quantity",
+      "value": 1,
+      "unit": null,
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.6,
+        "y0": 0.4,
+        "x1": 0.7,
+        "y1": 0.45
+      }
+    },
+    {
+      "subject": "item_2",
+      "attribute": "unit_price",
+      "value": 8.9,
+      "unit": "SGD",
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.7,
+        "y0": 0.4,
+        "x1": 0.8,
+        "y1": 0.45
+      }
+    },
+    {
+      "subject": "item_2",
+      "attribute": "total",
+      "value": 8.9,
+      "unit": "SGD",
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.8,
+        "y0": 0.4,
+        "x1": 0.9,
+        "y1": 0.45
+      }
+    }
+  ]
+}
