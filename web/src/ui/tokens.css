@@ -176,8 +176,11 @@
   --wash-watch: linear-gradient(160deg, var(--blush), var(--cream) 50%, var(--ground-warm));
   --wash-act: linear-gradient(160deg, var(--coral-wash), var(--coral-mid) 50%, var(--lavender));
 
-  /* Motion: only ever an answer to an action */
+  /* Motion: only ever an answer to an action (docs/design/motion.md). --settle: a card or row
+     entering after a fetch or a stream event, 220ms. --press: a pill or row under a finger,
+     90ms — always shorter than --settle, since a tap must feel instant and an entrance may not. */
   --settle: 220ms ease-out;
+  --press: 90ms ease-out;
   --wash-fade: 1200ms ease-in-out;
 
   /* Icons */
@@ -260,6 +263,7 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --settle: 0ms;
+    --press: 0ms;
     --wash-fade: 0ms;
   }
 }
