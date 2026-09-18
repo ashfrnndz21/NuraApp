@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.access import audited_profile_read
 from app.channels import state_words
 from app.consent import texts as consent_words
+from app.delivery import analyst_strings as analyst_words
 from app.delivery import strings as feed_words
 from app.delivery import timeline_strings
 from app.delivery.strings import language_for, theirs
@@ -111,6 +112,23 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         # The family's grant lines (#210): the parts a key opens.
         (family_words.WINDOW_LINES, family_words.WINDOW_LINES_THEIRS),
         (_bulleted(consent_words.SCOPE_WORDS), _bulleted(consent_words.SCOPE_WORDS_THEIRS)),
+        # The Health Analyst's report (`app.reasoning.analyst`): second-person by default,
+        # said about him by name to a caregiver reading his report with her own key.
+        (analyst_words.TREND_LINE, analyst_words.TREND_LINE_THEIRS),
+        (analyst_words.TREND_WHY, analyst_words.TREND_WHY_THEIRS),
+        (analyst_words.SCREENING_LINE, analyst_words.SCREENING_LINE_THEIRS),
+        (analyst_words.SCREENING_WHY, analyst_words.SCREENING_WHY_THEIRS),
+        (analyst_words.DUPLICATE_LINE, analyst_words.DUPLICATE_LINE_THEIRS),
+        (analyst_words.DUPLICATE_WHY, analyst_words.DUPLICATE_WHY_THEIRS),
+        (analyst_words.SUPPLEMENT_LINE, analyst_words.SUPPLEMENT_LINE_THEIRS),
+        (analyst_words.SUPPLEMENT_WHY, analyst_words.SUPPLEMENT_WHY_THEIRS),
+        (analyst_words.COST_LINE, analyst_words.COST_LINE_THEIRS),
+        (analyst_words.COST_WHY, analyst_words.COST_WHY_THEIRS),
+        (analyst_words.COVERAGE_LINE, analyst_words.COVERAGE_LINE_THEIRS),
+        (analyst_words.COVERAGE_WHY, analyst_words.COVERAGE_WHY_THEIRS),
+        (analyst_words.STEP_LABEL, analyst_words.STEP_LABEL_THEIRS),
+        (analyst_words.ASK_THE_DOCTOR_LINE, analyst_words.ASK_THE_DOCTOR_LINE_THEIRS),
+        (analyst_words.WITHHELD_LINE, analyst_words.WITHHELD_LINE_THEIRS),
     )
 
 

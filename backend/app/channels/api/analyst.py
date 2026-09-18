@@ -22,6 +22,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.errors import Refusal
 from app.memory.timeline import language_for
@@ -79,6 +80,12 @@ class InsightReportOut(BaseModel):
     week_of: date
     boundary: list[str]
     sections: list[SectionOut]
+    withheld: list[str] = []
+    """The key of every section this key's own scopes could not cover — set by
+    `app.reasoning.analyst.service._narrowed_for` on a saved report read back by a narrower
+    key than generated it; always empty straight off the stream, since that key is the one
+    that just generated the report and withheld nothing from itself (`RuleAnalyst` already
+    leaves an unscoped section out of `sections` entirely at generation time)."""
 
     @classmethod
     def of_report(cls, report: Report) -> InsightReportOut:
@@ -87,6 +94,7 @@ class InsightReportOut(BaseModel):
             generated_at=report.generated_at,
             week_of=report.week_of,
             boundary=list(report.boundary),
+            withheld=[],
             sections=[
                 SectionOut(
                     key=section.key,
@@ -118,6 +126,7 @@ class InsightReportOut(BaseModel):
             generated_at=cast(datetime, row["generated_at"]),
             week_of=cast(date, row["week_of"]),
             boundary=list(cast("list[str]", row["boundary"])),
+            withheld=list(cast("list[str]", row.get("withheld", []))),
             sections=[
                 SectionOut.model_validate(section)
                 for section in cast("list[dict[str, object]]", row["sections"])
@@ -144,15 +153,19 @@ async def insights_stream(request: Request, context: Context) -> StreamingRespon
         try:
             async with session_scope(request) as session:
                 language = await language_for(session, context, None)
+                reader = await reader_of(session, context, language)
                 report: Report | None = None
                 async for event in analyst.report_stream(session, context=context, language=language):
                     if isinstance(event, Step):
-                        yield _sse({"type": "step", "key": event.key.value, "label": event.label})
+                        yield _sse(
+                            {"type": "step", "key": event.key.value, "label": reader.says(event.label)}
+                        )
                     else:
                         report = event
                 assert report is not None
                 await save_report(session, context=context, report=report)
-                yield _sse({"type": "report", "report": InsightReportOut.of_report(report).model_dump(mode="json")})
+                out = reader.model(InsightReportOut.of_report(report))
+                yield _sse({"type": "report", "report": out.model_dump(mode="json")})
         except Refusal as refusal:
             yield await _refusal_event(request, refusal)
 
@@ -163,7 +176,8 @@ async def insights_stream(request: Request, context: Context) -> StreamingRespon
 async def insights_latest(context: Context, session: Db) -> InsightReportOut:
     """The newest saved report, or `NoReportYet` (404)."""
     row = await latest_report(session, context=context)
-    return InsightReportOut.of_row(row)
+    reader = await reader_of(session, context, cast("str | None", row.get("language")))
+    return reader.model(InsightReportOut.of_row(row))
 
 
 @router.get("/{profile_id}/insights/{report_id}")
@@ -171,7 +185,8 @@ async def insights_by_id(
     report_id: uuid.UUID, context: Context, session: Db
 ) -> InsightReportOut:
     row = await report_by_id(session, context=context, report_id=report_id)
-    return InsightReportOut.of_row(row)
+    reader = await reader_of(session, context, cast("str | None", row.get("language")))
+    return reader.model(InsightReportOut.of_row(row))
 
 
 __all__ = ["router"]

@@ -50,7 +50,17 @@ async def test_the_stream_yields_steps_in_order_then_a_report_which_get_then_rea
         "coverage",
     ]
     report = events[-1]["report"]
-    assert set(report.keys()) == {"report_id", "generated_at", "week_of", "boundary", "sections"}
+    assert set(report.keys()) == {
+        "report_id",
+        "generated_at",
+        "week_of",
+        "boundary",
+        "sections",
+        "withheld",
+    }
+    # His own key generated this report: nothing was withheld from him (docstring,
+    # `InsightReportOut.withheld`).
+    assert report["withheld"] == []
     assert report["boundary"]
     section_keys = [s["key"] for s in report["sections"]]
     assert section_keys == sorted(

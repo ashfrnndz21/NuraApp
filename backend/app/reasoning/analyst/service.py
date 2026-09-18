@@ -11,7 +11,11 @@ to what *this* context's own scopes cover, section by section (`SECTION_SCOPE`),
 `questions_for_the_doctor` down to the insights whose own kind sits under a scope this context
 holds (`_KIND_SCOPE`) — the same door `RuleAnalyst` would have closed at generation time, had
 this context been the one generating it (`tests/test_row_scope.py`, the row-scope conformance
-suite, is what caught the leak this filtering closes)."""
+suite, is what caught the leak this filtering closes). What that narrowing cut is never left
+unsaid either: `_narrowed_for` also hands back the key of every section a narrower context
+could not see, and `InsightReportOut.withheld` carries it — a caregiver's `GET` on a chief's
+own report says "screenings due was left out", never nothing at all where a section used to
+be (the UI already renders a withheld section once the field is there, #271)."""
 
 from __future__ import annotations
 
@@ -95,15 +99,28 @@ async def save_report(
     )
 
 
-def _narrowed_for(context: KeyContext, sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _narrowed_for(
+    context: KeyContext, sections: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], list[str]]:
     """`sections`, exactly as saved, cut down to what `context`'s own scopes cover — never
-    the scopes whoever generated and saved the row happened to hold."""
+    the scopes whoever generated and saved the row happened to hold — and, second, the key of
+    every section this cut left out by name: a section a narrower key cannot see is named in
+    `withheld`, never simply missing from the list with no reason given (`InsightReportOut`,
+    `.claude/rules` — "a key without a scope gets that section withheld, named"). The rollup
+    (`questions_for_the_doctor`) is never itself named in `withheld` — it carries no scope of
+    its own (`SECTION_SCOPE`'s own docstring) and is only ever thinner, not absent, for a
+    narrower key; a section with a real scope that this key holds but that simply has no
+    insights in it is not withheld either — `withheld` names only a door this key could not
+    open, never an empty room behind a door it could."""
     narrowed: list[dict[str, Any]] = []
+    withheld: list[str] = []
     for section in sections:
         scope = SECTION_SCOPE.get(section["key"])
         if scope is not None:
             if context.allows(scope):
                 narrowed.append(section)
+            else:
+                withheld.append(section["key"])
             continue
         # The rollup (`questions_for_the_doctor`): keep only the insights whose own kind
         # sits under a scope this context holds.
@@ -114,10 +131,11 @@ def _narrowed_for(context: KeyContext, sections: list[dict[str, Any]]) -> list[d
         ]
         if kept:
             narrowed.append({**section, "insights": kept})
-    return narrowed
+    return narrowed, withheld
 
 
 def _row_to_dict(row: InsightReport, *, context: KeyContext) -> dict[str, object]:
+    sections, withheld = _narrowed_for(context, row.sections)
     return {
         "report_id": str(row.id),
         "generated_at": row.generated_at,
@@ -125,7 +143,8 @@ def _row_to_dict(row: InsightReport, *, context: KeyContext) -> dict[str, object
         "language": row.language,
         "source": row.source,
         "boundary": list(row.boundary),
-        "sections": _narrowed_for(context, row.sections),
+        "sections": sections,
+        "withheld": withheld,
     }
 
 

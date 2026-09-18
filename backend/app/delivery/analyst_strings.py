@@ -69,12 +69,30 @@ TREND_LINE: Mapping[str, str] = {
     "ms": "{name} berada di luar julat biasa pada {day}.",
     "zh": "{name}在{day}不在一般范围内。",
 }
+"""Filled with `BP_NAME` (below), whose own words already say "your top blood pressure
+number" — the template itself carries no possessive, so its `_THEIRS` twin is the same text:
+`app.channels.about_him.Reader.says` rewrites the possessive inside the filled `{name}` slot
+itself (`app.delivery.strings.theirs`), never this template."""
+
+# @patient
+TREND_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{name} was outside the usual range on {day}.",
+    "ms": "{name} berada di luar julat biasa pada {day}.",
+    "zh": "{name}在{day}不在一般范围内。",
+}
 
 # @patient
 TREND_WHY: Mapping[str, str] = {
     "en": "This is compared with the usual range for your age.",
     "ms": "Ini dibandingkan dengan julat biasa untuk umur anda.",
     "zh": "这是与您这个年龄的一般范围做比较。",
+}
+
+# @patient
+TREND_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This is compared with the usual range for {patient}'s age.",
+    "ms": "Ini dibandingkan dengan julat biasa untuk umur {patient}.",
+    "zh": "这是与{patient}这个年龄的一般范围做比较。",
 }
 
 # @patient phrase
@@ -107,12 +125,29 @@ SCREENING_LINE: Mapping[str, str] = {
     "ms": "{name} belum ditulis lagi.",
     "zh": "还没有写下{name}的记录。",
 }
+"""Filled with `SCREENING_NAME` (above); its `_THEIRS` twin is the same text, the same
+reasoning `TREND_LINE_THEIRS` carries — the possessive lives inside the filled `{name}` slot,
+rewritten there, not in this template."""
+
+# @patient
+SCREENING_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{name} has not been written down yet.",
+    "ms": "{name} belum ditulis lagi.",
+    "zh": "还没有写下{name}的记录。",
+}
 
 # @patient
 SCREENING_WHY: Mapping[str, str] = {
     "en": "This compares your age and what you have told Nura with a general guide.",
     "ms": "Ini membandingkan umur anda dengan panduan am.",
     "zh": "这是把您的年龄和一般指引做比较。",
+}
+
+# @patient
+SCREENING_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This compares {patient}'s age and what has been told to Nura with a general guide.",
+    "ms": "Ini membandingkan umur {patient} dengan panduan am.",
+    "zh": "这是把{patient}的年龄和一般指引做比较。",
 }
 
 # @patient
@@ -126,10 +161,24 @@ DUPLICATE_LINE: Mapping[str, str] = {
 line naming it twice reads as a repeat, not two different medicines."""
 
 # @patient
+DUPLICATE_LINE_THEIRS: Mapping[str, str] = {
+    "en": "2 of {patient}'s medicines are written down as {name}.",
+    "ms": "2 daripada ubat {patient} ditulis sebagai {name}.",
+    "zh": "记录里有2笔{patient}的药，写的都是{name}。",
+}
+
+# @patient
 DUPLICATE_WHY: Mapping[str, str] = {
     "en": "This compares the kind written down for each medicine on your list.",
     "ms": "Ini membandingkan jenis yang ditulis untuk setiap ubat dalam senarai anda.",
     "zh": "这是比较您药物清单上每种药的分类。",
+}
+
+# @patient
+DUPLICATE_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This compares the kind written down for each medicine on {patient}'s list.",
+    "ms": "Ini membandingkan jenis yang ditulis untuk setiap ubat dalam senarai {patient}.",
+    "zh": "这是比较{patient}药物清单上每种药的分类。",
 }
 
 # @patient
@@ -140,10 +189,24 @@ SUPPLEMENT_LINE: Mapping[str, str] = {
 }
 
 # @patient
+SUPPLEMENT_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{name} is on {patient}'s list, and no condition on file explains it.",
+    "ms": "{name} ada dalam senarai {patient}, dan tiada keadaan direkodkan yang menerangkannya.",
+    "zh": "{name}在{patient}的清单上，但记录中的病况没有说明原因。",
+}
+
+# @patient
 SUPPLEMENT_WHY: Mapping[str, str] = {
     "en": "This compares your supplements with the conditions written down for you.",
     "ms": "Ini membandingkan suplemen anda dengan keadaan yang ditulis untuk anda.",
     "zh": "这是把您的补充品和记录中的病况做比较。",
+}
+
+# @patient
+SUPPLEMENT_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This compares {patient}'s supplements with the conditions written down for {patient}.",
+    "ms": "Ini membandingkan suplemen {patient} dengan keadaan yang ditulis untuk {patient}.",
+    "zh": "这是把{patient}的补充品和记录中的病况做比较。",
 }
 
 # @patient
@@ -154,10 +217,24 @@ COST_LINE: Mapping[str, str] = {
 }
 
 # @patient
+COST_LINE_THEIRS: Mapping[str, str] = {
+    "en": "Most of what {patient} paid this year, {amount}, was for {policy}.",
+    "ms": "Kebanyakan bayaran {patient} tahun ini, {amount}, adalah untuk {policy}.",
+    "zh": "{patient}今年大部分的付款，{amount}，是给{policy}的。",
+}
+
+# @patient
 COST_WHY: Mapping[str, str] = {
     "en": "This adds up what you paid across your claims this year.",
     "ms": "Ini menjumlahkan bayaran anda merentasi tuntutan tahun ini.",
     "zh": "这是把您今年各项索赔的付款加起来。",
+}
+
+# @patient
+COST_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This adds up what {patient} paid across {patient}'s claims this year.",
+    "ms": "Ini menjumlahkan bayaran {patient} merentasi tuntutan {patient} tahun ini.",
+    "zh": "这是把{patient}今年各项索赔的付款加起来。",
 }
 
 # @patient
@@ -168,10 +245,24 @@ COVERAGE_LINE: Mapping[str, str] = {
 }
 
 # @patient
+COVERAGE_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{patient}'s {policy} policy shows as {status} in {patient}'s papers.",
+    "ms": "Polisi {policy} {patient} tertulis sebagai {status} dalam surat-surat {patient}.",
+    "zh": "{patient}的{policy}保单在文件中显示为{status}。",
+}
+
+# @patient
 COVERAGE_WHY: Mapping[str, str] = {
     "en": "This is what is written down about your policy right now.",
     "ms": "Ini adalah apa yang tertulis tentang polisi anda sekarang.",
     "zh": "这是您保单目前在文件中的记录。",
+}
+
+# @patient
+COVERAGE_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This is what is written down about {patient}'s policy right now.",
+    "ms": "Ini adalah apa yang tertulis tentang polisi {patient} sekarang.",
+    "zh": "这是{patient}保单目前在文件中的记录。",
 }
 
 # @patient phrase
@@ -222,6 +313,31 @@ finishes (`POST /profiles/{id}/insights/stream`'s own `step` event) — the same
 already happened" discipline `app.search.ask.STEP_KEYS` holds its own labels to."""
 
 # @patient
+STEP_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "records": "Looking at what has been told to Nura.",
+        "series": "Looking at {patient}'s blood pressure.",
+        "medicines": "Looking at {patient}'s medicines.",
+        "ledger": "Adding up what {patient} paid.",
+        "coverage": "Looking at {patient}'s policies.",
+    },
+    "ms": {
+        "records": "Melihat apa yang diberitahu kepada Nura.",
+        "series": "Melihat tekanan darah {patient}.",
+        "medicines": "Melihat ubat {patient}.",
+        "ledger": "Menjumlahkan apa yang {patient} bayar.",
+        "coverage": "Melihat polisi {patient}.",
+    },
+    "zh": {
+        "records": "查看告诉Nura的资料。",
+        "series": "查看{patient}的血压。",
+        "medicines": "查看{patient}的药物。",
+        "ledger": "把{patient}付的钱加起来。",
+        "coverage": "查看{patient}的保单。",
+    },
+}
+
+# @patient
 ASK_THE_DOCTOR_LINE: Mapping[str, str] = {
     "en": "Something about one of your medicines is worth asking the doctor about.",
     "ms": "Ada sesuatu tentang salah satu ubat anda untuk ditanya kepada doktor.",
@@ -233,11 +349,37 @@ pipeline.finalize`, #236): a real question is filed for the doctor, and this lin
 candidate's own text — is what the report shows."""
 
 # @patient
+ASK_THE_DOCTOR_LINE_THEIRS: Mapping[str, str] = {
+    "en": "Something about one of {patient}'s medicines is worth asking the doctor about.",
+    "ms": "Ada sesuatu tentang salah satu ubat {patient} untuk ditanya kepada doktor.",
+    "zh": "{patient}其中一种药物的事，值得问问医生。",
+}
+
+# @patient
 ASK_THE_DOCTOR_WHY: Mapping[str, str] = {
     "en": "This was set aside instead of being shown as written.",
     "ms": "Ini diketepikan dan tidak ditunjukkan seperti yang ditulis.",
     "zh": "这个部分被保留下来，没有照原文显示。",
 }
+
+# @patient
+WITHHELD_LINE: Mapping[str, str] = {
+    "en": "{title} is not shown to you.",
+    "ms": "{title} tidak ditunjukkan kepada anda.",
+    "zh": "{title}没有显示给您看。",
+}
+"""One line per section `app.reasoning.analyst.service._narrowed_for` left out for a key
+narrower than the one that generated the report (`InsightReportOut.withheld`) — named, never
+a silent gap where a section used to be. `{title}` is that section's own
+`app.reasoning.analyst.port.SECTION_TITLES` entry, already a plain word."""
+
+# @patient
+WITHHELD_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{title} is not shown to {patient}.",
+    "ms": "{title} tidak ditunjukkan kepada {patient}.",
+    "zh": "{title}没有显示给{patient}看。",
+}
+
 
 def fill(line: str, **slots: object) -> str:
     """One filled template, for `rule.py` to hand straight to `pipeline.finalize`. Every
@@ -251,24 +393,40 @@ def fill(line: str, **slots: object) -> str:
 
 __all__ = [
     "ASK_THE_DOCTOR_LINE",
+    "ASK_THE_DOCTOR_LINE_THEIRS",
     "ASK_THE_DOCTOR_WHY",
     "BP_NAME",
     "COST_LINE",
+    "COST_LINE_THEIRS",
     "COST_WHY",
+    "COST_WHY_THEIRS",
     "COVERAGE_LINE",
+    "COVERAGE_LINE_THEIRS",
     "COVERAGE_WHY",
+    "COVERAGE_WHY_THEIRS",
     "DUPLICATE_LINE",
+    "DUPLICATE_LINE_THEIRS",
     "DUPLICATE_WHY",
+    "DUPLICATE_WHY_THEIRS",
     "LANGUAGES",
     "SCREENING_LINE",
+    "SCREENING_LINE_THEIRS",
     "SCREENING_NAME",
     "SCREENING_WHY",
+    "SCREENING_WHY_THEIRS",
     "SECTION_TITLES",
     "STATUS_WORDS",
     "STEP_LABEL",
+    "STEP_LABEL_THEIRS",
     "SUPPLEMENT_LINE",
+    "SUPPLEMENT_LINE_THEIRS",
     "SUPPLEMENT_WHY",
+    "SUPPLEMENT_WHY_THEIRS",
     "TREND_LINE",
+    "TREND_LINE_THEIRS",
     "TREND_WHY",
+    "TREND_WHY_THEIRS",
+    "WITHHELD_LINE",
+    "WITHHELD_LINE_THEIRS",
     "fill",
 ]
