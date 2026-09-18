@@ -1,0 +1,67 @@
+{
+  "placeholder": "pharmacy-receipt-2026-08-25",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "pharmacy_receipt",
+  "fields": [
+    {
+      "subject": "receipt",
+      "attribute": "pharmacy",
+      "value": "Guardian Pharmacy",
+      "unit": null
+    },
+    {
+      "subject": "receipt",
+      "attribute": "currency",
+      "value": "SGD",
+      "unit": null
+    },
+    {
+      "subject": "item_1",
+      "attribute": "name",
+      "value": "Panadol",
+      "unit": null
+    },
+    {
+      "subject": "item_1",
+      "attribute": "quantity",
+      "value": 2,
+      "unit": null
+    },
+    {
+      "subject": "item_1",
+      "attribute": "unit_price",
+      "value": 6.5,
+      "unit": "SGD"
+    },
+    {
+      "subject": "item_1",
+      "attribute": "total",
+      "value": 13.0,
+      "unit": "SGD"
+    },
+    {
+      "subject": "item_2",
+      "attribute": "name",
+      "value": "Hand sanitiser 250ml",
+      "unit": null
+    },
+    {
+      "subject": "item_2",
+      "attribute": "quantity",
+      "value": 1,
+      "unit": null
+    },
+    {
+      "subject": "item_2",
+      "attribute": "unit_price",
+      "value": 8.9,
+      "unit": "SGD"
+    },
+    {
+      "subject": "item_2",
+      "attribute": "total",
+      "value": 8.9,
+      "unit": "SGD"
+    }
+  ]
+}
