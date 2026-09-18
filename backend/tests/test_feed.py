@@ -1605,6 +1605,83 @@ async def test_when_nothing_is_due_a_bounded_catch_up_still_runs_the_stale_job(
     assert reran.last_run_at is not None and reran.last_run_at > first_last_run_at
 
 
+async def test_a_job_that_ran_but_found_nothing_still_lets_the_catch_up_run(
+    sg: AsyncSession, clock: FrozenClock, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Live-run defect, part two ("Pa's feed never creates learning jobs"): the catch-up guard
+    used to be "did a job run today" (`not ran`), not "does he have a learning card today". A
+    job that is due and actually runs, but finds nothing new to say — the search came back
+    empty, or everything it found is already shown — still landed in `ran`, so a day where the
+    one due job came up empty looked, wrongly, like a day that needed no catching up at all,
+    and a second, genuinely stale job never got its turn. `_learning` now reads his own day's
+    cards back instead of the jobs' bookkeeping, and logs one line either way."""
+    caplog.set_level("INFO", logger="nura.delivery.feed")
+    context = await _pa(sg)
+    source = Source(
+        name="Catch-up Example",
+        domain="catchup.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_RotatingSearcher(), compressor=_PlainCompressor(), registry=FixtureRegistry.load()
+    )
+    state = await current_state(sg, context=context)
+    day = today_for(context)
+    around = await around_for(sg, context=context, engine=engine, state=state, day=day)
+
+    # A stale job (`on_change`, `_gaps`/`_broker_wanted` never propose it again): the one only
+    # a catch-up can ever revive.
+    stale = await create_job(
+        sg, context=context, kind=JobKind.EXPLAINER, terms=["a stale tip"], reason={"gap": "test"}
+    )
+    await run_job(
+        sg,
+        context=context,
+        job=stale,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    # A daily job: due again after the clock steps, so it runs (and lands in `ran`) — but this
+    # one finds nothing, the same as a live search that turned up no new page.
+    daily = await create_job(
+        sg, context=context, kind=JobKind.SAFETY, terms=["amlodipine"], reason={"gap": "test"}
+    )
+
+    clock.step(timedelta(days=2))
+
+    import app.delivery.feed.compose as compose_module
+
+    real_run_job = compose_module.run_job
+
+    async def _empty_for_the_daily_job(*args: Any, job: Any, **kwargs: Any) -> list[Any]:
+        if job.id == daily.id:
+            return []
+        return await real_run_job(*args, job=job, **kwargs)
+
+    monkeypatch.setattr(compose_module, "run_job", _empty_for_the_daily_job)
+
+    _, second_load = await refresh(sg, context=context, engine=engine)
+
+    caught_up = [item for item in second_load if item.search_job_id == stale.id]
+    assert caught_up, (
+        "the daily job ran and found nothing, but the stale job should still have been "
+        "caught up — a job that ran is not the same as a card that was made"
+    )
+    assert any("feed: ran" in record.message for record in caplog.records), (
+        "no job/learning/catch-up line reached the log at all"
+    )
+
+
 async def test_the_catch_up_is_bounded_to_max_catch_up_jobs(sg: AsyncSession, clock: FrozenClock) -> None:
     """Bounded, the same way every other inline compose step already is: one open of the feed
     can never fan out into an unbounded run of searches, however many stale jobs a profile has

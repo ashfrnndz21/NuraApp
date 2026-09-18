@@ -1897,6 +1897,13 @@ async def around_for(
     )
 
 
+LEARNING_CARD_TYPES = frozenset(
+    {CardType.LEARNING, CardType.CLIP, CardType.LOCAL, CardType.SEASONAL, CardType.FOOD}
+)
+"""What a `run_job` call above can turn a job into (`_shape`, `app/delivery/feed/search.py`) —
+every card type that counts as "a learning card today" for the catch-up check below. `NOTICE`
+and `RECALL_ACTION` are a safety job's own cards, never this supply's, so they are not here."""
+
 MAX_CATCH_UP_JOBS = 3
 """When nothing has run for him today at all — not a new gap, not a job whose own cadence
 made it due — force at most this many of the oldest enabled jobs to run anyway, so the first
@@ -2051,33 +2058,50 @@ async def _learning(
             )
         )
         ran.add(job.id)
-    if not ran and not any(
-        (last := _last_run(job, day)) is not None and last >= day.starts_at for job in jobs
-    ):
-        # Nothing at all ran for him today: no new gap opened a job, and no existing job's own
-        # cadence said it was due (an "on_change" explainer that already ran once, a weekly
-        # watch not due till later this week, ...). Rather than the first open of the day
-        # showing only yesterday's cards — or nothing, once they expire — force the most
-        # overdue enabled jobs to run anyway, oldest first, capped at `MAX_CATCH_UP_JOBS` so
-        # this can never fan out into an unbounded run of searches.
-        overdue = sorted(
-            (job for job in jobs if job.enabled),
-            key=lambda job: _last_run(job, day) or datetime.min.replace(tzinfo=UTC),
+    if not found:
+        # Defect: "Pa's feed never creates learning jobs" — the old guard here was `not ran`,
+        # which only says no job was *attempted* today; a job that ran and simply found
+        # nothing (the search came back empty, everything it found was already shown) still
+        # landed in `ran`, so a day where every attempt came up empty looked, wrongly, like a
+        # day that needed no catching up. What actually matters is whether he has a learning
+        # card *today* at all — so this reads the day's own cards back, not the jobs' own
+        # bookkeeping.
+        today_cards = await audited_read(
+            session,
+            FeedItem,
+            context,
+            Scope.PROFILE,
+            where=(FeedItem.day == day.key, FeedItem.type.in_(LEARNING_CARD_TYPES)),
         )
-        for job in overdue[:MAX_CATCH_UP_JOBS]:
-            found.extend(
-                await run_job(
-                    session,
-                    context=context,
-                    job=job,
-                    engine=engine,
-                    state=state,
-                    language=house.language,
-                    around=around,
-                    doctor=house.doctor,
-                    existing=keys,
-                )
+        if not today_cards:
+            # Nothing at all became a learning card for him today: no new gap opened a job,
+            # no existing job's own cadence said it was due (an "on_change" explainer that
+            # already ran once, a weekly watch not due till later this week, ...), and no
+            # attempt today turned into a card either. Rather than the first open of the day
+            # showing only yesterday's cards — or nothing, once they expire — force the most
+            # overdue enabled jobs that have not already been tried this call to run anyway,
+            # oldest first, capped at `MAX_CATCH_UP_JOBS` so this can never fan out into an
+            # unbounded run of searches.
+            overdue = sorted(
+                (job for job in jobs if job.enabled and job.id not in ran),
+                key=lambda job: _last_run(job, day) or datetime.min.replace(tzinfo=UTC),
             )
+            for job in overdue[:MAX_CATCH_UP_JOBS]:
+                found.extend(
+                    await run_job(
+                        session,
+                        context=context,
+                        job=job,
+                        engine=engine,
+                        state=state,
+                        language=house.language,
+                        around=around,
+                        doctor=house.doctor,
+                        existing=keys,
+                    )
+                )
+                ran.add(job.id)
+    log.info("feed: ran %d learning jobs for the day", len(ran))
     return found
 
 
