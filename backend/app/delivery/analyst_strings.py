@@ -36,7 +36,7 @@ SECTION_TITLES: Mapping[str, Mapping[str, str]] = {
         "worth_a_look": "Patut dilihat",
         "medicines_and_supplements": "Ubat dan suplemen",
         "what_you_pay": "Apa yang anda bayar",
-        "screenings_due": "Pemeriksaan yang perlu",
+        "screenings_due": "Saringan yang perlu dibuat",
         "questions_for_the_doctor": "Soalan untuk doktor",
     },
     "zh": {
@@ -45,7 +45,7 @@ SECTION_TITLES: Mapping[str, Mapping[str, str]] = {
         "medicines_and_supplements": "药物和补充品",
         "what_you_pay": "您付的钱",
         "screenings_due": "该做的检查",
-        "questions_for_the_doctor": "问医生的问题",
+        "questions_for_the_doctor": "给医生的问题",
     },
 }
 """Whole words a person reads at the top of each part of the report, in the fixed order
