@@ -87,3 +87,28 @@ class FixtureNarrator:
     ) -> AsyncIterator[NarratedLine]:
         for step in steps:
             yield NarratedLine(key=step.key, text=step.label)
+
+
+async def narrate_step_label(
+    narrator: Narrator,
+    steps: Sequence[NarratedStep],
+    step_key: str,
+    original_label: str,
+    *,
+    language: str,
+    reader: Reader,
+) -> str | None:
+    """A step is never held back for a narrator (the module docstring): a caller sends it at
+    once, with its catalogue label, then awaits this — in the background, never in the
+    request's own path — and only sends a follow-up `step_label` event when it actually has
+    something different to say.
+
+    Returns the narrator's own rephrasing for `step_key`, or `None` when there is nothing new
+    to send: no line named that step, or the narrator's line is the very label already sent —
+    the same label a slow call, a refusal, a truncated answer or any other failure a
+    `Narrator` implementation folds into its own fallback (`ClaudeNarrator`) resolves to. A
+    caller never needs to tell those cases apart; both mean silence."""
+    async for line in narrator.narrate(steps, language=language, reader=reader):
+        if line.key == step_key and line.text != original_label:
+            return line.text
+    return None

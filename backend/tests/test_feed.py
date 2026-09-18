@@ -1502,6 +1502,161 @@ def test_lines_that_would_change_treatment_are_caught() -> None:
     assert not changes_treatment(["Tell your doctor before any new tablet or herb."])
 
 
+class _RotatingSearcher:
+    """A different page each time it is actually called — standing in for a live web search's
+    own drift over time, unlike the deterministic fixture files the rest of this module reads
+    (which would return the very same page, and so be turned away by `_key_for`'s own
+    job-scoped, day-blind dedupe key for anything but a local, food or seasonal job)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        if "catchup.example.sg" not in domains:
+            return []
+        self.calls += 1
+        return [
+            Found(
+                domain="catchup.example.sg",
+                url=f"https://catchup.example.sg/tip-{self.calls}",
+                title="A tip about his own record",
+                published_at="2026-09-01",
+                text="A plain tip about what he takes.",
+            )
+        ]
+
+    def find(
+        self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
+    ) -> Sequence[Found]:
+        return []
+
+
+class _PlainCompressor:
+    def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
+        return Compressed(
+            headline="A tip",
+            body=("A plain tip about what he takes.",),
+            why_topic="his medicines",
+            passage=text,
+        )
+
+
+async def test_when_nothing_is_due_a_bounded_catch_up_still_runs_the_stale_job(
+    sg: AsyncSession, clock: FrozenClock
+) -> None:
+    """Live-run defect: "no learning cards appear" — a job whose own cadence never makes
+    `due()` say yes again (`on_change`, the default for `JobKind.EXPLAINER`), and the same gap
+    still on his record so nothing new ever queues it either, would otherwise never run again
+    once it had — the first open of a new day would show only what it already found, or
+    nothing once that expired. `MAX_CATCH_UP_JOBS` (`compose._learning`) is the fix: when
+    nothing at all ran for him today, the most overdue enabled jobs run anyway."""
+    context = await _pa(sg)
+    source = Source(
+        name="Catch-up Example",
+        domain="catchup.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_RotatingSearcher(), compressor=_PlainCompressor(), registry=FixtureRegistry.load()
+    )
+    state = await current_state(sg, context=context)
+    day = today_for(context)
+    around = await around_for(sg, context=context, engine=engine, state=state, day=day)
+    # A job with no real gap behind it (an arbitrary term, no medicine or condition on his
+    # record names it): `_gaps`/`_broker_wanted` never propose it, so `_learning`'s own
+    # "wanted" and "due" loops never touch it again after this — isolating the catch-up path.
+    job = await create_job(
+        sg, context=context, kind=JobKind.EXPLAINER, terms=["a tip"], reason={"gap": "test"}
+    )
+    assert job.cadence == "on_change"
+    first = await run_job(
+        sg,
+        context=context,
+        job=job,
+        engine=engine,
+        state=state,
+        language="en",
+        around=around,
+        doctor=None,
+        existing=set(),
+    )
+    assert len(first) == 1, "ran once already — the baseline this test starts stale from"
+    first_last_run_at = job.last_run_at
+
+    clock.step(timedelta(days=2))
+    _, second_load = await refresh(sg, context=context, engine=engine)
+
+    caught_up = [item for item in second_load if item.search_job_id == job.id]
+    assert caught_up, "the catch-up should have run the stale on_change job again"
+    # A genuinely new page (the rotating searcher's second call) became a genuinely new card —
+    # not blocked by the first card's own dedupe key, which only the day-blind key of an
+    # unchanged page would have done.
+    assert caught_up[0].cite is not None
+    assert caught_up[0].cite["url"] == "https://catchup.example.sg/tip-2"
+
+    jobs_after = await list_jobs(sg, context=context)
+    [reran] = [one for one in jobs_after if one.id == job.id]
+    assert reran.last_run_at is not None and reran.last_run_at > first_last_run_at
+
+
+async def test_the_catch_up_is_bounded_to_max_catch_up_jobs(sg: AsyncSession, clock: FrozenClock) -> None:
+    """Bounded, the same way every other inline compose step already is: one open of the feed
+    can never fan out into an unbounded run of searches, however many stale jobs a profile has
+    built up (docs/design-direction.md; CLAUDE.md's own "never bypass a bound" spirit)."""
+    from app.delivery.feed.compose import MAX_CATCH_UP_JOBS
+
+    context = await _pa(sg)
+    source = Source(
+        name="Catch-up Example",
+        domain="catchup.example.sg",
+        kind=SourceKind.HOSPITAL,
+        regions=["SG"],
+        languages=["en"],
+        allowlisted=True,
+        review_status=ReviewStatus.APPROVED,
+    )
+    sg.add(source)
+    await sg.flush()
+    engine = Engine(
+        searcher=_RotatingSearcher(), compressor=_PlainCompressor(), registry=FixtureRegistry.load()
+    )
+    state = await current_state(sg, context=context)
+    day = today_for(context)
+    around = await around_for(sg, context=context, engine=engine, state=state, day=day)
+    made_jobs = []
+    for n in range(MAX_CATCH_UP_JOBS + 2):
+        job = await create_job(
+            sg,
+            context=context,
+            kind=JobKind.EXPLAINER,
+            terms=[f"a tip {n}"],
+            reason={"gap": "test"},
+        )
+        await run_job(
+            sg,
+            context=context,
+            job=job,
+            engine=engine,
+            state=state,
+            language="en",
+            around=around,
+            doctor=None,
+            existing=set(),
+        )
+        made_jobs.append(job)
+
+    clock.step(timedelta(days=2))
+    _, second_load = await refresh(sg, context=context, engine=engine)
+    reran_ids = {item.search_job_id for item in second_load if item.search_job_id is not None}
+    assert len(reran_ids) <= MAX_CATCH_UP_JOBS
+
+
 def test_render_fills_the_templates_in_his_language() -> None:
     lines = render("visit", "zh", body=("visit",), doctor="陈医生", day="9月21日星期一")
     assert lines.headline == "9月21日星期一看陈医生"

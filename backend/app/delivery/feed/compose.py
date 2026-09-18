@@ -19,7 +19,7 @@ import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1897,6 +1897,23 @@ async def around_for(
     )
 
 
+MAX_CATCH_UP_JOBS = 3
+"""When nothing has run for him today at all — not a new gap, not a job whose own cadence
+made it due — force at most this many of the oldest enabled jobs to run anyway, so the first
+open of a new day is never met with only what already expired (live-run defect: "no learning
+cards appear", `GET /feed` showing none of READ, CLIP or "Did you know"). Bounded, the same
+way every other inline compose step already is, so one open of the feed can never fan out into
+an unbounded run of searches."""
+
+
+def _last_run(job: SearchJob, day: Day) -> datetime | None:
+    """`job.last_run_at`, tz-aware — `due()`'s own normalisation, reused here so "did this run
+    today" is answered the same way `due()` answers "is this due"."""
+    if job.last_run_at is None:
+        return None
+    return job.last_run_at if job.last_run_at.tzinfo else job.last_run_at.replace(tzinfo=day.now.tzinfo)
+
+
 async def _learning(
     session: AsyncSession,
     *,
@@ -2033,6 +2050,34 @@ async def _learning(
                 existing=keys,
             )
         )
+        ran.add(job.id)
+    if not ran and not any(
+        (last := _last_run(job, day)) is not None and last >= day.starts_at for job in jobs
+    ):
+        # Nothing at all ran for him today: no new gap opened a job, and no existing job's own
+        # cadence said it was due (an "on_change" explainer that already ran once, a weekly
+        # watch not due till later this week, ...). Rather than the first open of the day
+        # showing only yesterday's cards — or nothing, once they expire — force the most
+        # overdue enabled jobs to run anyway, oldest first, capped at `MAX_CATCH_UP_JOBS` so
+        # this can never fan out into an unbounded run of searches.
+        overdue = sorted(
+            (job for job in jobs if job.enabled),
+            key=lambda job: _last_run(job, day) or datetime.min.replace(tzinfo=UTC),
+        )
+        for job in overdue[:MAX_CATCH_UP_JOBS]:
+            found.extend(
+                await run_job(
+                    session,
+                    context=context,
+                    job=job,
+                    engine=engine,
+                    state=state,
+                    language=house.language,
+                    around=around,
+                    doctor=house.doctor,
+                    existing=keys,
+                )
+            )
     return found
 
 

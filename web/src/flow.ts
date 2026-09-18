@@ -160,6 +160,7 @@ export async function afterSignIn(): Promise<void> {
   const known = [doors.own, ...doors.invited, ...doors.stewarding].filter((each): each is ProfileOut => each !== null);
   const still = remembered && known.find((each) => each.profile_id === remembered.profile_id);
   if (still) {
+    if (needsOnboarding(still)) return startOnboardingFor(still);
     await chooseProfile(still);
     return landOn(opening);
   }
@@ -178,11 +179,29 @@ export async function afterSignIn(): Promise<void> {
     return go({ name: "doors", doors, refusal: why });
   }
   if (doors.own && known.length === 1 && doors.claimable.length === 0) {
+    if (needsOnboarding(doors.own)) return startOnboardingFor(doors.own);
     await chooseProfile(doors.own);
     return landOn(opening);
   }
   if (known.length === 0 && closing.length > 0) return go({ name: "doors", doors, refusal: "AccountClosing" });
   go({ name: "doors", doors });
+}
+
+/** Whether these papers still need the onboarding gate: no name means About you was never
+ *  finished, whichever door opened them (his own, a steward's for someone, or a claim).
+ *  `E01-01`'s gate: a bare profile goes to onboarding first, every time, until it says
+ *  "Ready" — a fresh sign-in never lands on Today with nothing on it (the owner's report:
+ *  he signed in on a fresh number and landed on Home, his account with no name at all). */
+export function needsOnboarding(candidate: ProfileOut): boolean {
+  return candidate.display_name.trim().length === 0;
+}
+
+/** `startOnboarding` (onboarding/state.ts) also calls back into `go` here, so the import is
+ *  deferred to the call rather than static, to keep this module's own top-level free of the
+ *  cycle. */
+async function startOnboardingFor(candidate: ProfileOut): Promise<void> {
+  const { startOnboarding } = await import("./onboarding/state");
+  return startOnboarding(candidate);
 }
 
 /** Where a restored session lands: the card a push opened (`?open=`, #143), else Today. */
@@ -200,8 +219,10 @@ async function landOn(opening: string | null): Promise<void> {
 }
 
 /** Open one profile's papers. Whatever the phone kept of another profile's page is dropped:
- *  a page read under one key is never shown under another. */
+ *  a page read under one key is never shown under another. A bare profile (no name) goes
+ *  to onboarding instead of Today, whoever opened it and however they reached this door. */
 export async function openProfile(chosen: ProfileOut): Promise<void> {
+  if (needsOnboarding(chosen)) return startOnboardingFor(chosen);
   const before = profile.value;
   if (before && before.profile_id !== chosen.profile_id) {
     await clearProfileData(before.profile_id);

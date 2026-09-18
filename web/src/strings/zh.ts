@@ -1329,6 +1329,10 @@ export const zh = {
       done: "就这些了",
       // @patient
       term: "医生叫它 {term}。",
+      // @patient
+      countNone: "Nura 还没有记下什么。",
+      // @patient
+      count: "Nura 已经记下 {n} 项。",
     },
     asks: {
       // @patient
