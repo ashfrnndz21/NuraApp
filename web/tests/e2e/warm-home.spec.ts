@@ -79,9 +79,11 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
 
 test("Add a health report: a PDF or a photo, through the one upload path, straight onto its review card", async ({ page, request }) => {
   const pa = await seedOwner(request, "Pa", []);
+  // The one upload path (`papers.spec.ts`'s own `captures`): `photos` or `imports`, whether
+  // the plain route answers at once or the streamed twin narrates its trace first.
   const sent: string[] = [];
   page.on("request", (each) => {
-    const found = new URL(each.url()).pathname.match(/\/(photos|imports)$/);
+    const found = new URL(each.url()).pathname.match(/\/(photos|imports)(?:\/stream)?$/);
     if (each.method() === "POST" && found) sent.push(found[1]!);
   });
   await signInThroughTheApp(page, pa.phone, "Pa");
