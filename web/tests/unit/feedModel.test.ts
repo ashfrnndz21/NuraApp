@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cardView, sectionOf, shareAs, speechLanguage, statusLine, variantOf } from "../../src/feed/model";
+import { cardView, clipOf, sectionOf, shareAs, speechLanguage, statusLine, variantOf } from "../../src/feed/model";
+import { cuesFromCaptions } from "../../src/feed/captions";
 import { BOUNDARY, item, learning } from "./feedFixtures";
 
 describe("card variants", () => {
@@ -95,6 +96,84 @@ describe("the caregiver's list", () => {
     expect(statusLine({ status: "generated", type: "reading" }, "caregiver")).toBeNull();
     expect(statusLine({ status: "held", type: "duty" }, "caregiver")).toBeNull();
     expect(statusLine({ status: "held", type: "notice" }, "patient")).toBeNull();
+  });
+});
+
+describe("a clip card", () => {
+  const nuraMadeCite = {
+    kind: "nura_made",
+    scene: "clinic",
+    source: "Nura",
+    duration_ms: 26700,
+    cite_url: null,
+    captions: [
+      { at_ms: 0, text: "This is your blood pressure tablet." },
+      { at_ms: 3200, text: "It keeps your blood pressure down." },
+    ],
+  };
+
+  it("reads a Nura-made clip's scene and its own timed captions, never a publisher's still", () => {
+    const card = item("clip", "learning", { format: "clip", cite: nuraMadeCite });
+    const clip = clipOf(card);
+    expect(clip).not.toBeNull();
+    expect(clip!.kind).toBe("nura_made");
+    expect(clip!.scene).toBe("clinic");
+    expect(clip!.fullUrl).toBeNull();
+    expect(clip!.publisher).toBeNull();
+    expect(clip!.excerpt).toBe(false);
+    expect(clip!.captions).toEqual([
+      { atMs: 0, text: "This is your blood pressure tablet." },
+      { atMs: 3200, text: "It keeps your blood pressure down." },
+    ]);
+    expect(clip!.durationMs).toBe(26700);
+  });
+
+  it("still reads a publisher's clip the same as before: its still, its excerpt, its link", () => {
+    const card = item("clip", "learning", {
+      format: "clip",
+      cite: { media: "video", excerpt: true, full_url: "https://healthhub.sg/v", publisher: "HealthHub" },
+    });
+    const clip = clipOf(card);
+    expect(clip).not.toBeNull();
+    expect(clip!.kind).toBe("publisher");
+    expect(clip!.excerpt).toBe(true);
+    expect(clip!.fullUrl).toBe("https://healthhub.sg/v");
+    expect(clip!.publisher).toBe("HealthHub");
+    expect(clip!.scene).toBeNull();
+    expect(clip!.captions).toEqual([]);
+  });
+
+  it("is null for a card that is not a clip, whatever its cite says", () => {
+    const card = item("learning", "learning", { format: "text", cite: nuraMadeCite });
+    expect(clipOf(card)).toBeNull();
+  });
+
+  it("drops a caption with no text or no timestamp, rather than showing a blank line", () => {
+    const card = item("clip", "learning", {
+      format: "clip",
+      cite: { ...nuraMadeCite, captions: [{ at_ms: 0, text: "  " }, { at_ms: "soon", text: "Not a number." }, { at_ms: 100, text: "Kept." }] },
+    });
+    expect(clipOf(card)!.captions).toEqual([{ atMs: 100, text: "Kept." }]);
+  });
+});
+
+describe("cuesFromCaptions: a Nura-made clip's captions timed the way the publisher's parsed VTT already is", () => {
+  it("times each line from its own start to the next line's, the last to the clip's duration", () => {
+    const cues = cuesFromCaptions(
+      [
+        { atMs: 0, text: "This is your blood pressure tablet." },
+        { atMs: 3200, text: "It keeps your blood pressure down." },
+      ],
+      6400
+    );
+    expect(cues).toEqual([
+      { start: 0, end: 3.2, text: "This is your blood pressure tablet." },
+      { start: 3.2, end: 6.4, text: "It keeps your blood pressure down." },
+    ]);
+  });
+
+  it("is empty for no captions, never a placeholder line", () => {
+    expect(cuesFromCaptions([], null)).toEqual([]);
   });
 });
 

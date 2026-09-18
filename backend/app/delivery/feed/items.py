@@ -115,7 +115,10 @@ recap repeats the lines of his own story cards and infers nothing."""
 SOURCED: frozenset[CardType] = frozenset(
     {CardType.LEARNING, CardType.CLIP, CardType.LOCAL, CardType.SEASONAL, CardType.FOOD}
 )
-"""The cards compressed from an allowlisted page: each names a usable source, or is not made."""
+"""The cards compressed from an allowlisted page: each names a usable source, or is not made.
+A clip built by `app.delivery.feed.clipmaker` from his own record and the catalogue, not from
+a page — `self_made=True` below — is the one exception: it names no publisher because it read
+none, and `create_item` never asks it to invent one."""
 
 
 def _ends_on_its_line(lines: Lines) -> bool:
@@ -228,6 +231,7 @@ async def create_item(
     direction: Direction | None = None,
     action: CardAction | None = None,
     private_to: uuid.UUID | None = None,
+    self_made: bool = False,
 ) -> FeedItem:
     """Write one card, or refuse it.
 
@@ -240,6 +244,10 @@ async def create_item(
 
     `private_to`, when set, is his alone (RE-01): `rank._visible_to` drops the row for every
     other person, whatever her scopes — the one exception a `Scope` cannot express.
+
+    `self_made`, when set, is a clip `app.delivery.feed.clipmaker` built from his own record
+    and the catalogue, never from a page (RE-07, item 1): the one `SOURCED` card that names
+    no `source`, because it read none.
     """
     async with audited_guard(session, context, Action.WRITE, scope, FEED_TARGET):
         if changes_treatment([lines.headline, *lines.body]):
@@ -252,8 +260,14 @@ async def create_item(
             failing = failures_in(lines)
             if failing:
                 raise NotPlainWords(failing)
-        if type in SOURCED and (source is None or not usable(source, context.region)):
+        if (
+            type in SOURCED
+            and not self_made
+            and (source is None or not usable(source, context.region))
+        ):
             raise SourceNotAllowlisted(f"a {type.value} card names an allowlisted source")
+        if self_made and type is not CardType.CLIP:
+            raise ValueError("only a clip is ever self-made")
         # A card whose words come from an inferring surface elsewhere — the visit brief, the
         # memos — names it; otherwise its type decides (`SURFACE_OF`).
         surface = surface if surface is not None else SURFACE_OF.get(type)

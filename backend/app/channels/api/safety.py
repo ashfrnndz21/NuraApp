@@ -4,6 +4,7 @@
     GET  /profiles/{id}/emergency-card.html   the same card as one printable page
     PUT  /profiles/{id}/emergency-card/insurer the insurer on the card, on the typer's yes
     POST /profiles/{id}/not-feeling-well      the button: voice or words in, the card out
+    POST /profiles/{id}/not-feeling-well/stream    the same, streamed: the button runs, then a step per real check, then the card
     GET  /profiles/{id}/not-feeling-well/offline   the two cards the phone keeps for no network
     POST /profiles/{id}/symptoms              a symptom in his words, with how much and since when
     GET  /profiles/{id}/symptoms?since=       the log, in plain words with the day's name
@@ -16,12 +17,17 @@ holding a URL sees nothing without a key.
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import AwareDatetime
 
+from app.channels.about_him import reader_of
 from app.channels.api.delivery import via_of
-from app.channels.api.deps import Context, Db, providers_of, settings_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope, settings_of
+from app.channels.api.refusals import refused
 from app.channels.api.safety_schemas import (
     EmergencyCardOut,
     InsurerIn,
@@ -35,10 +41,17 @@ from app.channels.api.safety_schemas import (
 )
 from app.channels.printable import emergency_card_html
 from app.channels.safety_strings import severity_said
+from app.delivery.timeline_strings import NFW_STEPS
+from app.errors import Refusal
 from app.insurance.insurer import set_insurer
 from app.safety.emergency_card import emergency_card
 from app.safety.models import CardFormat
-from app.safety.not_feeling_well import not_feeling_well, offline_cards
+from app.safety.not_feeling_well import (
+    NfwStep,
+    not_feeling_well,
+    not_feeling_well_stream,
+    offline_cards,
+)
 from app.safety.symptom_log import (
     Entry,
     log_symptom,
@@ -141,6 +154,71 @@ async def button(body: SaidIn, request: Request, context: Context, session: Db) 
         language=body.language,
     )
     return WhatToDoOut.of(done)
+
+
+def _sse(payload: dict[str, object]) -> bytes:
+    """One Server-Sent Event: a `data:` line of JSON, blank line after
+    (`app.channels.api.timeline._sse`, the same shape every streaming route here uses)."""
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+async def _refusal_event(request: Request, refusal: Refusal) -> bytes:
+    """A refusal mid-stream, in the same shape the plain route answers it in
+    (`app.channels.api.timeline._refusal_event`)."""
+    response = await refused(request, refusal)
+    body = json.loads(bytes(response.body))
+    return _sse({"type": "refusal", "status": response.status_code, **body})
+
+
+@router.post("/{profile_id}/not-feeling-well/stream", status_code=status.HTTP_200_OK)
+async def button_stream(body: SaidIn, request: Request, context: Context) -> StreamingResponse:
+    """`POST /{id}/not-feeling-well`, streamed (docs/design-direction.md 'Conversation,
+    waiting and thinking'): the whole button runs first, entirely unchanged, red-flag path
+    and all (`not_feeling_well_stream`'s own docstring — this never interleaves a step into
+    that flow, only narrates it once it is done), then a `step` event for each real check it
+    made, then a `card` event, the same `WhatToDoOut` the plain route gives. An older web
+    client that has never asked for this route keeps using the plain one unchanged.
+
+    Opens its own session (`session_scope`), never `Depends(db)`, for the reason
+    `app.channels.api.timeline.ask_stream` gives."""
+    providers = providers_of(request)
+
+    async def events() -> AsyncIterator[bytes]:
+        try:
+            async with session_scope(request) as session:
+                reader = await reader_of(session, context, body.language)
+                done = None
+                steps: list[bytes] = []
+                async for event in not_feeling_well_stream(
+                    session,
+                    context=context,
+                    store=providers.object_store,
+                    transcriber=providers.transcriber,
+                    registry=providers.drug_registry,
+                    via=via_of(request),
+                    words=body.words,
+                    audio=body.audio_bytes(),
+                    content_type=body.content_type,
+                    language=body.language,
+                ):
+                    if isinstance(event, NfwStep):
+                        steps.append(event.key.value.encode())
+                    else:
+                        done = event
+                assert done is not None
+                # `done.language` is the language `not_feeling_well` actually rendered the
+                # card in — never `reader.language`, which is only a caregiver-key default
+                # unrelated to whose profile this is (`app.channels.about_him.Reader`).
+                lang = done.language if done.language in NFW_STEPS else "en"
+                for raw in steps:
+                    key = raw.decode()
+                    label = reader.says(NFW_STEPS[lang][key])
+                    yield _sse({"type": "step", "key": key, "label": label})
+                yield _sse({"type": "card", "card": WhatToDoOut.of(done).model_dump(mode="json")})
+        except Refusal as refusal:
+            yield await _refusal_event(request, refusal)
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 def _severity_words(entry: Entry) -> str | None:

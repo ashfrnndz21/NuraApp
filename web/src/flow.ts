@@ -40,6 +40,10 @@ export type Screen =
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his
    *  day, his medicines and what is coming up — one screen, the same for every persona. */
   | { name: "health" }
+  /** The weekly report (W1): Health's Insights card, or the bell's row for it. `start`: begin
+   *  a fresh report at once (the live trace, then the report); left off, the last one written
+   *  is shown as it is. */
+  | { name: "insights"; start?: boolean }
   /** Home's "Things to do" tile (docs/design/nura-concept-board.html): today's steps, water
    *  and meals, with the week ring — real writes through PR #235's lifestyle logs. */
   | { name: "activity" }

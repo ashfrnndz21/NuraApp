@@ -18,11 +18,16 @@
     GET  /profiles/{id}/appointments/{appt}/recordings           the recordings kept, who spoke when
     GET  /profiles/{id}/artifacts/{artifact}/clip?start=&end=    a stretch of one (E03-05)
     POST /profiles/{id}/transcripts/search                       words said at a confirmed visit (E02-05)
+    GET  /profiles/{id}/visits/proposed                          what Nura suggests, cited (T2)
+    POST /profiles/{id}/visits/proposed/{proposal}/decline       "Not now": hidden for 90 days
 
 Every route takes the key context like every other profile route. Briefs, questions, cards
 and memos are under the visits scope; the transcript is an artefact under the record's; a
 fact a card writes is held under its own subject's scope. The yes is minted at
 `POST /profiles/{id}/confirmations` with subject `appointment`, `question` or `visit_summary`.
+A proposal is never booked here: accepting one opens the ordinary booking screen, pre-filled,
+and books through the same `appointment` yes any other visit rests on
+(`app.reasoning.visits.planner`).
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ import uuid
 from fastapi import APIRouter, Query, Request, Response, status
 from pydantic import AwareDatetime
 
-from app.audit.access import audited_guard, audited_read
+from app.audit.access import audited_guard, audited_profile_read, audited_read
 from app.audit.models import Action
 from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
@@ -46,6 +51,7 @@ from app.channels.api.schemas import (
     MemoCardOut,
     MemoOut,
     NoticeOut,
+    ProposedVisitsOut,
     QuestionChangeIn,
     QuestionOut,
     QuestionsOut,
@@ -75,6 +81,7 @@ from app.reasoning.visits.brief import brief_for, lines_for
 from app.reasoning.visits.guard import can_change_visits
 from app.reasoning.visits.logistics import assign_driver, logistics_for
 from app.reasoning.visits.memos import consolidate_memos, current_memos, memo_card
+from app.reasoning.visits.planner import decline_proposal, propose_visits
 from app.reasoning.visits.questions import (
     change_questions,
     current_questions,
@@ -411,3 +418,33 @@ async def transcript_search(
         language=body.language,
     )
     return TranscriptSearchOut.of(found)
+
+
+# --- the planner: what Nura suggests (T2) ----------------------------------------------------
+
+
+@router.get("/{profile_id}/visits/proposed")
+async def proposed_visits(
+    context: Context, session: Db, language: str | None = Query(default=None)
+) -> ProposedVisitsOut:
+    """Every visit Nura proposes right now, cited, withheld entirely for a key without the
+    visits scope. Never a booking: `why` names the evidence, in `app.reasoning.visits.
+    planner`'s own words, for the "Nura suggests" row to show. Booking one is the ordinary
+    booking screen, pre-filled; declining is `POST …/visits/proposed/{proposal}/decline`."""
+    profile = await audited_profile_read(session, context)
+    return ProposedVisitsOut.of(
+        await propose_visits(
+            session, context=context, language=language or profile.language, region=context.region
+        )
+    )
+
+
+@router.post(
+    "/{profile_id}/visits/proposed/{proposal_id}/decline", status_code=status.HTTP_204_NO_CONTENT
+)
+async def decline_proposed_visit(proposal_id: str, context: Context, session: Db) -> Response:
+    """"Not now": hides this proposal for 90 days. Not a booking decision and not a change to
+    the record he can dispute — his own tap is the yes, the way declining a card already is
+    (`app.delivery.feed.engagement._decline_topic_for_30_days`)."""
+    await decline_proposal(session, context=context, proposal_id=proposal_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

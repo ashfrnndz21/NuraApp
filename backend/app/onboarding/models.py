@@ -57,6 +57,9 @@ class ProfileSettings(ProfileScoped, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     conditions: Mapped[list[str]] = mapped_column(JSON)
+    answers: Mapped[dict[str, str]] = mapped_column(JSON, default=dict)
+    """His answer to a tapped word's follow-up question, by the word's code — the option id he
+    chose (`app.onboarding.conditions.Ask`). Also written as `condition_answer.<code>` facts."""
     language: Mapped[str] = mapped_column(String(16))
     density: Mapped[Density] = mapped_column(enum_column(Density, "density"))
     large_text: Mapped[bool] = mapped_column(Boolean)

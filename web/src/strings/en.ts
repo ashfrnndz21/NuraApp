@@ -59,6 +59,10 @@ export const en = {
     bell: "More for you",
     // @patient phrase
     back: "Go back",
+    // @patient phrase
+    bellFeed: "More for you",
+    // @patient phrase
+    bellInsights: "Your week, looked at closely",
   },
   welcome: {
     // @patient headline
@@ -343,6 +347,60 @@ export const en = {
     comingUpTitle: "Coming up",
     // @patient phrase
     addReading: "Write down a blood pressure",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "Your week, looked at closely",
+    // @patient headline
+    cardTitleOther: "{name}'s week, looked at closely",
+    // @patient
+    cardNone: "Nura has not looked at your week yet.",
+    // @patient
+    cardNoneOther: "Nura has not looked at {name}'s week yet.",
+    // @patient phrase
+    cardLastLooked: "Nura looked at this on {date}",
+    // @patient phrase
+    generate: "Generate now",
+    // @patient headline
+    screenTitle: "Your week",
+    // @patient headline
+    screenTitleOther: "{name}'s week",
+    // @patient
+    working: "Nura is looking at this week.",
+    // @patient phrase
+    weekOf: "The week of {date}",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "What changed",
+      // @patient headline
+      worth_a_look: "Worth a look",
+      // @patient headline
+      medicines_and_supplements: "Medicines and supplements",
+      // @patient headline
+      what_you_pay: "What you pay",
+      // @patient headline
+      screenings_due: "Screenings due",
+      // @patient headline
+      questions_for_the_doctor: "Questions for the doctor",
+    },
+    // @patient
+    sectionWithheld: "This key does not cover this part of {name}'s week.",
+    // @patient
+    sectionEmpty: "There is nothing here this week.",
+    // @patient phrase
+    why: "Why",
+    // @patient phrase
+    sure: "Sure",
+    // @patient phrase
+    likely: "Likely",
+    // @patient phrase
+    worthALook: "Worth a look",
+    // @patient phrase
+    askThis: "Ask {who} this",
+    // @patient
+    asked: "Nura kept this question for your visit.",
+    // @patient
+    noVisit: "There is no visit booked yet to take this to.",
   },
   signIn: {
     // @patient headline
@@ -679,6 +737,8 @@ export const en = {
     // @patient
     askThinking: "Nura is looking.",
     // @patient
+    lookingForToday: "Nura is looking for today's reads.",
+    // @patient
     askAnswered: "Nura answered.",
     // @patient phrase
     askLookedAt: "What Nura looked at: {parts}",
@@ -696,6 +756,8 @@ export const en = {
     statusDismissed: "{name} tapped Not for me on this card.",
     // @patient phrase
     play: "Play",
+    // @patient phrase
+    watchAgain: "Watch again",
     // @patient phrase
     watchWhole: "Watch the whole video at {publisher}",
     // @patient phrase
@@ -1002,6 +1064,8 @@ export const en = {
     send: "Send {count} papers",
     // @patient
     sending: "Nura is sending paper {n} of {total}.",
+    // @patient
+    working: "Nura is working on it.",
     // @patient headline
     found: "What Nura found",
     // @patient
@@ -1275,6 +1339,22 @@ export const en = {
       countNone: "Nura has not written anything down yet.",
       // @patient
       count: "Nura has written {n} things down.",
+      // @patient phrase
+      tellMe: "Or just tell me",
+      // @patient
+      tellMeLead: "Say it in your own words.",
+      // @patient phrase
+      tellMeLabel: "In your own words",
+      // @patient phrase
+      tellMeSend: "Send",
+      // @patient
+      tellMeNothing: "Nura found no word above for that.",
+      // @patient
+      tellMeNothingSub: "Try tapping instead.",
+      // @patient
+      tellMeSafety: "Nura will not turn that into a word here.",
+      // @patient
+      tellMeSafetySub: "Please tell someone you trust, or get help now.",
     },
     asks: {
       // @patient
@@ -2291,6 +2371,22 @@ export const en = {
     linkLabel: "Call link, if there is one",
     // @patient phrase
     callLabelLabel: "What to call it",
+  },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "From your hospital letter",
+    // @patient phrase
+    medicineReviewWhy: "From your medicines",
+    // @patient phrase
+    testComingWhy: "From your blood test",
+    // @patient phrase
+    screeningDueWhy: "From your papers",
+    // @patient
+    rowOther: "Nura suggests {name} sees the doctor.",
+    // @patient phrase
+    bookIt: "Book it",
+    // @patient phrase
+    notNow: "Not now",
   },
   review: {
     // @patient headline

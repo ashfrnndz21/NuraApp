@@ -11,6 +11,7 @@ import { ClaimScreen, ConsentScreen, DoorsScreen, ForSomeoneScreen } from "./scr
 import { ConnectScreen } from "./screens/Connect";
 import { FamilyScreen } from "./screens/family/Family";
 import { HealthScreen } from "./screens/Health";
+import { InsightsScreen } from "./screens/Insights";
 import { ActivityScreen } from "./screens/Activity";
 import { FeedScreen } from "./screens/Feed";
 import { MeSheet, ProfileScreen } from "./screens/Me";
@@ -97,6 +98,8 @@ function Route(): JSX.Element | null {
       return <ReadingScreen />;
     case "health":
       return <HealthScreen />;
+    case "insights":
+      return <InsightsScreen start={current.start} />;
     case "activity":
       return <ActivityScreen />;
     case "visit":
