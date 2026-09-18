@@ -318,6 +318,11 @@ def test_claude_clip_maker_builds_a_script_citing_the_page_it_read() -> None:
     assert script.cite_url == PAGE.url
     for line in lines:
         assert line in script.lines
+    call = client.messages.calls[0]
+    # The SDK's `JSONOutputFormatParam` reads `schema`, not `json_schema` — the shape a
+    # 400 was hit live on (2026-09-18) until this was fixed.
+    assert "schema" in call["output_config"]["format"]
+    assert "json_schema" not in call["output_config"]["format"]
 
 
 def test_claude_clip_maker_never_asks_a_domain_off_its_own_allowlist() -> None:
@@ -427,3 +432,29 @@ async def test_self_made_is_refused_on_every_card_type_but_clip(sg: AsyncSession
             expires_at=now() + timedelta(days=90),
             self_made=True,
         )
+
+
+def _every_schema(node: object):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _every_schema(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _every_schema(value)
+
+
+def test_the_structured_output_schema_is_one_the_api_accepts() -> None:
+    """Hit live on the owner's key (2026-09-18): the same class of bug as the extractor's own
+    lint (`tests/test_claude_extractor.py`) and the feed adapters' own
+    (`tests/test_claude_feed_adapters.py`) — a property without a `type`, and `minimum`/
+    `maximum` on a number, are both refused by the API's structured output. Every property
+    carries a type; no numeric bounds ride in the schema."""
+    from app.delivery.feed.clipmaker import _LINES_SCHEMA
+
+    for node in _every_schema(_LINES_SCHEMA):
+        if not (isinstance(node, dict) and "properties" in node):
+            continue
+        for name, prop in node["properties"].items():
+            assert "type" in prop, name
+            assert "minimum" not in prop and "maximum" not in prop, name
