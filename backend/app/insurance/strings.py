@@ -167,6 +167,54 @@ BRING_GUARANTEE_LETTER: Mapping[str, str] = {
 "the insurance letter" — the same words `Scope.MONEY` already uses for it
 (`app.consent.texts.SCOPE_WORDS`)."""
 
+# @patient line
+COST_TYPICAL_NOT_A_QUOTE: Mapping[str, str] = {
+    "en": "This is a typical range, not a quote.",
+    "ms": "Ini anggaran biasa, bukan sebut harga.",
+    "zh": "这是一般范围，不是报价。",
+}
+
+# @patient line
+COST_ASK_THE_CLINIC: Mapping[str, str] = {
+    "en": "Ask what this visit will cost before he goes.",
+    "ms": "Tanya berapa kos lawatan ini sebelum dia pergi.",
+    "zh": "在他去看诊之前，先问清楚费用。",
+}
+"""Rule 13 (docs/plain-words.md §13) reserves "the clinic" for the doctor's own name; this
+line names no place at all, only when to ask."""
+
+# @patient line
+COST_NO_BENCHMARK_FOUND: Mapping[str, str] = {
+    "en": "Nura could not find a typical fee for this.",
+    "ms": "Nura tidak menjumpai anggaran kos biasa untuk ini.",
+    "zh": "Nura找不到这项的一般费用范围。",
+}
+
+# @patient line
+COST_MAY_BE_COVERED: Mapping[str, str] = {
+    "en": "{name}'s cover on file may pay part of this.",
+    "ms": "Perlindungan insurans {name} yang direkod mungkin membayar sebahagiannya.",
+    "zh": "{name}记录中的保险可能会支付部分费用。",
+}
+
+# @patient line
+COST_NO_COVER_ON_FILE: Mapping[str, str] = {
+    "en": "Nura has no insurance on file for {name} to check this against.",
+    "ms": "Nura tiada rekod insurans untuk {name} bagi menyemak perkara ini.",
+    "zh": "Nura没有{name}的保险记录可以用来核对这项费用。",
+}
+
+# @patient line
+COST_COVER_NEEDS_MONEY_SCOPE: Mapping[str, str] = {
+    "en": "Ask whoever manages {name}'s insurance letters what this may cost him.",
+    "ms": "Tanya sesiapa yang menguruskan surat insurans {name} berapa kos ini mungkin baginya.",
+    "zh": "请询问管理{name}保险信件的人，这可能要花多少钱。",
+}
+"""Named, never silent: the same words `Scope.MONEY` already carries
+(`app.consent.texts.SCOPE_WORDS`, "insurance letters") for the one caller who cannot see the
+covered part at all — a key without `Scope.MONEY` learns that it is withheld and who to ask,
+never a blank field with no line about it."""
+
 TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.bring_card": BRING_CARD,
     "insurance.has_cover": HAS_COVER,
@@ -176,6 +224,12 @@ TEMPLATES: Mapping[str, Mapping[str, str]] = {
     "insurance.confirm_if_any": CONFIRM_IF_ANY,
     "insurance.bring_policy_card": BRING_POLICY_CARD,
     "insurance.bring_guarantee_letter": BRING_GUARANTEE_LETTER,
+    "cost.typical_not_a_quote": COST_TYPICAL_NOT_A_QUOTE,
+    "cost.ask_the_clinic": COST_ASK_THE_CLINIC,
+    "cost.no_benchmark_found": COST_NO_BENCHMARK_FOUND,
+    "cost.may_be_covered": COST_MAY_BE_COVERED,
+    "cost.no_cover_on_file": COST_NO_COVER_ON_FILE,
+    "cost.covered_needs_money_scope": COST_COVER_NEEDS_MONEY_SCOPE,
 }
 
 def language_of(asked: str | None) -> str:

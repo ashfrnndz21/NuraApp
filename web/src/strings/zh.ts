@@ -1168,6 +1168,16 @@ export const zh = {
     // @patient headline
     questionsTitle: "看诊时要问的问题",
     // @patient phrase
+    costOpen: "大概的费用",
+    // @patient phrase
+    costOpenOther: "{patient}这次看诊大概的费用",
+    // @patient headline
+    costTitle: "大概的费用",
+    // @patient phrase
+    costCoveredLabel: "您的保险可能支付",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}的保险可能支付",
+    // @patient phrase
     questionLabel: "您的问题",
     // @patient phrase
     questionAdd: "保存这个问题",

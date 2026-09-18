@@ -34,6 +34,7 @@ from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.ingestion.speakers import SpeakerSeparator
 from app.ingestion.transcribe import Transcriber
+from app.insurance.cost_expectation import Estimator, RuleEstimator
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.reasoning.ranges import FixtureRanges, ReferenceRanges
 from app.reasoning.visits.summary import Summariser
@@ -102,6 +103,11 @@ class Providers:
     """What answers `POST /{id}/ask/stream` (Ask as an agent): the rule-based retriever,
     unchanged, until the agent asker is chosen on a declared demo
     (`app.search.asker_provider.asker_for`); the tests pass the rule-based one."""
+    estimator: Estimator = field(default_factory=RuleEstimator)
+    """What answers `GET /{id}/visits/{appointment_id}/cost` (T3, cost expectation): the
+    cached fee-benchmark table, unchanged, until the Claude-refined estimator is chosen on a
+    declared demo or dev run (`app.insurance.cost_expectation.estimator_for`); the tests pass
+    the rule one."""
 
 
 def settings_of(request: Request) -> Settings:
