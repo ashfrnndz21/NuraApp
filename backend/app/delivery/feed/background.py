@@ -68,14 +68,20 @@ from app.state.service import current_state
 
 log = logging.getLogger("nura.delivery.feed")
 
-MAX_CONCURRENT_JOBS = 2
-"""At most this many self-searches in flight at once for one run."""
+MAX_CONCURRENT_JOBS = 1
+"""How many self-searches are in flight at once for one run: one. The plan's order is the
+broker's order (`plan_learning_jobs` — the week's new medicine leads its learning supply), and
+a card lands in storage the moment its job finishes, so two jobs in flight put their cards in
+whichever order they happened to complete, not the broker's: the general clip ahead of the
+tablet's (#286's first CI round, and the same suite locally). One at a time keeps the order the
+plan decided, and the run is in the background anyway — nothing is waiting on it."""
 
 JOB_DEADLINE_SECONDS = 60
 """One job — one search, its pages, their compression — gets at most this long."""
 
-RUN_DEADLINE_SECONDS = 300
-"""The whole day's catch-up, however many jobs it holds, gets at most this long."""
+RUN_DEADLINE_SECONDS = 900
+"""The whole day's catch-up, however many jobs it holds, gets at most this long: one at a
+time, a dozen live jobs at their own pace fit well inside it, and nothing waits on the run."""
 
 State = Literal["looking", "done", "none"]
 
