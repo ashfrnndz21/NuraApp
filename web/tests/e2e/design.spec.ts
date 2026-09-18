@@ -130,9 +130,18 @@ for (const [label, viewport] of [
       // words without spending his look, so the tile draws without writing his trail — it is
       // visible, not absent (§3).
       await expect(page.getByTestId("what-changed")).toBeVisible();
+      // His next visit and what to buy, side by side, under "What changed" — the reference's
+      // own row of two (docs/design/full-experience.html, the Mei persona), not two stacked
+      // cards under a "Coming up" heading.
+      const nextVisitRow = page.getByTestId("next-visit-and-reorder");
+      await expect(nextVisitRow).toHaveClass("two-up");
+      await expect(nextVisitRow.getByTestId("next-visit-tile")).toBeVisible();
+      await expect(nextVisitRow.getByTestId("supply-tile")).toContainText("left");
+      // What Nura is watching for him and what was sent to him this week come right after: her
+      // key's own two panels, immediately below the row (F1, #177).
+      await expect(page.getByTestId("watching")).toBeVisible();
+      await expect(page.getByTestId("sent")).toBeVisible();
       await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
-      await expect(page.getByTestId("next-visit-tile")).toBeVisible();
-      await expect(page.getByTestId("supply-tile")).toContainText("left");
 
       // The same list for her: density changes the look, never the tabs.
       await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
