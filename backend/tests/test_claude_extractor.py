@@ -459,9 +459,7 @@ def test_claude_builds_on_a_declared_dev_run() -> None:
     """The owner's own laptop, his own documents, his own key: a declared dev run is now
     enough on its own, without also being a declared demo (ADR 0017 addendum)."""
     extractor = extractor_for(
-        _settings(
-            extractor="claude", dev_code_sender=True, anthropic_api_key="sk-test-not-real"
-        )
+        _settings(extractor="claude", dev_code_sender=True, anthropic_api_key="sk-test-not-real")
     )
     assert isinstance(extractor, ClaudeExtractor)
 
@@ -501,7 +499,6 @@ def test_an_unknown_extractor_name_refuses_to_start() -> None:
         extractor_for(_settings(extractor="ocr-3000"))
 
 
-
 def _every_schema(node: object):
     if isinstance(node, dict):
         yield node
@@ -518,7 +515,42 @@ def test_the_structured_output_schema_is_one_the_api_accepts() -> None:
     a 500. Every property carries a type; no numeric bounds ride in the schema."""
     from app.ingestion.claude_extract import _SCHEMA
 
-    for props in (node["properties"] for node in _every_schema(_SCHEMA) if isinstance(node, dict) and "properties" in node):
+    for props in (
+        node["properties"]
+        for node in _every_schema(_SCHEMA)
+        if isinstance(node, dict) and "properties" in node
+    ):
         for name, prop in props.items():
             assert "type" in prop, name
             assert "minimum" not in prop and "maximum" not in prop, name
+
+
+@dataclass
+class _ThinkingBlock:
+    """What a model that thinks first puts ahead of its answer: no `text` attribute at all."""
+
+    thinking: str
+    type: str = "thinking"
+
+
+async def test_an_answer_that_opens_with_a_thinking_block_is_still_read() -> None:
+    """Live, 2026-09-18: a real PDF, a 200 from the API, and the page reported unread — the
+    answer's first block was the model's thinking, and the text was read by position."""
+    payload = {
+        "document_kind": "lab_report",
+        "document_date": "2026-09-01",
+        "fields": [_field("lipid_panel", "ldl", 152, 0.97, unit="mg/dL")],
+    }
+    message = _FakeMessage(
+        content=[
+            _ThinkingBlock(thinking="a lab report, one panel"),
+            _TextBlock(text=json.dumps(payload)),
+        ]  # type: ignore[list-item]
+    )
+    client = _FakeClient(messages=_FakeMessages(answers=[message]))
+    extractor = ClaudeExtractor(client)  # type: ignore[arg-type]
+
+    extraction = await extractor.extract(b"%PDF-1.4 not a real pdf", "application/pdf", HINTS)
+
+    assert extraction.document_kind is DocumentKind.LAB_REPORT
+    assert [(f.attribute, f.value) for f in extraction.fields] == [("ldl", 152)]
