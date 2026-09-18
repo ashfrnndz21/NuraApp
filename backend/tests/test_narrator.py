@@ -26,7 +26,13 @@ from app.channels.about_him import Reader
 from app.llm import narrate as claude_narrate
 from app.llm.narrate import ClaudeNarrator
 from app.regions import Region
-from app.search.narrate import FixtureNarrator, NarratedLine, NarratedStep
+from app.search.narrate import (
+    FixtureNarrator,
+    NarratedLine,
+    NarratedStep,
+    Narrator,
+    narrate_step_label,
+)
 from app.search.narrator_provider import (
     ClaudeNarratorOutsideDemo,
     NoNarrator,
@@ -102,6 +108,65 @@ async def test_the_fixture_narrator_on_no_steps_yields_nothing() -> None:
     narrator = FixtureNarrator()
     lines = [line async for line in narrator.narrate([], language="en", reader=HIS)]
     assert lines == []
+
+
+# -- narrate_step_label: the background follow-up, never the step itself --------------------
+
+
+@dataclass
+class _RewordingNarrator:
+    """A narrator that always has something different to say — the success case, standing in
+    for a real `ClaudeNarrator` call that answered before its deadline."""
+
+    external_processor: str | None = None
+
+    async def narrate(
+        self, steps: list[NarratedStep], *, language: str, reader: Reader
+    ) -> Any:
+        for step in steps:
+            yield NarratedLine(key=step.key, text=f"{step.label} (said livelier)")
+
+
+@dataclass
+class _EchoingNarrator:
+    """A narrator that always falls back to the very label it was given — standing in for
+    every one of `ClaudeNarrator`'s own fallbacks (a timeout, a refusal, a truncated answer,
+    an answer that failed a safety check): there is nothing new to say, whichever it was."""
+
+    external_processor: str | None = None
+
+    async def narrate(
+        self, steps: list[NarratedStep], *, language: str, reader: Reader
+    ) -> Any:
+        for step in steps:
+            yield NarratedLine(key=step.key, text=step.label)
+
+
+async def test_narrate_step_label_returns_the_rephrasing_when_it_differs() -> None:
+    steps = [NarratedStep(key="medicines", label="Checking your medicines.", count=2)]
+    new_label = await narrate_step_label(
+        _RewordingNarrator(), steps, "medicines", "Checking your medicines.", language="en", reader=HIS
+    )
+    assert new_label == "Checking your medicines. (said livelier)"
+
+
+async def test_narrate_step_label_sends_nothing_when_the_narrator_falls_back() -> None:
+    """The fallback case, whatever caused it (a timeout among them): the narrator resolved to
+    the very label already sent, so there is nothing to send again."""
+    steps = [NarratedStep(key="medicines", label="Checking your medicines.", count=2)]
+    new_label = await narrate_step_label(
+        _EchoingNarrator(), steps, "medicines", "Checking your medicines.", language="en", reader=HIS
+    )
+    assert new_label is None
+
+
+async def test_narrate_step_label_ignores_a_line_for_a_different_step() -> None:
+    narrator: Narrator = _RewordingNarrator()
+    steps = [NarratedStep(key="visits", label="Checking your visits.", count=1)]
+    new_label = await narrate_step_label(
+        narrator, steps, "medicines", "Checking your medicines.", language="en", reader=HIS
+    )
+    assert new_label is None
 
 
 # -- ClaudeNarrator: rephrases, never invents, always safe ----------------------------------
