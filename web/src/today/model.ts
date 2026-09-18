@@ -110,7 +110,10 @@ export function feedLines(item: FeedItemOut): { lines: string[]; boundary: strin
 
 export function greeting(hour: number, name: string, s: Strings): string {
   const line = hour < 12 ? s.today.greetingMorning : hour < 18 ? s.today.greetingAfternoon : s.today.greetingEvening;
-  return fill(line, { name });
+  // A profile with no name yet is greeted without the comma and the gap ("Good morning."),
+  // never "Good morning, ." — the name's own separator goes with it, in every language.
+  const said = name.trim() ? line : line.replace(/[,，]\s*\{name\}/, "");
+  return fill(said, { name: name.trim() });
 }
 
 /** What he did, in the past tense, for the moment of the day he did it. */
