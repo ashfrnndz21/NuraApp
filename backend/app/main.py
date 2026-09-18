@@ -46,6 +46,7 @@ from app.ingestion.extract_provider import extractor_for
 from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
+from app.insurance.cost_expectation import estimator_for
 from app.reasoning.navigation.drafter_provider import drafter_for
 from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
@@ -81,6 +82,7 @@ def providers_for(settings: Settings) -> Providers:
         searcher=searcher_for(settings),
         compressor=compressor_for(settings),
         drug_registry=drug_registry_for(settings),
+        estimator=estimator_for(settings),
         summariser=FixtureSummariser(Path(settings.visit_fixtures)),
         whatsapp=whatsapp_provider_for(settings),
         reference_ranges=reference_ranges_for(settings),

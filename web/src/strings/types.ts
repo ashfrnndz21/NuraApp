@@ -542,6 +542,11 @@ export interface Strings {
     questionsOpen: string;
     questionsOpenOther: string;
     questionsTitle: string;
+    costOpen: string;
+    costOpenOther: string;
+    costTitle: string;
+    costCoveredLabel: string;
+    costCoveredLabelOther: string;
     questionLabel: string;
     questionAdd: string;
     questionCheck: string;

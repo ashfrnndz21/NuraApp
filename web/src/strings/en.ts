@@ -1188,6 +1188,16 @@ export const en = {
     // @patient headline
     questionsTitle: "Questions for your visit",
     // @patient phrase
+    costOpen: "What it may cost",
+    // @patient phrase
+    costOpenOther: "What {patient}'s visit may cost",
+    // @patient headline
+    costTitle: "What it may cost",
+    // @patient phrase
+    costCoveredLabel: "Your cover may pay",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}'s cover may pay",
+    // @patient phrase
     questionLabel: "Your question",
     // @patient phrase
     questionAdd: "Keep this question",

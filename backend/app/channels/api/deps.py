@@ -34,6 +34,7 @@ from app.ingestion.extract import Extractor
 from app.ingestion.objects import ObjectStore
 from app.ingestion.speakers import SpeakerSeparator
 from app.ingestion.transcribe import Transcriber
+from app.insurance.cost_expectation import Estimator, RuleEstimator
 from app.keys.context import KeyContext, NoKey, resolve_key_context
 from app.reasoning.navigation.models import Drafter
 from app.reasoning.navigation.rule_drafter import RuleDrafter
@@ -108,6 +109,11 @@ class Providers:
     """What writes a care-navigation drafted message (T3): the catalogue's own templates,
     unchanged, until the Claude-backed drafter is chosen on a declared demo
     (`app.reasoning.navigation.drafter_provider.drafter_for`); the tests pass the rule one."""
+    estimator: Estimator = field(default_factory=RuleEstimator)
+    """What answers `GET /{id}/visits/{appointment_id}/cost` (T3, cost expectation): the
+    cached fee-benchmark table, unchanged, until the Claude-refined estimator is chosen on a
+    declared demo or dev run (`app.insurance.cost_expectation.estimator_for`); the tests pass
+    the rule one."""
 
 
 def settings_of(request: Request) -> Settings:
