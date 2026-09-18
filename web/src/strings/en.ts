@@ -679,6 +679,8 @@ export const en = {
     // @patient
     askThinking: "Nura is looking.",
     // @patient
+    lookingForToday: "Nura is looking for today's reads.",
+    // @patient
     askAnswered: "Nura answered.",
     // @patient phrase
     askLookedAt: "What Nura looked at: {parts}",
@@ -1002,6 +1004,8 @@ export const en = {
     send: "Send {count} papers",
     // @patient
     sending: "Nura is sending paper {n} of {total}.",
+    // @patient
+    working: "Nura is working on it.",
     // @patient headline
     found: "What Nura found",
     // @patient

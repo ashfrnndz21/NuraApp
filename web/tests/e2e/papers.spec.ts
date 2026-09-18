@@ -12,11 +12,12 @@ test.beforeEach(async ({ page }) => {
 
 const auth = (token: string) => ({ headers: { Authorization: `Bearer ${token}` } });
 
-/** Every capture POST the phone makes: `photos` or `imports`. */
+/** Every capture POST the phone makes: `photos` or `imports`, streamed or not (the trace,
+ *  docs/design-direction.md) — the same two backend routes either way. */
 function captures(page: Page): string[] {
   const seen: string[] = [];
   page.on("request", (sent) => {
-    const found = new URL(sent.url()).pathname.match(/\/(photos|imports)$/);
+    const found = new URL(sent.url()).pathname.match(/\/(photos|imports)(?:\/stream)?$/);
     if (sent.method() === "POST" && found) seen.push(found[1]!);
   });
   return seen;

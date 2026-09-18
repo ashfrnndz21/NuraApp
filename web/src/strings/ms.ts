@@ -679,6 +679,8 @@ export const ms = {
     // @patient
     askThinking: "Nura sedang mencari.",
     // @patient
+    lookingForToday: "Nura sedang mencari bacaan hari ini.",
+    // @patient
     askAnswered: "Nura sudah menjawab.",
     // @patient phrase
     askLookedAt: "Apa yang Nura lihat: {parts}",
@@ -1002,6 +1004,8 @@ export const ms = {
     send: "Hantar {count} surat",
     // @patient
     sending: "Nura sedang menghantar surat {n} daripada {total}.",
+    // @patient
+    working: "Nura sedang membuatnya.",
     // @patient headline
     found: "Apa yang Nura jumpa",
     // @patient

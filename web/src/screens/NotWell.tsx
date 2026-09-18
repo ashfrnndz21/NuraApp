@@ -12,7 +12,7 @@ import { bindingOf } from "../offline/todayCache";
 import { profile, token } from "../store/session";
 import { language, t } from "../strings";
 import { Header } from "../ui/components";
-import { PaperTile, PillButton } from "../ui/kit";
+import { PaperTile, PillButton, StepTrace, type TraceStep } from "../ui/kit";
 import { Shell } from "./Shell";
 import { timer } from "../visit/model";
 
@@ -27,6 +27,7 @@ export function NotWellScreen(): JSX.Element {
   const [words, setWords] = useState("");
   const [stage, setStage] = useState<"ask" | "listening" | "sending">("ask");
   const [noMic, setNoMic] = useState(false);
+  const [steps, setSteps] = useState<TraceStep[]>([]);
   const recorder = useMemo(() => voiceRecorder(), []);
   useEffect(() => () => recorder.discard(), [recorder]);
   // He may say a red word on this screen (W7, E13-02): no background read is dispatched from
@@ -45,8 +46,15 @@ export function NotWellScreen(): JSX.Element {
       return go({ name: "whatToDo", lines: offlineLines("unknown", null, papers?.region, s, language.value).lines, offline: null, refusal: "NoSession" });
     }
     setStage("sending");
+    setSteps([]);
     try {
-      const card = await nura.notFeelingWell(bearer, papers.profile_id, said, language.value);
+      // The whole button runs first, entirely unchanged, before a single step is streamed
+      // back (`not_feeling_well_stream`'s own module docstring): a red word already reached
+      // the flag and his family by the time this trace shows anything at all.
+      const card = await nura.notFeelingWellStream(bearer, papers.profile_id, said, language.value, (key, text) => {
+        setSteps((prior) => [...prior.map((step) => ({ ...step, done: true })), { key, text, done: false }]);
+      });
+      setSteps((prior) => prior.map((step) => ({ ...step, done: true })));
       go({ name: "whatToDo", lines: whatToDoLines(card), offline: null, refusal: null });
     } catch (failure) {
       const kept = await keptCards(papers.profile_id, bindingOf(papers));
@@ -125,7 +133,7 @@ export function NotWellScreen(): JSX.Element {
       )}
       {stage === "sending" && (
         <PaperTile role="status" testId="sending">
-          <p>{s.day.sending}</p>
+          <StepTrace steps={steps} working={s.day.sending} testId="not-well-trace" />
         </PaperTile>
       )}
     </Shell>
