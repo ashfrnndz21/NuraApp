@@ -450,6 +450,10 @@ async def _write_line(
         drug_class=plan.match.drug_class,
         high_risk=plan.match.high_risk,
         product_kind=plan.match.product_kind,
+        # The same word `product_kind` gives, for the Health Analyst's own question
+        # (migration 0049, `app.reasoning.analyst`) — never a guess: unset where the register
+        # named no kind, exactly as the migration's own backfill treats an old row.
+        category=plan.match.product_kind.value if plan.match.product_kind else None,
         registry_confidence=plan.match.confidence,
         dose=label.dose.as_json(),
         prescriber=label.prescriber,

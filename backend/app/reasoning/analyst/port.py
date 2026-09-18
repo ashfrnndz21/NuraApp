@@ -18,14 +18,15 @@ cannot (`app/search/ask.py`'s own module doc).
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.delivery.analyst_strings import SECTION_TITLES
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 
@@ -85,34 +86,11 @@ class Section:
     insights: tuple[Insight, ...]
 
 
-SECTION_TITLES: dict[str, dict[str, str]] = {
-    "en": {
-        "what_changed": "What changed",
-        "worth_a_look": "Worth a look",
-        "medicines_and_supplements": "Medicines and supplements",
-        "what_you_pay": "What you pay",
-        "screenings_due": "Screenings due",
-        "questions_for_the_doctor": "Questions for the doctor",
-    },
-    "ms": {
-        "what_changed": "Apa yang berubah",
-        "worth_a_look": "Patut dilihat",
-        "medicines_and_supplements": "Ubat dan suplemen",
-        "what_you_pay": "Apa yang anda bayar",
-        "screenings_due": "Pemeriksaan yang perlu",
-        "questions_for_the_doctor": "Soalan untuk doktor",
-    },
-    "zh": {
-        "what_changed": "有什么变化",
-        "worth_a_look": "值得留意",
-        "medicines_and_supplements": "药物和补充品",
-        "what_you_pay": "您付的钱",
-        "screenings_due": "该做的检查",
-        "questions_for_the_doctor": "问医生的问题",
-    },
-}
-"""Section titles, tagged `@patient`: whole words a person reads at the top of each part of
-the report, in the fixed order `SECTION_KEYS` names."""
+"""`SECTION_TITLES` (imported above) is `app.delivery.analyst_strings.SECTION_TITLES`: whole
+words a person reads at the top of each part of the report, in the fixed order `SECTION_KEYS`
+names. It lives under `app/delivery/` — a path `.claude/rules/patient-strings.md` already
+checks — rather than here, so `make plain-words` verifies it without that rules file needing
+a line added for this story (`.claude/` is not this story's to edit)."""
 
 SECTION_KEYS: tuple[str, ...] = (
     "what_changed",
@@ -126,8 +104,13 @@ SECTION_KEYS: tuple[str, ...] = (
 carry sections in exactly this order, never resorted by a caller."""
 
 SECTION_SCOPE: dict[str, Scope] = {
+    # Trend abnormalities: RE-03's blood-pressure series (`app.reasoning.patterns.series.
+    # reading_series`), read under READINGS the same as the series reader itself.
     "what_changed": Scope.READINGS,
-    "worth_a_look": Scope.READINGS,
+    # A coverage gap (a lapsed policy, one past its renewal date) is a fact about his
+    # insurance, the same scope a policy is already read under (`app.insurance.policy.
+    # POLICY_SCOPE`).
+    "worth_a_look": Scope.MONEY,
     "medicines_and_supplements": Scope.MEDICINES,
     "what_you_pay": Scope.MONEY,
     "screenings_due": Scope.RECORDS,
@@ -137,7 +120,9 @@ SECTION_SCOPE: dict[str, Scope] = {
     # theirs are — not because this key lacks it.
 }
 """Which scope each section's own read stands behind, for `RuleAnalyst`'s withholding
-(`.claude/rules` — "a key without a scope gets that section withheld, named")."""
+(`.claude/rules` — "a key without a scope gets that section withheld, named"). Internal to
+this backend: `InsightReportOut` (the wire contract) carries no `withheld` field, so this
+table never needs to agree with anything the UI builder already coded against."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,17 +191,17 @@ async def report(
 
 
 __all__ = [
-    "AskWho",
+    "SECTION_KEYS",
+    "SECTION_SCOPE",
+    "SECTION_TITLES",
     "Analyst",
+    "AskWho",
     "Confidence",
     "Evidence",
     "Insight",
     "InsightKind",
     "Report",
     "ReportEvent",
-    "SECTION_KEYS",
-    "SECTION_SCOPE",
-    "SECTION_TITLES",
     "Section",
     "Step",
     "StepKey",

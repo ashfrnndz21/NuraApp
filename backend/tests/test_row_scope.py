@@ -77,6 +77,9 @@ from app.memory.semantic import assert_fact, current_facts
 from app.memory.spine import add_provider
 from app.memory.timeline import gather
 from app.memory.working import open_episode
+from app.reasoning.analyst.port import Report
+from app.reasoning.analyst.rule import RuleAnalyst
+from app.reasoning.analyst.service import save_report
 from app.regions import Region
 from app.safety.red_flags import Flag
 from app.search.ask import Mode, recall
@@ -617,6 +620,16 @@ async def _seed(deployment: Deployment) -> Seeded:
             claim_reference="CLM-1",
             confirmation_id=claim_yes.id,
         )
+        # The Health Analyst's own row (`app.reasoning.analyst`): whatever it cites is a mix
+        # of MEDICINES, READINGS, RECORDS and MONEY, so a leak of any one id anywhere in its
+        # saved report is its own finding, the same standing the policy and the claim above
+        # already have.
+        insight_report: Report | None = None
+        async for event in RuleAnalyst().report_stream(session, context=owner, language="en"):
+            if isinstance(event, Report):
+                insight_report = event
+        assert insight_report is not None
+        saved_report = await save_report(session, context=owner, report=insight_report)
         await session.commit()
     await _ok(
         await client.post(
@@ -729,6 +742,8 @@ async def _seed(deployment: Deployment) -> Seeded:
         seeded.kinds[str(policy.id)] = "policy"
         seeded.scopes[str(claim.id)] = Scope.MONEY
         seeded.kinds[str(claim.id)] = "insurance_claim"
+        seeded.scopes[str(saved_report.id)] = Scope.PROFILE
+        seeded.kinds[str(saved_report.id)] = "insight_report"
         seeded.params = {
             "event_id": [str(e.id) for e in events],
             "episode_id": [str(illness.id)],
@@ -746,6 +761,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "upload_id": [upload_id],
             "photo_id": [shared["photo"]["photo_id"]],
             "kind": ["steps", "heart_rate", "sleep", "water"],
+            "report_id": [str(saved_report.id)],
         }
     return seeded
 
@@ -941,6 +957,11 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/calls/upcoming"),
     Walk("GET", f"{P}/health/overview"),
     Walk("GET", f"{P}/health/insights"),
+    # The Health Analyst's weekly report (`app.reasoning.analyst`): a mix of MEDICINES,
+    # READINGS, RECORDS and MONEY, saved the moment the stream finishes.
+    Walk("POST", f"{P}/insights/stream", json={}, stream=True),
+    Walk("GET", f"{P}/insights"),
+    Walk("GET", f"{P}/insights/{{report_id}}"),
     Walk("GET", f"{P}/medication-reminder"),
     Walk("GET", f"{P}/metrics/{{kind}}"),
     Walk("GET", f"{P}/food"),

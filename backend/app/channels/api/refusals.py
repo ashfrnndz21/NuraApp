@@ -151,6 +151,7 @@ from app.onboarding.biography import (
 from app.onboarding.biography import NoSuchQuestion as NoSuchBiographyQuestion
 from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
+from app.reasoning.analyst.service import NoReportYet
 from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
 from app.reasoning.signals import NotTheirsToSetSignals
 from app.reasoning.trends import NoSuchAnalyte
@@ -258,6 +259,8 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoKeyToClose, 404),
     (NoStewardshipHere, 404),
     (NoState, 404),
+    # The Health Analyst's weekly report (`app.reasoning.analyst`): nothing saved yet.
+    (NoReportYet, 404),
     (NoWordsInThatLanguage, 404),
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),

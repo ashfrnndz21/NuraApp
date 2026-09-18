@@ -55,6 +55,7 @@ import app.onboarding
 import app.state  # noqa: F401  — wires State's recompute onto the memory store
 from app.channels.api import (
     account,
+    analyst,
     auth,
     capture,
     connectors,
@@ -188,6 +189,7 @@ class ReviewOrigin:
 
 def _api() -> APIRouter:
     api = APIRouter()
+    api.include_router(analyst.router)
     api.include_router(auth.router)
     api.include_router(doors.router)
     api.include_router(profiles.router)
