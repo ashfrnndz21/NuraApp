@@ -30,7 +30,9 @@ the fact the feed reads to go voice-first; read-back and repeated prompts under
 `memory_support`; large text and high contrast under `vision`; big targets under `dexterity`;
 breakfast and the name he goes by under `nudges`. A `setting.*` subject would have folded
 into the clinical dimension, which is State's default for a subject it does not know. The
-conditions are `condition.<code>` facts "as told", the doctor is `doctor.name` and the decade
+conditions are `condition.<code>` facts "as told", a tapped word's follow-up answer is
+`condition_answer.<code>` (the option id he chose, `app.onboarding.conditions.check_answers`),
+the doctor is `doctor.name` and the decade
 he was born in is `setting.birth_decade` (lab trends read his age band from it), all in
 the clinical dimension and neither a `control` word, so neither moves a posture. Only what
 changed writes a fact, superseding the one before; a condition untapped is superseded with
@@ -45,8 +47,8 @@ rule free to act.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import datetime, time
 from typing import Any
 
@@ -67,7 +69,7 @@ from app.keys.scopes import KeyRole, Scope
 from app.memory.episodic import record_event
 from app.memory.models import ConfidenceState, Event, EventKind, Fact, SourceChannel, short_label
 from app.memory.semantic import assert_fact, current_facts
-from app.onboarding.conditions import check_conditions
+from app.onboarding.conditions import check_answers, check_conditions
 from app.onboarding.models import Density, ProfileSettings
 from app.onboarding.strings import LANGUAGES, language_for
 
@@ -82,6 +84,10 @@ RECORD_PARTS: tuple[str, ...] = ("conditions", "doctor_name", "birth_decade")
 the record reads his lab ranges by — read only under `Scope.RECORDS`."""
 
 CONDITION = "condition"
+ANSWER = "condition_answer"
+"""The subject of a tapped word's follow-up answer: `condition_answer.<code>` holds the option
+id he chose (`app.onboarding.conditions.Ask`), his own word, resting on the moment he tapped
+it. Clinical, beside `condition`, and never a `control` word, so it never moves a posture."""
 DOCTOR = ("doctor", "name")
 BREAKFAST = ("nudges", "breakfast_time")
 PREFERRED_NAME = ("nudges", "preferred_name")
@@ -138,6 +144,8 @@ class SettingsValues:
 
     language: str
     conditions: tuple[str, ...] = ()
+    answers: Mapping[str, str] = field(default_factory=dict)
+    """His answer to a tapped word's follow-up question, by the word's code."""
     density: Density = Density.DETAILED
     large_text: bool = False
     high_contrast: bool = False
@@ -154,7 +162,8 @@ class SettingsValues:
 
     def checked(self) -> SettingsValues:
         """The same values, or a refusal: a language Nura speaks, conditions from the
-        graph, names that are names, a time to the minute."""
+        graph, an answer only for a tapped word that asks one, names that are names, a time
+        to the minute."""
         if self.language not in LANGUAGES:
             raise NotALanguage(f"{self.language!r} is not one of {LANGUAGES}")
         if self.birth_decade is not None and (
@@ -162,9 +171,11 @@ class SettingsValues:
             or not FIRST_DECADE <= self.birth_decade <= utcnow().year // 10 * 10
         ):
             raise NotADecade(f"{self.birth_decade} is not the first year of a decade")
+        conditions = check_conditions(self.conditions)
         return replace(
             self,
-            conditions=check_conditions(self.conditions),
+            conditions=conditions,
+            answers=check_answers(self.answers, picked=conditions),
             preferred_name=_name(self.preferred_name),
             doctor_name=_name(self.doctor_name),
             breakfast_time=None
@@ -180,6 +191,7 @@ def values_of(row: ProfileSettings) -> SettingsValues:
     return SettingsValues(
         language=row.language,
         conditions=tuple(row.conditions),
+        answers=dict(row.answers) if row.answers else {},
         density=row.density,
         large_text=row.large_text,
         high_contrast=row.high_contrast,
@@ -217,6 +229,8 @@ def facts_of(values: SettingsValues) -> dict[tuple[str, str], Any]:
     }
     for code in values.conditions:
         wanted[(CONDITION, code)] = True
+    for code, option_id in values.answers.items():
+        wanted[(ANSWER, code)] = option_id
     return wanted
 
 
@@ -232,13 +246,17 @@ def changes(
     values: SettingsValues, held: Sequence[Fact]
 ) -> list[tuple[str, str, Any, Fact | None]]:
     """What a save writes: each setting whose value differs from the fact that holds, with the
-    fact it supersedes. A condition no longer tapped is superseded with `false`; a name or a
-    time taken away, with null. Voice off is written only over a voice-on he gave."""
+    fact it supersedes. A condition no longer tapped is superseded with `false`; an answer no
+    longer given (the word untapped, or the answer itself taken back) is superseded with
+    null, the way a name or a time taken away is; a name or a time taken away, with null.
+    Voice off is written only over a voice-on he gave."""
     current = _newest(held)
     wanted = facts_of(values)
     for (subject, attribute), fact in current.items():
         if subject == CONDITION and fact.value is True and (subject, attribute) not in wanted:
             wanted[(subject, attribute)] = False
+        if subject == ANSWER and (subject, attribute) not in wanted:
+            wanted[(subject, attribute)] = None
     out: list[tuple[str, str, Any, Fact | None]] = []
     for (subject, attribute), value in wanted.items():
         was = current.get((subject, attribute))
@@ -411,6 +429,7 @@ async def save_settings(
         context,
         SETTINGS_SCOPE,
         conditions=list(chosen.conditions),
+        answers=dict(chosen.answers),
         language=chosen.language,
         density=chosen.density,
         large_text=chosen.large_text,
@@ -461,7 +480,7 @@ def _narrowed(
 ) -> tuple[SettingsValues, tuple[str, ...]]:
     if context.allows(Scope.RECORDS):
         return values, ()
-    return replace(values, conditions=(), doctor_name=None, birth_decade=None), RECORD_PARTS
+    return replace(values, conditions=(), answers={}, doctor_name=None, birth_decade=None), RECORD_PARTS
 
 
 @audited(Action.READ, SETTINGS_SCOPE, TARGET)
