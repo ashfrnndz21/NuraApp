@@ -14,6 +14,7 @@ import { Notice } from "../ui/components";
 import { go } from "../flow";
 import { session, toRecord, useRead } from "./record/parts";
 import { Shell } from "./Shell";
+import { VisitSuggestions } from "./VisitSuggest";
 
 /** The Health tab (docs/design/nura-concept-board.html, "3 · Health"): "This week"'s ring and
  *  his four everyday metrics, his readings, his day, his medicines and what is coming up. Every
@@ -279,6 +280,7 @@ export function HealthScreen(): JSX.Element {
           <p>{owner ? s.visit.none : fill(s.places.visitsNoneOther, { name })}</p>
         </TintCard>
       )}
+      <VisitSuggestions owner={owner} name={name} />
 
       <PaperTile testId="health-more">
         <nav class="place-rows" aria-label={owner ? s.record.title : fill(s.record.titleOther, { name })}>

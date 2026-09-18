@@ -2350,6 +2350,22 @@ export const ms = {
     // @patient phrase
     callLabelLabel: "Nama untuk panggilan ini",
   },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "Daripada surat hospital anda",
+    // @patient phrase
+    medicineReviewWhy: "Daripada ubat anda",
+    // @patient phrase
+    testComingWhy: "Daripada ujian darah anda",
+    // @patient phrase
+    screeningDueWhy: "Daripada surat-surat anda",
+    // @patient
+    rowOther: "Nura mencadangkan {name} berjumpa doktor.",
+    // @patient phrase
+    bookIt: "Tempahkan",
+    // @patient phrase
+    notNow: "Bukan sekarang",
+  },
   review: {
     // @patient headline
     title: "Senarai ahli farmasi",

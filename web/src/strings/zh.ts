@@ -2349,6 +2349,22 @@ export const zh = {
     // @patient phrase
     callLabelLabel: "给这通电话取个名字",
   },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "来自您的出院信",
+    // @patient phrase
+    medicineReviewWhy: "来自您的药",
+    // @patient phrase
+    testComingWhy: "来自您的验血",
+    // @patient phrase
+    screeningDueWhy: "来自您的文件",
+    // @patient
+    rowOther: "Nura建议{name}去看医生。",
+    // @patient phrase
+    bookIt: "预约",
+    // @patient phrase
+    notNow: "现在不用",
+  },
   review: {
     // @patient headline
     title: "药剂师的清单",
