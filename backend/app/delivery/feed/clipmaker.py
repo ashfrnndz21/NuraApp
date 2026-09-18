@@ -36,6 +36,7 @@ recomputing it."""
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
@@ -46,6 +47,8 @@ from app.delivery.strings import language_for, learning_lines
 from app.delivery.timeline_strings import verified
 from app.llm.narrate import _has_conclusion_language  # the one blocklist, not a second copy
 from app.safety.boundary import YOUR_DOCTOR
+
+log = logging.getLogger("nura.delivery.feed.clipmaker")
 
 if TYPE_CHECKING:
     # Only for mypy: `explainer_clip_item`'s own docstring explains why the real imports stay
@@ -234,15 +237,16 @@ class RuleClipMaker:
 
 
 _LINES_SCHEMA = {
-    "name": "clip_script",
-    "schema": {
-        "type": "object",
-        "properties": {"lines": {"type": "array", "items": {"type": "string"}}},
-        "required": ["lines"],
-        "additionalProperties": False,
-    },
-    "strict": True,
+    "type": "object",
+    "properties": {"lines": {"type": "array", "items": {"type": "string"}}},
+    "required": ["lines"],
+    "additionalProperties": False,
 }
+"""The raw JSON schema `output_config.format.schema` asks for — see `app.delivery.feed.
+claude_adapters.SEARCH_SCHEMA`'s docstring: the `{"name", "schema", "strict"}` wrapper this
+used to carry hid the actual schema from `JSONOutputFormatParam`, which only reads `type` and
+`schema`, so every call read as an unrecognised `json_schema` key and was refused with a 400
+before the model ever ran."""
 
 
 def _clip_prompt(evidence: str, page_title: str, page_text: str, language: str) -> str:
@@ -306,7 +310,7 @@ class ClaudeClipMaker:
             response = self._client.messages.create(
                 model=self.MODEL,
                 max_tokens=2048,
-                output_config={"format": {"type": "json_schema", "json_schema": _LINES_SCHEMA}},
+                output_config={"format": {"type": "json_schema", "schema": _LINES_SCHEMA}},
                 messages=[
                     {
                         "role": "user",
@@ -314,7 +318,17 @@ class ClaudeClipMaker:
                     }
                 ],
             )
-        except Exception:  # noqa: BLE001 — a failed call makes nothing, never a guess
+        except Exception as failed:  # noqa: BLE001 — a failed call makes nothing, never a guess
+            # Never his evidence or the page text past this line — only the exception's own
+            # class and, for an API refusal, its status and message, so a rejected schema
+            # (a 400) is a distinguishable log line, not a silent "no clip made".
+            from anthropic import APIStatusError
+
+            log.warning(
+                "claude clip maker call failed (%s%s)",
+                type(failed).__name__,
+                f": {failed}" if isinstance(failed, APIStatusError) else "",
+            )
             return None
         if getattr(response, "stop_reason", None) == "refusal":
             return None
