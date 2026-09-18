@@ -59,6 +59,8 @@ import type {
   MetricKind,
   MetricLogIn,
   MoreOut,
+  NavigationDraftOut,
+  NavigationNeedOut,
   NfwStreamEvent,
   NoticeOut,
   NowOut,
@@ -1094,3 +1096,17 @@ export function findStream(
       .catch(reject);
   });
 }
+
+/** Care navigation (T3): every real need on the record right now, no drafted text yet
+ *  (`app.reasoning.navigation.needs.list_needs`). */
+export const navigationNeeds = (token: string, profileId: string) =>
+  api<NavigationNeedOut[]>(`/profiles/${profileId}/navigation/drafts`, { token });
+
+/** The drafted message for one need: text and a link built from the provider's own contact,
+ *  never sent (`app.reasoning.navigation.service.draft_message`). */
+export const draftNavigationMessage = (token: string, profileId: string, needId: string, language?: string) =>
+  api<NavigationDraftOut>(`/profiles/${profileId}/navigation/drafts/${needId}`, {
+    method: "POST",
+    token,
+    query: language ? { language } : undefined,
+  });

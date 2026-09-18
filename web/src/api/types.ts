@@ -1953,3 +1953,37 @@ export interface LedgerOut {
   total_paid_by_patient_said: string;
   by_policy: PolicyTotalOut[];
 }
+
+/** Care navigation with drafted messages (T3): one real need on the record a message could
+ *  be drafted for — no drafted text yet (`GET /profiles/{id}/navigation/drafts`). */
+export interface NavigationNeedOut {
+  id: string;
+  kind: "follow_up" | "new_medicine" | "test_due" | "home_care";
+  evidence_kind: string;
+  evidence_id: string;
+  provider_id: string | null;
+  doctor: string | null;
+  when: string | null;
+  category: string | null;
+}
+
+/** One way to reach the provider, built from its own directory contact — `sms:` or
+ *  `https://wa.me/`, never a number typed for the occasion. */
+export interface NavigationContactLinkOut {
+  kind: "sms" | "whatsapp";
+  href: string;
+}
+
+/** The drafted message (`POST /profiles/{id}/navigation/drafts/{need_id}`): text only. Nura
+ *  never sends it — `links` is empty and `copy_only` is true when the provider has no phone
+ *  on file. */
+export interface NavigationDraftOut {
+  need_id: string;
+  kind: "follow_up" | "new_medicine" | "test_due" | "home_care";
+  language: string;
+  text: string;
+  drafted_by: "self" | "caregiver";
+  links: NavigationContactLinkOut[];
+  copy_only: boolean;
+  cites: string[];
+}

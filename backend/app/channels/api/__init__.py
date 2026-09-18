@@ -69,6 +69,7 @@ from app.channels.api import (
     health_tab,
     insurance,
     medicines,
+    navigation,
     onboarding,
     profiles,
     recording_uploads,
@@ -204,6 +205,7 @@ def _api() -> APIRouter:
     api.include_router(feelings.router)
     api.include_router(health_tab.router)
     api.include_router(health_tab.catalog_router)
+    api.include_router(navigation.router)
     api.include_router(onboarding.router)
     api.include_router(consent_words.router)
     api.include_router(trends.router)

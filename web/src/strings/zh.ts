@@ -308,6 +308,26 @@ export const zh = {
     // @patient
     noneOther: "Nura 在{name}附近暂时还没有这项服务。",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "写一条消息草稿",
+    // @patient headline
+    sheetTitle: "您的消息草稿",
+    // @patient phrase
+    copy: "复制",
+    // @patient
+    copied: "已复制，可以粘贴到您要发送的地方。",
+    // @patient phrase
+    sendBySms: "用短信发送",
+    // @patient phrase
+    sendByWhatsApp: "用 WhatsApp 发送",
+    // @patient
+    copyOnly: "这个地方没有号码，请自行复制并发送这条消息。",
+    // @patient
+    loading: "Nura 正在写这条消息。",
+    // @patient
+    error: "Nura 现在无法写这条消息。",
+  },
   health: {
     // @patient headline
     title: "您的健康",
