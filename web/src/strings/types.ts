@@ -333,6 +333,7 @@ export interface Strings {
     statusPlayed: string;
     statusDismissed: string;
     play: string;
+    watchAgain: string;
     watchWhole: string;
     askOrSearch: string;
     filterLabel: string;

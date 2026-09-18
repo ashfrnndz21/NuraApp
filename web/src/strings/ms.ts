@@ -755,6 +755,8 @@ export const ms = {
     // @patient phrase
     play: "Main",
     // @patient phrase
+    watchAgain: "Tonton semula",
+    // @patient phrase
     watchWhole: "Tonton seluruh video di {publisher}",
     // @patient phrase
     askOrSearch: "Tanya atau cari",

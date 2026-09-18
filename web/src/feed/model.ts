@@ -154,25 +154,77 @@ export function sourceOf(item: Pick<FeedItemOut, "type" | "cite">): CardView["so
   return { publisher, url };
 }
 
-/** What a clip card plays, from the backend's card and its cite — never guessed:
- *  the still (always, from Nura's own server), the excerpt only where the publisher's licence
- *  let the server keep one, and the whole video's page on the publisher's own site, linked for
- *  him to tap. His week in 30 seconds has no video behind it, so no link. */
+/** One caption of a Nura-made clip, timed from the clip's start (`app.delivery.feed.
+ *  clipmaker.ClipScript.captions`, milliseconds) — never recomputed on the client, so a
+ *  caregiver's Why sheet and the player agree on when a line was said. */
+export interface ClipCaption {
+  atMs: number;
+  text: string;
+}
+
+/** What a clip card plays, from the backend's card and its cite — never guessed. A publisher
+ *  clip's still is always from Nura's own server, the excerpt only where the publisher's
+ *  licence let the server keep one, and the whole video is a link to the publisher's own
+ *  site. A Nura-made clip (`kind: "nura_made"`, RE-07 item 1) has no still and no excerpt to
+ *  fetch: it is his own words over one of the kit's warm scenes, its captions carried on the
+ *  card itself. */
 export interface ClipView {
-  /** The server kept an excerpt (the licence allows reuse): it plays under the narration. */
+  kind: "publisher" | "nura_made";
+  /** The server kept an excerpt (the licence allows reuse): it plays under the narration.
+   *  Always false for a Nura-made clip — there is no video to excerpt. */
   excerpt: boolean;
-  /** The whole video on the publisher's site, https only; null for the recap. */
+  /** The whole video on the publisher's site, https only; null for the recap and for a
+   *  Nura-made clip, which links to nothing off this app. */
   fullUrl: string | null;
   publisher: string | null;
+  /** The warm scene a Nura-made clip plays over (`app.delivery.feed.clipmaker.SCENES`); null
+   *  for a publisher clip, which shows the still instead. */
+  scene: string | null;
+  /** A Nura-made clip's own captions, already timed; empty for a publisher clip, whose
+   *  captions are fetched from `GET …/feed/{item}/clip/captions` instead. */
+  captions: readonly ClipCaption[];
+  durationMs: number | null;
 }
 
 export function clipOf(item: Pick<FeedItemOut, "format" | "cite">): ClipView | null {
   if (item.format !== "clip") return null;
-  const cite = (item.cite ?? {}) as { excerpt?: unknown; full_url?: unknown; publisher?: unknown; media?: unknown };
+  const cite = (item.cite ?? {}) as {
+    excerpt?: unknown;
+    full_url?: unknown;
+    publisher?: unknown;
+    media?: unknown;
+    kind?: unknown;
+    scene?: unknown;
+    source?: unknown;
+    duration_ms?: unknown;
+    captions?: unknown;
+  };
+  if (cite.kind === "nura_made") {
+    const scene = typeof cite.scene === "string" && cite.scene.trim() !== "" ? cite.scene : "morning";
+    const captions = Array.isArray(cite.captions)
+      ? cite.captions
+          .filter(
+            (one): one is { at_ms: unknown; text: unknown } =>
+              typeof one === "object" && one !== null
+          )
+          .filter((one) => typeof one.at_ms === "number" && typeof one.text === "string" && one.text.trim() !== "")
+          .map((one) => ({ atMs: one.at_ms as number, text: one.text as string }))
+      : [];
+    const durationMs = typeof cite.duration_ms === "number" ? cite.duration_ms : null;
+    return { kind: "nura_made", excerpt: false, fullUrl: null, publisher: null, scene, captions, durationMs };
+  }
   const video = cite.media === "video";
   const fullUrl = video && typeof cite.full_url === "string" && cite.full_url.startsWith("https://") ? cite.full_url : null;
   const publisher = typeof cite.publisher === "string" && cite.publisher.trim() !== "" ? cite.publisher : null;
-  return { excerpt: video && cite.excerpt === true, fullUrl: fullUrl && publisher ? fullUrl : null, publisher };
+  return {
+    kind: "publisher",
+    excerpt: video && cite.excerpt === true,
+    fullUrl: fullUrl && publisher ? fullUrl : null,
+    publisher,
+    scene: null,
+    captions: [],
+    durationMs: null,
+  };
 }
 
 export function cardView(item: FeedItemOut): CardView {

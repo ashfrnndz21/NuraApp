@@ -755,6 +755,8 @@ export const en = {
     // @patient phrase
     play: "Play",
     // @patient phrase
+    watchAgain: "Watch again",
+    // @patient phrase
     watchWhole: "Watch the whole video at {publisher}",
     // @patient phrase
     askOrSearch: "Ask or search",
