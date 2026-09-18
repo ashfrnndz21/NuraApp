@@ -1271,6 +1271,10 @@ export const ms = {
       done: "Itu sahaja",
       // @patient
       term: "Doktor panggilnya {term}.",
+      // @patient
+      countNone: "Nura belum tulis apa-apa lagi.",
+      // @patient
+      count: "Nura sudah tulis {n} perkara.",
     },
     asks: {
       // @patient

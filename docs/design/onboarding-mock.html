@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chief of Health — onboarding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2B2733;--soft:#6A6377;--plum:#4E3A78;--good:#3B7A57;--watch:#B8741A;--paper:rgba(255,255,255,.92);--glass:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Outfit',system-ui,sans-serif;color:var(--ink);background:#F5F1F4;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:var(--ink)}
+.page{max-width:1180px;margin:0 auto;padding:40px 24px 80px}
+h1{font-weight:400;font-size:26px}
+.lede{color:var(--soft);margin-top:8px;max-width:66ch;line-height:1.5;font-size:15px}
+.wrap{display:grid;grid-template-columns:400px 1fr;gap:40px;margin-top:32px;align-items:start}
+@media (max-width:900px){.wrap{grid-template-columns:1fr}}
+.phone{width:100%;max-width:392px;margin:0 auto;background:#1c1a20;border-radius:50px;padding:12px;box-shadow:0 30px 60px rgba(40,30,60,.18)}
+.screen{position:relative;border-radius:40px;overflow:hidden;height:820px;padding:18px 18px 100px;background:linear-gradient(160deg,#DCD5EE,#F1DCE6 45%,#DCE8DF);overflow-y:auto;scrollbar-width:none}
+.screen::-webkit-scrollbar{display:none}
+.screen::before{content:"";position:fixed;inset:0;pointer-events:none}
+.status{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);padding:6px 6px 0}
+.status b{font-weight:500;color:var(--ink)}
+.prog{display:flex;gap:5px;margin:14px 4px 0}
+.prog i{flex:1;height:5px;border-radius:999px;background:rgba(255,255,255,.6)}
+.prog i.on{background:var(--plum)}
+.step{display:none}.step.on{display:block}
+h2{font-size:24px;font-weight:500;line-height:1.15;margin-top:22px;padding:0 4px}
+.sub{font-size:16px;color:var(--soft);margin-top:6px;padding:0 4px;line-height:1.45}
+.assist{display:flex;gap:10px;margin-top:16px;align-items:flex-start}
+.assist .a{width:34px;height:34px;border-radius:50%;background:var(--plum);flex:none;position:relative}
+.assist .a::after{content:"";position:absolute;left:10px;top:10px;width:14px;height:14px;border-radius:50%;background:#fff;opacity:.9}
+.assist p{background:var(--paper);border-radius:4px 18px 18px 18px;padding:12px 14px;font-size:15px;line-height:1.5;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.card{background:var(--paper);border-radius:20px;padding:16px;margin-top:14px;box-shadow:0 8px 24px rgba(60,40,80,.06)}
+.card.glass{background:var(--glass);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.7)}
+.card .t{font-size:17px;font-weight:500}
+.card .s{font-size:14px;color:var(--soft);margin-top:3px;line-height:1.45}
+.sso{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+.sso button{height:54px;border-radius:999px;background:var(--paper);font-size:16px;font-weight:500;box-shadow:0 4px 14px rgba(60,40,80,.06);display:flex;align-items:center;justify-content:center;gap:10px}
+.sso button.dark{background:var(--ink);color:#fff}
+.sso button i{width:18px;height:18px;border-radius:50%;background:currentColor;opacity:.85}
+.or{text-align:center;font-size:13px;color:var(--soft);margin-top:14px}
+.field{margin-top:12px}
+.field label{display:block;font-size:13px;color:var(--soft);margin:0 0 6px 4px}
+.field input,.field select{width:100%;height:50px;border-radius:14px;border:1.5px solid rgba(255,255,255,.9);background:var(--paper);padding:0 14px;font-size:17px;outline:none}
+.field input:focus{border-color:var(--plum)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.seg{display:flex;background:rgba(255,255,255,.6);border-radius:999px;padding:4px;margin-top:6px}
+.seg button{flex:1;height:40px;border-radius:999px;font-size:15px;color:var(--soft)}
+.seg button.on{background:#fff;color:var(--plum);font-weight:500;box-shadow:0 2px 8px rgba(60,40,80,.12)}
+.cloud{display:flex;flex-wrap:wrap;gap:8px 8px;margin-top:14px;align-items:center}
+.w{background:var(--paper);border-radius:999px;padding:8px 14px;line-height:1.2;box-shadow:0 3px 12px rgba(60,40,80,.06);border:1.5px solid transparent;transition:transform .15s,opacity .25s;color:var(--ink)}
+.w.s1{font-size:14px;color:#544D5E}.w.s2{font-size:16px}.w.s3{font-size:19px;font-weight:500}
+.w.on{background:var(--plum);color:#fff;border-color:var(--plum)}
+.w.new{animation:pop .35s ease-out;border-color:rgba(78,58,120,.45);background:#F3EEF8}
+.w.new.on{background:var(--plum)}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+.hint{font-size:14px;color:var(--soft);margin:12px 4px 0;line-height:1.45;min-height:20px}
+.count{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding:0 4px;font-size:14px;color:var(--soft)}
+.ask{margin-top:10px;background:#F3EEF8;border-radius:16px;padding:12px 14px}
+.ask .q{font-size:15px;font-weight:500}
+.ask .opts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ask .opts button{background:#fff;border-radius:999px;padding:7px 12px;font-size:14px;border:1.5px solid transparent}
+.ask .opts button.on{border-color:var(--plum);color:var(--plum);font-weight:500}
+.stmt{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid rgba(43,39,51,.08)}
+.stmt:first-child{border-top:0}
+.stmt p{flex:1;font-size:16px;line-height:1.4}
+.stmt .yn{display:flex;gap:4px;flex:none}
+.stmt .yn button{width:38px;height:34px;border-radius:10px;background:#F3EEF8;font-size:13px}
+.stmt .yn button.y.on{background:#E6F0E9;color:#2F6247;font-weight:500}
+.stmt .yn button.n.on{background:#F7E4E1;color:#7A2E24;font-weight:500}
+.gap{font-size:14px;color:var(--soft);line-height:1.5}
+.gap li{margin-left:18px;padding:2px 0}
+.rec{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid rgba(43,39,51,.08)}
+.rec:first-child{border-top:0}
+.rec i{width:34px;height:34px;border-radius:11px;background:#EFE9F5;flex:none;display:flex;align-items:center;justify-content:center;color:var(--plum);font-size:13px;font-weight:500}
+.rec b{display:block;font-size:15px;font-weight:500}
+.rec span{font-size:13px;color:var(--soft);line-height:1.4}
+.up{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.up button{height:64px;border-radius:16px;background:var(--paper);font-size:14px;font-weight:500;box-shadow:0 4px 14px rgba(60,40,80,.06);padding:0 10px;line-height:1.3}
+.up button.done{background:#E6F0E9;color:#2F6247}
+.learn{list-style:none;margin-top:6px}
+.learn li{font-size:14px;padding:7px 0;border-top:1px solid rgba(43,39,51,.06);display:flex;gap:8px;align-items:flex-start;line-height:1.4;animation:pop .3s ease-out}
+.learn li:first-child{border-top:0}
+.learn li i{width:8px;height:8px;border-radius:50%;background:var(--good);flex:none;margin-top:7px}
+.learn li i.w{background:var(--watch)}
+.bar{height:8px;border-radius:999px;background:rgba(43,39,51,.08);margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--plum);border-radius:999px;width:20%;transition:width .5s}
+.nav{position:sticky;bottom:-100px;margin:18px -18px -100px;padding:14px 14px 22px;display:flex;gap:10px;background:linear-gradient(180deg,transparent,rgba(245,241,244,.95) 30%)}
+.nav button{flex:1;height:52px;border-radius:999px;background:var(--paper);font-size:16px;font-weight:500;box-shadow:0 6px 18px rgba(60,40,80,.08)}
+.nav button.plum{background:var(--plum);color:#fff;flex:2}
+.pill{display:flex;align-items:center;justify-content:center;height:50px;border-radius:999px;background:var(--paper);font-size:16px;font-weight:500;margin-top:12px;box-shadow:0 4px 14px rgba(60,40,80,.06)}
+.preview{margin-top:14px;border-radius:22px;padding:14px;background:linear-gradient(160deg,#DCD5EE,#F1DCE6);border:1px dashed rgba(78,58,120,.35)}
+.preview .lab{font-size:12px;color:var(--soft)}
+.preview .one{background:var(--paper);border-radius:16px;padding:14px;margin-top:8px}
+.preview .one b{display:block;font-size:19px;font-weight:500}
+.preview .one span{font-size:14px;color:var(--soft)}
+.side{background:#fff;border:1px solid rgba(43,39,51,.08);border-radius:24px;padding:24px 26px;position:sticky;top:24px}
+.side h2{font-size:16px;margin:0}
+.side p{font-size:13px;color:var(--soft);line-height:1.5;margin-top:4px}
+.side h3{font-size:13px;font-weight:500;color:var(--soft);margin-top:20px;padding-top:14px;border-top:1px solid rgba(43,39,51,.08)}
+.side ul{list-style:none;margin-top:6px}
+.side li{font-size:14px;line-height:1.5;padding:3px 0}
+.side li.dim{color:#B3ACBA}
+.side .k{color:var(--soft)}
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Onboarding — the app learns you before it shows you anything</h1>
+  <p class="lede">Sign in with something you already have. Then a few facts, a word cloud that deepens as you tap, a read-back to check I understood, and an assistant that explains why records come next. The panel on the right shows the context being written as you go.</p>
+
+  <div class="wrap">
+  <div class="phone"><div class="screen" id="sc">
+    <div class="status"><b>Set up</b><span id="stepname">Sign in</span></div>
+    <div class="prog" id="prog"></div>
+
+    <!-- 0 sign in -->
+    <div class="step on" data-name="Sign in">
+      <h2>Let's start with you</h2>
+      <div class="sub">Use an account you already have. No new password.</div>
+      <div class="sso">
+        <button class="dark" onclick="sso('Apple')"><i></i>Continue with Apple</button>
+        <button onclick="sso('Google')"><i style="background:#4E3A78"></i>Continue with Google</button>
+        <button onclick="sso('email')"><i style="background:#6F9A82"></i>Continue with email</button>
+      </div>
+      <div class="or">or</div>
+      <div class="field"><label>Phone number</label><input type="text" value="+60 12 345 6789"></div>
+      <button class="pill" onclick="sso('phone')">Send me a code</button>
+      <div class="card glass" style="margin-top:18px"><div class="t" style="font-size:15px">Setting up for someone else?</div><div class="s">You can do that after you're in. It works the same way, in their name and language.</div></div>
+    </div>
+
+    <!-- 1 about you -->
+    <div class="step" data-name="About you">
+      <h2>A few things about you</h2>
+      <div class="sub">These set your reference ranges and how I talk to you.</div>
+      <div class="field"><label>Name</label><input type="text" id="f-name" value="Ashwin" oninput="ctx()"></div>
+      <div class="two"><div class="field"><label>Born</label><input type="text" id="f-dob" value="1968" oninput="ctx()"></div><div class="field"><label>Sex</label><select id="f-sex" onchange="ctx()"><option>Male</option><option>Female</option></select></div></div>
+      <div class="two"><div class="field"><label>Height</label><input type="text" id="f-h" value="170 cm" oninput="ctx()"></div><div class="field"><label>Weight</label><input type="text" id="f-w" value="82 kg" oninput="ctx()"></div></div>
+      <div class="field"><label>Language you'd like to hear</label><div class="seg" id="lang"><button class="on" onclick="segp(this,'lang')">English</button><button onclick="segp(this,'lang')">Malay</button><button onclick="segp(this,'lang')">Mandarin</button><button onclick="segp(this,'lang')">Hokkien</button></div></div>
+      <div class="field"><label>How do you like things?</label><div class="seg" id="mode"><button class="on" onclick="segp(this,'mode')">Detailed</button><button onclick="segp(this,'mode')">Simple, one thing at a time</button></div></div>
+    </div>
+
+    <!-- 2 word cloud -->
+    <div class="step" data-name="Your health">
+      <h2>What's part of your health?</h2>
+      <div class="assist"><div class="a"></div><p id="cloudmsg">Tap anything that applies. When you tap one, I'll show what often goes with it. Nothing here is a diagnosis; it tells me where to look.</p></div>
+      <div class="cloud" id="cloud"></div>
+      <div id="askbox"></div>
+      <div class="count"><span id="cnt">Nothing yet</span><button style="color:var(--plum);font-weight:500" onclick="toast('Tell me in your own words and I will place them.')">Or just tell me</button></div>
+    </div>
+
+    <!-- 3 replay -->
+    <div class="step" data-name="Check">
+      <h2>Here's what I understood</h2>
+      <div class="assist"><div class="a"></div><p>Tell me if any of this isn't right. I'd rather fix it now than build on it.</p></div>
+      <div class="card" id="stmts"></div>
+      <div class="card"><div class="t" style="font-size:15px">What I don't know yet</div><ul class="gap" id="gaps"></ul></div>
+    </div>
+
+    <!-- 4 records -->
+    <div class="step" data-name="Records">
+      <h2>Now, the fuller picture</h2>
+      <div class="assist"><div class="a"></div><p id="recmsg"></p></div>
+      <div class="card"><div class="t" style="font-size:15px">What each record tells me</div>
+        <div class="rec"><i>DL</i><div><b>Discharge letters</b><span>What happened in hospital, what was changed, what to watch for.</span></div></div>
+        <div class="rec"><i>LR</i><div><b>Lab results, any year</b><span>Trends. One cholesterol number is a fact; three are a direction.</span></div></div>
+        <div class="rec"><i>Rx</i><div><b>Prescriptions or the medicine bag</b><span>The real list, reconciled against what you told me.</span></div></div>
+        <div class="rec"><i>CC</i><div><b>Clinic cards and appointment slips</b><span>Your doctors, and when you're next due.</span></div></div>
+        <div class="rec"><i>IN</i><div><b>Insurance card or policy</b><span>What's covered, which hospitals, when a letter is needed.</span></div></div>
+      </div>
+      <div class="up">
+        <button onclick="learn(this,'dl')">Add a discharge letter</button>
+        <button onclick="learn(this,'lr')">Add lab results</button>
+        <button onclick="learn(this,'rx')">Snap the medicine bag</button>
+        <button onclick="learn(this,'cc')">Add a clinic card</button>
+        <button onclick="learn(this,'in')">Snap the insurance card</button>
+        <button onclick="toast('Forward anything to +60 12 345 6789 and I will file it here.')">Forward on WhatsApp</button>
+      </div>
+      <div class="card"><div class="t" style="font-size:15px">What I've learned</div><div class="bar"><i id="bar"></i></div><ul class="learn" id="learned"><li><i class="w"></i>Only what you told me so far. Records make it real.</li></ul></div>
+    </div>
+
+    <!-- 5 questions from records -->
+    <div class="step" data-name="A few questions">
+      <h2>Your records raised a few questions</h2>
+      <div class="assist"><div class="a"></div><p>Short ones. They close the gaps between the papers and today.</p></div>
+      <div id="rq"></div>
+    </div>
+
+    <!-- 6 ready -->
+    <div class="step" data-name="Ready">
+      <h2>Your app is ready</h2>
+      <div class="assist"><div class="a"></div><p>Everything you'll see is built from this. I'll ask for the rest one thing at a time, when it's convenient: your day, your family, your doctors.</p></div>
+      <div class="card"><ul class="learn" id="summary"></ul></div>
+      <div class="preview"><div class="lab">Your Today screen</div><div class="one"><b id="pv-t">Your blood pressure tablet</b><span id="pv-s">One with breakfast.</span></div></div>
+      <button class="pill" onclick="toast('Setup for someone else starts the same way, in their name.')">Set up for someone I care for</button>
+    </div>
+
+    <div class="nav"><button onclick="step(-1)">Back</button><button class="plum" id="next" onclick="step(1)">Next</button></div>
+  </div></div>
+
+  <aside class="side">
+    <h2>Context being written</h2>
+    <p>This is the profile the system holds. Everything on the phone is rendered from it. Nothing here is diagnosed; it's what you said, and where it came from.</p>
+    <h3>Person</h3><ul id="c-person"><li class="dim">Not signed in</li></ul>
+    <h3>Profile</h3><ul id="c-profile"><li class="dim">Nothing yet</li></ul>
+    <h3>Health, as told</h3><ul id="c-health"><li class="dim">Nothing yet</li></ul>
+    <h3>Records</h3><ul id="c-records"><li class="dim">None yet</li></ul>
+    <h3>Gaps the system will ask about</h3><ul id="c-gaps"><li class="dim">Nothing yet</li></ul>
+  </aside>
+  </div>
+</div>
+
+<div id="toast" style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#2B2733;color:#fff;border-radius:16px;padding:12px 18px;font-size:14px;display:none;z-index:9;max-width:420px;line-height:1.4"></div>
+
+<script>
+// ---------- condition graph ----------
+var N={
+ bp:{l:'High blood pressure',w:3,kids:['bp_meds','bp_home','ankles','kidney_chk','heart_doc','stroke_fam']},
+ chol:{l:'Cholesterol',w:3,kids:['statin','muscle','heart_doc','liver']},
+ sugar:{l:'Diabetes, sugar',w:3,kids:['sugar_tabs','insulin','sugar_home','feet','eyes_yr','kidney_chk']},
+ heart:{l:'Heart',w:3,kids:['hf','stent','afib','breathless','thinner','heart_doc']},
+ kidney:{l:'Kidneys',w:2,kids:['kidney_chk','swelling','dialysis']},
+ breath:{l:'Asthma, breathing',w:2,kids:['inhaler','copd','snore']},
+ joints:{l:'Joints, arthritis',w:2,kids:['knee','painkill','falls']},
+ thyroid:{l:'Thyroid',w:1,kids:['thy_tabs']},
+ stomach:{l:'Stomach, reflux',w:2,kids:['reflux_tabs','ulcer']},
+ sleep:{l:'Sleep',w:2,kids:['snore','sleep_tabs']},
+ weight:{l:'Weight',w:2,kids:['glp1','diet']},
+ cancer:{l:'Cancer, past or present',w:1,kids:['cancer_tx','cancer_fu']},
+ stroke:{l:'Stroke, mini-stroke',w:1,kids:['thinner','stroke_fam']},
+ eyes:{l:'Eyes',w:1,kids:['cataract','eyes_yr']},
+ allergy:{l:'Allergies',w:2,kids:['drug_all','food_all']},
+ smoke:{l:'Smoking',w:1,kids:['quit']},
+ hosp:{l:'In hospital, last year',w:2,kids:['dl_have']},
+ meds5:{l:'5 or more medicines',w:2,kids:['bag']},
+ famhx:{l:'Family history',w:2,kids:['stroke_fam','heart_fam','sugar_fam','cancer_fam']},
+ memory:{l:'Memory',w:1,kids:['mem_doc','mem_worry']},
+ // level 2
+ bp_meds:{l:'On tablets for it',w:2,ask:{q:'For how long?',o:['Under a year','1 to 5 years','More than 5']}},
+ bp_home:{l:'Check it at home',w:1,ask:{q:'Usually?',o:['Under 130','130 to 150','Over 150','Not sure']}},
+ ankles:{l:'Swollen ankles',w:1},
+ kidney_chk:{l:'Kidney number watched',w:1},
+ heart_doc:{l:'See a heart doctor',w:1,ask:{q:'How often?',o:['Every 3 months','Every 6','Yearly','Only when needed']}},
+ stroke_fam:{l:'Stroke in the family',w:1},
+ statin:{l:'On a statin',w:2,ask:{q:'Any side effects?',o:['None','Muscle aches','Not sure']}},
+ muscle:{l:'Muscle aches',w:1},
+ liver:{l:'Fatty liver',w:1},
+ sugar_tabs:{l:'Sugar tablets',w:2},
+ insulin:{l:'Insulin',w:2,ask:{q:'How many times a day?',o:['Once','Twice','More']}},
+ sugar_home:{l:'Check sugar at home',w:1},
+ feet:{l:'Numb feet',w:1},
+ eyes_yr:{l:'Eye check yearly',w:1},
+ hf:{l:'Heart failure',w:2,kids:['water_pill','weigh']},
+ stent:{l:'Stent or bypass',w:2,ask:{q:'When?',o:['This year','1 to 5 years ago','Longer']}},
+ afib:{l:'Irregular heartbeat',w:2,kids:['thinner']},
+ breathless:{l:'Breathless on stairs',w:1},
+ thinner:{l:'Blood thinner',w:2,ask:{q:'Which kind?',o:['Warfarin, needs blood tests','A newer one, no tests','Not sure']}},
+ water_pill:{l:'Water pill',w:1},
+ weigh:{l:'Weigh myself',w:1},
+ swelling:{l:'Swelling',w:1},
+ dialysis:{l:'Dialysis',w:2},
+ inhaler:{l:'Use an inhaler',w:1},
+ copd:{l:'COPD',w:1},
+ snore:{l:'Snore, stop breathing at night',w:1},
+ knee:{l:'Knees',w:1},
+ painkill:{l:'Painkillers most days',w:1,ask:{q:'Which?',o:['Paracetamol','Anti-inflammatory','Not sure']}},
+ falls:{l:'A fall this year',w:2},
+ thy_tabs:{l:'Thyroid tablets',w:1},
+ reflux_tabs:{l:'Reflux tablets',w:1},
+ ulcer:{l:'Ulcer before',w:1},
+ sleep_tabs:{l:'Sleeping tablets',w:1},
+ glp1:{l:'Weight-loss injection',w:1},
+ diet:{l:'Trying to lose weight',w:1},
+ cancer_tx:{l:'In treatment now',w:2},
+ cancer_fu:{l:'Follow-up only',w:1},
+ cataract:{l:'Cataract',w:1},
+ drug_all:{l:'Allergic to a medicine',w:2,ask:{q:'Which one?',o:['Penicillin','Aspirin, NSAIDs','Another','Not sure']}},
+ food_all:{l:'Food allergy',w:1},
+ quit:{l:'Quit',w:1},
+ dl_have:{l:'I have the discharge letter',w:1},
+ bag:{l:'I can snap the bag',w:1},
+ heart_fam:{l:'Heart disease in the family',w:1},
+ sugar_fam:{l:'Diabetes in the family',w:1},
+ cancer_fam:{l:'Cancer in the family',w:1},
+ mem_doc:{l:'Seen a doctor about it',w:1},
+ mem_worry:{l:'Family is worried',w:1}
+};
+var TOP=['bp','chol','sugar','heart','kidney','breath','joints','thyroid','stomach','sleep','weight','cancer','stroke','eyes','allergy','smoke','hosp','meds5','famhx','memory'];
+var sel={}, answers={}, order=[];
+var HINT={bp:'High blood pressure, noted. A few things that often go with it appeared below.',chol:'Cholesterol, noted. I added what usually sits beside it.',sugar:'Sugar, noted. I added the checks that go with it.',heart:'Heart, noted. Tell me which part if you can.',kidney:'Kidneys, noted. Often connected to pressure and sugar.',hf:'Heart failure, noted. Two things that matter most for that.',afib:'Irregular heartbeat, noted. Usually comes with a blood thinner.'};
+
+function renderCloud(){
+  var c=document.getElementById('cloud'); c.innerHTML='';
+  var seen={};
+  function add(id,isNew){ if(seen[id])return; seen[id]=true; var n=N[id]; var b=document.createElement('button'); b.className='w s'+n.w+(sel[id]?' on':'')+(isNew?' new':''); b.textContent=n.l; b.onclick=function(){pick(id)}; c.appendChild(b); if(sel[id]&&n.kids){n.kids.forEach(function(k){add(k,lastPick===id)})} }
+  TOP.forEach(function(id){add(id,false)});
+  var n=Object.keys(sel).length;
+  document.getElementById('cnt').textContent=n?n+' noted':'Nothing yet';
+  document.getElementById('next').textContent=(cur===2&&n)?"That's everything":'Next';
+  renderAsk();
+}
+var lastPick=null;
+function pick(id){
+  if(sel[id]){delete sel[id]; order=order.filter(function(x){return x!==id}); (N[id].kids||[]).forEach(function(k){delete sel[k];delete answers[k]}); delete answers[id]; lastPick=null; document.getElementById('cloudmsg').textContent='Removed. Tap anything else that applies.';}
+  else{sel[id]=true; order.push(id); lastPick=id; var h=HINT[id]||(N[id].kids?N[id].l+', noted. I added what often goes with it.':N[id].l+', noted.'); document.getElementById('cloudmsg').textContent=h;}
+  renderCloud(); ctx();
+}
+function renderAsk(){
+  var box=document.getElementById('askbox'); box.innerHTML='';
+  order.forEach(function(id){var n=N[id]; if(!n.ask)return; var d=document.createElement('div'); d.className='ask'; d.innerHTML='<div class="q">'+n.l+': '+n.ask.q+'</div>'; var o=document.createElement('div'); o.className='opts'; n.ask.o.forEach(function(opt){var b=document.createElement('button'); b.textContent=opt; if(answers[id]===opt)b.className='on'; b.onclick=function(){answers[id]=opt; renderAsk(); ctx()}; o.appendChild(b)}); d.appendChild(o); box.appendChild(d)});
+}
+
+// ---------- statements ----------
+function statements(){
+  var out=[];
+  TOP.forEach(function(t){ if(!sel[t])return; var n=N[t]; var parts=[]; (n.kids||[]).forEach(function(k){ if(sel[k]){var s=N[k].l.toLowerCase(); if(answers[k])s+=' ('+answers[k].toLowerCase()+')'; parts.push(s); (N[k].kids||[]).forEach(function(g){if(sel[g])parts.push(N[g].l.toLowerCase()+(answers[g]?' ('+answers[g].toLowerCase()+')':''))}) } }); var s=n.l+(parts.length?': '+parts.join(', ')+'.':'.'); out.push({id:t,text:s}); });
+  return out;
+}
+function gaps(){
+  var g=[]; if(sel.bp_meds||sel.statin||sel.sugar_tabs||sel.meds5||sel.thinner)g.push('Which tablets exactly, and the doses. The medicine bag will tell me.'); if(sel.bp&&!sel.bp_home)g.push('Your usual blood pressure numbers.'); if(sel.chol)g.push('Your last cholesterol result and when.'); if(sel.sugar)g.push('Your last three-month sugar number.'); if(sel.kidney_chk||sel.kidney)g.push('Your last kidney result.'); if(sel.heart_doc||sel.heart)g.push('Your heart doctor\'s name and your next visit.'); if(sel.hosp)g.push('What the discharge letter says was changed.'); if(!g.length)g.push('Your doctors, your medicines, your last results.'); return g;
+}
+var verdict={};
+function renderReplay(){
+  var s=document.getElementById('stmts'); s.innerHTML=''; var st=statements(); if(!st.length){s.innerHTML='<p class="gap">You didn\'t tap anything. That\'s fine; records can fill this in.</p>'}
+  st.forEach(function(x){ var d=document.createElement('div'); d.className='stmt'; d.innerHTML='<p>'+x.text+'</p><div class="yn"><button class="y '+(verdict[x.id]!=='n'?'on':'')+'" onclick="vd(\''+x.id+'\',\'y\')">Yes</button><button class="n '+(verdict[x.id]==='n'?'on':'')+'" onclick="vd(\''+x.id+'\',\'n\')">No</button></div>'; s.appendChild(d)});
+  var g=document.getElementById('gaps'); g.innerHTML=gaps().map(function(x){return '<li>'+x+'</li>'}).join('');
+}
+function vd(id,v){verdict[id]=v; renderReplay(); if(v==='n')toast('Noted. I will not build on that one until you fix it.'); ctx()}
+
+// ---------- records ----------
+var LEARN={
+ dl:['Gleneagles, Feb 2026: two nights for breathlessness. Heart failure confirmed.','Four medicines started or changed at discharge.','Follow-up with Dr Tan was due in March.'],
+ lr:['Cholesterol: 6.1 in 2024, 5.2 in 2025, 4.8 in June. Going the right way.','Three-month sugar: 7.4 in March, 6.8 in June.','Potassium 4.9 in June, at the top of the range.'],
+ rx:['Amlodipine 5 mg, morning. Matches "on tablets for blood pressure".','Atorvastatin 20 mg, night. Matches "on a statin".','Metformin 500 mg, dinner.','Furosemide 20 mg, morning. Not something you mentioned.'],
+ cc:['Dr Tan, heart, Gleneagles Penang. Next visit not on the card.','Polyclinic Air Itam, sugar clinic, every 4 months.'],
+ in:['AIA policy on file. Gleneagles is on the panel.','A letter is needed before any admission. Renews in March.']
+};
+var learned={}, pct=20;
+function learn(btn,k){ if(learned[k])return; learned[k]=true; btn.classList.add('done'); btn.textContent=btn.textContent.replace('Add ','Added ').replace('Snap ','Snapped '); var ul=document.getElementById('learned'); if(ul.querySelector('li i.w'))ul.innerHTML=''; LEARN[k].forEach(function(t,i){setTimeout(function(){var li=document.createElement('li'); li.innerHTML='<i'+(/Not something|top of the range|not on the card/.test(t)?' class="w"':'')+'></i>'+t; ul.appendChild(li)},300+i*450)}); pct=Math.min(95,pct+15); document.getElementById('bar').style.width=pct+'%'; ctx(); }
+function recMsg(){
+  var st=statements(); var bits=[]; if(sel.bp)bits.push('blood pressure'); if(sel.chol)bits.push('cholesterol'); if(sel.sugar)bits.push('sugar'); if(sel.heart)bits.push('your heart'); if(sel.kidney||sel.kidney_chk)bits.push('kidneys');
+  var who=bits.length?bits.join(', ').replace(/, ([^,]*)$/,' and $1'):'your health';
+  document.getElementById('recmsg').textContent="Thank you. That gives me the shape of things: "+who+", and what you take for them. What I don't have is the history: the numbers over time, what your doctors actually wrote, and the exact medicines. I'd like to build that from your records, as many as you have, from any year. You don't need to sort them. Add whatever is to hand, and I'll tell you what each one taught me.";
+}
+function renderRQ(){
+  var box=document.getElementById('rq'); box.innerHTML=''; var qs=[];
+  if(learned.rx&&!sel.water_pill)qs.push({q:'The bag has a water pill, furosemide. You didn\'t mention it. Still taking it?',o:['Yes, every morning','Stopped it','Not sure']});
+  if(learned.lr)qs.push({q:'Your June potassium was at the top of the range. Has anyone rechecked it?',o:['Yes','No','Don\'t know']});
+  if(learned.dl)qs.push({q:'The discharge letter asked for a follow-up in March. Did that happen?',o:['Yes, saw Dr Tan','Not yet','Different doctor']});
+  if(learned.cc)qs.push({q:'When is your next visit to Dr Tan?',o:['This month','Next month','Not booked']});
+  if(!qs.length)qs.push({q:'No records yet, so just one: who is the doctor you see most?',o:['A GP','A specialist','Polyclinic']});
+  qs.forEach(function(x,i){var d=document.createElement('div'); d.className='ask'; d.style.marginTop='12px'; d.innerHTML='<div class="q">'+x.q+'</div>'; var o=document.createElement('div'); o.className='opts'; x.o.forEach(function(opt){var b=document.createElement('button'); b.textContent=opt; b.onclick=function(){o.querySelectorAll('button').forEach(function(z){z.classList.remove('on')}); b.classList.add('on'); answers['rq'+i]=opt; ctx()}; o.appendChild(b)}); d.appendChild(o); box.appendChild(d)});
+}
+function renderSummary(){
+  var ul=document.getElementById('summary'); var items=[]; items.push(document.getElementById('f-name').value+', born '+document.getElementById('f-dob').value+', '+document.getElementById('lang').querySelector('.on').textContent+', '+document.getElementById('mode').querySelector('.on').textContent.toLowerCase()); var st=statements().filter(function(x){return verdict[x.id]!=='n'}); items.push(st.length+' things about your health, checked with you'); var r=Object.keys(learned).length; items.push(r?r+' kinds of records read, '+Object.keys(learned).reduce(function(a,k){return a+LEARN[k].length},0)+' facts learned':'No records yet; I will ask for them one at a time'); items.push('Watching for safety notices on your medicines'); ul.innerHTML=items.map(function(t){return '<li><i></i>'+t+'</li>'}).join('');
+  if(learned.rx){document.getElementById('pv-t').textContent='Your blood pressure tablet';document.getElementById('pv-s').textContent='One with breakfast. Amlodipine, 5 mg.'}else if(sel.bp){document.getElementById('pv-t').textContent='Your blood pressure';document.getElementById('pv-s').textContent='Snap the medicine bag when you can, and I will set up your mornings.'}else{document.getElementById('pv-t').textContent='One thing to add today';document.getElementById('pv-s').textContent='A photo of any result or letter.'}
+}
+
+// ---------- context panel ----------
+var signed=null;
+function ctx(){
+  var p=document.getElementById('c-person'); p.innerHTML=signed?'<li>Signed in with '+signed+'</li><li class="k">+60 12 345 6789</li>':'<li class="dim">Not signed in</li>';
+  var pr=document.getElementById('c-profile'); if(cur>=1){pr.innerHTML='<li>'+document.getElementById('f-name').value+', born '+document.getElementById('f-dob').value+', '+document.getElementById('f-sex').value.toLowerCase()+'</li><li>'+document.getElementById('f-h').value+', '+document.getElementById('f-w').value+'</li><li>Hears: '+document.getElementById('lang').querySelector('.on').textContent+' · '+document.getElementById('mode').querySelector('.on').textContent+'</li>'}else pr.innerHTML='<li class="dim">Nothing yet</li>';
+  var h=document.getElementById('c-health'); var st=statements(); h.innerHTML=st.length?st.map(function(x){return '<li'+(verdict[x.id]==='n'?' class="dim"':'')+'>'+x.text+(verdict[x.id]==='n'?' <span class="k">(disputed)</span>':'')+'</li>'}).join(''):'<li class="dim">Nothing yet</li>';
+  var r=document.getElementById('c-records'); var ks=Object.keys(learned); r.innerHTML=ks.length?ks.map(function(k){return '<li>'+({dl:'Discharge letter',lr:'Lab results',rx:'Medicine bag',cc:'Clinic card',in:'Insurance'})[k]+' <span class="k">· '+LEARN[k].length+' facts</span></li>'}).join(''):'<li class="dim">None yet</li>';
+  var g=document.getElementById('c-gaps'); g.innerHTML=(cur>=2&&Object.keys(sel).length)?gaps().map(function(x){return '<li>'+x+'</li>'}).join(''):'<li class="dim">Nothing yet</li>';
+}
+function sso(k){signed=k; ctx(); step(1)}
+function segp(b,id){document.getElementById(id).querySelectorAll('button').forEach(function(x){x.classList.remove('on')}); b.classList.add('on'); ctx()}
+
+// ---------- stepper ----------
+var cur=0; var steps=document.querySelectorAll('#sc .step'); var prog=document.getElementById('prog');
+steps.forEach(function(s,i){prog.innerHTML+='<i'+(i===0?' class="on"':'')+'></i>'});
+function step(d){ var n=Math.max(0,Math.min(steps.length-1,cur+d)); if(n===cur)return; cur=n; steps.forEach(function(s,i){s.classList.toggle('on',i===cur)}); prog.querySelectorAll('i').forEach(function(b,i){b.classList.toggle('on',i<=cur)}); document.getElementById('stepname').textContent=steps[cur].dataset.name; document.getElementById('next').textContent=cur===steps.length-1?'Open the app':'Next'; if(cur===2)renderCloud(); if(cur===3)renderReplay(); if(cur===4)recMsg(); if(cur===5)renderRQ(); if(cur===6)renderSummary(); document.getElementById('sc').scrollTop=0; ctx(); }
+var tt; function toast(m){var t=document.getElementById('toast'); t.textContent=m; t.style.display='block'; clearTimeout(tt); tt=setTimeout(function(){t.style.display='none'},2600)}
+renderCloud(); ctx();
+</script>
+</body>
+</html>
