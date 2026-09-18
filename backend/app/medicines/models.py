@@ -124,6 +124,13 @@ class MedicationLine(ProfileScoped, Base):
     """A prescription medicine, a supplement or a TCM remedy (E04-03) — from the registry's
     own `DrugMatch.product_kind`. Nullable: a line written before this column existed carries
     none, and is read as a prescription medicine, the only kind the register held then."""
+    category: Mapped[str | None] = mapped_column(String(32), default=None)
+    """The Health Analyst's own question, "is this something to ask about the way a
+    supplement is" (`app.reasoning.analyst`, migration 0049) — a plain string, not
+    `ProductKind`: `product_kind` is the register's classification of the product; this is
+    a second word beside it, free to diverge from a future write path, never assumed to
+    agree. Nullable: a line written before this column existed, or by any path that has not
+    set it, carries none, and `RuleAnalyst` never treats an unset category as "supplement"."""
     registry_confidence: Mapped[float | None] = mapped_column(Float, default=None)
     """How sure the register was that its match is this product (`DrugMatch.confidence`,
     #206): 1.0 for a registration number or a name whose strength and form both matched;

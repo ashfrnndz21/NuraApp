@@ -152,6 +152,11 @@ class MemoSource(StrEnum):
     """A search job found something worth asking the doctor (#181/#224) — a safety notice
     whose words would change treatment, rerouted here rather than shown as a card. Stored as
     plain `VARCHAR` (`enum_column`), so this needed no migration."""
+    ANALYST = "analyst"
+    """The Health Analyst found a candidate insight whose words would change treatment,
+    rerouted here the same way a search job's is (`app.reasoning.analyst.pipeline`, #236) —
+    never printed as a card or a report line. Stored as plain `VARCHAR`, so this needed no
+    migration either."""
 
 
 class Memo(RenderedFromState, ProfileScoped, Base):

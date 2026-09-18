@@ -72,6 +72,14 @@ class Settings:
     first-party API does not process in SG or MY and no in-region provider exists yet
     (ADR 0017) — a laptop dev run stays on `rule`. A name this build does not have refuses to
     start."""
+    analyst: str = "rule"
+    """NURA_ANALYST: which `Analyst` writes the Health Analyst's weekly report
+    (`app.reasoning.analyst.provider.analyst_for`). `rule` (the default) is today's behaviour,
+    unchanged — `app.reasoning.analyst.rule.RuleAnalyst`; `claude` is the agent
+    (`app.reasoning.analyst.claude_adapter.ClaudeAnalyst`), which only builds on a declared
+    demo (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process in SG or MY
+    and no in-region provider exists yet (ADR 0017) — a laptop dev run stays on `rule`. A name
+    this build does not have refuses to start."""
     drafter: str = "rule"
     """NURA_DRAFTER: what writes a care-navigation drafted message (T3,
     `app.reasoning.navigation.drafter_provider.drafter_for`). `rule` (the default) is the
@@ -324,6 +332,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
         anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         narrator=source.get("NURA_NARRATOR", "fixture"),
+        analyst=source.get("NURA_ANALYST", "rule"),
         asker=source.get("NURA_ASKER", "rule"),
         drafter=source.get("NURA_DRAFTER", "rule"),
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,

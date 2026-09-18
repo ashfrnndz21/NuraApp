@@ -32,6 +32,7 @@ import app.medicines.models
 import app.memory.models
 import app.notes.models
 import app.onboarding.models
+import app.reasoning.analyst.models
 import app.reasoning.feelings.models
 import app.reasoning.models
 import app.reasoning.visits.models
