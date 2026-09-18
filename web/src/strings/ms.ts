@@ -308,6 +308,26 @@ export const ms = {
     // @patient
     noneOther: "Nura tiada apa-apa berhampiran {name} untuk ini lagi.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Tulis draf mesej",
+    // @patient headline
+    sheetTitle: "Draf mesej anda",
+    // @patient phrase
+    copy: "Salin",
+    // @patient
+    copied: "Sudah disalin, sedia untuk ditampal di tempat anda mahu hantar.",
+    // @patient phrase
+    sendBySms: "Hantar melalui mesej teks",
+    // @patient phrase
+    sendByWhatsApp: "Hantar melalui WhatsApp",
+    // @patient
+    copyOnly: "Tiada nombor untuk tempat ini, jadi salin mesej ini dan hantar sendiri.",
+    // @patient
+    loading: "Nura sedang menulis mesej.",
+    // @patient
+    error: "Nura tidak dapat menulis mesej buat masa ini.",
+  },
   health: {
     // @patient headline
     title: "Kesihatan anda",
@@ -1172,6 +1192,16 @@ export const ms = {
     // @patient headline
     questionsTitle: "Soalan untuk lawatan anda",
     // @patient phrase
+    costOpen: "Anggaran kosnya",
+    // @patient phrase
+    costOpenOther: "Anggaran kos lawatan {patient}",
+    // @patient headline
+    costTitle: "Anggaran kosnya",
+    // @patient phrase
+    costCoveredLabel: "Perlindungan insurans anda mungkin membayar",
+    // @patient phrase
+    costCoveredLabelOther: "Perlindungan insurans {patient} mungkin membayar",
+    // @patient phrase
     questionLabel: "Soalan anda",
     // @patient phrase
     questionAdd: "Simpan soalan ini",
@@ -1450,6 +1480,10 @@ export const ms = {
       // @patient
       kindOther: "Ini surat kesihatan.",
       // @patient
+      kindPillPhoto: "Ini gambar sebiji pil.",
+      // @patient
+      kindPharmacyReceipt: "Ini resit farmasi.",
+      // @patient
       unreadable: "Nura tidak dapat membaca yang ini.",
       // @patient
       typeIt: "Sila taip apa yang tertulis pada surat itu.",
@@ -1463,6 +1497,8 @@ export const ms = {
       dated: "Surat ini bertarikh {date}.",
       // @patient
       highRisk: "Nura lebih berhati-hati dengan ubat ini.",
+      // @patient
+      pillProposal: "Ini kelihatan seperti {medicine} — semak dengan ahli farmasi.",
       // @patient
       fromPhoto: "Daripada gambar yang anda tambah pada {date}.",
       // @patient phrase
@@ -1614,6 +1650,22 @@ export const ms = {
         amount: "Jumlah wang",
         date: "Tarikh",
         for: "Untuk apa tuntutan itu",
+      },
+      pill: {
+        imprint: "Apa yang tertera padanya",
+        colour: "Warnanya",
+        shape: "Bentuknya",
+        score_line: "Sama ada ia boleh dibelah",
+      },
+      receipt: {
+        pharmacy: "Farmasi",
+        currency: "Mata wang",
+      },
+      item: {
+        name: "Apa yang dibeli",
+        quantity: "Berapa banyak",
+        unit_price: "Harga seunit",
+        total: "Jumlah harga",
       },
     },
   },

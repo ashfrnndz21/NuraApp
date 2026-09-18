@@ -7,7 +7,7 @@ import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, sendPaper, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
-import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, provenanceLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
+import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, pillProposalLine, provenanceLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { fill, language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
@@ -196,10 +196,12 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
     }
   };
 
+  const proposal = pillProposalLine(card, s);
   const head = [
     kindLine(card.document_kind, s),
     ...(card.document_date ? [fill(r.dated, { date: paperDate(card.document_date, locale) })] : []),
     ...(card.high_risk_class ? [r.highRisk] : []),
+    ...(proposal ? [proposal] : []),
   ];
   const fields = [...card.fields].sort((a, b) => a.position - b.position);
   const patient = density() === "patient";

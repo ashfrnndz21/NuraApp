@@ -125,6 +125,20 @@ export interface Strings {
     near: string; nearOther: string;
     none: string; noneOther: string;
   };
+  /** Care navigation with drafted messages (T3): "Draft a message" on a provider row or a
+   *  letter's follow-up line, and the sheet it opens. Nura only ever drafts; the send links
+   *  and "Copy" say plainly that he or his chief sends it themselves. */
+  navigation: {
+    draftAction: string;
+    sheetTitle: string;
+    copy: string;
+    copied: string;
+    sendBySms: string;
+    sendByWhatsApp: string;
+    copyOnly: string;
+    loading: string;
+    error: string;
+  };
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his day
    *  and Coming up. Every figure and status word beside these is the backend's own
    *  (`health_tab.py`); these are only the screen's own headings and the few lines the backend
@@ -530,6 +544,11 @@ export interface Strings {
     questionsOpen: string;
     questionsOpenOther: string;
     questionsTitle: string;
+    costOpen: string;
+    costOpenOther: string;
+    costTitle: string;
+    costCoveredLabel: string;
+    costCoveredLabelOther: string;
     questionLabel: string;
     questionAdd: string;
     questionCheck: string;
@@ -669,6 +688,9 @@ export interface Strings {
       kindInsuranceClaim: string;
       kindDeviceScreen: string;
       kindOther: string;
+      kindPillPhoto: string;
+      kindPharmacyReceipt: string;
+      pillProposal: string;
       unreadable: string;
       typeIt: string;
       fromPage: string;

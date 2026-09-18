@@ -136,6 +136,8 @@ export interface LineOut {
   missed: boolean;
   /** The backend's source line: where the line came from and on which day, in his words. */
   source: string;
+  /** "S$15 a month", from a pharmacy receipt's matched lines; null where none has matched. */
+  monthly_cost_said?: string | null;
   /** The `medication` fact the line is the typed view of (a reorder card cites it). */
   fact_id?: string;
   /** How sure, as a number and in words (E04-01): a line written on a person's yes is
@@ -570,6 +572,38 @@ export interface PolicyOut {
   set_at: string;
 }
 
+/** A typical fee range's own source (T3): who published it, the page, and the day it was
+ *  read — always shown beside the range, never a bare number. */
+export interface CostSourceOut {
+  publisher: string;
+  url: string;
+  fetched_at: string;
+}
+
+/** The cost expectation (T3, `GET /profiles/{id}/visits/{appointmentId}/cost`,
+ *  `app.insurance.cost_expectation`): a typical fee range from a public fee benchmark, cited
+ *  and dated, never a quote. `found=false` means no benchmark matched — `low_cents`,
+ *  `high_cents` and `source` are all null, said plainly in `note`, never guessed at.
+ *  `covered_shown=false` means the caller does not hold `Scope.MONEY` — `covered_low_cents`
+ *  and `covered_high_cents` are null, and `note` names who to ask instead. `*_said` are the
+ *  backend's own rendered amounts, in his region's currency — never formatted here. */
+export interface CostExpectationOut {
+  appointment_id: string;
+  found: boolean;
+  low_cents: number | null;
+  high_cents: number | null;
+  low_said: string | null;
+  high_said: string | null;
+  currency: string;
+  source: CostSourceOut | null;
+  covered_shown: boolean;
+  covered_low_cents: number | null;
+  covered_high_cents: number | null;
+  covered_low_said: string | null;
+  covered_high_said: string | null;
+  note: string[];
+}
+
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
  *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
 export interface EmergencyCardOut {
@@ -849,6 +883,8 @@ export type DocumentKind =
   | "insurance_policy"
   | "insurance_claim"
   | "device_screen"
+  | "pill_photo"
+  | "pharmacy_receipt"
   | "other"
   | "not_health"
   | "unknown"
@@ -1991,4 +2027,38 @@ export interface LedgerOut {
   total_paid_by_patient_cents: number;
   total_paid_by_patient_said: string;
   by_policy: PolicyTotalOut[];
+}
+
+/** Care navigation with drafted messages (T3): one real need on the record a message could
+ *  be drafted for — no drafted text yet (`GET /profiles/{id}/navigation/drafts`). */
+export interface NavigationNeedOut {
+  id: string;
+  kind: "follow_up" | "new_medicine" | "test_due" | "home_care";
+  evidence_kind: string;
+  evidence_id: string;
+  provider_id: string | null;
+  doctor: string | null;
+  when: string | null;
+  category: string | null;
+}
+
+/** One way to reach the provider, built from its own directory contact — `sms:` or
+ *  `https://wa.me/`, never a number typed for the occasion. */
+export interface NavigationContactLinkOut {
+  kind: "sms" | "whatsapp";
+  href: string;
+}
+
+/** The drafted message (`POST /profiles/{id}/navigation/drafts/{need_id}`): text only. Nura
+ *  never sends it — `links` is empty and `copy_only` is true when the provider has no phone
+ *  on file. */
+export interface NavigationDraftOut {
+  need_id: string;
+  kind: "follow_up" | "new_medicine" | "test_due" | "home_care";
+  language: string;
+  text: string;
+  drafted_by: "self" | "caregiver";
+  links: NavigationContactLinkOut[];
+  copy_only: boolean;
+  cites: string[];
 }

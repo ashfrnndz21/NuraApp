@@ -74,10 +74,16 @@ describe("onboarding's words", () => {
 
   it("name every line the paper fixtures can put on a review card, in every language", () => {
     expect(papers.length).toBeGreaterThan(0);
+    // A pharmacy receipt's line subjects are numbered in the order printed (`item_1`,
+    // `item_2`…) and share one set of words (`fieldLabel`'s own `ITEM_SUBJECT` rule).
+    const subjectWords = (subject: string) => (/^item_\d+$/.test(subject) ? "item" : subject);
     for (const code of LANGUAGES) {
       for (const paper of papers) {
         for (const field of paper.fields) {
-          expect(stringsFor(code).onboarding.fields[field.subject]?.[field.attribute], `${code} ${field.subject}.${field.attribute}`).toBeTruthy();
+          expect(
+            stringsFor(code).onboarding.fields[subjectWords(field.subject)]?.[field.attribute],
+            `${code} ${field.subject}.${field.attribute}`,
+          ).toBeTruthy();
         }
       }
     }

@@ -308,6 +308,26 @@ export const en = {
     // @patient
     noneOther: "Nura has nothing near {name} for this yet.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Draft a message",
+    // @patient headline
+    sheetTitle: "Your drafted message",
+    // @patient phrase
+    copy: "Copy",
+    // @patient
+    copied: "It is copied, ready to paste where you send it.",
+    // @patient phrase
+    sendBySms: "Send by text message",
+    // @patient phrase
+    sendByWhatsApp: "Send by WhatsApp",
+    // @patient
+    copyOnly: "There is no number for this place, so copy the message and send it yourself.",
+    // @patient
+    loading: "Nura is writing the message.",
+    // @patient
+    error: "Nura could not write the message just now.",
+  },
   health: {
     // @patient headline
     title: "Your health",
@@ -1172,6 +1192,16 @@ export const en = {
     // @patient headline
     questionsTitle: "Questions for your visit",
     // @patient phrase
+    costOpen: "What it may cost",
+    // @patient phrase
+    costOpenOther: "What {patient}'s visit may cost",
+    // @patient headline
+    costTitle: "What it may cost",
+    // @patient phrase
+    costCoveredLabel: "Your cover may pay",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}'s cover may pay",
+    // @patient phrase
     questionLabel: "Your question",
     // @patient phrase
     questionAdd: "Keep this question",
@@ -1450,6 +1480,10 @@ export const en = {
       // @patient
       kindOther: "This is a health paper.",
       // @patient
+      kindPillPhoto: "This is a photo of a pill.",
+      // @patient
+      kindPharmacyReceipt: "This is a pharmacy receipt.",
+      // @patient
       unreadable: "Nura could not read this one.",
       // @patient
       typeIt: "Please type what the paper says.",
@@ -1463,6 +1497,8 @@ export const en = {
       dated: "The paper is dated {date}.",
       // @patient
       highRisk: "Nura takes extra care with this medicine.",
+      // @patient
+      pillProposal: "This looks like {medicine} — check with the pharmacist.",
       // @patient
       fromPhoto: "From the photo you added on {date}.",
       // @patient phrase
@@ -1616,6 +1652,22 @@ export const en = {
         amount: "The amount",
         date: "The date",
         for: "What the claim was for",
+      },
+      pill: {
+        imprint: "What is printed on it",
+        colour: "Its colour",
+        shape: "Its shape",
+        score_line: "Whether it can be split",
+      },
+      receipt: {
+        pharmacy: "The pharmacy",
+        currency: "The currency",
+      },
+      item: {
+        name: "What was bought",
+        quantity: "How many",
+        unit_price: "The price each",
+        total: "The total price",
       },
     },
   },

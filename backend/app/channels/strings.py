@@ -54,6 +54,39 @@ TEXT: Mapping[str, Mapping[str, Lines]] = {
         ),
         # Under a voice note Nura could not hear; the recording is kept (E02-06).
         "could_not_hear": ("Nura could not hear this note.", "Nura kept the note."),
+        # Care navigation (T3): who is speaking, in the drafted message itself.
+        "navigation_intro_self": ("{patient} is writing this.",),
+        "navigation_intro_caregiver": ("This is {who}, {patient}'s family.",),
+        # The ask, one line each, filled only with a name already on the record — never a
+        # dose, never a diagnosis (app.reasoning.navigation.rule_drafter module doc).
+        "navigation_follow_up": (
+            "{patient} saw {doctor} and needs a check-up.",
+            "Could we book a time, please?",
+        ),
+        "navigation_new_medicine": (
+            "{patient} has a new medicine from {doctor}.",
+            "Could we ask a few questions about it, please?",
+        ),
+        "navigation_test_due": (
+            "{patient} has a test booked at {place}.",
+            "Could you confirm the time, please?",
+        ),
+        "navigation_home_care_nursing": (
+            "We are looking for a home nurse for {patient}.",
+            "Could you send a quote, please?",
+        ),
+        "navigation_home_care_physio": (
+            "We are looking for a physio visit for {patient} at home.",
+            "Could you send a quote, please?",
+        ),
+        "navigation_home_care_meals": (
+            "We are looking for meals sent to {patient} at home.",
+            "Could you send a quote, please?",
+        ),
+        "navigation_home_care_transport": (
+            "We are looking for transport for {patient} to his visits.",
+            "Could you send a quote, please?",
+        ),
     },
     "ms": {
         "code_works_for": ("Kod ini boleh digunakan selama 10 minit.",),
@@ -78,6 +111,36 @@ TEXT: Mapping[str, Mapping[str, Lines]] = {
             "Sila taip apa yang tertulis pada kertas itu.",
         ),
         "could_not_hear": ("Nura tidak dapat mendengar nota ini.", "Nura sudah simpan nota ini."),
+        "navigation_intro_self": ("{patient} yang menulis mesej ini.",),
+        "navigation_intro_caregiver": ("Ini ialah {who}, keluarga {patient}.",),
+        "navigation_follow_up": (
+            "{patient} berjumpa {doctor} dan perlu pemeriksaan susulan.",
+            "Bolehkah kami tempah masa, jika boleh?",
+        ),
+        "navigation_new_medicine": (
+            "{patient} ada ubat baharu daripada {doctor}.",
+            "Bolehkah kami bertanya beberapa soalan tentangnya, jika boleh?",
+        ),
+        "navigation_test_due": (
+            "{patient} ada ujian ditempah di {place}.",
+            "Bolehkah anda sahkan masanya, jika boleh?",
+        ),
+        "navigation_home_care_nursing": (
+            "Kami mencari jururawat di rumah untuk {patient}.",
+            "Bolehkah anda hantar sebut harga, jika boleh?",
+        ),
+        "navigation_home_care_physio": (
+            "Kami mencari lawatan fisio untuk {patient} di rumah.",
+            "Bolehkah anda hantar sebut harga, jika boleh?",
+        ),
+        "navigation_home_care_meals": (
+            "Kami mencari makanan dihantar untuk {patient} di rumah.",
+            "Bolehkah anda hantar sebut harga, jika boleh?",
+        ),
+        "navigation_home_care_transport": (
+            "Kami mencari pengangkutan untuk {patient} ke temujanjinya.",
+            "Bolehkah anda hantar sebut harga, jika boleh?",
+        ),
     },
     "zh": {
         "code_works_for": ("验证码在 10 分钟内有效。",),
@@ -102,6 +165,36 @@ TEXT: Mapping[str, Mapping[str, Lines]] = {
             "请改为手动输入纸上的内容。",
         ),
         "could_not_hear": ("Nura 听不清这段录音。", "Nura 保存了这段录音。"),
+        "navigation_intro_self": ("这是{patient}写的。",),
+        "navigation_intro_caregiver": ("我是{who}，{patient}的家人。",),
+        "navigation_follow_up": (
+            "{patient}看过{doctor}，需要一次复查。",
+            "可以帮忙安排时间吗？",
+        ),
+        "navigation_new_medicine": (
+            "{patient}有{doctor}开的新药。",
+            "可以让我们问几个问题吗？",
+        ),
+        "navigation_test_due": (
+            "{patient}在{place}有一次检查预约。",
+            "可以确认时间吗？",
+        ),
+        "navigation_home_care_nursing": (
+            "我们想为{patient}找一位居家护理员。",
+            "可以给我们报价吗？",
+        ),
+        "navigation_home_care_physio": (
+            "我们想为{patient}安排居家物理治疗。",
+            "可以给我们报价吗？",
+        ),
+        "navigation_home_care_meals": (
+            "我们想为{patient}安排送餐服务。",
+            "可以给我们报价吗？",
+        ),
+        "navigation_home_care_transport": (
+            "我们想为{patient}安排看诊接送。",
+            "可以给我们报价吗？",
+        ),
     },
 }
 """Every line, by key, in each language Nura speaks."""

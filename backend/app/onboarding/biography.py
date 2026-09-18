@@ -57,6 +57,7 @@ from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
 from app.drafts import FactDraft
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.ingestion.documents import PDF_CONTENT_TYPE, store_pdf
 from app.ingestion.extract import DocumentKind, Extractor
@@ -667,6 +668,7 @@ async def add_paper(
     content_type: str,
     captured_at: datetime,
     paper: PaperKind,
+    registry: DrugRegistry | None = None,
 ) -> tuple[BiographyPaper, ReviewCard]:
     """One paper of the sitting: the photo through the capture path — stored in the region,
     read into a review card with per-field confidence — and the paper row naming both, with
@@ -698,6 +700,7 @@ async def add_paper(
             extractor=extractor,
             language=language,
             asked_as=PDF_HINTS.get(paper),
+            registry=registry,
         )
     else:
         artifact = await store_photo(
@@ -716,6 +719,7 @@ async def add_paper(
             store=store,
             extractor=extractor,
             language=language,
+            registry=registry,
         )
     written = await audited_write(
         session,

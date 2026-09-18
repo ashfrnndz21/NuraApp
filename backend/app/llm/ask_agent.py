@@ -76,7 +76,7 @@ from app.memory.timeline import language_for
 from app.reasoning.feelings.service import recent_notes
 from app.reasoning.visits.planner import propose_visits
 from app.safety.boundary import Surface, boundary_lines
-from app.safety.plain_words import verify
+from app.safety.plain_words import _MEDICINE_NOUNS, Finding, verify
 from app.safety.red_flags import detect
 from app.search.ask import (
     _LATIN_WORD,
@@ -229,21 +229,28 @@ _TOOL_DEFS: Final[dict[str, dict[str, Any]]] = {
     },
 }
 
-_RULE_HINTS: Final[dict[int, str]] = {
-    1: "each line is a whole sentence, someone doing something, ending in . ! ? or :",
-    2: "one idea per line",
-    3: "short words and short lines, under ten where it can be done, never over fifteen",
-    4: "call things what he calls them, never the chemical or clinical name alone",
-    5: "say the day and the date in words, never digits, a clock time or a time zone",
-    10: "numbers as digits, small and few — never more than three on one line",
-    11: "never a red word like missed, failed, overdue or non-compliant",
-    12: "nothing to decode — no abbreviations, no units, no jargon like dose or follow-up",
-    13: "the same words every time for the same thing",
-    14: "never a line that starts, stops or changes a medicine",
-}
-"""One short, generic instruction per `docs/plain-words.md` rule (and rule 14, the boundary
-check `_check_boundary` also runs), for the one repair round: the model is told which rules
-its lines broke, never the lines themselves — nothing it wrote leaves this process twice."""
+def _boundary_rewrite(text: str, language: str) -> str | None:
+    """Rule 14's one deterministic rewrite (`docs/plain-words.md` 14, `_check_boundary`): a
+    line that only crosses the boundary — a treatment verb beside a medicine noun, and
+    nothing else wrong with it — is turned into a question for the doctor, the same shape
+    the verifier's own suggestion already names ('a question for the doctor: "Ask Dr Tan
+    about the new amount of the water pill."'), instead of being thrown away outright
+    (defect: every line the model wrote about a medicine dropped, repair round included, and
+    the reader heard nothing). The medicine named is whichever of `_MEDICINE_NOUNS` the
+    offending line already named — never a chemical name, never invented. `None` when the
+    line does not actually name one (should not happen: `_check_boundary` only ever fires
+    when it does), so the caller still falls back to dropping the line."""
+    nouns = _MEDICINE_NOUNS.get(language, _MEDICINE_NOUNS["en"])
+    found = nouns.search(text)
+    if found is None:
+        return None
+    medicine = found.group()
+    if language == "zh":
+        return f"问一问医生关于{medicine}的事。"
+    if language == "ms":
+        return f"Tanya doktor anda tentang {medicine}."
+    article = "" if medicine[:1].isupper() else "the "
+    return f"Ask your doctor about {article}{medicine}."
 
 ANSWER_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
@@ -705,29 +712,36 @@ class ClaudeAsker:
                         break
                     if stop_reason != "tool_use":
                         payload = _structured_json(response)
-                        failed_rules: set[int] = set()
+                        failed_findings: dict[int, Finding] = {}
                         parsed = (
                             None
                             if payload is None
                             else _answer_from_payload(
-                                payload, known, lang, reader, mode, failed_rules
+                                payload, known, lang, reader, mode, failed_findings
                             )
                         )
-                        if parsed is None and failed_rules and not repaired:
+                        if parsed is None and failed_findings and not repaired:
                             # One repair round (defect: "the agent still returns an empty
-                            # answer"): tell the model which rules its lines broke — never
-                            # what it wrote — and give it one more try before falling back.
+                            # answer"): tell the model which rules its lines broke, in the
+                            # verifier's own words for exactly that failure — never the line
+                            # itself — and give it one more try before falling back. A generic
+                            # "never a line that starts, stops or changes a medicine" was not
+                            # concrete enough for the model to fix (defect: rule 14 dropped
+                            # every line, repair round included); the verifier's own rewrite
+                            # ('a question for the doctor: "Ask Dr Tan about the new amount of
+                            # the water pill."') gives it a template to copy.
                             repaired = True
                             log.info(
-                                "claude asker: repair round, rules=%s", sorted(failed_rules)
+                                "claude asker: repair round, rules=%s",
+                                sorted(failed_findings),
                             )
                             assistant_content = getattr(response, "content", None) or []
                             messages.append(
                                 {"role": "assistant", "content": assistant_content}
                             )
                             hints = "; ".join(
-                                _RULE_HINTS.get(rule, f"rule {rule}")
-                                for rule in sorted(failed_rules)
+                                f"{finding.problem} — say instead: {finding.rewrite}"
+                                for _rule, finding in sorted(failed_findings.items())
                             )
                             messages.append(
                                 {
@@ -949,13 +963,16 @@ def _drop(reason: str, *, rules: Sequence[int] = ()) -> None:
         log.info("claude asker: dropped a line, reason=%s", reason)
 
 
-def _plain_words_rules(text: str, language: str) -> tuple[int, ...]:
-    """The `docs/plain-words.md` rule numbers `text` fails, sorted — never the text itself.
-    Logged by `_drop` and, once per ask, handed to the model as `_RULE_HINTS` for the one
-    repair round: which rule, never which words."""
-    return tuple(
-        sorted({finding.rule for finding in verify(text, language, "line") if finding.severity == "fail"})
-    )
+def _plain_words_findings(text: str, language: str) -> list[Finding]:
+    """The `docs/plain-words.md` findings `text` fails, one per broken rule, sorted by rule —
+    never the text itself. Logged (by rule number only) by `_drop`, and handed to the model,
+    problem and rewrite but never the line, as the one repair round's hint."""
+    by_rule = {
+        finding.rule: finding
+        for finding in verify(text, language, "line")
+        if finding.severity == "fail"
+    }
+    return [by_rule[rule] for rule in sorted(by_rule)]
 
 
 def _answer_from_payload(
@@ -964,7 +981,7 @@ def _answer_from_payload(
     language: str,
     reader: Reader,
     mode: Mode,
-    failed_rules: set[int] | None = None,
+    failed_findings: dict[int, Finding] | None = None,
 ) -> Answer | None:
     raw_lines = payload.get("lines")
     if not isinstance(raw_lines, list):
@@ -988,11 +1005,21 @@ def _answer_from_payload(
             _drop("empty_text")
             continue
         if not verified(text, language):
-            rules = _plain_words_rules(text, language)
-            if failed_rules is not None:
-                failed_rules.update(rules)
-            _drop("plain_words_failed", rules=rules)
-            continue
+            findings = _plain_words_findings(text, language)
+            rules = tuple(finding.rule for finding in findings)
+            if failed_findings is not None:
+                for finding in findings:
+                    failed_findings.setdefault(finding.rule, finding)
+            rewritten = _boundary_rewrite(text, language) if rules == (14,) else None
+            if rewritten is not None and verified(rewritten, language):
+                # Rule 14 alone, and nothing else wrong with the line: rewritten into the
+                # catalogue's own shape for it — a question for the doctor — rather than
+                # dropped outright (defect: every medicine line dropped, on both rounds, and
+                # the reader heard nothing at all).
+                text = rewritten
+            else:
+                _drop("plain_words_failed", rules=rules)
+                continue
         if _has_conclusion_language(text, language):
             _drop("conclusion_language")
             continue

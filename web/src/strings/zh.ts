@@ -308,6 +308,26 @@ export const zh = {
     // @patient
     noneOther: "Nura 在{name}附近暂时还没有这项服务。",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "写一条消息草稿",
+    // @patient headline
+    sheetTitle: "您的消息草稿",
+    // @patient phrase
+    copy: "复制",
+    // @patient
+    copied: "已复制，可以粘贴到您要发送的地方。",
+    // @patient phrase
+    sendBySms: "用短信发送",
+    // @patient phrase
+    sendByWhatsApp: "用 WhatsApp 发送",
+    // @patient
+    copyOnly: "这个地方没有号码，请自行复制并发送这条消息。",
+    // @patient
+    loading: "Nura 正在写这条消息。",
+    // @patient
+    error: "Nura 现在无法写这条消息。",
+  },
   health: {
     // @patient headline
     title: "您的健康",
@@ -1172,6 +1192,16 @@ export const zh = {
     // @patient headline
     questionsTitle: "看诊时要问的问题",
     // @patient phrase
+    costOpen: "大概的费用",
+    // @patient phrase
+    costOpenOther: "{patient}这次看诊大概的费用",
+    // @patient headline
+    costTitle: "大概的费用",
+    // @patient phrase
+    costCoveredLabel: "您的保险可能支付",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}的保险可能支付",
+    // @patient phrase
     questionLabel: "您的问题",
     // @patient phrase
     questionAdd: "保存这个问题",
@@ -1450,6 +1480,10 @@ export const zh = {
       // @patient
       kindOther: "这是一份健康文件。",
       // @patient
+      kindPillPhoto: "这是一颗药丸的照片。",
+      // @patient
+      kindPharmacyReceipt: "这是一张药房收据。",
+      // @patient
       unreadable: "这一条 Nura 看不清。",
       // @patient
       typeIt: "请输入文件上写的。",
@@ -1463,6 +1497,8 @@ export const zh = {
       dated: "这份文件的日期是 {date}。",
       // @patient
       highRisk: "这种药 Nura 会格外小心。",
+      // @patient
+      pillProposal: "这看起来像{medicine}——请向药剂师确认。",
       // @patient
       fromPhoto: "来自您在 {date} 加的照片。",
       // @patient phrase
@@ -1614,6 +1650,22 @@ export const zh = {
         amount: "金额",
         date: "日期",
         for: "这次理赔是为了什么",
+      },
+      pill: {
+        imprint: "上面印的字",
+        colour: "颜色",
+        shape: "形状",
+        score_line: "是否有刻痕可以掰开",
+      },
+      receipt: {
+        pharmacy: "药房",
+        currency: "货币",
+      },
+      item: {
+        name: "买了什么",
+        quantity: "数量",
+        unit_price: "单价",
+        total: "总价",
       },
     },
   },
