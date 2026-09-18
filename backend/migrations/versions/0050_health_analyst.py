@@ -42,7 +42,9 @@ def upgrade() -> None:
     op.create_table(
         "insight_report",
         sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column("profile_id", sa.Uuid(), sa.ForeignKey("profile.id"), nullable=False),
+        sa.Column(
+            "profile_id", sa.Uuid(), sa.ForeignKey("profile.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("generated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("week_of", sa.Date(), nullable=False),
         sa.Column("language", sa.String(length=16), nullable=False),
