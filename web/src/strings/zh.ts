@@ -371,7 +371,7 @@ export const zh = {
     weekOf: "这一周从{date}开始",
     sectionTitles: {
       // @patient headline
-      what_changed: "变化",
+      what_changed: "有什么变化",
       // @patient headline
       worth_a_look: "值得留意",
       // @patient headline

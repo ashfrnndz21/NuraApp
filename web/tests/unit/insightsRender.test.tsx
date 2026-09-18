@@ -5,7 +5,7 @@ import { InsightsCard } from "../../src/screens/Health";
 import { InsightRow, ReportBody, SectionCard } from "../../src/screens/Insights";
 import { stringsFor } from "../../src/strings";
 import { StepTrace } from "../../src/ui/kit";
-import { all, byTestId, one, render, text } from "./ui/render";
+import { all, byTestId, render, text } from "./ui/render";
 
 const en = stringsFor("en");
 
@@ -75,13 +75,13 @@ describe("the weekly report screen, drawn from the backend's own words", () => {
         hasNextVisit
       />,
     );
-    expect(text(tree)).toContain("Nothing to flag here this week.");
+    expect(text(tree)).toContain("There is nothing here this week.");
   });
 
   it("boundary lines end the report, after every section", () => {
     const written = report([{ key: "what_changed", title: "What changed", insights: [] }]);
     const tree = render(<ReportBody report={written} s={en} name="Pa" askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit locale="en-SG" />);
-    const boundary = one(all(tree, byTestId("insights-boundary"))[0]!);
+    const boundary = all(tree, byTestId("insights-boundary"))[0]!;
     expect(text([boundary])).toContain("Ask your doctor.");
   });
 

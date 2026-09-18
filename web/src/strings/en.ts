@@ -386,7 +386,7 @@ export const en = {
     // @patient
     sectionWithheld: "This key does not cover this part of {name}'s week.",
     // @patient
-    sectionEmpty: "Nothing to flag here this week.",
+    sectionEmpty: "There is nothing here this week.",
     // @patient phrase
     why: "Why",
     // @patient phrase
