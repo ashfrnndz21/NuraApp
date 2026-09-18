@@ -22,11 +22,13 @@ Acceptance lines this covers:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.drafts import FactDraft
 from app.drugs.fixture import FixtureRegistry
 from app.ingestion.extract import DocumentKind, FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
@@ -34,8 +36,10 @@ from app.ingestion.review import PILL_MAX_CONFIDENCE, card_fields, confirm_revie
 from app.insurance.ledger import medicine_monthly_costs
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
+from app.memory.models import ConfidenceState
 from app.memory.semantic import current_facts
 from app.regions import Region
+from app.safety.high_risk import HighRiskNeedsLabelPhoto, refuse_dose_without_label_photo
 from app.safety.red_flags import FlagKind, open_flags
 from tests.medicines_support import add, label
 from tests.paper import (
@@ -48,6 +52,7 @@ from tests.paper import (
     PHARMACY_RECEIPT,
     PHARMACY_RECEIPT_RED_FLAG,
     PILL_PHOTO,
+    WARFARIN_LABEL,
 )
 from tests.test_ingestion import _card, _decide, _pa, _photo, _yes  # test helpers
 
@@ -282,20 +287,24 @@ async def test_a_pharmacy_receipts_matched_line_sums_into_the_ledger_and_an_unma
     item1_fact = next(fact for fact in facts if fact.id == item1_name.fact_id)
     assert item1_fact.value == "Panadol"
 
-    # And, besides that plain fact, a cost entry for the generic it matched.
+    # And, besides that plain fact, a cost entry for the generic it matched, with the
+    # quantity bought beside the price — what the monthly figure below is worked out from.
     cost_facts = [fact for fact in facts if fact.subject == "medicine_cost"]
     assert len(cost_facts) == 1
     assert cost_facts[0].attribute == "paracetamol"
-    assert cost_facts[0].value == {"total_cents": 1300, "item": "Panadol"}
+    assert cost_facts[0].value == {"total_cents": 1300, "item": "Panadol", "quantity": 2}
     assert cost_facts[0].unit == "SGD"
     assert scope_for_subject("medicine_cost") is Scope.MEDICINES
 
-    # The ledger sums it: one receipt, one month, S$13 a month.
+    # The ledger works out a real month from what was bought and how much he actually takes
+    # a day (1 tablet OD, `tests.medicines_support.label`'s default dose): 2 tablets bought,
+    # 1 a day, is 2/30 of a month, so S$13 buys S$195 worth of month at that rate.
     costs = await medicine_monthly_costs(sg, context=owner, language="en")
     assert len(costs) == 1
     assert costs[0].generic == "paracetamol"
-    assert costs[0].monthly_cents == 1300
-    assert costs[0].monthly_said == "S$13 a month"
+    assert costs[0].currency == "SGD"
+    assert costs[0].monthly_cents == 19500
+    assert costs[0].monthly_said == "S$195 a month"
 
     # The unmatched line (nothing on his list is a hand sanitiser) stays a plain fact only.
     item2_name = next(f for f in decided if f.subject == "item_2" and f.attribute == "name")
@@ -337,3 +346,70 @@ async def test_a_pharmacy_receipt_item_naming_a_red_word_is_flagged_before_the_c
     assert flag.appointment_id is None
     assert flag.payload["found_in"] == "item_1.name"
     assert card.document_kind is DocumentKind.PHARMACY_RECEIPT  # the card still opens as usual
+
+
+async def test_a_pill_photos_review_card_never_grounds_a_high_risk_label_confirm(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """A pill photo is stored as `ArtifactKind.PHOTO`, the very same storage kind a real label
+    photo is — but its own review card says which it was (#pill-receipt clinical-safety
+    review): a warfarin dose submitted with a pill photo's artefact as its source is refused
+    exactly like no photo at all, never silently accepted because the storage kind alone
+    matches (`app.safety.high_risk.is_pill_photo`, checked in both `app.medicines.service.
+    plan` and the `before_fact_write` hook that is the floor under every writer). A real
+    label photo, confirmed the same way, still passes."""
+    owner = await _pa(sg)
+    pill_photo = await _photo(sg, owner, store, PILL_PHOTO)
+    pill_card = await review_photo(
+        sg, context=owner, artifact_id=pill_photo.id, store=store, extractor=extractor, language="en"
+    )
+    assert pill_card.document_kind is DocumentKind.PILL_PHOTO
+    with pytest.raises(HighRiskNeedsLabelPhoto):
+        await add(sg, owner, label("warfarin", "3 mg", "1 tab ON"), pill_photo)
+
+    # A real label photo, confirmed the same way (its own review card, not a bare artefact),
+    # still passes: the rule tells a pill from a label, it does not refuse every photo.
+    label_photo = await _photo(sg, owner, store, WARFARIN_LABEL)
+    label_card = await review_photo(
+        sg, context=owner, artifact_id=label_photo.id, store=store, extractor=extractor, language="en"
+    )
+    assert label_card.document_kind is DocumentKind.MEDICINE_LABEL
+    done = await add(sg, owner, label("warfarin", "3 mg", "1 tab ON"), label_photo)
+    assert done.line.generic == "warfarin"
+
+
+async def test_the_before_fact_write_hook_itself_tells_a_pill_photo_from_a_label(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """The floor under every writer (`app.safety.high_risk.refuse_dose_without_label_photo`)
+    is what actually stops a high-risk dose, whichever module tries to write it — not only
+    `app.medicines.service.plan`'s own earlier check, which is friendlier but not the only
+    door (#pill-receipt clinical-safety review). A `medicine`/`strength` draft naming warfarin,
+    resting on a pill photo's own artefact, is refused here directly; the same draft resting
+    on a real label photo's artefact is not."""
+    owner = await _pa(sg)
+    pill_photo = await _photo(sg, owner, store, PILL_PHOTO)
+    await review_photo(
+        sg, context=owner, artifact_id=pill_photo.id, store=store, extractor=extractor, language="en"
+    )
+    draft = FactDraft(
+        subject="medicine",
+        attribute="strength",
+        value="warfarin 5 mg",
+        unit=None,
+        confidence=0.9,
+        confidence_state=ConfidenceState.CONFIRMED_BY_PERSON,
+        artifact_id=pill_photo.id,
+        event_id=None,
+        episode_id=None,
+        supersedes_id=None,
+    )
+    with pytest.raises(HighRiskNeedsLabelPhoto):
+        await refuse_dose_without_label_photo(sg, owner, draft)
+
+    label_photo = await _photo(sg, owner, store, WARFARIN_LABEL)
+    await review_photo(
+        sg, context=owner, artifact_id=label_photo.id, store=store, extractor=extractor, language="en"
+    )
+    on_label = replace(draft, artifact_id=label_photo.id)
+    await refuse_dose_without_label_photo(sg, owner, on_label)  # does not raise

@@ -392,6 +392,41 @@ export interface InsightsReportEvent {
 
 export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
 
+/** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step
+ *  the instant each real stage of turning a stored photo or PDF into a review card finishes
+ *  — stored, reading, what it found, the red-flag check where one runs, a real link to a
+ *  medicine or visit where one exists, ready — then the card itself. */
+export interface ImportStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+export interface ImportCardEvent {
+  type: "card";
+  card: ReviewCardOut;
+}
+export type ImportStreamEvent = ImportStepEvent | ImportCardEvent | AskRefusalEvent;
+
+/** The not-feeling-well trace (`POST /profiles/{id}/not-feeling-well/stream`): the button
+ *  runs first, entirely unchanged — the red-flag path, the family told — and only then a
+ *  step per real check it made, then the card itself. */
+export interface NfwStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+export interface NfwCardEvent {
+  type: "card";
+  card: WhatToDoOut;
+}
+export type NfwStreamEvent = NfwStepEvent | NfwCardEvent | AskRefusalEvent;
+
+/** Whether the day's self-searches are still to run (`GET /profiles/{id}/feed/jobs/status`):
+ *  the feed's own "Nura is looking for today's reads" line, bound to a real read. */
+export interface JobsStatusOut {
+  looking: boolean;
+}
+
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
 export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";
@@ -580,6 +615,38 @@ export interface AppointmentOut {
   /** The doctor's or clinic's name as the family wrote it (the provider's); absent where the
    *  route does not read it. */
   doctor?: string | null;
+}
+
+/** One id a visit proposal rests on, and the scope it was read under
+ *  (`app.delivery.recommend.models.Evidence`, `EvidenceOut`). */
+export interface VisitEvidenceOut {
+  kind: string;
+  id: string;
+  scope: string;
+}
+
+/** Where a proposal's evidence came from (T2, `app.reasoning.visits.planner.VisitSource`). */
+export type VisitSource = "follow_up" | "medicine_review" | "test_coming" | "screening_due";
+
+/** One visit Nura proposes (T2, `GET /profiles/{id}/visits/proposed`): never booked, never a
+ *  claim about what is wrong — only what the record already holds that a visit would follow
+ *  up on, cited. `purpose` is the backend's own plain-words line, in his voice, pre-filled
+ *  into the booking screen on "Book it"; the row itself says whose suggestion it is in the
+ *  screen's own words (caregiver by name), never this line verbatim to a caregiver. */
+export interface VisitProposalOut {
+  proposal_id: string;
+  source: VisitSource;
+  purpose: string;
+  provider_kind: string | null;
+  suggested_at: string | null;
+  why: VisitEvidenceOut[];
+}
+
+/** Every proposal a key may see right now, and which scopes held none back
+ *  (`app.reasoning.visits.planner.ProposedVisits`). */
+export interface ProposedVisitsOut {
+  proposals: VisitProposalOut[];
+  withheld: string[];
 }
 
 /** One line of the logistics card (E05-03): its part, and the words as printed and spoken. */
@@ -820,6 +887,14 @@ export interface ConditionsOut {
   conditions: ConditionOut[];
 }
 
+/** "Or just tell me" (`POST /onboarding/tell-me`): the condition codes his own words tagged —
+ *  already the cloud's own words, never a new one — and `red_flag`, true when a red word means
+ *  `conditions` is deliberately empty and he is sent to the safety path instead. */
+export interface TellMeOut {
+  conditions: string[];
+  red_flag: boolean;
+}
+
 export type Density = "detailed" | "simple";
 
 /** The settings screen, whole (`PUT /profiles/{id}/settings` replaces it). The words he
@@ -827,6 +902,8 @@ export type Density = "detailed" | "simple";
 export interface SettingsIn {
   language: string;
   conditions: string[];
+  /** His answer to a tapped word's follow-up question, by the word's code (`ConditionOut.ask`). */
+  answers: Record<string, string>;
   density: Density;
   large_text: boolean;
   high_contrast: boolean;
@@ -844,10 +921,12 @@ export interface SettingsIn {
 }
 
 /** The settings as the caller's key reads them; `withheld` names what it does not open. */
-export interface SettingsOut extends Omit<SettingsIn, "conditions" | "doctor_name" | "birth_decade"> {
+export interface SettingsOut extends Omit<SettingsIn, "conditions" | "answers" | "doctor_name" | "birth_decade"> {
   settings_id: string | null;
   profile_id: string;
   conditions: string[] | null;
+  /** Null exactly when `conditions` is: the same key's read withholds both together. */
+  answers: Record<string, string> | null;
   doctor_name: string | null;
   birth_decade: number | null;
   set_by_person_id: string | null;

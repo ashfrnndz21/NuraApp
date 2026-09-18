@@ -41,9 +41,12 @@ from app.audit.access import audited_read
 from app.db import as_utc, utcnow
 from app.insurance.claim import CLAIM_SCOPE, ClaimStatus, InsuranceClaim
 from app.insurance.policy import Policy, PolicyType
-from app.insurance.strings import CURRENCY_BY_REGION, claim_status_word, say_money
+from app.insurance.strings import CURRENCY_BY_REGION, claim_status_word, say_money, say_money_in
 from app.keys.context import KeyContext
-from app.medicines.strings import say_date, say_monthly_cost
+from app.keys.scopes import Scope
+from app.medicines.dose import Dose, NotADose, daily_amount
+from app.medicines.models import LineStatus, MedicationLine
+from app.medicines.strings import say_amount, say_date, say_monthly_cost, say_supply_cost
 from app.memory.models import Appointment
 from app.memory.semantic import current_facts
 from app.regions import REGION_TZ, Region
@@ -59,7 +62,9 @@ __all__ = [
 
 MEDICINE_COST_SUBJECT = "medicine_cost"
 """What `app.ingestion.review._write_receipt` writes a matched pharmacy receipt line's cost
-under: subject `medicine_cost`, attribute the generic, value carrying `total_cents`."""
+under: subject `medicine_cost`, attribute the generic, value carrying `total_cents` and,
+where the receipt gave one, `quantity`; the fact's own `unit` carries the receipt's currency
+code (`"SGD"`, `"MYR"`), read back here, never the profile's region."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,13 +236,18 @@ def _said(cents: int | None, region: Region) -> str | None:
 
 @dataclass(frozen=True, slots=True)
 class MedicineMonthlyCost:
-    """What one medicine or supplement on his list costs a month, from every pharmacy
-    receipt line matched to it (`app.ingestion.review._write_receipt`), summed and spread
-    over the calendar months a receipt actually fell in — one receipt alone stands for what
-    a month costs; more receipts refine it, never inflate it."""
+    """What one medicine or supplement on his list costs, from every pharmacy receipt line
+    matched to it and paid in one currency (`app.ingestion.review._write_receipt`). Never a
+    sum across currencies — a receipt from across the causeway is its own entry, in its own
+    symbol, beside the home one, not folded into it. `monthly_cents`/`monthly_said` are a
+    real month's cost, worked out from how much of it he actually takes a day
+    (`quantity / (dose a day × 30)`), set only when both the quantity bought and the dose are
+    known; otherwise `monthly_cents` is `None` and `monthly_said` is the plain, honest total
+    and what it bought — never a month invented from a calendar."""
 
     generic: str
-    monthly_cents: int
+    currency: str
+    monthly_cents: int | None
     monthly_said: str
 
 
@@ -245,26 +255,73 @@ async def medicine_monthly_costs(
     session: AsyncSession, *, context: KeyContext, language: str
 ) -> Sequence[MedicineMonthlyCost]:
     """Every medicine or supplement with at least one matched pharmacy receipt line, and what
-    it costs a month. Read under `Scope.MEDICINES` — the same door the medicines list already
+    it costs — a month, when how much he takes a day is known; the plain total and what it
+    bought otherwise. Read under `Scope.MEDICINES` — the same door the medicines list already
     stands behind, not this module's own `Scope.MONEY`: a key that can see what he takes can
-    see what it costs to keep taking it; the claims ledger above is untouched by this."""
+    see what it costs to keep taking it; the claims ledger above is untouched by this.
+
+    Grouped by generic **and** currency (#pill-receipt clinical-safety review): a receipt in
+    another currency from the ones already on file is never summed into them — cents from two
+    currencies added together is not an amount in either — it is its own entry instead, so
+    nothing is silently overstated or under-stated by treating RM and S$ as the same cents."""
     facts = await current_facts(session, context=context, subject=MEDICINE_COST_SUBJECT)
-    by_generic: dict[str, list[Any]] = {}
+    by_generic_currency: dict[tuple[str, str], list[Any]] = {}
     for fact in facts:
-        by_generic.setdefault(fact.attribute, []).append(fact)
-    zone = REGION_TZ[context.region]
+        currency = fact.unit or CURRENCY_BY_REGION[context.region]
+        by_generic_currency.setdefault((fact.attribute, currency), []).append(fact)
+    lines = await audited_read(
+        session,
+        MedicationLine,
+        context,
+        Scope.MEDICINES,
+        where=(
+            MedicationLine.superseded_at.is_(None),
+            MedicationLine.status == LineStatus.ACTIVE,
+        ),
+    )
+    dose_by_generic: dict[str, Dose] = {}
+    for line in lines:
+        try:
+            dose_by_generic[line.generic] = Dose.from_json(line.dose)
+        except (KeyError, ValueError, NotADose):
+            continue  # An unreadable dose is never guessed at; this generic gets no monthly figure.
     out: list[MedicineMonthlyCost] = []
-    for generic in sorted(by_generic):
-        rows = by_generic[generic]
-        months = {as_utc(row.valid_from).astimezone(zone).strftime("%Y-%m") for row in rows}
+    for generic, currency in sorted(by_generic_currency):
+        rows = by_generic_currency[(generic, currency)]
         total_cents = sum(int((row.value or {}).get("total_cents", 0)) for row in rows)
-        monthly_cents = round(total_cents / max(1, len(months)))
+        raw_quantities = [(row.value or {}).get("quantity") for row in rows]
+        known_quantities: list[float] = [
+            q for q in raw_quantities if isinstance(q, int | float) and not isinstance(q, bool)
+        ]
+        total_quantity: float | None = None
+        if raw_quantities and len(known_quantities) == len(raw_quantities):
+            total_quantity = sum(known_quantities)
+        dose = dose_by_generic.get(generic)
+        daily = daily_amount(dose) if dose is not None else None
+        monthly_cents: int | None = None
+        if total_quantity is not None and total_quantity > 0 and daily is not None and daily > 0:
+            months_covered = total_quantity / (daily * 30)
+            if months_covered > 0:
+                monthly_cents = round(total_cents / months_covered)
+        if monthly_cents is not None:
+            said = say_monthly_cost(say_money_in(monthly_cents, currency), language)
+        elif total_quantity is not None and dose is not None:
+            said = say_supply_cost(
+                say_money_in(total_cents, currency),
+                say_amount(total_quantity, dose.unit, language),
+                language,
+            )
+        else:
+            # Neither the quantity bought nor the dose a day is known: the plain total, still
+            # honest, still never a month made up from a calendar.
+            said = say_money_in(total_cents, currency)
         out.append(
             MedicineMonthlyCost(
                 generic=generic,
+                currency=currency,
                 monthly_cents=monthly_cents,
-                monthly_said=say_monthly_cost(say_money(monthly_cents, context.region), language),
+                monthly_said=said,
             )
         )
-    # A deterministic order, the ledger's own rule for any sum: by generic name.
+    # A deterministic order, the ledger's own rule for any sum: by generic name, then currency.
     return out

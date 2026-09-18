@@ -26,6 +26,7 @@ from app.consent.models import (
 )
 from app.consent.service import RecordConsent
 from app.db import as_utc
+from app.delivery.recommend.models import Evidence as VisitEvidence
 from app.drafts import ConfirmSubject
 from app.drugs.registry import ProductKind, ReviewState
 from app.family.documents import Backing, DocumentView
@@ -100,6 +101,7 @@ from app.memory.models import (
     ConfidenceState,
     Event,
     Fact,
+    ProviderKind,
 )
 from app.notes.models import NOTE_LENGTH, Note
 from app.reasoning.visits.logistics import Logistics
@@ -112,6 +114,7 @@ from app.reasoning.visits.models import (
     SummaryItem,
     VisitSummary,
 )
+from app.reasoning.visits.planner import ProposedVisits, VisitProposal, VisitSource
 from app.reasoning.visits.summary import MAX_TRANSCRIPT_BYTES
 from app.reasoning.visits.summary import Decision as ItemDecision
 from app.regions import Region
@@ -2045,6 +2048,58 @@ class AppointmentOut(BaseModel):
             purpose=appointment.purpose,
             confirmed_by_person_id=appointment.confirmed_by_person_id,
             doctor=doctor,
+        )
+
+
+class EvidenceOut(BaseModel):
+    """One id a proposal or a candidate rests on, and the scope it was read under
+    (`app.delivery.recommend.models.Evidence`)."""
+
+    kind: str
+    id: uuid.UUID
+    scope: Scope
+
+    @classmethod
+    def of(cls, evidence: VisitEvidence) -> EvidenceOut:
+        return cls(kind=evidence.kind, id=evidence.id, scope=evidence.scope)
+
+
+class VisitProposalOut(BaseModel):
+    """One visit Nura proposes (T2, `app.reasoning.visits.planner`): never booked, never
+    contacting a clinic — the surface opens the existing booking screen pre-filled with
+    `provider_kind`/`suggested_at`/`purpose` and books it the ordinary way, on its own yes."""
+
+    proposal_id: str
+    source: VisitSource
+    purpose: str
+    provider_kind: ProviderKind | None
+    suggested_at: datetime | None
+    why: list[EvidenceOut]
+
+    @classmethod
+    def of(cls, proposal: VisitProposal) -> VisitProposalOut:
+        return cls(
+            proposal_id=proposal.proposal_id,
+            source=proposal.source,
+            purpose=proposal.purpose,
+            provider_kind=proposal.provider_kind,
+            suggested_at=None if proposal.suggested_at is None else utc(proposal.suggested_at),
+            why=[EvidenceOut.of(one) for one in proposal.why],
+        )
+
+
+class ProposedVisitsOut(BaseModel):
+    """Every proposal a key may see right now, and which scopes held none back
+    (`app.reasoning.visits.planner.ProposedVisits`)."""
+
+    proposals: list[VisitProposalOut]
+    withheld: list[Scope]
+
+    @classmethod
+    def of(cls, proposed: ProposedVisits) -> ProposedVisitsOut:
+        return cls(
+            proposals=[VisitProposalOut.of(one) for one in proposed.proposals],
+            withheld=list(proposed.withheld),
         )
 
 

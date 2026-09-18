@@ -737,6 +737,8 @@ export const zh = {
     // @patient
     askThinking: "Nura 正在找。",
     // @patient
+    lookingForToday: "Nura正在为您找今天的内容。",
+    // @patient
     askAnswered: "Nura回答了。",
     // @patient phrase
     askLookedAt: "Nura查看了：{parts}",
@@ -754,6 +756,8 @@ export const zh = {
     statusDismissed: "{name} 按了“不适合我”。",
     // @patient phrase
     play: "播放",
+    // @patient phrase
+    watchAgain: "再看一次",
     // @patient phrase
     watchWhole: "在{publisher}看完整的视频",
     // @patient phrase
@@ -1060,6 +1064,8 @@ export const zh = {
     send: "发 {count} 份文件",
     // @patient
     sending: "Nura 正在发第 {n} 份，共 {total} 份。",
+    // @patient
+    working: "Nura正在处理。",
     // @patient headline
     found: "Nura 找到的",
     // @patient
@@ -1333,6 +1339,22 @@ export const zh = {
       countNone: "Nura 还没有记下什么。",
       // @patient
       count: "Nura 已经记下 {n} 项。",
+      // @patient phrase
+      tellMe: "或者直接告诉我",
+      // @patient
+      tellMeLead: "用您自己的话说。",
+      // @patient phrase
+      tellMeLabel: "用您自己的话",
+      // @patient phrase
+      tellMeSend: "发送",
+      // @patient
+      tellMeNothing: "Nura 没有找到对应的词。",
+      // @patient
+      tellMeNothingSub: "请试试点选。",
+      // @patient
+      tellMeSafety: "Nura 不会把这个变成上面的词。",
+      // @patient
+      tellMeSafetySub: "请告诉您信任的人，或现在就寻求帮助。",
     },
     asks: {
       // @patient
@@ -2368,6 +2390,22 @@ export const zh = {
     linkLabel: "通话链接，如果有的话",
     // @patient phrase
     callLabelLabel: "给这通电话取个名字",
+  },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "来自您的出院信",
+    // @patient phrase
+    medicineReviewWhy: "来自您的药",
+    // @patient phrase
+    testComingWhy: "来自您的验血",
+    // @patient phrase
+    screeningDueWhy: "来自您的文件",
+    // @patient
+    rowOther: "Nura建议{name}去看医生。",
+    // @patient phrase
+    bookIt: "预约",
+    // @patient phrase
+    notNow: "现在不用",
   },
   review: {
     // @patient headline

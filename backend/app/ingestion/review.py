@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, time
 from enum import StrEnum
@@ -78,7 +78,7 @@ from app.keys.scopes import Scope
 from app.medicines.models import LineStatus, MedicationLine
 from app.memory.attach import attach_from_ingestion
 from app.memory.episodic import held_here, record_event, require_artifact
-from app.memory.models import Artifact, ConfidenceState, EventKind, Fact
+from app.memory.models import Appointment, Artifact, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact
 from app.memory.working import require_open_episode
 from app.regions import REGION_TZ
@@ -304,8 +304,75 @@ def _cards_held_here(context: KeyContext) -> Any:
     )
 
 
-@audited(Action.WRITE, Scope.RECORDS, CARD)
-async def review_artifact(
+class ImportStepKey(StrEnum):
+    """One real stage of turning a stored photo or PDF into a review card, in the order
+    `review_artifact_stream` yields them. Never every stage runs for every artefact: a
+    document kind outside `RED_FLAG_SCANNED_KINDS` never raises `RED_FLAG_CHECKED` (only a
+    lab report, a pill photo, or a pharmacy receipt is scanned, `_red_flag_scan`), and
+    `LINKED` is yielded only when a real match was found — no invented step, no step for a
+    check that did not run."""
+
+    STORED = "stored"
+    READING = "reading"
+    FOUND = "found"
+    RED_FLAG_CHECKED = "red_flag_checked"
+    LINKED = "linked"
+    READY = "ready"
+
+
+@dataclass(frozen=True, slots=True)
+class ImportStep:
+    """One `ImportStepKey`, with the short, already-checked strings a step may carry so the
+    trace can say what it found — never a row, the way `app.search.ask.AskStep` carries only
+    a count. `document_kind`/`document_date`/`facility` are the paper's own real fields
+    (`FOUND`); `linked_kind` is `"medicine"` or `"visit"` and `linked_label` is the matched
+    line's or visit's own name (`LINKED`)."""
+
+    key: ImportStepKey
+    document_kind: str | None = None
+    facility: str | None = None
+    document_date: str | None = None
+    linked_kind: str | None = None
+    linked_label: str | None = None
+
+
+async def _linked_match(
+    session: AsyncSession, *, context: KeyContext, extraction: Extraction
+) -> ImportStep | None:
+    """Whether this page's own fields name a medicine already on the record, or land on the
+    same day as a visit already on the spine — read-only, from the profile's own rows alone
+    (the signal-locality rule), never written anywhere. `None` when neither matches: the
+    trace shows a link only when one is real (module docstring)."""
+    named = next(
+        (field.value for field in extraction.fields if (field.subject, field.attribute) == MEDICINE_NAME),
+        None,
+    )
+    if isinstance(named, str) and named.strip() and context.allows(Scope.MEDICINES):
+        word = named.strip().lower()
+        lines = await audited_read(
+            session,
+            MedicationLine,
+            context,
+            Scope.MEDICINES,
+            where=(MedicationLine.superseded_at.is_(None),),
+        )
+        for line in lines:
+            if word in line.generic.lower() or (line.brand is not None and word in line.brand.lower()):
+                return ImportStep(key=ImportStepKey.LINKED, linked_kind="medicine", linked_label=line.generic)
+    if extraction.document_date is not None and context.allows(Scope.VISITS):
+        tz = REGION_TZ[context.region]
+        visits = await audited_read(session, Appointment, context, Scope.VISITS)
+        for visit in visits:
+            if as_utc(visit.scheduled_at).astimezone(tz).date() == extraction.document_date:
+                return ImportStep(
+                    key=ImportStepKey.LINKED,
+                    linked_kind="visit",
+                    linked_label=as_utc(visit.scheduled_at).astimezone(tz).date().isoformat(),
+                )
+    return None
+
+
+async def review_artifact_stream(
     session: AsyncSession,
     *,
     context: KeyContext,
@@ -316,14 +383,23 @@ async def review_artifact(
     asked_as: DocumentKind | None = None,
     source: DocumentSource | None = None,
     registry: DrugRegistry | None = None,
-) -> ReviewCard:
-    """Read a stored photo or PDF into a review card: one field per extracted statement, the
-    extractor's confidence on each, the kind and date of the paper, and — from the drug the
-    card names — whether the label rule guards it. `asked_as` goes to the extractor as the
-    hint and onto the card; `source` is where an imported PDF came from. `registry` is what a
-    pill photo's guess is matched against (`_capped_pill_fields`); omitted, a pill photo's
-    fields still reach the card, unmatched and still capped."""
+) -> AsyncIterator[ImportStep | ReviewCard]:
+    """`review_artifact`, streamed: an `ImportStep` the instant each real stage of turning a
+    stored photo or PDF into a review card finishes, then the `ReviewCard` itself, last.
+    `review_artifact` is this, drained — the relationship `recall`/`recall_stream` already
+    have (`app.search.ask`) — so the plain route and the streamed one can never answer the
+    pipeline two different ways.
+
+    The order is the pipeline's own, unchanged from `review_artifact`: stored, then read,
+    then what it found, then the red-flag check where one really runs, then a real link if
+    one exists, then the card. Nothing here waits to look slower and nothing is skipped to
+    look faster — a caller that never reads the generator (`review_artifact`) still does
+    every step, in the same order, in the same unit of work. `registry` is what a pill
+    photo's guess is matched against (`_capped_pill_fields`); omitted, a pill photo's fields
+    still reach the card, unmatched and still capped."""
+    context.require(Scope.RECORDS)
     artifact = await require_artifact(session, context=context, artifact_id=artifact_id)
+    yield ImportStep(key=ImportStepKey.STORED)
     data = await store.get(artifact.storage_key)
     if extractor.external_processor is not None:
         # Written before the call, in the same unit of work as the card: a reach that sends
@@ -340,10 +416,25 @@ async def review_artifact(
             rows=1,
             shared_with_label=extractor.external_processor,
         )
+    yield ImportStep(key=ImportStepKey.READING)
     extraction = await extractor.extract(
         data,
         artifact.content_type,
         Hints(language=language, region=context.region, expected=asked_as),
+    )
+    facility = next(
+        (
+            field.value
+            for field in extraction.fields
+            if field.attribute == "facility" and isinstance(field.value, str)
+        ),
+        None,
+    )
+    yield ImportStep(
+        key=ImportStepKey.FOUND,
+        document_kind=extraction.document_kind.value,
+        facility=facility,
+        document_date=None if extraction.document_date is None else extraction.document_date.isoformat(),
     )
     if extraction.document_kind in RED_FLAG_SCANNED_KINDS:
         # The red-flag path first, exactly like typed free text (`app.safety.red_flags`
@@ -352,7 +443,11 @@ async def review_artifact(
         # ("breathless at rest", "chest pain") is read the same way a transcript is — and so
         # is a pill photo's free-text guess or a pharmacy receipt's item name.
         await _red_flag_scan(session, context=context, artifact=artifact, extraction=extraction)
-    return await card_from(
+        yield ImportStep(key=ImportStepKey.RED_FLAG_CHECKED)
+    linked = await _linked_match(session, context=context, extraction=extraction)
+    if linked is not None:
+        yield linked
+    card = await card_from(
         session,
         context=context,
         artifact=artifact,
@@ -361,6 +456,47 @@ async def review_artifact(
         source=source,
         registry=registry,
     )
+    yield ImportStep(key=ImportStepKey.READY)
+    yield card
+
+
+@audited(Action.WRITE, Scope.RECORDS, CARD)
+async def review_artifact(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    artifact_id: uuid.UUID,
+    store: ObjectStore,
+    extractor: Extractor,
+    language: str,
+    asked_as: DocumentKind | None = None,
+    source: DocumentSource | None = None,
+    registry: DrugRegistry | None = None,
+) -> ReviewCard:
+    """`review_artifact_stream`, drained: the card alone, for a caller that does not stream
+    (the existing `POST /profiles/{id}/photos` and `/imports` routes, unchanged). Read a
+    stored photo or PDF into a review card: one field per extracted statement, the
+    extractor's confidence on each, the kind and date of the paper, and — from the drug the
+    card names — whether the label rule guards it. `asked_as` goes to the extractor as the
+    hint and onto the card; `source` is where an imported PDF came from. `registry` is what a
+    pill photo's guess is matched against (`_capped_pill_fields`); omitted, a pill photo's
+    fields still reach the card, unmatched and still capped."""
+    card: ReviewCard | None = None
+    async for event in review_artifact_stream(
+        session,
+        context=context,
+        artifact_id=artifact_id,
+        store=store,
+        extractor=extractor,
+        language=language,
+        asked_as=asked_as,
+        source=source,
+        registry=registry,
+    ):
+        if isinstance(event, ReviewCard):
+            card = event
+    assert card is not None
+    return card
 
 
 async def review_photo(
@@ -951,15 +1087,20 @@ async def _write_receipt(
         )
         if matched is None:
             continue
+        quantity_field = item.get("quantity")
+        quantity = (
+            quantity_field.value
+            if quantity_field is not None and isinstance(quantity_field.value, int | float)
+            else None
+        )
         total_field = item.get("total")
         total_cents = _cents(total_field.value) if total_field is not None else None
         if total_cents is None:
-            quantity = item.get("quantity")
             unit_price = item.get("unit_price")
             unit_price_cents = _cents(unit_price.value) if unit_price is not None else None
             if unit_price_cents is None:
                 continue
-            count = quantity.value if quantity is not None and isinstance(quantity.value, int | float) else 1
+            count = quantity if quantity is not None else 1
             total_cents = round(unit_price_cents * count)
         cost_fact = await _write_fact_for(
             session,
@@ -967,7 +1108,7 @@ async def _write_receipt(
             card=card,
             subject=MEDICINE_COST_SUBJECT,
             attribute=matched.generic,
-            value={"total_cents": total_cents, "item": name.value},
+            value={"total_cents": total_cents, "item": name.value, "quantity": quantity},
             unit=currency,
             event_id=None,
             valid_from=opens,

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "The word cloud of onboarding (docs/onboarding.html, 'What's part of your health?'). Each condition: how large it sits in the cloud (weight 1-3), its name in English, Malay and Chinese, and the related conditions shown beside it once it is tapped. Nothing here is a diagnosis: a tapped word says where to look. Names are his words (docs/plain-words.md); the tests check every one.",
+  "note": "The word cloud of onboarding (docs/onboarding.html, 'What's part of your health?'). Each condition: how large it sits in the cloud (weight 1-3), its name in English, Malay and Chinese, and the related conditions shown beside it once it is tapped. A handful also carry 'ask': the one follow-up question the mock shows once that word is tapped ('On tablets for it -> For how long?'), its options each with a short id and its own text in the three languages. His answer becomes a condition_answer fact, his own word, never inferred. Nothing here is a diagnosis: a tapped word says where to look. Names are his words (docs/plain-words.md); the tests check every one.",
   "top": [
     "high_blood_pressure",
     "cholesterol",
@@ -45,25 +45,55 @@
     "family_history": {"weight": 2, "names": {"en": "Illness in the family", "ms": "Penyakit dalam keluarga", "zh": "家人有病史"}, "related": ["stroke_in_family", "heart_in_family", "diabetes_in_family", "cancer_in_family"]},
     "memory": {"weight": 1, "names": {"en": "Forgetting things", "ms": "Selalu lupa", "zh": "记性不好"}, "related": ["memory_seen_doctor", "family_worried"]},
 
-    "bp_tablets": {"weight": 2, "names": {"en": "Blood pressure tablets", "ms": "Ubat darah tinggi", "zh": "血压药"}, "related": []},
-    "bp_at_home": {"weight": 1, "names": {"en": "Check blood pressure at home", "ms": "Periksa tekanan darah di rumah", "zh": "在家量血压"}, "related": []},
+    "bp_tablets": {"weight": 2, "names": {"en": "Blood pressure tablets", "ms": "Ubat darah tinggi", "zh": "血压药"}, "related": [], "ask": {"question": {"en": "For how long?", "ms": "Sudah berapa lama?", "zh": "吃了多久?"}, "options": [
+      {"id": "under_a_year", "text": {"en": "Under a year", "ms": "Kurang setahun", "zh": "不到一年"}},
+      {"id": "one_to_five_years", "text": {"en": "1 to 5 years", "ms": "1 hingga 5 tahun", "zh": "1到5年"}},
+      {"id": "more_than_five", "text": {"en": "More than 5", "ms": "Lebih 5 tahun", "zh": "超过5年"}}
+    ]}},
+    "bp_at_home": {"weight": 1, "names": {"en": "Check blood pressure at home", "ms": "Periksa tekanan darah di rumah", "zh": "在家量血压"}, "related": [], "ask": {"question": {"en": "Usually?", "ms": "Biasanya?", "zh": "通常多少?"}, "options": [
+      {"id": "under_130", "text": {"en": "Under 130", "ms": "Bawah 130", "zh": "低于130"}},
+      {"id": "between_130_and_150", "text": {"en": "130 to 150", "ms": "130 hingga 150", "zh": "130到150"}},
+      {"id": "over_150", "text": {"en": "Over 150", "ms": "Lebih 150", "zh": "超过150"}},
+      {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
+    ]}},
     "swollen_ankles": {"weight": 1, "names": {"en": "Swollen ankles", "ms": "Buku lali bengkak", "zh": "脚踝肿"}, "related": []},
     "kidney_watched": {"weight": 1, "names": {"en": "Kidney number checked by a doctor", "ms": "Doktor pantau nombor buah pinggang", "zh": "医生有在检查肾功能"}, "related": []},
-    "heart_doctor": {"weight": 1, "names": {"en": "See a heart doctor", "ms": "Jumpa doktor jantung", "zh": "看心脏科医生"}, "related": []},
+    "heart_doctor": {"weight": 1, "names": {"en": "See a heart doctor", "ms": "Jumpa doktor jantung", "zh": "看心脏科医生"}, "related": [], "ask": {"question": {"en": "How often?", "ms": "Berapa kerap?", "zh": "多久一次?"}, "options": [
+      {"id": "every_3_months", "text": {"en": "Every 3 months", "ms": "Setiap 3 bulan", "zh": "每3个月"}},
+      {"id": "every_6_months", "text": {"en": "Every 6 months", "ms": "Setiap 6 bulan", "zh": "每6个月"}},
+      {"id": "yearly", "text": {"en": "Yearly", "ms": "Setiap tahun", "zh": "每年"}},
+      {"id": "only_when_needed", "text": {"en": "Only when needed", "ms": "Hanya bila perlu", "zh": "只在需要时"}}
+    ]}},
     "stroke_in_family": {"weight": 1, "names": {"en": "Stroke in the family", "ms": "Strok dalam keluarga", "zh": "家人有中风"}, "related": []},
-    "cholesterol_tablet": {"weight": 2, "names": {"en": "The cholesterol tablet", "ms": "Ubat kolesterol", "zh": "降胆固醇药"}, "related": []},
+    "cholesterol_tablet": {"weight": 2, "names": {"en": "The cholesterol tablet", "ms": "Ubat kolesterol", "zh": "降胆固醇药"}, "related": [], "ask": {"question": {"en": "Any side effects?", "ms": "Ada kesan sampingan?", "zh": "有副作用吗?"}, "options": [
+      {"id": "none", "text": {"en": "None", "ms": "Tiada", "zh": "没有"}},
+      {"id": "muscle_aches", "text": {"en": "Muscle aches", "ms": "Sakit otot", "zh": "肌肉酸痛"}},
+      {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
+    ]}},
     "muscle_aches": {"weight": 1, "names": {"en": "Muscle aches", "ms": "Sakit otot", "zh": "肌肉酸痛"}, "related": []},
     "fatty_liver": {"weight": 1, "names": {"en": "Fatty liver", "ms": "Hati berlemak", "zh": "脂肪肝"}, "related": []},
     "sugar_tablets": {"weight": 2, "names": {"en": "Sugar tablets", "ms": "Ubat gula", "zh": "降糖药"}, "related": []},
-    "insulin": {"weight": 2, "names": {"en": "Insulin", "ms": "Insulin", "zh": "胰岛素"}, "related": []},
+    "insulin": {"weight": 2, "names": {"en": "Insulin", "ms": "Insulin", "zh": "胰岛素"}, "related": [], "ask": {"question": {"en": "How many times a day?", "ms": "Berapa kali sehari?", "zh": "一天几次?"}, "options": [
+      {"id": "once", "text": {"en": "Once", "ms": "Sekali", "zh": "一次"}},
+      {"id": "twice", "text": {"en": "Twice", "ms": "Dua kali", "zh": "两次"}},
+      {"id": "more", "text": {"en": "More", "ms": "Lebih", "zh": "更多"}}
+    ]}},
     "sugar_at_home": {"weight": 1, "names": {"en": "Check sugar at home", "ms": "Periksa gula di rumah", "zh": "在家验血糖"}, "related": []},
     "numb_feet": {"weight": 1, "names": {"en": "Numb feet", "ms": "Kaki kebas", "zh": "脚麻"}, "related": []},
     "eye_check_every_year": {"weight": 1, "names": {"en": "Eye check every year", "ms": "Periksa mata setiap tahun", "zh": "每年检查眼睛"}, "related": []},
     "weak_heart": {"weight": 2, "names": {"en": "A weak heart", "ms": "Jantung lemah", "zh": "心脏衰弱"}, "related": ["water_pill", "weigh_myself"]},
-    "stent_or_bypass": {"weight": 2, "names": {"en": "Stent or bypass", "ms": "Stent atau bypass jantung", "zh": "支架或搭桥"}, "related": []},
+    "stent_or_bypass": {"weight": 2, "names": {"en": "Stent or bypass", "ms": "Stent atau bypass jantung", "zh": "支架或搭桥"}, "related": [], "ask": {"question": {"en": "When?", "ms": "Bila?", "zh": "什么时候?"}, "options": [
+      {"id": "this_year", "text": {"en": "This year", "ms": "Tahun ini", "zh": "今年"}},
+      {"id": "one_to_five_years_ago", "text": {"en": "1 to 5 years ago", "ms": "1 hingga 5 tahun lalu", "zh": "1到5年前"}},
+      {"id": "longer_ago", "text": {"en": "Longer ago", "ms": "Lebih lama", "zh": "更早"}}
+    ]}},
     "uneven_heartbeat": {"weight": 2, "names": {"en": "Uneven heartbeat", "ms": "Degupan jantung tidak sekata", "zh": "心跳不规律"}, "related": ["blood_thinner"]},
     "breathless_on_stairs": {"weight": 1, "names": {"en": "Out of breath on stairs", "ms": "Sesak nafas naik tangga", "zh": "上楼梯会喘"}, "related": []},
-    "blood_thinner": {"weight": 2, "names": {"en": "Blood thinner", "ms": "Ubat cair darah", "zh": "薄血药"}, "related": []},
+    "blood_thinner": {"weight": 2, "names": {"en": "Blood thinner", "ms": "Ubat cair darah", "zh": "薄血药"}, "related": [], "ask": {"question": {"en": "Which kind?", "ms": "Jenis apa?", "zh": "哪一种?"}, "options": [
+      {"id": "warfarin", "text": {"en": "Warfarin, needs blood tests", "ms": "Warfarin, perlu ujian darah", "zh": "华法林，需要验血"}},
+      {"id": "newer", "text": {"en": "A newer one, no blood tests", "ms": "Jenis baharu, tiada ujian darah", "zh": "较新的药，不需要验血"}},
+      {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
+    ]}},
     "water_pill": {"weight": 1, "names": {"en": "The water pill", "ms": "Pil air", "zh": "去水药"}, "related": []},
     "weigh_myself": {"weight": 1, "names": {"en": "Weigh most mornings", "ms": "Timbang berat badan hampir setiap pagi", "zh": "大多数早上量体重"}, "related": []},
     "swelling": {"weight": 1, "names": {"en": "Swelling", "ms": "Bengkak", "zh": "水肿"}, "related": []},
@@ -72,7 +102,11 @@
     "lung_trouble": {"weight": 1, "names": {"en": "Long-term lung trouble", "ms": "Masalah paru-paru lama", "zh": "长期肺病"}, "related": []},
     "snoring": {"weight": 1, "names": {"en": "Snore, stop breathing at night", "ms": "Berdengkur, berhenti bernafas waktu malam", "zh": "打鼾、夜里停止呼吸"}, "related": []},
     "knees": {"weight": 1, "names": {"en": "Knees", "ms": "Lutut", "zh": "膝盖"}, "related": []},
-    "pain_tablets_most_days": {"weight": 1, "names": {"en": "Pain tablets most days", "ms": "Ubat sakit hampir setiap hari", "zh": "几乎每天吃止痛药"}, "related": []},
+    "pain_tablets_most_days": {"weight": 1, "names": {"en": "Pain tablets most days", "ms": "Ubat sakit hampir setiap hari", "zh": "几乎每天吃止痛药"}, "related": [], "ask": {"question": {"en": "Which?", "ms": "Ubat yang mana?", "zh": "哪一种?"}, "options": [
+      {"id": "paracetamol", "text": {"en": "Fever and pain tablets", "ms": "Ubat demam dan sakit", "zh": "退烧止痛药"}},
+      {"id": "anti_inflammatory", "text": {"en": "A stronger pain tablet", "ms": "Ubat sakit yang lebih kuat", "zh": "较强的止痛药"}},
+      {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
+    ]}},
     "fall_this_year": {"weight": 2, "names": {"en": "A fall this year", "ms": "Jatuh tahun ini", "zh": "今年跌倒过"}, "related": []},
     "thyroid_tablets": {"weight": 1, "names": {"en": "Thyroid tablets", "ms": "Ubat tiroid", "zh": "甲状腺药"}, "related": []},
     "reflux_tablets": {"weight": 1, "names": {"en": "Reflux tablets", "ms": "Ubat pedih ulu hati", "zh": "胃酸药"}, "related": []},
@@ -83,7 +117,12 @@
     "cancer_treatment_now": {"weight": 2, "names": {"en": "In treatment now", "ms": "Sedang dirawat", "zh": "正在治疗"}, "related": []},
     "cancer_checkups_only": {"weight": 1, "names": {"en": "Only check-ups now", "ms": "Hanya pemeriksaan sekarang", "zh": "现在只是定期检查"}, "related": []},
     "cataract": {"weight": 1, "names": {"en": "Cataract", "ms": "Katarak", "zh": "白内障"}, "related": []},
-    "medicine_allergy": {"weight": 2, "names": {"en": "Allergic to a medicine", "ms": "Alah kepada ubat", "zh": "对某种药过敏"}, "related": []},
+    "medicine_allergy": {"weight": 2, "names": {"en": "Allergic to a medicine", "ms": "Alah kepada ubat", "zh": "对某种药过敏"}, "related": [], "ask": {"question": {"en": "Which one?", "ms": "Ubat yang mana?", "zh": "哪一种药?"}, "options": [
+      {"id": "penicillin", "text": {"en": "An infection medicine, like Penicillin", "ms": "Ubat jangkitan, seperti Penisilin", "zh": "感染药物，像青霉素"}},
+      {"id": "aspirin_or_anti_inflammatory", "text": {"en": "Aspirin or a stronger pain tablet", "ms": "Aspirin atau ubat sakit yang lebih kuat", "zh": "阿司匹林或较强的止痛药"}},
+      {"id": "another", "text": {"en": "Another one", "ms": "Ubat lain", "zh": "另一种药"}},
+      {"id": "not_sure", "text": {"en": "Not sure", "ms": "Tak pasti", "zh": "不确定"}}
+    ]}},
     "food_allergy": {"weight": 1, "names": {"en": "Food allergy", "ms": "Alahan makanan", "zh": "食物过敏"}, "related": []},
     "quit_smoking": {"weight": 1, "names": {"en": "Quit smoking", "ms": "Sudah berhenti merokok", "zh": "已经戒烟"}, "related": []},
     "have_hospital_letter": {"weight": 1, "names": {"en": "Have the hospital letter", "ms": "Ada surat hospital", "zh": "有出院信"}, "related": []},

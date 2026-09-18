@@ -140,7 +140,9 @@ async def seed_demo(session: AsyncSession, settings: Settings, providers: Provid
         owner = await _seed_pa(session, settings, pa_phone)
         await _seed_mei(session, owner, mei_phone)
         await _seed_area(session, owner)
-        await _seed_medicines(session, owner, providers.drug_registry)
+        medicine_lines = await _seed_medicines(session, owner, providers.drug_registry)
+        blood_pressure = next(r for r in medicine_lines if r.line.generic == "amlodipine")
+        await _seed_explainer_clip(session, owner, providers.drug_registry, blood_pressure)
         await _seed_readings(session, owner)
         await _seed_visits(session, owner)
         await _seed_home_care(session, owner)
@@ -328,7 +330,9 @@ NEW_MEDICINE_AGO = timedelta(days=3)
 """Inside both `new_medicine_explainer`'s 14-day window and its own 7-day "recent" boost."""
 
 
-async def _seed_medicines(session: AsyncSession, owner: KeyContext, registry: DrugRegistry) -> None:
+async def _seed_medicines(
+    session: AsyncSession, owner: KeyContext, registry: DrugRegistry
+) -> list[Reconciled]:
     lines: list[Reconciled] = []
     for item in MEDICINES:
         if item[0] == NEW_MEDICINE:
@@ -373,6 +377,66 @@ async def _seed_medicines(session: AsyncSession, owner: KeyContext, registry: Dr
                 continue  # the one skipped dose
             taken_at = day.replace(hour=hour, minute=0, second=0, microsecond=0)
             await _write_past_dose(session, owner, metformin, anchor, taken_at)
+    return lines
+
+
+async def _seed_explainer_clip(
+    session: AsyncSession, owner: KeyContext, registry: DrugRegistry, medicine: Reconciled
+) -> None:
+    """A Nura-made explainer clip for Pa's new blood-pressure tablet (RE-07, item 1), so the
+    demo shows the clip card and not only the publisher's kind. `RuleClipMaker` — no model,
+    no network — composes the script from the same catalogue lines his medicine's own story
+    already says (`app.medicines.story.medication_story`'s `purpose`), the way a real "new
+    medicine" gap would once the planner offers this alongside its search job (deliberately
+    not wired there yet, `app.delivery.feed.clipmaker`'s own module doc)."""
+    from app.delivery.feed.clipmaker import ClipTopic, RuleClipMaker, explainer_clip_item
+    from app.delivery.feed.days import today_for
+    from app.medicines.story import medication_story
+    from app.state.service import current_state
+
+    line = medicine.line
+    monograph = registry.monograph(line.generic)
+    story = medication_story(
+        generic=line.generic,
+        strength=line.strength,
+        dose=Dose.from_json(line.dose),
+        prescriber=line.prescriber,
+        change_kind=line.change_kind,
+        monograph=monograph,
+        language="en",  # Pa is seeded in English (`_seed_pa`)
+    )
+    # `story.name` is already his own words for it, "your blood pressure tablet"
+    # (`app.medicines.strings.PLAIN_NAME`) — the why line names it as it is; the headline
+    # capitalises it, the way every other card's headline starts a sentence.
+    topic = ClipTopic(
+        why_topic=story.name,
+        headline=story.name[:1].upper() + story.name[1:] + ", explained",
+        evidence=f"a new medicine: {line.generic} {line.strength}",
+        # `story.purpose` alone (2 lines for amlodipine) makes a script under 20s: too short
+        # to be the clip the card claims to be (`clipmaker.clip_length_ok`). `how_to_take`
+        # says the one more thing that is genuinely his to hear before the boundary — what
+        # to do with the tablet, not only what it is for — and together they land in the
+        # 20-30s window (`MIN_LINES`/`MAX_LINES`, `clipmaker.py`'s own module doc).
+        catalogue_lines=tuple(story.purpose) + tuple(story.how_to_take),
+        doctor=DOCTOR,
+    )
+    script = RuleClipMaker().make(topic, "en")
+    if script is None:
+        return
+    state = await current_state(session, context=owner)
+    day = today_for(owner)
+    await explainer_clip_item(
+        session,
+        context=owner,
+        state=state,
+        script=script,
+        fact_ids=(str(line.fact_id),),
+        scope=Scope.MEDICINES,
+        day_key=day.key,
+        dedupe_key=f"explainer_clip:{line.generic}",
+        expires_at=day.now + timedelta(days=90),
+        gap=line.generic,
+    )
 
 
 # --- readings ----------------------------------------------------------------------------

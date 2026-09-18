@@ -737,6 +737,8 @@ export const ms = {
     // @patient
     askThinking: "Nura sedang mencari.",
     // @patient
+    lookingForToday: "Nura sedang mencari bacaan hari ini.",
+    // @patient
     askAnswered: "Nura sudah menjawab.",
     // @patient phrase
     askLookedAt: "Apa yang Nura lihat: {parts}",
@@ -754,6 +756,8 @@ export const ms = {
     statusDismissed: "{name} tekan Bukan untuk saya pada kad ini.",
     // @patient phrase
     play: "Main",
+    // @patient phrase
+    watchAgain: "Tonton semula",
     // @patient phrase
     watchWhole: "Tonton seluruh video di {publisher}",
     // @patient phrase
@@ -1060,6 +1064,8 @@ export const ms = {
     send: "Hantar {count} surat",
     // @patient
     sending: "Nura sedang menghantar surat {n} daripada {total}.",
+    // @patient
+    working: "Nura sedang membuatnya.",
     // @patient headline
     found: "Apa yang Nura jumpa",
     // @patient
@@ -1333,6 +1339,22 @@ export const ms = {
       countNone: "Nura belum tulis apa-apa lagi.",
       // @patient
       count: "Nura sudah tulis {n} perkara.",
+      // @patient phrase
+      tellMe: "Atau beritahu saja",
+      // @patient
+      tellMeLead: "Cakap dengan kata-kata anda sendiri.",
+      // @patient phrase
+      tellMeLabel: "Dengan kata-kata anda sendiri",
+      // @patient phrase
+      tellMeSend: "Hantar",
+      // @patient
+      tellMeNothing: "Nura tidak jumpa perkataan di atas untuk itu.",
+      // @patient
+      tellMeNothingSub: "Cuba tekan sahaja.",
+      // @patient
+      tellMeSafety: "Nura tidak akan jadikan itu satu perkataan di sini.",
+      // @patient
+      tellMeSafetySub: "Sila beritahu seseorang yang anda percaya, atau dapatkan bantuan sekarang.",
     },
     asks: {
       // @patient
@@ -2369,6 +2391,22 @@ export const ms = {
     linkLabel: "Pautan panggilan, jika ada",
     // @patient phrase
     callLabelLabel: "Nama untuk panggilan ini",
+  },
+  visitSuggest: {
+    // @patient phrase
+    followUpWhy: "Daripada surat hospital anda",
+    // @patient phrase
+    medicineReviewWhy: "Daripada ubat anda",
+    // @patient phrase
+    testComingWhy: "Daripada ujian darah anda",
+    // @patient phrase
+    screeningDueWhy: "Daripada surat-surat anda",
+    // @patient
+    rowOther: "Nura mencadangkan {name} berjumpa doktor.",
+    // @patient phrase
+    bookIt: "Tempahkan",
+    // @patient phrase
+    notNow: "Bukan sekarang",
   },
   review: {
     // @patient headline

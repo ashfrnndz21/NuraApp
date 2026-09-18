@@ -82,7 +82,7 @@ from app.memory.episodic import require_artifact
 from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ
-from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto
+from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto, is_pill_photo
 
 if TYPE_CHECKING:
     from app.routines.service import Day
@@ -329,7 +329,10 @@ async def plan(
     may_change_medicines(context)
     match = _one_product(registry.identify(label.fields()))
     artifact = await require_artifact(session, context=context, artifact_id=source_artifact_id)
-    needs_photo = match.high_risk and artifact.kind is not ArtifactKind.PHOTO
+    needs_photo = match.high_risk and (
+        artifact.kind is not ArtifactKind.PHOTO
+        or await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
+    )
     lead = LEAD_TIME_DAYS[label.source_kind]
 
     if await _label_seen_before(
@@ -925,7 +928,14 @@ async def active_lines(
     lines = await _active_lines(session, context=context)
     if not lines:
         return []
-    costs = {cost.generic: cost.monthly_said for cost in await medicine_monthly_costs(session, context=context, language=lang)}
+    costs: dict[str, str] = {}
+    for cost in await medicine_monthly_costs(session, context=context, language=lang):
+        # Grouped by currency too (never summed across one, #pill-receipt): a generic bought
+        # in two currencies shows both lines, joined, rather than one silently overwriting
+        # the other.
+        costs[cost.generic] = (
+            cost.monthly_said if cost.generic not in costs else f"{costs[cost.generic]}; {cost.monthly_said}"
+        )
     ids = [line.id for line in lines]
     supplies = await audited_read(
         session, Supply, context, Scope.MEDICINES, where=(Supply.line_id.in_(ids),)

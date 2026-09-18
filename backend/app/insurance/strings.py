@@ -32,11 +32,31 @@ CURRENCY_BY_REGION: Mapping[Region, str] = {
 never a symbol hard-coded at a call site (the ledger, `app.insurance.ledger`): a policy
 carries no currency of its own, so the region is the one source of truth for it."""
 
+CURRENCY_SYMBOL_BY_CODE: Mapping[str, str] = {
+    "SGD": "S$",
+    "MYR": "RM",
+}
+"""The same symbols as `CURRENCY_BY_REGION`, keyed by the three-letter code a pharmacy
+receipt's own `currency` field carries (`app.ingestion.review._write_receipt`) rather than
+his profile's region: a receipt from across the causeway is still his own money, read in the
+currency printed on it, never folded into his home region's symbol (#pill-receipt)."""
+
 
 def say_money(cents: int, region: Region) -> str:
     """An amount in minor units, in his own currency: 'S$420', 'S$420.50' — cents in, never a
     float, never a bare number with nothing to say what it is."""
-    symbol = CURRENCY_BY_REGION[region]
+    return _say_money(cents, CURRENCY_BY_REGION[region])
+
+
+def say_money_in(cents: int, currency: str) -> str:
+    """`say_money`, for an amount whose currency is a receipt's own three-letter code
+    (`app.insurance.ledger.medicine_monthly_costs`) rather than his profile's region: 'S$13',
+    'RM26'. A code Nura does not carry a symbol for is still shown honestly, as printed
+    ('AUD13'), never silently read as his home currency."""
+    return _say_money(cents, CURRENCY_SYMBOL_BY_CODE.get(currency, currency))
+
+
+def _say_money(cents: int, symbol: str) -> str:
     sign = "-" if cents < 0 else ""
     whole, remainder = divmod(abs(cents), 100)
     if remainder:

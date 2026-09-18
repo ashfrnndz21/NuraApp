@@ -324,6 +324,7 @@ export interface Strings {
     sourceVisits: string;
     askWithheld: string;
     askThinking: string;
+    lookingForToday: string;
     askAnswered: string;
     askLookedAt: string;
     back: string;
@@ -333,6 +334,7 @@ export interface Strings {
     statusPlayed: string;
     statusDismissed: string;
     play: string;
+    watchAgain: string;
     watchWhole: string;
     askOrSearch: string;
     filterLabel: string;
@@ -470,6 +472,7 @@ export interface Strings {
     sendOne: string;
     send: string;
     sending: string;
+    working: string;
     found: string;
     read: string;
     check: string;
@@ -604,6 +607,14 @@ export interface Strings {
       term: string;
       countNone: string;
       count: string;
+      tellMe: string;
+      tellMeLead: string;
+      tellMeLabel: string;
+      tellMeSend: string;
+      tellMeNothing: string;
+      tellMeNothingSub: string;
+      tellMeSafety: string;
+      tellMeSafetySub: string;
     };
     asks: { lead: string };
     readBack: {
@@ -1001,6 +1012,20 @@ export interface Strings {
     whenLabel: string;
     linkLabel: string;
     callLabelLabel: string;
+  };
+  /** T2's "Nura suggests" rows (Health's Coming up, Connect's next-visit tile): what the
+   *  planner found, in the screen's own words — the backend's own line (`purpose`) is shown
+   *  to the owner as it is written; a caregiver's key reads `rowOther` by name instead, never
+   *  the backend's "you" line. "Book it" opens the visits tab with the proposal ready to
+   *  book; "Not now" hides it for 90 days (`app.reasoning.visits.planner`). */
+  visitSuggest: {
+    followUpWhy: string;
+    medicineReviewWhy: string;
+    testComingWhy: string;
+    screeningDueWhy: string;
+    rowOther: string;
+    bookIt: string;
+    notNow: string;
   };
   review: {
     title: string;

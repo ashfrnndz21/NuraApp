@@ -915,6 +915,25 @@ def say_monthly_cost(amount_said: str, language: str) -> str:
     return MONTHLY_COST[lang]["a_month"].format(amount=amount_said)
 
 
+# @patient phrase
+FOR_SUPPLY_COST: Mapping[str, Mapping[str, str]] = {
+    "en": {"for_supply": "{amount} for {count}"},
+    "ms": {"for_supply": "{amount} untuk {count}"},
+    "zh": {"for_supply": "{count}花{amount}"},
+}
+"""What a pharmacy receipt's matched cost entry says when Nura does not know how much he
+takes a day (`app.insurance.ledger.medicine_monthly_costs`): the plain, honest total and
+what it bought — never a monthly figure guessed from a calendar, and never invented."""
+
+
+def say_supply_cost(amount_said: str, count_said: str, language: str) -> str:
+    """'S$13 for 2 tablets': the plain total and the count it bought, said once, never a
+    month worked out from a calendar (`say_monthly_cost` is the other, when the daily amount
+    is known)."""
+    lang = language if language in FOR_SUPPLY_COST else DEFAULT_LANGUAGE
+    return FOR_SUPPLY_COST[lang]["for_supply"].format(amount=amount_said, count=count_said)
+
+
 def anchor_slots(anchors: Sequence[str], language: str) -> dict[str, str]:
     """`{anchor1}`, `{anchor2}`… for the HOW_OFTEN line: his words for each moment."""
     return {

@@ -608,6 +608,29 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Keluarga anda menulis nota tentang cara ke {doctor}.",
         "zh": "您的家人写了去{doctor}那里要注意的事。",
     },
+    # The planner's own proposals (T2, `app.reasoning.visits.planner`): "Nura suggests" rows,
+    # never a booking and never a claim about what is wrong — only what the record already
+    # holds that a visit would follow up on.
+    "visit_suggestion_follow_up_day": {
+        "en": "Nura suggests you see your doctor again around {day}.",
+        "ms": "Nura mencadangkan anda jumpa doktor anda lagi sekitar {day}.",
+        "zh": "Nura建议您在{day}前后再看一次医生。",
+    },
+    "visit_suggestion_medicine_review": {
+        "en": "Nura suggests you see your doctor about your medicines.",
+        "ms": "Nura mencadangkan anda jumpa doktor anda tentang ubat anda.",
+        "zh": "Nura建议您就您的药物去看医生。",
+    },
+    "visit_suggestion_test_coming": {
+        "en": "Nura suggests you see your doctor again about your blood test.",
+        "ms": "Nura mencadangkan anda jumpa doktor anda lagi tentang ujian darah anda.",
+        "zh": "Nura建议您为验血再看一次医生。",
+    },
+    "visit_suggestion_screening": {
+        "en": "Nura suggests a visit to your doctor.",
+        "ms": "Nura mencadangkan lawatan ke doktor anda.",
+        "zh": "Nura建议您去看医生。",
+    },
 }
 """Every line the visit loop can say that is not a thing for him to do, by key and language."""
 
