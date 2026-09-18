@@ -493,3 +493,30 @@ async def test_when_the_fallback_itself_fails_the_catalogue_line_is_still_sent(
     assert answer.lines == ()
     assert list(answer.honest) == honest_lines("en", None)
     assert answer.boundary
+
+
+def _every_schema(node: object):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _every_schema(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _every_schema(value)
+
+
+def test_the_structured_output_schema_is_one_the_api_accepts() -> None:
+    """The same lint every Claude-backed structured-output adapter carries
+    (`tests/test_claude_extractor.py`, `tests/test_claude_feed_adapters.py`,
+    `tests/test_clipmaker.py`, `tests/test_narrator.py`): a property without a `type`, and
+    `minimum`/`maximum` on a number, are both refused by the API's structured output (hit
+    live on the owner's key, 2026-09-18, for the extractor and the feed adapters). Every
+    property carries a type; no numeric bounds ride in this schema."""
+    from app.llm.ask_agent import ANSWER_SCHEMA
+
+    for node in _every_schema(ANSWER_SCHEMA):
+        if not (isinstance(node, dict) and "properties" in node):
+            continue
+        for name, prop in node["properties"].items():
+            assert "type" in prop, name
+            assert "minimum" not in prop and "maximum" not in prop, name
