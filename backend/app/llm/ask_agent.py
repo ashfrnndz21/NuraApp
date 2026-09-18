@@ -73,6 +73,7 @@ from app.memory.spine import UPCOMING
 from app.memory.timeline import language_for
 from app.reasoning.feelings.service import recent_notes
 from app.safety.boundary import Surface, boundary_lines
+from app.safety.plain_words import verify
 from app.safety.red_flags import detect
 from app.search.ask import (
     _LATIN_WORD,
@@ -168,6 +169,22 @@ _TOOL_DEFS: Final[dict[str, dict[str, Any]]] = {
         },
     },
 }
+
+_RULE_HINTS: Final[dict[int, str]] = {
+    1: "each line is a whole sentence, someone doing something, ending in . ! ? or :",
+    2: "one idea per line",
+    3: "short words and short lines, under ten where it can be done, never over fifteen",
+    4: "call things what he calls them, never the chemical or clinical name alone",
+    5: "say the day and the date in words, never digits, a clock time or a time zone",
+    10: "numbers as digits, small and few — never more than three on one line",
+    11: "never a red word like missed, failed, overdue or non-compliant",
+    12: "nothing to decode — no abbreviations, no units, no jargon like dose or follow-up",
+    13: "the same words every time for the same thing",
+    14: "never a line that starts, stops or changes a medicine",
+}
+"""One short, generic instruction per `docs/plain-words.md` rule (and rule 14, the boundary
+check `_check_boundary` also runs), for the one repair round: the model is told which rules
+its lines broke, never the lines themselves — nothing it wrote leaves this process twice."""
 
 ANSWER_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
@@ -494,6 +511,7 @@ class ClaudeAsker:
             messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
 
             answer: Answer | None = None
+            repaired = False
             try:
                 for _round in range(MAX_ROUNDS):
                     response = await self._client.messages.create(  # type: ignore[call-overload]
@@ -514,9 +532,41 @@ class ClaudeAsker:
                         break
                     if stop_reason != "tool_use":
                         payload = _structured_json(response)
-                        answer = None if payload is None else _answer_from_payload(
-                            payload, known, lang, reader, mode
+                        failed_rules: set[int] = set()
+                        parsed = (
+                            None
+                            if payload is None
+                            else _answer_from_payload(
+                                payload, known, lang, reader, mode, failed_rules
+                            )
                         )
+                        if parsed is None and failed_rules and not repaired:
+                            # One repair round (defect: "the agent still returns an empty
+                            # answer"): tell the model which rules its lines broke — never
+                            # what it wrote — and give it one more try before falling back.
+                            repaired = True
+                            log.info(
+                                "claude asker: repair round, rules=%s", sorted(failed_rules)
+                            )
+                            assistant_content = getattr(response, "content", None) or []
+                            messages.append(
+                                {"role": "assistant", "content": assistant_content}
+                            )
+                            hints = "; ".join(
+                                _RULE_HINTS.get(rule, f"rule {rule}")
+                                for rule in sorted(failed_rules)
+                            )
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "Those lines did not pass the house style. Rewrite "
+                                        f"them so that: {hints}. Cite the same ids as before."
+                                    ),
+                                }
+                            )
+                            continue
+                        answer = parsed
                         break
 
                     tool_uses = _tool_use_blocks(response)
@@ -569,26 +619,42 @@ class ClaudeAsker:
                 answer = None
 
             if answer is None or not answer.lines:
-                answer = await fallback()
-                if not answer.lines and not answer.honest:
-                    # Belt and braces (defect: "the agent's answer reached the phone empty"):
-                    # even the rule-based answer, which is supposed to always say something,
-                    # came back with nothing to say. Never let only the boundary reach him —
-                    # say the catalogue's own honest line ourselves.
+                try:
+                    answer = await fallback()
+                except Exception:
+                    # The rule-based answer is supposed to always say something and never
+                    # raise — but if it does, that must never be the reason he hears nothing
+                    # at all (defect: "the agent's answer reached the phone empty, and so did
+                    # the fallback"). Fall through to the belt-and-braces line below.
+                    log.exception(
+                        "claude asker: the rule-based fallback failed; sending the "
+                        "catalogue's honest line"
+                    )
+                    answer = None
+                if answer is None or (not answer.lines and not answer.honest):
+                    # Belt and braces: even the rule-based answer, which is supposed to
+                    # always say something, came back with nothing to say (or failed
+                    # outright, above). Never let only the boundary reach him — say the
+                    # catalogue's own honest line ourselves.
                     log.warning(
-                        "claude asker: the rule-based fallback also had nothing to say; "
+                        "claude asker: the rule-based fallback had nothing to say; "
                         "sending the catalogue's honest line"
                     )
                     doctor = _doctor_name(visits_seen, providers_seen)
+                    withheld = tuple(
+                        dict.fromkeys(
+                            scope for scope in TOOL_SCOPES.values() if not context.allows(scope)
+                        )
+                    )
                     answer = Answer(
-                        question_artifact_id=answer.question_artifact_id,
-                        mode=answer.mode,
-                        language=answer.language,
+                        question_artifact_id=kept.id,
+                        mode=mode,
+                        language=lang,
                         lines=(),
                         honest=tuple(honest_lines(lang, doctor)),
-                        boundary=answer.boundary,
-                        withheld=answer.withheld,
-                        dropped=answer.dropped,
+                        boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
+                        withheld=withheld,
+                        dropped=0,
                     )
                 yield answer
                 return
@@ -685,11 +751,25 @@ class ClaudeAsker:
         return [], 0
 
 
-def _drop(reason: str) -> None:
+def _drop(reason: str, *, rules: Sequence[int] = ()) -> None:
     """One line logged, its reason class only — never its text, never a cite, never a value
     off his record (defect: "the agent's answer reached the phone empty", fixed by knowing,
-    from the logs alone, which gate a line actually failed)."""
-    log.info("claude asker: dropped a line, reason=%s", reason)
+    from the logs alone, which gate a line actually failed). `rules` names which
+    `docs/plain-words.md` rule numbers a `plain_words_failed` drop broke — still never the
+    words that broke them."""
+    if rules:
+        log.info("claude asker: dropped a line, reason=%s, rules=%s", reason, list(rules))
+    else:
+        log.info("claude asker: dropped a line, reason=%s", reason)
+
+
+def _plain_words_rules(text: str, language: str) -> tuple[int, ...]:
+    """The `docs/plain-words.md` rule numbers `text` fails, sorted — never the text itself.
+    Logged by `_drop` and, once per ask, handed to the model as `_RULE_HINTS` for the one
+    repair round: which rule, never which words."""
+    return tuple(
+        sorted({finding.rule for finding in verify(text, language, "line") if finding.severity == "fail"})
+    )
 
 
 def _answer_from_payload(
@@ -698,6 +778,7 @@ def _answer_from_payload(
     language: str,
     reader: Reader,
     mode: Mode,
+    failed_rules: set[int] | None = None,
 ) -> Answer | None:
     raw_lines = payload.get("lines")
     if not isinstance(raw_lines, list):
@@ -721,7 +802,10 @@ def _answer_from_payload(
             _drop("empty_text")
             continue
         if not verified(text, language):
-            _drop("plain_words_failed")
+            rules = _plain_words_rules(text, language)
+            if failed_rules is not None:
+                failed_rules.update(rules)
+            _drop("plain_words_failed", rules=rules)
             continue
         if _has_conclusion_language(text, language):
             _drop("conclusion_language")

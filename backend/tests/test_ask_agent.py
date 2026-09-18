@@ -394,3 +394,102 @@ async def test_when_even_the_fallback_has_nothing_the_catalogue_honest_line_is_s
     assert answer.lines == ()
     assert list(answer.honest) == honest_lines("en", None)
     assert answer.boundary
+
+
+# A line that fails rule 3 (`docs/plain-words.md`: short words, short lines) — over fifteen
+# words, otherwise clean — the same string `test_over_fifteen_words_fail_and_over_ten_is_a_note`
+# in `test_plain_words.py` pins to rule 3 alone.
+_TOO_LONG_LINE = (
+    "Nura will ask you to say yes again the next time you open the app on your phone at home."
+)
+_SHORT_LINE = "Your blood pressure tablet is on your list of medicines."
+
+
+async def test_a_line_that_fails_plain_words_is_repaired_and_then_shown(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Defect: "the agent still returns an empty answer" — five lines dropped, no repair. The
+    fix gives the model one more try, told which rule its line broke (never the words), before
+    ever falling back."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _SHORT_LINE, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, _deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    assert steps == ["medicines"]
+    # Three calls: the tool-use round, the first (failing) final answer, and the one repair
+    # round — never a second repair.
+    assert len(client.messages.calls) == 3
+    repair_messages = client.messages.calls[2]["messages"]
+    repair_ask = repair_messages[-1]
+    assert repair_ask["role"] == "user"
+    # The rule is named; the line that broke it is not.
+    assert "short words" in repair_ask["content"]
+    assert _TOO_LONG_LINE not in repair_ask["content"]
+    assert [line.text for line in answer.lines] == [_SHORT_LINE]
+
+
+async def test_when_the_repair_also_fails_the_catalogue_line_is_sent(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Defect, part two: when even the one repair round still fails plain words, the rule-based
+    fallback must be used, and if it has nothing of its own to say, the catalogue's own "could
+    not find this" line must still reach him."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+        ]
+    )
+
+    async def _honest_only_recall(*_args: Any, **_kwargs: Any) -> Answer:
+        return Answer(
+            question_artifact_id=uuid.uuid4(),
+            mode=Mode.TEXT,
+            language="en",
+            lines=(),
+            honest=tuple(honest_lines("en", None)),
+            boundary=boundary_lines(Surface.RECALL, "en", doctor=None),
+            withheld=(),
+            dropped=0,
+        )
+
+    monkeypatch.setattr("app.llm.ask_agent.recall", _honest_only_recall)
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, _deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    # One repair round only — never a second.
+    assert len(client.messages.calls) == 3
+    assert answer.lines == ()
+    assert list(answer.honest) == honest_lines("en", None)
+    assert answer.boundary
+
+
+async def test_when_the_fallback_itself_fails_the_catalogue_line_is_still_sent(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """The rule-based answer is supposed to always say something and never raise — but if it
+    does, that must never be the one way he ends up hearing nothing at all."""
+    rec = await record(sg)
+    client = FakeClient([FakeMessage(stop_reason="refusal")])
+
+    async def _broken_recall(*_args: Any, **_kwargs: Any) -> Answer:
+        raise RuntimeError("the rule-based asker blew up")
+
+    monkeypatch.setattr("app.llm.ask_agent.recall", _broken_recall)
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, _deltas, answer = await _drive(
+        asker, sg, rec.owner, "what was my blood pressure", tmp_path
+    )
+
+    assert answer.lines == ()
+    assert list(answer.honest) == honest_lines("en", None)
+    assert answer.boundary
