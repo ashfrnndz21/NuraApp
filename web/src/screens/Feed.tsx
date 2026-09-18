@@ -56,23 +56,34 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const [reorderError, setReorderError] = useState<unknown>(null);
   // "Why am I seeing this?" (RE-08): which card's sheet is open, or none.
   const [whyItem, setWhyItem] = useState<FeedItemOut | null>(null);
-  // Whether the day's self-searches are still to run (docs/design-direction.md 'Conversation,
-  // waiting and thinking'): a real read (`GET /feed/jobs/status`), asked once as the feed
-  // opens, alongside `store.open()` below — never a guess or a timer of its own. `looking`
-  // starts false and only ever turns true from that one real answer, so an offline phone or
-  // a slow read never shows a line that was never true.
+  // Whether the day's self-searches are still to run, in the background
+  // (`app.delivery.feed.background`, never inline in a request): a real read
+  // (`GET /feed/jobs/status`), asked as the feed opens, alongside `store.open()` below, then
+  // asked again every few seconds for as long as it says yes — never a guess or a timer of
+  // its own, and never left stuck saying "looking" once the run is actually done. `looking`
+  // starts false and only ever turns true from a real answer, so an offline phone or a slow
+  // read never shows a line that was never true.
   const [looking, setLooking] = useState(false);
   useEffect(() => {
     const bearer = token.value;
     const papers = profile.value;
     if (!bearer || !papers) return;
     let live = true;
-    nura.feedJobsStatus(bearer, papers.profile_id).then(
-      (status) => live && setLooking(status.looking),
-      () => live && setLooking(false),
-    );
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const poll = () => {
+      nura.feedJobsStatus(bearer, papers.profile_id).then(
+        (status) => {
+          if (!live) return;
+          setLooking(status.looking);
+          if (status.looking) timer = setTimeout(poll, 5000);
+        },
+        () => live && setLooking(false),
+      );
+    };
+    poll();
     return () => {
       live = false;
+      if (timer) clearTimeout(timer);
     };
   }, []);
   const hasReorder = entries.some((entry) => variantOf(entry.item) === "reorder");

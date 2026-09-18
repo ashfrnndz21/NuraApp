@@ -54,6 +54,7 @@ from app.channels.api.feed_schemas import (
     EventsIn,
     EventsOut,
     FeedItemOut,
+    FeedJobsOut,
     FeedPageOut,
     FindIn,
     FindOut,
@@ -70,8 +71,9 @@ from app.channels.api.feed_schemas import (
 from app.channels.api.refusals import refused
 from app.channels.api.sse_pump import stream_with_background_pump
 from app.delivery.feed.area import read_area, set_area
+from app.delivery.feed.background import ensure_learning_scheduled
 from app.delivery.feed.clips import clip_captions, clip_poster, clip_video
-from app.delivery.feed.compose import around_for, today_for
+from app.delivery.feed.compose import around_for, can_compose, today_for
 from app.delivery.feed.engagement import record_engagement, record_events
 from app.delivery.feed.find import FindStep, find_stream
 from app.delivery.feed.find import find as find_pages
@@ -173,8 +175,22 @@ async def feed(
     page = await feed_page(
         session, context=context, engine=_engine(request), cursor=cursor, pretend_local=pretend
     )
+    jobs = FeedJobsOut(state="none")
+    if cursor is None and await can_compose(context):
+        # The first page of the day: whatever cards exist already answer at once (`feed_page`
+        # above never runs a self-search). If today's are missing, this starts them on their
+        # own background task (`app.delivery.feed.background`, #269/#276/#280) and returns
+        # immediately — never awaited here, never on this request's own slow path.
+        day = today_for(context)
+        run = ensure_learning_scheduled(
+            context=context, engine=_engine(request), day=day, sessions=request.app.state.session_factory
+        )
+        if run is not None:
+            jobs = FeedJobsOut(state=run.state, started_at=run.started_at, done_at=run.done_at)
     reader = await reader_of(session, context, None)
-    return reader.page(_with_why_sheet(FeedPageOut.of(page), context=context, reader=reader))
+    return reader.page(
+        _with_why_sheet(FeedPageOut.of(page, jobs=jobs), context=context, reader=reader)
+    )
 
 
 @router.get("/{profile_id}/feed/jobs/status")
