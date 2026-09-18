@@ -40,6 +40,8 @@ import type {
   FoodLogIn,
   HandedOverOut,
   HealthOverviewOut,
+  InsightsReportOut,
+  InsightsStreamEvent,
   ItemDecision,
   JobKind,
   KeyOut,
@@ -361,6 +363,36 @@ export function askStream(
 /** A card's pre-rendered voice (E11), when the backend has the route. */
 export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
   apiBlob(`/profiles/${profileId}/feed/${itemId}/voice`, { token, query: { language } });
+
+// --- W1: the weekly report (Insights) --------------------------------------------------------
+
+/** The last report written, if there is one (`GET /profiles/{id}/insights`); a profile with
+ *  none yet throws `Refused("NotFound", 404)`, exactly as `Visit.tsx`'s own "no summary" reads
+ *  it — a caller tells "nothing generated yet" from a real failure the same way it always does. */
+export const insightsLatest = (token: string, profileId: string) => api<InsightsReportOut>(`/profiles/${profileId}/insights`, { token });
+
+/** A new report, streamed (`POST /profiles/{id}/insights/stream`): `onStep` for each real part
+ *  of the week Nura looked at as it happens, resolving with the finished report — the same
+ *  shape `askStream` streams an answer in. A refusal throws `Refused`, as `apiStream` always
+ *  throws one. */
+export function insightsStream(token: string, profileId: string, onStep: (key: string, label: string) => void): Promise<InsightsReportOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/insights/stream`, { method: "POST", token }, (event) => {
+      const streamed = event as unknown as InsightsStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "report") {
+        settled = true;
+        resolve(streamed.report);
+      }
+      // A "refusal" event is thrown by `apiStream` itself before it ever reaches `onEvent`.
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no report"));
+      })
+      .catch(reject);
+  });
+}
 
 /** The keys on the profile with their holders' names: the owner reads whom to call. */
 export const keys = (token: string, profileId: string) =>
