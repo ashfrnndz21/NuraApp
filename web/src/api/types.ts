@@ -307,6 +307,71 @@ export interface FindResultsEvent {
 }
 export type FindStreamEvent = FindStepEvent | FindResultsEvent | AskRefusalEvent;
 
+/** How sure Nura is of one line of the weekly report (W1): the backend's own word, never a
+ *  score. Drawn as a chip, never as a colour that reads like a health state. */
+export type InsightConfidence = "sure" | "likely" | "worth_a_look";
+
+/** One part of the record an insight rests on ("Your blood pressure book", "Monday's visit"),
+ *  the backend's own name for it — the same idea as `AnswerLineOut.cites`, in the shape the
+ *  weekly report sends. */
+export interface InsightEvidenceOut {
+  id: string;
+  kind: string;
+  label: string;
+}
+
+/** One line of the weekly report: the backend's sentence, who to ask about it (a doctor's
+ *  name) when there is a question worth taking to a visit, what it rests on, the plain reason,
+ *  and how sure Nura is. */
+export interface InsightOut {
+  insight_id: string;
+  kind: string;
+  text: string;
+  ask_who: string | null;
+  evidence: InsightEvidenceOut[];
+  why_plain: string;
+  confidence: InsightConfidence;
+}
+
+/** The report's fixed sections, in the order they are always shown. A section left out of
+ *  `InsightsReportOut.sections` entirely is one this key's scope does not cover; a section
+ *  present with an empty `insights` list is one Nura looked at and found nothing to say. */
+export type InsightSectionKey = "what_changed" | "worth_a_look" | "medicines_and_supplements" | "what_you_pay" | "screenings_due" | "questions_for_the_doctor";
+
+export interface InsightsSectionOut {
+  key: InsightSectionKey | string;
+  title: string;
+  insights: InsightOut[];
+}
+
+/** The weekly report (W1, `GET /profiles/{id}/insights`): the week it covers, only the
+ *  sections this key's scope opens, and the boundary line last, exactly as `AnswerOut` ends
+ *  its own. */
+export interface InsightsReportOut {
+  report_id: string;
+  generated_at: string;
+  week_of: string;
+  boundary: string[];
+  sections: InsightsSectionOut[];
+}
+
+/** One real stage of building the report, streamed the instant it finishes (`POST
+ *  /profiles/{id}/insights/stream`), the same trace pattern as `AskStepEvent`. */
+export interface InsightsStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished report, exactly `GET /profiles/{id}/insights` would
+ *  return once it is written. */
+export interface InsightsReportEvent {
+  type: "report";
+  report: InsightsReportOut;
+}
+
+export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
+
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
 export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";
