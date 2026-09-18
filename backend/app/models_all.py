@@ -38,6 +38,7 @@ import app.reasoning.visits.models
 import app.routines.models
 import app.safety.models
 import app.safety.red_flags
+import app.search.models
 import app.state.models  # noqa: F401
 from app.db import Base
 

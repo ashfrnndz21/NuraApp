@@ -63,6 +63,8 @@ from app.delivery.timeline_strings import honest_lines, reroute_lines, verified
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
+from app.insurance.ledger import insurance_ledger
+from app.insurance.policy import current_policies
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.llm.narrate import _has_conclusion_language
@@ -72,6 +74,7 @@ from app.memory.models import Appointment, AppointmentStatus, Provider
 from app.memory.spine import UPCOMING
 from app.memory.timeline import language_for
 from app.reasoning.feelings.service import recent_notes
+from app.reasoning.visits.planner import propose_visits
 from app.safety.boundary import Surface, boundary_lines
 from app.safety.plain_words import verify
 from app.safety.red_flags import detect
@@ -89,6 +92,7 @@ from app.search.ask import (
     Cite,
     Mode,
     NotAQuestion,
+    Proposal,
     _facts_under,
     _is_reading,
     _keep_question,
@@ -96,6 +100,7 @@ from app.search.ask import (
     recall,
 )
 from app.search.asker import AnswerDelta
+from app.search.conversation import ConversationMemory
 from app.search.retrieve import Retriever
 
 log = logging.getLogger("nura.llm.ask_agent")
@@ -113,9 +118,16 @@ TOOL_SCOPES: Final[dict[str, Scope]] = {
     "read_visits": Scope.VISITS,
     "read_records": Scope.RECORDS,
     "read_feelings": Scope.RECORDS,
+    "read_insurance": Scope.MONEY,
+    "read_costs": Scope.MONEY,
+    "read_plan": Scope.VISITS,
 }
 """Which scope a tool's read rests on — the same scope `_corpus_stream` checks before it ever
-reads that part. A key that does not hold it is never offered the tool at all."""
+reads that part. A key that does not hold it is never offered the tool at all. `read_insurance`
+and `read_costs` rest on `Scope.MONEY`, the door `app.insurance.policy` and
+`app.insurance.ledger` already stand behind — the owner, a steward, or the chief his family
+named, never a caregiver or a viewer (W2 grounding: an insurance or cost question is never
+answered for a key that cannot already see the policy or the ledger itself)."""
 
 TOOL_STEP_KEYS: Final[dict[str, str]] = {
     "read_medicines": "medicines",
@@ -124,6 +136,10 @@ TOOL_STEP_KEYS: Final[dict[str, str]] = {
     "read_records": "records",
     "read_feelings": "feelings",
     "search_online": "search_online",
+    "read_insurance": "insurance",
+    "read_costs": "costs",
+    "read_plan": "plan",
+    "propose_action": "plan",
 }
 """A tool call's `AskStep` key, into `app.delivery.timeline_strings.ASK_STEPS`/`_THEIRS` — the
 same catalogue `recall_stream`'s own steps use, so the trace looks the same however it was
@@ -165,6 +181,49 @@ _TOOL_DEFS: Final[dict[str, dict[str, Any]]] = {
             "type": "object",
             "properties": {"query": {"type": "string", "description": "What to look for."}},
             "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+    "read_insurance": {
+        "name": "read_insurance",
+        "description": "His insurance policies in force: insurer, type, and what each covers "
+        "as he or his chief wrote it down. Nothing here decides what is covered — only what "
+        "the policy's own words say.",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    "read_costs": {
+        "name": "read_costs",
+        "description": "What he has actually paid or claimed before, by visit and policy — "
+        "the only cost record this key can read. Never a public price list.",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    "read_plan": {
+        "name": "read_plan",
+        "description": "His visits already on the calendar, and the visits Nura proposes but "
+        "has not booked — each with why it was proposed.",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    "propose_action": {
+        "name": "propose_action",
+        "description": "Offer the reader a next step to confirm for himself — adding a "
+        "question to a coming visit, drafting a message to a provider, or booking a follow-up. "
+        "This never happens by itself: it only ever produces something he must still say yes "
+        "to, through the app's own confirm step. Call it at most once per question, only when "
+        "a concrete next step is obvious from what was just read.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["add_to_visit", "message_provider", "book_follow_up"],
+                },
+                "label": {
+                    "type": "string",
+                    "description": "The pill's own words, plain, short, an action he takes "
+                    "(e.g. 'Add to Thursday's questions').",
+                },
+            },
+            "required": ["kind", "label"],
             "additionalProperties": False,
         },
     },
@@ -235,6 +294,10 @@ _TOKEN_PREFIXES: Final[dict[str, str]] = {
     "appointment": "v",
     "feeling_note": "g",
     "web": "w",
+    "policy": "p",
+    "claim": "c",
+    "plan": "n",
+    "proposal": "x",
 }
 """One letter per kind, for `_TokenCounter` — never the uuid itself. A model given `m1` and
 `v2` to cite back can actually copy them; one given a raw uuid to retype byte for byte
@@ -371,6 +434,85 @@ async def _search_online(
     return lines, len(found)
 
 
+async def _read_insurance(
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
+    """His policies in force, each cited to itself: what the policy's own words say it
+    covers, nothing Nura decided (`app.insurance.policy`, "the owner's decision, written
+    down")."""
+    policies = await current_policies(session, context=context)
+    lines: list[_ToolLine] = []
+    for policy in policies:
+        covers = policy.covers or "nothing written down about what it covers"
+        text = (
+            f"{policy.insurer_name}, {policy.policy_type.value.replace('_', ' ')}, "
+            f"status {policy.status.value}, covers: {covers}"
+        )
+        _register(lines, counter, "policy", policy.id, text)
+    return lines, len(policies)
+
+
+async def _read_costs(
+    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
+    """What he has actually paid or claimed, by visit — his own ledger
+    (`app.insurance.ledger`), never a public price list: this build carries no cost-expectation
+    module, so a cost question is answered from his own record or not at all."""
+    ledger = await insurance_ledger(session, context=context, language=language)
+    lines: list[_ToolLine] = []
+    for row in ledger.lines:
+        amount = row.paid_by_patient_said or row.claimed_amount_said or "no amount written down"
+        text = (
+            f"{row.visit_purpose} under {row.policy_name} on {row.visit_date_said}: "
+            f"{amount}, {row.status_word}"
+        )
+        _register(lines, counter, "claim", row.claim_id, text)
+    return lines, len(ledger.lines)
+
+
+async def _read_plan(
+    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
+    """The visits Nura proposes but has not booked (`app.reasoning.visits.planner`), each with
+    why — never a row of the record it rests on, only the proposal's own plain-words purpose."""
+    proposed = await propose_visits(
+        session, context=context, language=language, region=context.region
+    )
+    lines: list[_ToolLine] = []
+    for proposal in proposed.proposals:
+        synthetic = uuid.uuid5(uuid.NAMESPACE_URL, f"visit-proposal:{proposal.proposal_id}")
+        when = (
+            proposal.suggested_at.date().isoformat()
+            if proposal.suggested_at is not None
+            else "no date written down"
+        )
+        text = f"Nura suggests: {proposal.purpose} (around {when})"
+        _register(lines, counter, "plan", synthetic, text)
+    return lines, len(proposed.proposals)
+
+
+async def _propose_action(
+    kind: str, label: str, counter: _TokenCounter, proposals: list[Proposal]
+) -> tuple[list[_ToolLine], int]:
+    """Note a proposal for the reader to confirm himself; never a write, a booking or a send
+    by this call (the module docstring's grounding rule). `proposals` is mutated in place —
+    the caller attaches it to the final `Answer` only once the answer itself survives every
+    check, so a proposal offered mid-loop but dropped along with a refused answer is never
+    shown."""
+    label = " ".join(label.split())[:120] or "Do this"
+    proposals.append(Proposal(kind=kind, label=label))
+    lines: list[_ToolLine] = []
+    _register(
+        lines,
+        counter,
+        "proposal",
+        uuid.uuid4(),
+        f"noted: '{label}' will be offered to him to confirm; nothing was written, booked or "
+        "sent",
+    )
+    return lines, 1
+
+
 def _would_change_treatment(question: str, about_medicine: bool) -> bool:
     """`app.search.ask._would_change_treatment`'s own check, without its `hits`: `about_medicine`
     is true when a surviving line already cites a medicine, the agent's own twin of a keyword
@@ -384,7 +526,33 @@ def _would_change_treatment(question: str, about_medicine: bool) -> bool:
 def _tools_for(context: KeyContext) -> list[str]:
     names = [name for name, scope in TOOL_SCOPES.items() if context.allows(scope)]
     names.append("search_online")
+    names.append("propose_action")
     return names
+
+
+HISTORY_TURNS: Final = 6
+"""How many of the most recent turns `_history_block` writes out in full — the same
+`app.search.conversation.KEPT_VERBATIM` the caller's `history` was already built to."""
+
+
+def _history_block(history: ConversationMemory | None) -> str:
+    """Conversation memory (W2), folded into the system prompt rather than the message list:
+    the smallest change this file takes to let a follow-up resolve "that" or "it" against
+    what was just asked and found. `None`, or a thread with nothing on it yet, adds nothing.
+    Never the whole record — only what was already said in this thread."""
+    if history is None or (not history.recent and not history.summary):
+        return ""
+    parts = ["\n\nThis is a continuing conversation. Earlier in it:"]
+    if history.summary:
+        parts.append(f"Summary of earlier turns: {history.summary}")
+    for turn in history.recent[-HISTORY_TURNS:]:
+        said = "; ".join(turn.answer_lines) or "; ".join(turn.honest) or "nothing was found"
+        parts.append(f'He asked: "{turn.question}" — Nura said: {said}')
+    parts.append(
+        'If this question refers back to something above (e.g. "that", "it", "the same '
+        'thing"), resolve it using the above before deciding which tools to call.'
+    )
+    return "\n".join(parts)
 
 
 def _doctor_name(visits: Sequence[Appointment], providers: Mapping[uuid.UUID, Provider]) -> str | None:
@@ -458,6 +626,7 @@ class ClaudeAsker:
         store: ObjectStore,
         registry: DrugRegistry | None = None,
         language: str | None = None,
+        history: ConversationMemory | None = None,
     ) -> AsyncIterator[AskStep | AnswerDelta | Answer]:
         async def fallback() -> Answer:
             return await recall(
@@ -486,6 +655,7 @@ class ClaudeAsker:
             counter = _TokenCounter()
             visits_seen: list[Appointment] = []
             providers_seen: dict[uuid.UUID, Provider] = {}
+            proposals: list[Proposal] = []
 
             # Written once per ask, before the first call: every round reaches Anthropic's
             # first-party API, whether or not it ends up calling a tool (ADR 0017, mirroring
@@ -507,7 +677,10 @@ class ClaudeAsker:
                 else f"You are speaking to a family member, about the patient, whose name is "
                 f"{reader.name or 'the patient'}."
             )
-            system = f"{_SYSTEM_PROMPT}\n\n{voice} Answer in language code {lang!r}."
+            system = (
+                f"{_SYSTEM_PROMPT}\n\n{voice} Answer in language code {lang!r}."
+                f"{_history_block(history)}"
+            )
             messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
 
             answer: Answer | None = None
@@ -593,6 +766,7 @@ class ClaudeAsker:
                             visits_seen=visits_seen,
                             providers_seen=providers_seen,
                             counter=counter,
+                            proposals=proposals,
                         )
                         for line in step_lines:
                             known[line.token] = line
@@ -707,6 +881,7 @@ class ClaudeAsker:
                 boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
                 withheld=withheld,
                 dropped=answer.dropped,
+                proposals=tuple(proposals),
             )
             await record_audit(
                 session,
@@ -731,6 +906,7 @@ class ClaudeAsker:
         visits_seen: list[Appointment],
         providers_seen: dict[uuid.UUID, Provider],
         counter: _TokenCounter,
+        proposals: list[Proposal],
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
             return await _read_medicines(session, context, registry, language, counter)
@@ -748,6 +924,16 @@ class ClaudeAsker:
         if name == "search_online":
             query = str(args.get("query") or "")
             return await _search_online(session, context, self._searcher, query, counter)
+        if name == "read_insurance":
+            return await _read_insurance(session, context, counter)
+        if name == "read_costs":
+            return await _read_costs(session, context, language, counter)
+        if name == "read_plan":
+            return await _read_plan(session, context, language, counter)
+        if name == "propose_action":
+            kind = str(args.get("kind") or "")
+            label = str(args.get("label") or "")
+            return await _propose_action(kind, label, counter, proposals)
         return [], 0
 
 

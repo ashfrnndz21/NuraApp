@@ -327,6 +327,8 @@ export interface Strings {
     lookingForToday: string;
     askAnswered: string;
     askLookedAt: string;
+    newConversation: string;
+    earlierInConversation: string;
     back: string;
     statusHeld: string;
     statusSent: string;

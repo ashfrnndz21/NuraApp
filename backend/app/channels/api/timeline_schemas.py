@@ -612,6 +612,15 @@ class AnswerLineOut(BaseModel):
     clip: ClipOut | None = None
 
 
+class ProposalOut(BaseModel):
+    """A next step offered alongside an answer (W2): the pill the web screen shows. Never a
+    write, a booking or a send by itself — it still needs a yes through the existing confirm
+    flow."""
+
+    kind: str
+    label: str
+
+
 class AnswerOut(BaseModel):
     """An answer: the cited lines, the honest line when the record does not answer, the
     boundary last, and the whole as he hears it (`spoken`). The question is named by the
@@ -629,6 +638,13 @@ class AnswerOut(BaseModel):
     voice_script: VoiceScriptOut
     """`spoken` as it is said (E22-03), the longer pause before the boundary."""
     withheld: list[Scope]
+    proposals: list[ProposalOut] = []
+    """Zero or more next steps offered alongside this answer (W2) — always empty for the
+    rule-based asker, which never proposes."""
+    conversation_id: uuid.UUID | None = None
+    """Which thread this turn landed on (W2) — set by the streaming routes only
+    (`app.channels.api.timeline._stream_turn`); `None` from the plain, non-streaming `POST
+    .../ask`, which does not write a turn."""
     red_flag: FeelingOut | None = None
     """A red flag heard in the question: the red-flag path it took, as the same word tapped on
     the feeling cloud (the moment written in his words, the flag raised, the family told), and
@@ -684,4 +700,33 @@ class AnswerOut(BaseModel):
                 answer.spoken, answer.language, "\n".join(answer.boundary)
             ),
             withheld=list(answer.withheld),
+            proposals=[
+                ProposalOut(kind=p.kind, label=p.label) for p in answer.proposals
+            ],
         )
+
+
+class TurnOut(BaseModel):
+    """One turn on a conversation (W2): the question and the answer's own lines, read back
+    from the two MESSAGE artefacts a `Turn` row points at — never a row's own words."""
+
+    turn_id: uuid.UUID
+    created_at: datetime
+    mode: Mode
+    language: str
+    question: str
+    answered: bool
+    answer_lines: list[str]
+    honest: list[str]
+
+
+class ConversationOut(BaseModel):
+    """One thread with Nura (W2): every turn on it, oldest first, and the plain summary of
+    whatever was folded out of the verbatim window."""
+
+    conversation_id: uuid.UUID
+    started_at: datetime
+    last_turn_at: datetime
+    closed_at: datetime | None
+    summary: str | None
+    turns: list[TurnOut]

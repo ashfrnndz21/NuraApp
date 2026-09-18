@@ -743,6 +743,10 @@ export const en = {
     // @patient phrase
     askLookedAt: "What Nura looked at: {parts}",
     // @patient phrase
+    newConversation: "New questions",
+    // @patient headline
+    earlierInConversation: "What you asked before",
+    // @patient phrase
     back: "Back to your cards",
     // @patient
     statusHeld: "Nura kept this back from {name}.",

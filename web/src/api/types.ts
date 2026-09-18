@@ -235,6 +235,14 @@ export interface ClipOut {
   doctor: string;
 }
 
+/** A next step offered alongside an answer (W2), never taken by itself: the pill the screen
+ *  shows, confirmed through the existing confirm flow before anything is written, booked or
+ *  sent. */
+export interface ProposalOut {
+  kind: string;
+  label: string;
+}
+
 export interface AnswerOut {
   /** The question as it was kept; null when a red word in it took the red-flag path instead. */
   question_artifact_id: string | null;
@@ -250,10 +258,41 @@ export interface AnswerOut {
   spoken: string[];
   /** Parts of the record this key does not reach, so not read. */
   withheld: string[];
+  /** Zero or more next steps offered alongside this answer (W2). Always empty from the
+   *  rule-based asker. */
+  proposals?: ProposalOut[];
+  /** Which conversation thread this turn landed on (W2); set only by the streaming ask
+   *  routes, null from the plain, non-streaming `POST .../ask`. */
+  conversation_id?: string | null;
   /** A red flag heard in the question: the red-flag path it took first, as the same word
    *  tapped on the feeling cloud would (the moment written, the flag raised, the family told).
    *  Null when the question carries none. */
   red_flag?: FeelingOut | null;
+}
+
+/** One turn on a conversation thread (W2), read back from `GET
+ *  /profiles/{id}/conversations/{id}`: the question and the answer's own lines — never a raw
+ *  row, the same as every other line here. */
+export interface TurnOut {
+  turn_id: string;
+  created_at: string;
+  mode: AskMode;
+  language: string;
+  question: string;
+  answered: boolean;
+  answer_lines: string[];
+  honest: string[];
+}
+
+/** A thread with Nura (W2): every turn on it, oldest first, and the plain summary of whatever
+ *  was folded out of the last six turns' verbatim window. */
+export interface ConversationOut {
+  conversation_id: string;
+  started_at: string;
+  last_turn_at: string;
+  closed_at: string | null;
+  summary: string | null;
+  turns: TurnOut[];
 }
 
 /** One real stage of an ask or a search, streamed the instant it finishes (docs/design-
