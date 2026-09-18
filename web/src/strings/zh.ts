@@ -59,6 +59,10 @@ export const zh = {
     bell: "更多给您的",
     // @patient phrase
     back: "返回",
+    // @patient phrase
+    bellFeed: "更多给您的",
+    // @patient phrase
+    bellInsights: "您这一周，仔细看过了",
   },
   welcome: {
     // @patient headline
@@ -343,6 +347,60 @@ export const zh = {
     comingUpTitle: "接下来",
     // @patient phrase
     addReading: "写下血压读数",
+  },
+  insights: {
+    // @patient headline
+    cardTitle: "您这一周，仔细看过了",
+    // @patient headline
+    cardTitleOther: "{name}这一周，仔细看过了",
+    // @patient
+    cardNone: "Nura还没看过您这一周。",
+    // @patient
+    cardNoneOther: "Nura还没看过{name}这一周。",
+    // @patient phrase
+    cardLastLooked: "Nura在{date}看过这个",
+    // @patient phrase
+    generate: "现在生成",
+    // @patient headline
+    screenTitle: "您这一周",
+    // @patient headline
+    screenTitleOther: "{name}这一周",
+    // @patient
+    working: "Nura正在看这一周。",
+    // @patient phrase
+    weekOf: "这一周从{date}开始",
+    sectionTitles: {
+      // @patient headline
+      what_changed: "有什么变化",
+      // @patient headline
+      worth_a_look: "值得留意",
+      // @patient headline
+      medicines_and_supplements: "药物和补充品",
+      // @patient headline
+      what_you_pay: "您付的钱",
+      // @patient headline
+      screenings_due: "该做的检查",
+      // @patient headline
+      questions_for_the_doctor: "给医生的问题",
+    },
+    // @patient
+    sectionWithheld: "这把钥匙不包括{name}这一周的这部分。",
+    // @patient
+    sectionEmpty: "这一周没有要提的事。",
+    // @patient phrase
+    why: "原因",
+    // @patient phrase
+    sure: "确定",
+    // @patient phrase
+    likely: "可能",
+    // @patient phrase
+    worthALook: "值得留意",
+    // @patient phrase
+    askThis: "问{who}这个",
+    // @patient
+    asked: "Nura把这个问题留给您的就诊。",
+    // @patient
+    noVisit: "还没有预约的看诊可以带上这个问题。",
   },
   signIn: {
     // @patient headline
@@ -1275,6 +1333,10 @@ export const zh = {
       done: "就这些了",
       // @patient
       term: "医生叫它 {term}。",
+      // @patient
+      countNone: "Nura 还没有记下什么。",
+      // @patient
+      count: "Nura 已经记下 {n} 项。",
     },
     asks: {
       // @patient

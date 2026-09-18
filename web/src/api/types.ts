@@ -268,6 +268,18 @@ export interface AskStepEvent {
   name: string;
 }
 
+/** A step's label, rephrased by a Claude-backed narrator (`NURA_NARRATOR=claude`) some time
+ *  after its own `AskStepEvent` already went out with the catalogue's own label — the
+ *  narrator's own call runs in the background and never holds a step, a tool call or the
+ *  answer back for it (`app.search.narrate.narrate_step_label`). Replaces that step's label in
+ *  place; may arrive at any point, including after `AskAnswerEvent`. An older client that has
+ *  never seen this type simply ignores it. */
+export interface AskStepLabelEvent {
+  type: "step_label";
+  key: string;
+  label: string;
+}
+
 /** The stream's last event: the finished answer, exactly `POST /profiles/{id}/ask` returns. */
 export interface AskAnswerEvent {
   type: "answer";
@@ -292,7 +304,7 @@ export interface AskRefusalEvent {
   scope?: string;
 }
 
-export type AskStreamEvent = AskStepEvent | AskAnswerDeltaEvent | AskAnswerEvent | AskRefusalEvent;
+export type AskStreamEvent = AskStepEvent | AskStepLabelEvent | AskAnswerDeltaEvent | AskAnswerEvent | AskRefusalEvent;
 
 /** The feed's web/video search, streamed the same way (`POST /profiles/{id}/find/stream`):
  *  one step while the search runs, then the results `POST /profiles/{id}/find` would return. */
@@ -305,7 +317,78 @@ export interface FindResultsEvent {
   type: "results";
   results: FindResultOut[];
 }
-export type FindStreamEvent = FindStepEvent | FindResultsEvent | AskRefusalEvent;
+/** Find's own twin of `AskStepLabelEvent`, above. */
+export interface FindStepLabelEvent {
+  type: "step_label";
+  key: string;
+  label: string;
+}
+export type FindStreamEvent = FindStepEvent | FindStepLabelEvent | FindResultsEvent | AskRefusalEvent;
+
+/** How sure Nura is of one line of the weekly report (W1): the backend's own word, never a
+ *  score. Drawn as a chip, never as a colour that reads like a health state. */
+export type InsightConfidence = "sure" | "likely" | "worth_a_look";
+
+/** One part of the record an insight rests on ("Your blood pressure book", "Monday's visit"),
+ *  the backend's own name for it — the same idea as `AnswerLineOut.cites`, in the shape the
+ *  weekly report sends. */
+export interface InsightEvidenceOut {
+  id: string;
+  kind: string;
+  label: string;
+}
+
+/** One line of the weekly report: the backend's sentence, who to ask about it (a doctor's
+ *  name) when there is a question worth taking to a visit, what it rests on, the plain reason,
+ *  and how sure Nura is. */
+export interface InsightOut {
+  insight_id: string;
+  kind: string;
+  text: string;
+  ask_who: string | null;
+  evidence: InsightEvidenceOut[];
+  why_plain: string;
+  confidence: InsightConfidence;
+}
+
+/** The report's fixed sections, in the order they are always shown. A section left out of
+ *  `InsightsReportOut.sections` entirely is one this key's scope does not cover; a section
+ *  present with an empty `insights` list is one Nura looked at and found nothing to say. */
+export type InsightSectionKey = "what_changed" | "worth_a_look" | "medicines_and_supplements" | "what_you_pay" | "screenings_due" | "questions_for_the_doctor";
+
+export interface InsightsSectionOut {
+  key: InsightSectionKey | string;
+  title: string;
+  insights: InsightOut[];
+}
+
+/** The weekly report (W1, `GET /profiles/{id}/insights`): the week it covers, only the
+ *  sections this key's scope opens, and the boundary line last, exactly as `AnswerOut` ends
+ *  its own. */
+export interface InsightsReportOut {
+  report_id: string;
+  generated_at: string;
+  week_of: string;
+  boundary: string[];
+  sections: InsightsSectionOut[];
+}
+
+/** One real stage of building the report, streamed the instant it finishes (`POST
+ *  /profiles/{id}/insights/stream`), the same trace pattern as `AskStepEvent`. */
+export interface InsightsStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished report, exactly `GET /profiles/{id}/insights` would
+ *  return once it is written. */
+export interface InsightsReportEvent {
+  type: "report";
+  report: InsightsReportOut;
+}
+
+export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
 
 /** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step
  *  the instant each real stage of turning a stored photo or PDF into a review card finishes

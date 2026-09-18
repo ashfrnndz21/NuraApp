@@ -49,7 +49,7 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Any, Final
 
-from anthropic import AsyncAnthropic
+from anthropic import APIStatusError, AsyncAnthropic
 
 from app.ingestion.extract import (
     DocumentKind,
@@ -99,14 +99,13 @@ _FIELD_SCHEMA: Final[dict[str, Any]] = {
             "'strength', 'dose', 'ldl', 'systolic'.",
         },
         "value": {
-            "description": "The value read, as a short JSON scalar or object — a number, a "
-            "string, an ISO date, or a small structure. Null when unreadable is true.",
+            "type": ["string", "number", "boolean", "null"],
+            "description": "The value read: a number, a string, an ISO date, or a small structure "
+            "written as a JSON string. Null when unreadable is true.",
         },
         "unit": {"type": ["string", "null"], "description": "The unit the value is in, or null."},
         "confidence": {
             "type": "number",
-            "minimum": 0.0,
-            "maximum": 1.0,
             "description": "How sure you are this is what the page says, from 0 to 1. Only "
             "give a high number when the text is clearly legible and unambiguous; a guess, an "
             "inference, or a smudged or handwritten value is a low number.",
@@ -118,7 +117,6 @@ _FIELD_SCHEMA: Final[dict[str, Any]] = {
         },
         "page": {
             "type": "integer",
-            "minimum": 1,
             "description": "Which page of the document this field was read on, counting from "
             "1. A single photo is always 1.",
         },
@@ -327,6 +325,16 @@ class ClaudeExtractor:
             if not isinstance(payload, Mapping):
                 raise TypeError("the model's answer was not a JSON object")
             return _extraction_from_payload(payload)
+        except APIStatusError as refused:
+            # The API refused the request itself (a schema it does not accept, a bad request):
+            # the page reads as unread, the reason is in the log by class and status — the
+            # owner's own key was hit live on 2026-09-18 and a 500 reached the phone until now.
+            log.warning(
+                "claude extractor: the API refused the request (%s %s)",
+                type(refused).__name__,
+                getattr(refused, "status_code", "?"),
+            )
+            return Extraction.nothing()
         except (
             IndexError,
             AttributeError,

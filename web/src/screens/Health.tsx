@@ -1,14 +1,15 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, MetricKind } from "../api/types";
+import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, InsightsReportOut, MetricKind } from "../api/types";
 import { useToday } from "../today/useToday";
 import { DoseSection, NextVisitTile } from "./Today";
 import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, readingsWithheld } from "../health/model";
+import { headlineInsight } from "../health/insights";
 import { dateLine } from "../today/model";
 import { profile, token } from "../store/session";
-import { fill, language, LOCALE, t } from "../strings";
-import { Icon, IconBadge, MetricRow, PaperTile, ProgressRing, SectionHeader, type Tint, TintCard } from "../ui/kit";
+import { fill, language, LOCALE, t, type Strings } from "../strings";
+import { Icon, IconBadge, MetricRow, PaperTile, PillButton, ProgressRing, SectionHeader, type Tint, TintCard } from "../ui/kit";
 import { Notice } from "../ui/components";
 import { go } from "../flow";
 import { session, toRecord, useRead } from "./record/parts";
@@ -151,6 +152,85 @@ function DayLogs({ owner, name }: { owner: boolean; name: string }): JSX.Element
   );
 }
 
+function useLatestInsights(): { report: InsightsReportOut | null; checked: boolean } {
+  const bearer = token.value;
+  const papers = profile.value;
+  const [report, setReport] = useState<InsightsReportOut | null>(null);
+  const [checked, setChecked] = useState(false);
+  useEffect(() => {
+    if (!bearer || !papers) return;
+    setChecked(false);
+    nura.insightsLatest(bearer, papers.profile_id).then(
+      (found) => {
+        setReport(found);
+        setChecked(true);
+      },
+      () => {
+        // A 404 (nothing generated yet) and any other failure both leave the card in its "not
+        // looked at yet" state: quiet, never an error banner on a card this small.
+        setReport(null);
+        setChecked(true);
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bearer, papers?.profile_id]);
+  return { report, checked };
+}
+
+/** The Insights card (W1, docs/design/nura-concept-board.html): "Your week, looked at
+ *  closely", when it was last looked at and the one line most worth a look, with "Generate
+ *  now" beside it. Tapping the card opens the report as it stands; "Generate now" opens it and
+ *  starts a fresh one at once. No hook, so it renders the same from a test as on the screen. */
+export function InsightsCard({
+  s,
+  owner,
+  name,
+  report,
+  checked,
+  locale,
+  onOpen,
+  onGenerate,
+}: {
+  s: Strings;
+  owner: boolean;
+  name: string;
+  report: InsightsReportOut | null;
+  checked: boolean;
+  locale: string;
+  onOpen: () => void;
+  onGenerate: () => void;
+}): JSX.Element {
+  const headline = report ? headlineInsight(report) : null;
+  return (
+    <TintCard tint="lavender" testId="insights-card">
+      <button type="button" class="insights-card-open" onClick={onOpen} data-testid="insights-open">
+        <IconBadge icon="trends" tint="lavender" />
+        <span class="insights-card-text">
+          <span class="insights-card-title">{owner ? s.insights.cardTitle : fill(s.insights.cardTitleOther, { name })}</span>
+          {report && (
+            <span class="caption" data-testid="insights-last-looked">
+              {fill(s.insights.cardLastLooked, { date: dateLine(new Date(report.generated_at), locale) })}
+            </span>
+          )}
+          {!report && checked && (
+            <span class="caption" data-testid="insights-none">
+              {owner ? s.insights.cardNone : fill(s.insights.cardNoneOther, { name })}
+            </span>
+          )}
+          {headline && (
+            <span class="insights-card-headline" data-testid="insights-headline">
+              {headline.text}
+            </span>
+          )}
+        </span>
+      </button>
+      <PillButton variant="primary" onClick={onGenerate} testId="insights-generate">
+        {s.insights.generate}
+      </PillButton>
+    </TintCard>
+  );
+}
+
 export function HealthScreen(): JSX.Element {
   const s = t();
   const papers = profile.value;
@@ -163,6 +243,7 @@ export function HealthScreen(): JSX.Element {
     const { bearer, profileId } = session();
     return nura.healthOverview(bearer, profileId, language.value);
   }, [language.value]);
+  const { report: latestInsights, checked: insightsChecked } = useLatestInsights();
 
   return (
     <Shell
@@ -170,6 +251,17 @@ export function HealthScreen(): JSX.Element {
       testId="health-screen"
       topBar={{ variant: "board", title: healthTitle(owner, name, s), back: true, action: { icon: "calendar", label: s.health.addReading, onClick: () => go({ name: "reading" }) } }}
     >
+      <InsightsCard
+        s={s}
+        owner={owner}
+        name={name}
+        report={latestInsights}
+        checked={insightsChecked}
+        locale={locale}
+        onOpen={() => go({ name: "insights" })}
+        onGenerate={() => go({ name: "insights", start: true })}
+      />
+
       <SectionHeader title={s.health.thisWeek} />
       <Notice error={error} />
       <ThisWeek overview={overview} locale={locale} owner={owner} name={name} />

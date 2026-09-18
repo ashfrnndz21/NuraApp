@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FeedItemOut, LineOut, SlotOut } from "../../src/api/types";
 import { en } from "../../src/strings/en";
+import { ms } from "../../src/strings/ms";
+import { zh } from "../../src/strings/zh";
+import { fill } from "../../src/strings";
 import {
   boundaryOf,
   dateLine,
@@ -330,5 +333,16 @@ describe("his large-text setting, from State", () => {
     expect(largeTextOf({ dimensions: { functional: { facts: {} } } })).toBe(false);
     expect(largeTextOf({ dimensions: { functional: null } })).toBeNull();
     expect(largeTextOf(null)).toBeNull();
+  });
+});
+
+
+describe("greeting without a name", () => {
+  it("drops the comma and the gap when the profile has no name yet", () => {
+    for (const s of [en, ms, zh]) {
+      const line = greeting(9, "", s);
+      expect(line).not.toMatch(/[,，]\s*[.。]/);
+      expect(line).toBe(fill(s.today.greetingMorning, { name: "" }).replace(/[,，]\s*[.。]/, s === zh ? "。" : "."));
+    }
   });
 });
