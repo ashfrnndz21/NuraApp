@@ -13,6 +13,9 @@
     POST /profiles/{id}/providers/{provider_id}/notes     the chief's line about the place
     GET  /profiles/{id}/changes                           what changed since you last looked
     POST /profiles/{id}/ask                               recall, with citations
+    POST /profiles/{id}/conversations                      start a new conversation thread
+    GET  /profiles/{id}/conversations/{cid}                the thread, every turn on it
+    POST /profiles/{id}/conversations/{cid}/turns/stream   a turn on that thread, streamed
 
 The yeses — for a visit, a step of its status, and hanging a paper — are minted at `POST
 /profiles/{id}/confirmations` with subjects `appointment`, `appointment_status` and `attach`
@@ -25,6 +28,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import Sequence
+from typing import Any
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import StreamingResponse
@@ -37,6 +41,7 @@ from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.channels.api.feelings_schemas import FeelingOut
 from app.channels.api.refusals import refused
+from app.channels.api.schemas import utc
 from app.channels.api.sse_pump import stream_with_background_pump
 from app.channels.api.timeline_schemas import (
     AnswerOut,
@@ -46,6 +51,7 @@ from app.channels.api.timeline_schemas import (
     AttachIn,
     AttachmentOut,
     ChangesOut,
+    ConversationOut,
     EpisodeIn,
     EpisodeOut,
     EpisodeViewOut,
@@ -57,6 +63,7 @@ from app.channels.api.timeline_schemas import (
     ProviderSummaryOut,
     StatusIn,
     TimelineOut,
+    TurnOut,
 )
 from app.db import utcnow
 from app.delivery.timeline_strings import ASK_STEP_NAMES, ASK_STEPS
@@ -73,6 +80,15 @@ from app.reasoning.feelings.service import record_tap
 from app.safety.red_flags import detect
 from app.search.ask import AskStep, recall
 from app.search.asker import AnswerDelta
+from app.search.conversation import (
+    conversation_by_id,
+    current_conversation,
+    memory_for,
+    record_turn,
+    start_new_conversation,
+    turn_view,
+    turns_of,
+)
 from app.search.narrate import NarratedStep, Narrator, narrate_step_label
 
 router = APIRouter(prefix="/profiles", tags=["timeline"])
@@ -366,6 +382,109 @@ async def _narrate_step_later(
         await queue.put(_sse({"type": "step_label", "key": step.key, "label": new_label}))
 
 
+async def _stream_turn(
+    session: Any,
+    context: Any,
+    body: AskIn,
+    request: Request,
+    outside: Any,
+    queue: asyncio.Queue[bytes | object],
+    conversation: Any,
+) -> None:
+    """One turn, streamed onto `conversation` (W2): `ask_stream` and `turn_stream` share this
+    — the only difference between them is which conversation they resolve before calling it
+    (the current one, or one named by id). See `ask_stream`'s own docstring for the event
+    contract; this adds nothing to it beyond `history` (conversation memory, so a follow-up
+    can resolve "that") going in, and `record_turn` writing the finished answer onto the
+    thread once it survives every check."""
+    heard = detect(body.question)
+    if heard is not None:
+        tapped = await record_tap(
+            session,
+            context=context,
+            word=heard,
+            registry=outside.drug_registry,
+            store=outside.object_store,
+            transcriber=outside.transcriber,
+            via=via_of(request),
+            language=body.language,
+            said=body.question,
+        )
+        answer_out = AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
+        await queue.put(_sse({"type": "answer", "answer": answer_out.model_dump(mode="json")}))
+        return
+    lang = await language_for(session, context, body.language)
+    reader = await reader_of(session, context, body.language)
+    history = await memory_for(
+        session, context=context, store=outside.object_store, conversation=conversation
+    )
+    steps_so_far: list[NarratedStep] = []
+    reached_out = False
+    narration_tasks: list[asyncio.Task[None]] = []
+    async for event in outside.asker.ask_stream(
+        session,
+        context=context,
+        question=body.question,
+        mode=body.mode,
+        retriever=outside.retriever,
+        store=outside.object_store,
+        registry=outside.drug_registry,
+        language=body.language,
+        history=history,
+    ):
+        if isinstance(event, AskStep):
+            if outside.narrator.external_processor is not None and not reached_out:
+                # Written before the first narration call, once per ask: a reach
+                # that sends the trace's step ids and counts outside the region,
+                # distinct from the ASK read itself (ADR 0017, mirroring
+                # `app.ingestion.review.review_artifact`'s EXTERNAL_MODEL_PROCESSOR
+                # line for the extractor). The agent asker's own reach, when it is
+                # the one running, writes its own line the same way, inside
+                # `ClaudeAsker.ask_stream` itself.
+                await record_audit(
+                    session,
+                    context=context,
+                    action=Action.SHARE,
+                    scope=Scope.ASK,
+                    target=EXTERNAL_MODEL_PROCESSOR,
+                    rows=1,
+                    shared_with_label=outside.narrator.external_processor,
+                )
+                reached_out = True
+            await queue.put(_step_event_now(event, steps_so_far, lang, reader))
+            # A snapshot of the trace so far: `steps_so_far` keeps growing after
+            # this, and a narrator asked about an earlier step must still see the
+            # trace as it stood when that step was streamed, not a later one.
+            snapshot = list(steps_so_far)
+            label = snapshot[-1].label
+            narration_tasks.append(
+                asyncio.create_task(
+                    _narrate_step_later(
+                        queue, outside.narrator, snapshot, event, label, lang, reader
+                    )
+                )
+            )
+        elif isinstance(event, AnswerDelta):
+            await queue.put(_sse({"type": "answer_delta", "text": event.text}))
+        else:
+            await record_turn(
+                session,
+                context=context,
+                store=outside.object_store,
+                conversation=conversation,
+                question_artifact_id=event.question_artifact_id,
+                answer=event,
+            )
+            answer_out = AnswerOut.of(event).model_copy(update={"conversation_id": conversation.id})
+            await queue.put(_sse({"type": "answer", "answer": answer_out.model_dump(mode="json")}))
+    if narration_tasks:
+        # Nothing here delayed a step, a tool call or the answer — every one of
+        # those already went out above. This only delays the stream's own close,
+        # so a still-running narration's `step_label` still reaches the wire
+        # instead of being cancelled the instant the answer is sent.
+        await asyncio.gather(*narration_tasks, return_exceptions=True)
+
+
 @router.post("/{profile_id}/ask/stream")
 async def ask_stream(body: AskIn, request: Request, context: Context) -> StreamingResponse:
     """`POST /{id}/ask`, streamed (docs/design-direction.md 'Conversation, waiting and
@@ -386,6 +505,12 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
     the answer back, however long it takes (`app.llm.narrate.NARRATE_DEADLINE_S`). An older web
     client that has never seen `step_label` simply ignores it.
 
+    W2: this always writes onto the asker's own current conversation
+    (`app.search.conversation.current_conversation`) — the thread that continues across days
+    until he starts a new one — the same as `POST .../conversations/{cid}/turns/stream` does
+    for a named thread. A caller that only ever wants the plain answer, never the thread,
+    still gets exactly that; the conversation is kept regardless.
+
     Opens its own session (`session_scope`), never `Depends(db)`: FastAPI closes a `yield`
     dependency the moment this function returns the `StreamingResponse` object, well before
     Starlette actually drives the pump to send the body — a session from `Depends(db)` would
@@ -396,81 +521,81 @@ async def ask_stream(body: AskIn, request: Request, context: Context) -> Streami
     async def pump(queue: asyncio.Queue[bytes | object]) -> None:
         try:
             async with session_scope(request) as session:
-                heard = detect(body.question)
-                if heard is not None:
-                    tapped = await record_tap(
-                        session,
-                        context=context,
-                        word=heard,
-                        registry=outside.drug_registry,
-                        store=outside.object_store,
-                        transcriber=outside.transcriber,
-                        via=via_of(request),
-                        language=body.language,
-                        said=body.question,
-                    )
-                    answer_out = AnswerOut.red_only(FeelingOut.of(tapped), body.mode)
-                    await queue.put(_sse({"type": "answer", "answer": answer_out.model_dump(mode="json")}))
-                    return
-                lang = await language_for(session, context, body.language)
-                reader = await reader_of(session, context, body.language)
-                steps_so_far: list[NarratedStep] = []
-                reached_out = False
-                narration_tasks: list[asyncio.Task[None]] = []
-                async for event in outside.asker.ask_stream(
-                    session,
-                    context=context,
-                    question=body.question,
-                    mode=body.mode,
-                    retriever=outside.retriever,
-                    store=outside.object_store,
-                    registry=outside.drug_registry,
-                    language=body.language,
-                ):
-                    if isinstance(event, AskStep):
-                        if outside.narrator.external_processor is not None and not reached_out:
-                            # Written before the first narration call, once per ask: a reach
-                            # that sends the trace's step ids and counts outside the region,
-                            # distinct from the ASK read itself (ADR 0017, mirroring
-                            # `app.ingestion.review.review_artifact`'s EXTERNAL_MODEL_PROCESSOR
-                            # line for the extractor). The agent asker's own reach, when it is
-                            # the one running, writes its own line the same way, inside
-                            # `ClaudeAsker.ask_stream` itself.
-                            await record_audit(
-                                session,
-                                context=context,
-                                action=Action.SHARE,
-                                scope=Scope.ASK,
-                                target=EXTERNAL_MODEL_PROCESSOR,
-                                rows=1,
-                                shared_with_label=outside.narrator.external_processor,
-                            )
-                            reached_out = True
-                        await queue.put(_step_event_now(event, steps_so_far, lang, reader))
-                        # A snapshot of the trace so far: `steps_so_far` keeps growing after
-                        # this, and a narrator asked about an earlier step must still see the
-                        # trace as it stood when that step was streamed, not a later one.
-                        snapshot = list(steps_so_far)
-                        label = snapshot[-1].label
-                        narration_tasks.append(
-                            asyncio.create_task(
-                                _narrate_step_later(
-                                    queue, outside.narrator, snapshot, event, label, lang, reader
-                                )
-                            )
-                        )
-                    elif isinstance(event, AnswerDelta):
-                        await queue.put(_sse({"type": "answer_delta", "text": event.text}))
-                    else:
-                        await queue.put(
-                            _sse({"type": "answer", "answer": AnswerOut.of(event).model_dump(mode="json")})
-                        )
-                if narration_tasks:
-                    # Nothing here delayed a step, a tool call or the answer — every one of
-                    # those already went out above. This only delays the stream's own close,
-                    # so a still-running narration's `step_label` still reaches the wire
-                    # instead of being cancelled the instant the answer is sent.
-                    await asyncio.gather(*narration_tasks, return_exceptions=True)
+                conversation = await current_conversation(session, context=context)
+                await _stream_turn(session, context, body, request, outside, queue, conversation)
+        except Refusal as refusal:
+            await queue.put(await _refusal_event(request, refusal))
+
+    return StreamingResponse(stream_with_background_pump(pump), media_type="text/event-stream")
+
+
+@router.post("/{profile_id}/conversations", status_code=status.HTTP_201_CREATED)
+async def new_conversation(context: Context, session: Db) -> ConversationOut:
+    """His own "New conversation" (W2): close whichever thread is open now, if any, and start
+    a fresh one, empty."""
+    conversation = await start_new_conversation(session, context=context)
+    return ConversationOut(
+        conversation_id=conversation.id,
+        started_at=utc(conversation.started_at),
+        last_turn_at=utc(conversation.last_turn_at),
+        closed_at=None,
+        summary=None,
+        turns=[],
+    )
+
+
+@router.get("/{profile_id}/conversations/{conversation_id}")
+async def get_conversation(
+    conversation_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> ConversationOut:
+    """The thread (W2): every turn on it, oldest first, read back from the two artefacts each
+    one points at — never a row's own words."""
+    outside = providers_of(request)
+    conversation = await conversation_by_id(session, context=context, conversation_id=conversation_id)
+    turns = await turns_of(session, context=context, conversation=conversation)
+    out_turns = []
+    for turn in turns:
+        question, answer_lines, honest = await turn_view(
+            session, context=context, store=outside.object_store, turn=turn
+        )
+        out_turns.append(
+            TurnOut(
+                turn_id=turn.id,
+                created_at=utc(turn.created_at),
+                mode=turn.mode,
+                language=turn.language,
+                question=question,
+                answered=turn.answered,
+                answer_lines=answer_lines,
+                honest=honest,
+            )
+        )
+    return ConversationOut(
+        conversation_id=conversation.id,
+        started_at=utc(conversation.started_at),
+        last_turn_at=utc(conversation.last_turn_at),
+        closed_at=None if conversation.closed_at is None else utc(conversation.closed_at),
+        summary=conversation.summary,
+        turns=out_turns,
+    )
+
+
+@router.post("/{profile_id}/conversations/{conversation_id}/turns/stream")
+async def turn_stream(
+    conversation_id: uuid.UUID, body: AskIn, request: Request, context: Context
+) -> StreamingResponse:
+    """`POST /{id}/ask/stream`, on a named thread instead of the current one (W2): the same
+    event contract as `ask_stream`, refused (`NoSuchConversation`) for a conversation this key
+    did not start or that is not on this profile."""
+    outside = providers_of(request)
+
+    async def pump(queue: asyncio.Queue[bytes | object]) -> None:
+        try:
+            async with session_scope(request) as session:
+                conversation = await conversation_by_id(
+                    session, context=context, conversation_id=conversation_id
+                )
+                await _stream_turn(session, context, body, request, outside, queue, conversation)
         except Refusal as refusal:
             await queue.put(await _refusal_event(request, refusal))
 

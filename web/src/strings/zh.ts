@@ -763,6 +763,10 @@ export const zh = {
     // @patient phrase
     askLookedAt: "Nura查看了：{parts}",
     // @patient phrase
+    newConversation: "新的问题",
+    // @patient headline
+    earlierInConversation: "之前问过的",
+    // @patient phrase
     back: "回到您的卡",
     // @patient
     statusHeld: "Nura 没有把这张卡给 {name} 看。",

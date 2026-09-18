@@ -325,6 +325,9 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "records": "Looking at your papers.",
         "feelings": "Checking your feelings notes.",
         "search_online": "Looking online.",
+        "insurance": "Checking your insurance.",
+        "costs": "Looking at what this usually costs.",
+        "plan": "Looking at what is coming up.",
     },
     "ms": {
         "visits": "Menyemak lawatan anda.",
@@ -333,6 +336,9 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "records": "Melihat surat anda.",
         "feelings": "Menyemak nota perasaan anda.",
         "search_online": "Melihat di web.",
+        "insurance": "Menyemak insurans anda.",
+        "costs": "Melihat kos biasa untuk ini.",
+        "plan": "Melihat apa yang akan datang.",
     },
     "zh": {
         "visits": "正在查看您看医生的记录。",
@@ -341,6 +347,9 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "records": "正在查看您的文件。",
         "feelings": "正在查看您的感受记录。",
         "search_online": "正在网上查看。",
+        "insurance": "正在查看您的保险。",
+        "costs": "正在查看一般的费用。",
+        "plan": "正在查看接下来的安排。",
     },
 }
 """What Ask's trace says while it works (spec 'Conversation, waiting and thinking'), one line
@@ -361,6 +370,9 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "records": "papers",
         "feelings": "feelings notes",
         "search_online": "online",
+        "insurance": "insurance",
+        "costs": "costs",
+        "plan": "what's coming up",
     },
     "ms": {
         "visits": "lawatan",
@@ -369,6 +381,9 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "records": "surat",
         "feelings": "nota perasaan",
         "search_online": "dalam talian",
+        "insurance": "insurans",
+        "costs": "kos",
+        "plan": "akan datang",
     },
     "zh": {
         "visits": "看医生的记录",
@@ -377,6 +392,9 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "records": "文件",
         "feelings": "感受记录",
         "search_online": "网上",
+        "insurance": "保险",
+        "costs": "费用",
+        "plan": "接下来的安排",
     },
 }
 """The short name for each part `ASK_STEPS` reads — a bare noun, not "your" or "his" and not a
@@ -716,6 +734,9 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "records": "Looking at {patient}'s papers.",
         "feelings": "Checking {patient}'s feelings notes.",
         "search_online": "Looking online for {patient}.",
+        "insurance": "Checking {patient}'s insurance.",
+        "costs": "Looking at what this usually costs {patient}.",
+        "plan": "Looking at what is coming up for {patient}.",
     },
     "ms": {
         "visits": "Menyemak lawatan {patient}.",
@@ -724,6 +745,9 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "records": "Melihat surat {patient}.",
         "feelings": "Menyemak nota perasaan {patient}.",
         "search_online": "Melihat di internet untuk {patient}.",
+        "insurance": "Menyemak insurans {patient}.",
+        "costs": "Melihat kos biasa untuk {patient}.",
+        "plan": "Melihat apa yang akan datang untuk {patient}.",
     },
     "zh": {
         "visits": "正在查看{patient}看医生的记录。",
@@ -732,6 +756,9 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "records": "正在查看{patient}的文件。",
         "feelings": "正在查看{patient}的感受记录。",
         "search_online": "正在为{patient}在网上查看。",
+        "insurance": "正在查看{patient}的保险。",
+        "costs": "正在查看{patient}一般的费用。",
+        "plan": "正在查看{patient}接下来的安排。",
     },
 }
 """`ASK_STEPS`, said about him by name, for a key that is not his."""

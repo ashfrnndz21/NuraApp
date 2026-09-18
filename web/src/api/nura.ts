@@ -17,6 +17,7 @@ import type {
   ConditionsOut,
   ConfirmationOut,
   ConsentOut,
+  ConversationOut,
   ConsultOut,
   CostExpectationOut,
   DayNudgesOut,
@@ -376,6 +377,51 @@ export function askStream(
       }
       // A "refusal" event is thrown by `apiStream` itself before it ever reaches `onEvent`.
     })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no answer"));
+      })
+      .catch(reject);
+  });
+}
+
+/** His own "New conversation" (W2): close whichever thread is open now, if any, and start a
+ *  fresh, empty one. */
+export const startConversation = (token: string, profileId: string) =>
+  api<ConversationOut>(`/profiles/${profileId}/conversations`, { method: "POST", token });
+
+/** The thread (W2): every turn on it, oldest first. */
+export const getConversation = (token: string, profileId: string, conversationId: string) =>
+  api<ConversationOut>(`/profiles/${profileId}/conversations/${conversationId}`, { token });
+
+/** A turn on a named thread (W2), streamed exactly like `askStream` — the only difference is
+ *  which conversation the answer lands on. */
+export function turnStream(
+  token: string,
+  profileId: string,
+  conversationId: string,
+  question: string,
+  mode: AskMode,
+  language: string,
+  onStep: (key: string, label: string, name: string) => void,
+  onDelta?: (text: string) => void,
+  onStepLabel?: (key: string, label: string) => void,
+): Promise<AnswerOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(
+      `/profiles/${profileId}/conversations/${conversationId}/turns/stream`,
+      { method: "POST", token, body: { question, mode, language } },
+      (event) => {
+        const streamed = event as unknown as AskStreamEvent;
+        if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
+        else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
+        else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
+        else if (streamed.type === "answer") {
+          settled = true;
+          resolve(streamed.answer);
+        }
+      },
+    )
       .then(() => {
         if (!settled) reject(new Error("the stream ended with no answer"));
       })

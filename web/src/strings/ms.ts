@@ -763,6 +763,10 @@ export const ms = {
     // @patient phrase
     askLookedAt: "Apa yang Nura lihat: {parts}",
     // @patient phrase
+    newConversation: "Soalan baharu",
+    // @patient headline
+    earlierInConversation: "Apa yang anda tanya sebelum ini",
+    // @patient phrase
     back: "Kembali ke kad anda",
     // @patient
     statusHeld: "Nura tidak tunjuk kad ini kepada {name}.",

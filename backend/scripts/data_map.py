@@ -1103,6 +1103,34 @@ CLASSES: dict[str, str] = {
     "insurance_claim.status_changed_by_person_id": IDENTIFIER,
     "insurance_claim.status_changed_confirmation_id": CONSENT,
     "insurance_claim.status_changed_at": OPERATIONAL,
+    # Ask becomes a conversation (W2, `app.search.models`). Neither table holds a question's
+    # or an answer's own words — those stay in the MESSAGE artefacts the two id columns below
+    # point at (`event.artifact_id`'s own standing, HEALTH: a reference to health data). Who
+    # is asking is an identifier the same way a note's writer already is; when, operational;
+    # `written_scope` the consent door it was kept under, the same as `artifact.written_scope`.
+    # `summary` is the one free-text column: a deterministic, rule-written line naming what
+    # was asked and found, by cite id — the record's own standing (health), never the record
+    # itself.
+    "conversation.id": HEALTH,
+    "conversation.written_scope": CONSENT,
+    "conversation.person_id": IDENTIFIER,
+    "conversation.started_at": OPERATIONAL,
+    "conversation.last_turn_at": OPERATIONAL,
+    "conversation.closed_at": OPERATIONAL,
+    "conversation.turn_count": OPERATIONAL,
+    "conversation.summarized_through": OPERATIONAL,
+    "conversation.summary": HEALTH,
+    "turn.id": HEALTH,
+    "turn.written_scope": CONSENT,
+    "turn.conversation_id": HEALTH,
+    "turn.person_id": IDENTIFIER,
+    "turn.mode": OPERATIONAL,
+    "turn.language": OPERATIONAL,
+    "turn.question_artifact_id": HEALTH,
+    "turn.answer_artifact_id": HEALTH,
+    "turn.answered": OPERATIONAL,
+    "turn.line_count": OPERATIONAL,
+    "turn.created_at": OPERATIONAL,
 }
 
 
