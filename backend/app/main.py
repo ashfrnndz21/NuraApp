@@ -47,6 +47,7 @@ from app.ingestion.speakers import FixtureSeparator
 from app.ingestion.stores import object_store_for
 from app.ingestion.transcribe import FixtureTranscriber
 from app.insurance.cost_expectation import estimator_for
+from app.reasoning.navigation.drafter_provider import drafter_for
 from app.reasoning.ranges import reference_ranges_for
 from app.reasoning.visits.summary import FixtureSummariser
 from app.search.asker_provider import asker_for
@@ -76,6 +77,7 @@ def providers_for(settings: Settings) -> Providers:
         extractor=extractor_for(settings),
         narrator=narrator_for(settings),
         asker=asker_for(settings),
+        drafter=drafter_for(settings),
         transcriber=FixtureTranscriber(Path(settings.voice_fixtures), settings.region),
         searcher=searcher_for(settings),
         compressor=compressor_for(settings),

@@ -79,6 +79,21 @@ describe("Care services and Guides (Services tab)", () => {
     expect(all(nodes, byTestId("care-providers-all"))).toHaveLength(1);
   });
 
+  it("a provider row offers 'Draft a message' (T3) only when a real need names it", () => {
+    const tan = provider("Dr Tan, heart clinic", "prov-tan");
+    const withoutNeed = render(<CareBody s={en} own name="" cards={[]} providers={[tan]} dateOf={(iso) => iso} />);
+    expect(all(withoutNeed, byTestId("care-provider-draft"))).toEqual([]);
+
+    const need = { id: "follow_up:1", kind: "follow_up" as const, evidence_kind: "fact", evidence_id: "fact-1", provider_id: "prov-tan", doctor: "Dr Tan", when: null, category: null };
+    const onDraft = vi.fn();
+    const withNeed = render(<CareBody s={en} own name="" cards={[]} providers={[tan]} dateOf={(iso) => iso} needs={[need]} onDraft={onDraft} />);
+    const [draftButton] = all(withNeed, byTestId("care-provider-draft"));
+    expect(draftButton).toBeDefined();
+    expect(text(draftButton!)).toContain("Draft a message");
+    (draftButton!.props.onClick as () => void)();
+    expect(onDraft).toHaveBeenCalledWith("follow_up:1");
+  });
+
   it("Help at home always shows all four tiles, each naming what is near him once one is near", () => {
     const nodes = render(<HomeCareGrid s={en} own name="" providers={[provider("Amanah Home Nursing", "p1", "nursing")]} />);
     const labels = text(all(nodes, byTestId("home-care-nursing")));

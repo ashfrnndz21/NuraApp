@@ -308,6 +308,26 @@ export const en = {
     // @patient
     noneOther: "Nura has nothing near {name} for this yet.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Draft a message",
+    // @patient headline
+    sheetTitle: "Your drafted message",
+    // @patient phrase
+    copy: "Copy",
+    // @patient
+    copied: "It is copied, ready to paste where you send it.",
+    // @patient phrase
+    sendBySms: "Send by text message",
+    // @patient phrase
+    sendByWhatsApp: "Send by WhatsApp",
+    // @patient
+    copyOnly: "There is no number for this place, so copy the message and send it yourself.",
+    // @patient
+    loading: "Nura is writing the message.",
+    // @patient
+    error: "Nura could not write the message just now.",
+  },
   health: {
     // @patient headline
     title: "Your health",

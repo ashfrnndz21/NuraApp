@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { AppointmentOut, FeedItemOut, HomeCareCategory, ProviderSummaryOut } from "../api/types";
+import type { AppointmentOut, FeedItemOut, HomeCareCategory, NavigationDraftOut, NavigationNeedOut, ProviderSummaryOut } from "../api/types";
 import { go } from "../flow";
 import { careCards, clipOf, guideCards } from "../feed/model";
 import { startOnboarding } from "../onboarding/state";
@@ -11,6 +11,7 @@ import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, feedLines, timeLine, whyLine } from "../today/model";
 import { Card, Notice } from "../ui/components";
 import { FeatureTile, FeedCard, Icon, PaperTile, PillButton, Poster, SectionLabel, type Tint } from "../ui/kit";
+import { NavigationDraftSheet } from "./NavigationDraftSheet";
 import { Shell } from "./Shell";
 
 /** The Visits tab (D1, one tab set): his visits — the spine of the record — and, under them,
@@ -99,7 +100,28 @@ function VisitList(): JSX.Element | null {
  *  is one the feed already rendered, every provider one the directory already holds, each with
  *  the way in it already has. A pure body, so owner and caregiver density are one prop away
  *  from a test, with no network of their own. */
-export function CareBody({ s, own, name, cards, providers, dateOf }: { s: Strings; own: boolean; name: string; cards: readonly FeedItemOut[]; providers: readonly ProviderSummaryOut[]; dateOf: (iso: string) => string }): JSX.Element {
+export function CareBody({
+  s,
+  own,
+  name,
+  cards,
+  providers,
+  dateOf,
+  needs,
+  onDraft,
+}: {
+  s: Strings;
+  own: boolean;
+  name: string;
+  cards: readonly FeedItemOut[];
+  providers: readonly ProviderSummaryOut[];
+  dateOf: (iso: string) => string;
+  /** Care navigation (T3): a real need already drafted for, one per provider it names
+   *  (`GET /profiles/{id}/navigation/drafts`) — empty where the caller has not fetched it,
+   *  same as any other optional read. */
+  needs?: readonly NavigationNeedOut[];
+  onDraft?: (needId: string) => void;
+}): JSX.Element {
   const empty = cards.length === 0 && providers.length === 0;
   return (
     <>
@@ -114,31 +136,41 @@ export function CareBody({ s, own, name, cards, providers, dateOf }: { s: String
             const shown = feedLines(item);
             return <FeedCard key={item.item_id} icon="care" title={item.headline} lines={shown.lines} boundary={shown.boundary} why={whyLine(item)} testId="care-card" />;
           })}
-          {providers.slice(0, 3).map((summary) => (
-            <PaperTile key={summary.provider.provider_id} testId="care-provider">
-              <div class="card-head">
-                <span class="card-icon">
-                  <Icon name="stethoscope" />
-                </span>
-                <div>
-                  <h2 class="title">{summary.provider.name}</h2>
-                  <p class="source-line">{kindWord(summary.provider.kind, s)}</p>
+          {providers.slice(0, 3).map((summary) => {
+            const need = needs?.find((each) => each.provider_id === summary.provider.provider_id);
+            return (
+              <PaperTile key={summary.provider.provider_id} testId="care-provider">
+                <div class="card-head">
+                  <span class="card-icon">
+                    <Icon name="stethoscope" />
+                  </span>
+                  <div>
+                    <h2 class="title">{summary.provider.name}</h2>
+                    <p class="source-line">{kindWord(summary.provider.kind, s)}</p>
+                  </div>
                 </div>
-              </div>
-              <div class="lines">
-                {providerLines(summary, dateOf, s).map((line, at) => (
-                  <p key={at}>{line}</p>
-                ))}
-              </div>
-              <nav class="place-rows" aria-label={s.record.seeDoctor}>
-                <button type="button" class="place-row" onClick={() => go({ name: "record", at: { name: "provider", providerId: summary.provider.provider_id } })} data-testid="care-provider-open">
-                  <Icon name="stethoscope" />
-                  <span class="place-word">{s.record.seeDoctor}</span>
-                  <Icon name="chevron" />
-                </button>
-              </nav>
-            </PaperTile>
-          ))}
+                <div class="lines">
+                  {providerLines(summary, dateOf, s).map((line, at) => (
+                    <p key={at}>{line}</p>
+                  ))}
+                </div>
+                <nav class="place-rows" aria-label={s.record.seeDoctor}>
+                  <button type="button" class="place-row" onClick={() => go({ name: "record", at: { name: "provider", providerId: summary.provider.provider_id } })} data-testid="care-provider-open">
+                    <Icon name="stethoscope" />
+                    <span class="place-word">{s.record.seeDoctor}</span>
+                    <Icon name="chevron" />
+                  </button>
+                  {need && onDraft && (
+                    <button type="button" class="place-row" onClick={() => onDraft(need.id)} data-testid="care-provider-draft">
+                      <Icon name="care" />
+                      <span class="place-word">{s.navigation.draftAction}</span>
+                      <Icon name="chevron" />
+                    </button>
+                  )}
+                </nav>
+              </PaperTile>
+            );
+          })}
           {providers.length > 0 && (
             <nav class="place-rows" aria-label={s.places.careTitle}>
               <button type="button" class="place-row" onClick={() => go({ name: "record", at: { name: "providers" } })} data-testid="care-providers-all">
@@ -327,6 +359,16 @@ function ServiceCards(): JSX.Element | null {
   const [area, setArea] = useState<string | null>(null);
   const [areaKnown, setAreaKnown] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // Care navigation (T3): every real need on the record right now, so a provider row with
+  // one to draft for can offer "Draft a message" — empty on a key with no navigation scope,
+  // the same as any other read that comes back withheld.
+  const [needs, setNeeds] = useState<NavigationNeedOut[]>([]);
+  const [draftingNeedId, setDraftingNeedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<NavigationDraftOut | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftError, setDraftError] = useState(false);
+  const [draftText, setDraftText] = useState("");
+  const [draftCopied, setDraftCopied] = useState(false);
   useEffect(() => {
     if (!bearer || !papers) return;
     wholeFeed(bearer, papers.profile_id).then(setItems, (failure: unknown) => {
@@ -334,6 +376,7 @@ function ServiceCards(): JSX.Element | null {
       setError(failure);
     });
     nura.providers(bearer, papers.profile_id).then(setProviders, () => setProviders([]));
+    nura.navigationNeeds(bearer, papers.profile_id).then(setNeeds, () => setNeeds([]));
     nura.area(bearer, papers.profile_id).then(
       (out) => {
         setArea(out.area);
@@ -342,6 +385,38 @@ function ServiceCards(): JSX.Element | null {
       () => setAreaKnown(true),
     );
   }, [bearer, papers?.profile_id]);
+  useEffect(() => {
+    setDraft(null);
+    setDraftError(false);
+    setDraftCopied(false);
+    setDraftText("");
+    if (!bearer || !papers || !draftingNeedId) return;
+    setDraftLoading(true);
+    let live = true;
+    nura.draftNavigationMessage(bearer, papers.profile_id, draftingNeedId, language.value).then(
+      (out) => {
+        if (!live) return;
+        setDraft(out);
+        setDraftText(out.text);
+        setDraftLoading(false);
+      },
+      () => {
+        if (live) {
+          setDraftError(true);
+          setDraftLoading(false);
+        }
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [bearer, papers?.profile_id, draftingNeedId]);
+  const copyDraftText = (): void => {
+    setDraftCopied(false);
+    const clipboard = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+    if (!clipboard) return;
+    void clipboard.writeText(draftText).then(() => setDraftCopied(true));
+  };
   if (!items || !providers || !areaKnown) return null;
   // The doctors-and-clinics directory (`CareBody`, the app's own "Care services") and the
   // board's home-care grid (`HomeCareGrid`, "Help at home") read the same directory, told
@@ -351,9 +426,30 @@ function ServiceCards(): JSX.Element | null {
     <>
       <Notice error={error} />
       <HomeCareGrid s={s} own={own} name={name} providers={providers} />
-      <CareBody s={s} own={own} name={name} cards={careCards(items)} providers={doctors} dateOf={(iso) => dateLine(new Date(iso), locale)} />
+      <CareBody
+        s={s}
+        own={own}
+        name={name}
+        cards={careCards(items)}
+        providers={doctors}
+        dateOf={(iso) => dateLine(new Date(iso), locale)}
+        needs={needs}
+        onDraft={setDraftingNeedId}
+      />
       <NearYouBody s={s} own={own} name={name} area={area} />
       <GuideBody s={s} cards={guideCards(items)} />
+      <NavigationDraftSheet
+        s={s}
+        open={draftingNeedId !== null}
+        draft={draft}
+        loading={draftLoading}
+        error={draftError}
+        text={draftText}
+        onTextChange={setDraftText}
+        copied={draftCopied}
+        onCopy={copyDraftText}
+        onClose={() => setDraftingNeedId(null)}
+      />
     </>
   );
 }

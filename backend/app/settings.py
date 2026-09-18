@@ -72,6 +72,14 @@ class Settings:
     first-party API does not process in SG or MY and no in-region provider exists yet
     (ADR 0017) — a laptop dev run stays on `rule`. A name this build does not have refuses to
     start."""
+    drafter: str = "rule"
+    """NURA_DRAFTER: what writes a care-navigation drafted message (T3,
+    `app.reasoning.navigation.drafter_provider.drafter_for`). `rule` (the default) is the
+    catalogue's own templates, unchanged; `claude` is the Claude-backed drafter
+    (`app.llm.navigation_draft.ClaudeDrafter`), which only builds on a declared demo
+    (NURA_DEMO_MODE=1) because Anthropic's first-party API does not process in SG or MY and
+    no in-region provider exists yet (ADR 0017) — a laptop dev run stays on `rule`. A name
+    this build does not have refuses to start."""
     visit_fixtures: str | None = None
     """NURA_VISIT_FIXTURES: the directory of visit transcripts the fixture summariser answers
     from (`app.reasoning.visits.summary.FixtureSummariser`). No live model call exists yet;
@@ -317,6 +325,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
         narrator=source.get("NURA_NARRATOR", "fixture"),
         asker=source.get("NURA_ASKER", "rule"),
+        drafter=source.get("NURA_DRAFTER", "rule"),
         visit_fixtures=source.get("NURA_VISIT_FIXTURES") or None,
         voice_fixtures=source.get("NURA_VOICE_FIXTURES") or None,
         feed_fixtures=source.get("NURA_FEED_FIXTURES") or None,

@@ -308,6 +308,26 @@ export const ms = {
     // @patient
     noneOther: "Nura tiada apa-apa berhampiran {name} untuk ini lagi.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Tulis draf mesej",
+    // @patient headline
+    sheetTitle: "Draf mesej anda",
+    // @patient phrase
+    copy: "Salin",
+    // @patient
+    copied: "Sudah disalin, sedia untuk ditampal di tempat anda mahu hantar.",
+    // @patient phrase
+    sendBySms: "Hantar melalui mesej teks",
+    // @patient phrase
+    sendByWhatsApp: "Hantar melalui WhatsApp",
+    // @patient
+    copyOnly: "Tiada nombor untuk tempat ini, jadi salin mesej ini dan hantar sendiri.",
+    // @patient
+    loading: "Nura sedang menulis mesej.",
+    // @patient
+    error: "Nura tidak dapat menulis mesej buat masa ini.",
+  },
   health: {
     // @patient headline
     title: "Kesihatan anda",
