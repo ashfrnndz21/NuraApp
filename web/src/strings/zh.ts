@@ -308,6 +308,26 @@ export const zh = {
     // @patient
     noneOther: "Nura 在{name}附近暂时还没有这项服务。",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "写一条消息草稿",
+    // @patient headline
+    sheetTitle: "您的消息草稿",
+    // @patient phrase
+    copy: "复制",
+    // @patient
+    copied: "已复制，可以粘贴到您要发送的地方。",
+    // @patient phrase
+    sendBySms: "用短信发送",
+    // @patient phrase
+    sendByWhatsApp: "用 WhatsApp 发送",
+    // @patient
+    copyOnly: "这个地方没有号码，请自行复制并发送这条消息。",
+    // @patient
+    loading: "Nura 正在写这条消息。",
+    // @patient
+    error: "Nura 现在无法写这条消息。",
+  },
   health: {
     // @patient headline
     title: "您的健康",
@@ -743,6 +763,10 @@ export const zh = {
     // @patient phrase
     askLookedAt: "Nura查看了：{parts}",
     // @patient phrase
+    newConversation: "新的问题",
+    // @patient headline
+    earlierInConversation: "之前问过的",
+    // @patient phrase
     back: "回到您的卡",
     // @patient
     statusHeld: "Nura 没有把这张卡给 {name} 看。",
@@ -1167,6 +1191,16 @@ export const zh = {
     questionsOpenOther: "要问{patient}医生的问题",
     // @patient headline
     questionsTitle: "看诊时要问的问题",
+    // @patient phrase
+    costOpen: "大概的费用",
+    // @patient phrase
+    costOpenOther: "{patient}这次看诊大概的费用",
+    // @patient headline
+    costTitle: "大概的费用",
+    // @patient phrase
+    costCoveredLabel: "您的保险可能支付",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}的保险可能支付",
     // @patient phrase
     questionLabel: "您的问题",
     // @patient phrase

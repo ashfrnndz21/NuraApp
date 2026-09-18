@@ -83,6 +83,7 @@ from app.reasoning.analyst.service import save_report
 from app.regions import Region
 from app.safety.red_flags import Flag
 from app.search.ask import Mode, recall
+from app.search.conversation import start_new_conversation
 from app.state.service import current_state
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.capture_support import agree_to_recording, b64, confirm, decide, photo
@@ -744,6 +745,11 @@ async def _seed(deployment: Deployment) -> Seeded:
         seeded.kinds[str(claim.id)] = "insurance_claim"
         seeded.scopes[str(saved_report.id)] = Scope.PROFILE
         seeded.kinds[str(saved_report.id)] = "insight_report"
+        # Ask as a conversation (W2, `app.search.conversation`): the thread row itself sits
+        # under ASK, the same door its questions were always kept behind.
+        conversation = await start_new_conversation(session, context=owner)
+        seeded.scopes[str(conversation.id)] = Scope.ASK
+        seeded.kinds[str(conversation.id)] = "conversation"
         seeded.params = {
             "event_id": [str(e.id) for e in events],
             "episode_id": [str(illness.id)],
@@ -762,6 +768,7 @@ async def _seed(deployment: Deployment) -> Seeded:
             "photo_id": [shared["photo"]["photo_id"]],
             "kind": ["steps", "heart_rate", "sleep", "water"],
             "report_id": [str(saved_report.id)],
+            "conversation_id": [str(conversation.id)],
         }
     return seeded
 
@@ -957,11 +964,6 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/me-summary"),
     Walk("GET", f"{P}/nudges"),
     Walk("GET", f"{P}/not-feeling-well/offline"),
-    # The fuller insurance record (E13-03): money, not the emergency card's EMERGENCY.
-    Walk("GET", f"{P}/insurance/policies"),
-    Walk("GET", f"{P}/insurance/appointments/{{appointment_id}}/claims"),
-    Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
-    Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
     Walk("GET", f"{P}/calls/upcoming"),
     Walk("GET", f"{P}/health/overview"),
     Walk("GET", f"{P}/health/insights"),
@@ -979,10 +981,30 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/insurance/claims/{{claim_id}}/papers"),
     Walk("GET", f"{P}/insurance/pre-visit/{{appointment_id}}"),
     Walk("GET", f"{P}/insurance/ledger"),
+    # Ask as a conversation (W2): the thread read back, and a turn asked on it — the same
+    # event contract as /ask/stream above.
+    Walk("GET", f"{P}/conversations/{{conversation_id}}"),
+    Walk(
+        "POST",
+        f"{P}/conversations/{{conversation_id}}/turns/stream",
+        json={"question": "what papers do I have", "mode": "text"},
+        stream=True,
+    ),
+    # Care navigation drafts (T3), the planner's proposed visits and a visit's cost
+    # expectation (T2): reads over VISITS, with MONEY deciding whether cover is shown.
+    Walk("GET", f"{P}/navigation/drafts"),
+    Walk("GET", f"{P}/visits/proposed"),
+    Walk("GET", f"{P}/visits/{{appointment_id}}/cost"),
 )
 """Every route under `/profiles/{id}/` that answers with rows of the profile."""
 
 NOT_WALKED: dict[tuple[str, str], str] = {
+    ("POST", f"{P}/conversations"): "starts a fresh thread; returns its empty shell",
+    ("POST", f"{P}/navigation/drafts/{{need_id}}"): "drafts a message for a need; returns the draft",
+    (
+        "POST",
+        f"{P}/visits/proposed/{{proposal_id}}/decline",
+    ): "declines a proposed visit; returns what it declined",
     ("POST", f"{P}/confirmations"): "mints a yes for a draft the caller sends; returns its id",
     ("POST", f"{P}/claim"): "the patient claims his graph; returns the profile row",
     ("POST", f"{P}/keys"): "cuts a key; returns the key",

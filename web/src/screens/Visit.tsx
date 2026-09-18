@@ -2,15 +2,24 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { Refused } from "../api/client";
 import * as nura from "../api/nura";
-import type { ConsultOut, LogisticsOut, MemoCardOut, NoticeOut, VisitSummaryOut, WordingOut } from "../api/types";
+import type {
+  ConsultOut,
+  CostExpectationOut,
+  LogisticsOut,
+  MemoCardOut,
+  NoticeOut,
+  VisitSummaryOut,
+  WordingOut,
+} from "../api/types";
 import { decisionsFor, waitingSummary } from "../day/model";
 import { go } from "../flow";
 import { speak } from "../speech/speak";
 import { density, profile, token } from "../store/session";
-import { fill, isLanguage, language, t } from "../strings";
+import { fill, isLanguage, LOCALE, language, t } from "../strings";
 import { voice } from "../player/voice";
 import { Header, Hear, Notice, Pill, Tile } from "../ui/components";
 import { HearClip } from "../ui/Player";
+import { CostSheet } from "./CostSheet";
 import { Shell } from "./Shell";
 import { CONSENT_REFUSALS, logisticsView, summaryView, timer } from "../visit/model";
 import { browserRecorderDeps, canRecord, ConsultRecorder, type Kept } from "../visit/recorder";
@@ -63,6 +72,9 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
   // His yes to the post-visit card (E05-05): the items he leaves out, and the memo card after.
   const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
   const [memos, setMemos] = useState<MemoCardOut | null>(null);
+  // "What it may cost" (T3): loaded once, shown in its own sheet — never blocks the card.
+  const [cost, setCost] = useState<CostExpectationOut | null>(null);
+  const [costOpen, setCostOpen] = useState(false);
   const recorder = useMemo(() => new ConsultRecorder(browserRecorderDeps()), []);
   /** The recording's chunked upload (#129), from the moment the microphone opens. */
   const chunked = useRef<ChunkedUpload | null>(null);
@@ -81,6 +93,11 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
 
   useEffect(() => {
     void loadCard();
+  }, [bearer, papers?.profile_id, appointmentId]);
+
+  useEffect(() => {
+    if (!bearer || !papers) return;
+    nura.costExpectation(bearer, papers.profile_id, appointmentId).then(setCost, () => setCost(null));
   }, [bearer, papers?.profile_id, appointmentId]);
 
   // A card from this visit still waiting for his yes opens first (E05-05): confirming it on the
@@ -438,6 +455,11 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
           <Pill onClick={() => go({ name: "questions", appointmentId })} testId="open-questions">
             {s.day.questionsOpen}
           </Pill>
+          {cost && (
+            <Pill onClick={() => setCostOpen(true)} testId="open-cost">
+              {papers?.standing === "owner" ? s.day.costOpen : fill(s.day.costOpenOther, { patient: papers?.display_name ?? "" })}
+            </Pill>
+          )}
           <Pill onClick={() => void begin()} disabled={busy || stage.kind === "gating"} testId="start-recording">
             <span class="start-label">{s.visit.start}</span>
           </Pill>
@@ -446,6 +468,16 @@ export function VisitScreen({ appointmentId }: { appointmentId: string }): JSX.E
           </p>
         </>
       )}
+
+      <CostSheet
+        cost={cost}
+        open={costOpen}
+        onClose={() => setCostOpen(false)}
+        owner={papers?.standing === "owner"}
+        patientName={papers?.display_name ?? ""}
+        locale={LOCALE[language.value]}
+        s={s}
+      />
 
       {stage.kind === "consent" && (
         <Tile paper sheet testId="recording-consent">

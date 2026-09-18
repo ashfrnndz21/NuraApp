@@ -18,7 +18,7 @@ it carried, and its sections and insights, kept as JSON the way `TrendCard.lines
 read (`app.db.monotonic`'s own docstring, #192/#218): two reports written in the same request,
 or under a frozen clock, must resolve to one winner, never an arbitrary one.
 
-Revision ID: 0050_health_analyst
+Revision ID: 0051_health_analyst
 Revises: 0049_condition_answers
 Create Date: 2026-09-18
 """
@@ -28,8 +28,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0050_health_analyst"
-down_revision = "0049_condition_answers"
+revision = "0051_health_analyst"
+down_revision = "0050_conversations"
 branch_labels = None
 depends_on = None
 

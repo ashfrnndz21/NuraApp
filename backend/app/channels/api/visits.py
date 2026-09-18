@@ -20,6 +20,7 @@
     POST /profiles/{id}/transcripts/search                       words said at a confirmed visit (E02-05)
     GET  /profiles/{id}/visits/proposed                          what Nura suggests, cited (T2)
     POST /profiles/{id}/visits/proposed/{proposal}/decline       "Not now": hidden for 90 days
+    GET  /profiles/{id}/visits/{appt}/cost                       typical fee range, cited (T3)
 
 Every route takes the key context like every other profile route. Briefs, questions, cards
 and memos are under the visits scope; the transcript is an artefact under the record's; a
@@ -39,6 +40,7 @@ from pydantic import AwareDatetime
 
 from app.audit.access import audited_guard, audited_profile_read, audited_read
 from app.audit.models import Action
+from app.channels.api.cost_schemas import CostExpectationOut, CostSourceOut
 from app.channels.api.delivery import via_of
 from app.channels.api.deps import Context, CurrentPerson, Db, providers_of
 from app.channels.api.schemas import (
@@ -74,6 +76,7 @@ from app.ingestion.consult import (
     record_consult,
     recordings_for,
 )
+from app.insurance.cost_expectation import expect_cost
 from app.keys.scopes import Scope
 from app.memory.models import Provider
 from app.memory.spine import upcoming_appointments
@@ -448,3 +451,42 @@ async def decline_proposed_visit(proposal_id: str, context: Context, session: Db
     (`app.delivery.feed.engagement._decline_topic_for_30_days`)."""
     await decline_proposal(session, context=context, proposal_id=proposal_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- cost expectation (T3) --------------------------------------------------------------------
+
+
+@router.get("/{profile_id}/visits/{appointment_id}/cost")
+async def cost_expectation(
+    appointment_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> CostExpectationOut:
+    """A typical fee range for this visit, from a public fee benchmark, always cited and
+    dated, and never a quote (`app.insurance.cost_expectation`). Refused (`OutOfScope`, 403)
+    for a key that cannot see the visit at all. What his cover on file would likely pay is
+    shown only to a key that also holds `Scope.MONEY`; without it, `covered_shown` is false
+    and `note` names who to ask instead — never a silent blank."""
+    shown = await expect_cost(
+        session, context, appointment_id, estimator=providers_of(request).estimator
+    )
+    return CostExpectationOut(
+        appointment_id=shown.appointment_id,
+        found=shown.found,
+        low_cents=shown.low_cents,
+        high_cents=shown.high_cents,
+        low_said=shown.low_said,
+        high_said=shown.high_said,
+        currency=shown.currency,
+        source=None
+        if shown.source is None
+        else CostSourceOut(
+            publisher=shown.source.publisher,
+            url=shown.source.url,
+            fetched_at=shown.source.fetched_at,
+        ),
+        covered_shown=shown.covered_shown,
+        covered_low_cents=shown.covered_low_cents,
+        covered_high_cents=shown.covered_high_cents,
+        covered_low_said=shown.covered_low_said,
+        covered_high_said=shown.covered_high_said,
+        note=[line.text for line in shown.note],
+    )

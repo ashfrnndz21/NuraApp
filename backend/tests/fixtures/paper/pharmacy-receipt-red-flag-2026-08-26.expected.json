@@ -1,0 +1,43 @@
+{
+  "placeholder": "pharmacy-receipt-red-flag-2026-08-26",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "pharmacy_receipt",
+  "fields": [
+    {
+      "subject": "receipt",
+      "attribute": "pharmacy",
+      "value": "Unity Pharmacy",
+      "unit": null
+    },
+    {
+      "subject": "receipt",
+      "attribute": "currency",
+      "value": "SGD",
+      "unit": null
+    },
+    {
+      "subject": "item_1",
+      "attribute": "name",
+      "value": "Chest pain relief patch",
+      "unit": null
+    },
+    {
+      "subject": "item_1",
+      "attribute": "quantity",
+      "value": 1,
+      "unit": null
+    },
+    {
+      "subject": "item_1",
+      "attribute": "unit_price",
+      "value": 5.5,
+      "unit": "SGD"
+    },
+    {
+      "subject": "item_1",
+      "attribute": "total",
+      "value": 5.5,
+      "unit": "SGD"
+    }
+  ]
+}

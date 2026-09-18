@@ -27,6 +27,7 @@ from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
 from app.search.ask import Answer, AskStep, Mode, recall_stream
+from app.search.conversation import ConversationMemory
 from app.search.retrieve import Retriever
 
 
@@ -65,9 +66,13 @@ class Asker(Protocol):
         store: ObjectStore,
         registry: DrugRegistry | None = None,
         language: str | None = None,
+        history: ConversationMemory | None = None,
     ) -> AsyncIterator[AskStep | AnswerDelta | Answer]:
         """`recall_stream`'s own signature, so `asker_for`'s choice is a drop-in for the
-        route that calls it."""
+        route that calls it. `history` is the conversation memory (W2,
+        `app.search.conversation.memory_for`) for a follow-up on an existing thread — `None`
+        for a first question, and unused by `RuleBasedAsker`, which never resolves a
+        follow-up's "that" the way the agent asker can."""
         ...
 
 
@@ -89,7 +94,9 @@ class RuleBasedAsker:
         store: ObjectStore,
         registry: DrugRegistry | None = None,
         language: str | None = None,
+        history: ConversationMemory | None = None,
     ) -> AsyncIterator[AskStep | AnswerDelta | Answer]:
+        del history  # unused: the rule-based answer never resolves a follow-up from it
         async for event in recall_stream(
             session,
             context=context,

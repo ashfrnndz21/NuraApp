@@ -68,6 +68,19 @@ SEED: tuple[Seed, ...] = (
     Seed("National Heart Centre Singapore", "nhcs.com.sg", SourceKind.HOSPITAL, ("SG",), ("en",)),
     Seed("Institut Jantung Negara", "ijn.com.my", SourceKind.HOSPITAL, ("MY",), ("ms", "en")),
     Seed("Singapore Heart Foundation", "myheart.org.sg", SourceKind.SOCIETY, ("SG",), ("en", "zh")),
+    # T3, cost expectation (`app.insurance.cost_expectation`): MOH Malaysia's own domain,
+    # distinct from MyHEALTH above, publishes the Fees Act 1951 schedule the fee-benchmark
+    # estimator cites for a Malaysian visit. `moh.gov.sg` (Ministry of Health Singapore,
+    # seeded above) already covers the Singapore side — it is where the MOH fee-benchmark
+    # comparison portal and the hospital bill browser both live, so no new Singapore domain
+    # is needed.
+    Seed(
+        "Ministry of Health Malaysia",
+        "moh.gov.my",
+        SourceKind.MINISTRY,
+        ("MY",),
+        ("ms", "en"),
+    ),
 )
 """The first allowlist: regulators, ministries, hospital groups and one society, both
 countries. Adding to it is a pharmacist's review, not a code change made in passing."""

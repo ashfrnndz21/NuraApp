@@ -308,6 +308,26 @@ export const en = {
     // @patient
     noneOther: "Nura has nothing near {name} for this yet.",
   },
+  navigation: {
+    // @patient phrase
+    draftAction: "Draft a message",
+    // @patient headline
+    sheetTitle: "Your drafted message",
+    // @patient phrase
+    copy: "Copy",
+    // @patient
+    copied: "It is copied, ready to paste where you send it.",
+    // @patient phrase
+    sendBySms: "Send by text message",
+    // @patient phrase
+    sendByWhatsApp: "Send by WhatsApp",
+    // @patient
+    copyOnly: "There is no number for this place, so copy the message and send it yourself.",
+    // @patient
+    loading: "Nura is writing the message.",
+    // @patient
+    error: "Nura could not write the message just now.",
+  },
   health: {
     // @patient headline
     title: "Your health",
@@ -743,6 +763,10 @@ export const en = {
     // @patient phrase
     askLookedAt: "What Nura looked at: {parts}",
     // @patient phrase
+    newConversation: "New questions",
+    // @patient headline
+    earlierInConversation: "What you asked before",
+    // @patient phrase
     back: "Back to your cards",
     // @patient
     statusHeld: "Nura kept this back from {name}.",
@@ -1167,6 +1191,16 @@ export const en = {
     questionsOpenOther: "Questions for {patient}'s doctor",
     // @patient headline
     questionsTitle: "Questions for your visit",
+    // @patient phrase
+    costOpen: "What it may cost",
+    // @patient phrase
+    costOpenOther: "What {patient}'s visit may cost",
+    // @patient headline
+    costTitle: "What it may cost",
+    // @patient phrase
+    costCoveredLabel: "Your cover may pay",
+    // @patient phrase
+    costCoveredLabelOther: "{patient}'s cover may pay",
     // @patient phrase
     questionLabel: "Your question",
     // @patient phrase

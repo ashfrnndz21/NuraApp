@@ -1,0 +1,43 @@
+{
+  "placeholder": "pill-photo-2026-09-15",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "pill_photo",
+  "fields": [
+    {
+      "subject": "pill",
+      "attribute": "imprint",
+      "value": "IP 190",
+      "unit": null
+    },
+    {
+      "subject": "pill",
+      "attribute": "colour",
+      "value": "white",
+      "unit": null
+    },
+    {
+      "subject": "pill",
+      "attribute": "shape",
+      "value": "round",
+      "unit": null
+    },
+    {
+      "subject": "pill",
+      "attribute": "score_line",
+      "value": true,
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "paracetamol",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": "500 mg",
+      "unit": null
+    }
+  ]
+}

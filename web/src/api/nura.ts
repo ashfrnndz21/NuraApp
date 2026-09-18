@@ -17,7 +17,9 @@ import type {
   ConditionsOut,
   ConfirmationOut,
   ConsentOut,
+  ConversationOut,
   ConsultOut,
+  CostExpectationOut,
   DayNudgesOut,
   DecisionIn,
   DeploymentOut,
@@ -59,6 +61,8 @@ import type {
   MetricKind,
   MetricLogIn,
   MoreOut,
+  NavigationDraftOut,
+  NavigationNeedOut,
   NfwStreamEvent,
   NoticeOut,
   NowOut,
@@ -380,6 +384,51 @@ export function askStream(
   });
 }
 
+/** His own "New conversation" (W2): close whichever thread is open now, if any, and start a
+ *  fresh, empty one. */
+export const startConversation = (token: string, profileId: string) =>
+  api<ConversationOut>(`/profiles/${profileId}/conversations`, { method: "POST", token });
+
+/** The thread (W2): every turn on it, oldest first. */
+export const getConversation = (token: string, profileId: string, conversationId: string) =>
+  api<ConversationOut>(`/profiles/${profileId}/conversations/${conversationId}`, { token });
+
+/** A turn on a named thread (W2), streamed exactly like `askStream` — the only difference is
+ *  which conversation the answer lands on. */
+export function turnStream(
+  token: string,
+  profileId: string,
+  conversationId: string,
+  question: string,
+  mode: AskMode,
+  language: string,
+  onStep: (key: string, label: string, name: string) => void,
+  onDelta?: (text: string) => void,
+  onStepLabel?: (key: string, label: string) => void,
+): Promise<AnswerOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(
+      `/profiles/${profileId}/conversations/${conversationId}/turns/stream`,
+      { method: "POST", token, body: { question, mode, language } },
+      (event) => {
+        const streamed = event as unknown as AskStreamEvent;
+        if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
+        else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
+        else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
+        else if (streamed.type === "answer") {
+          settled = true;
+          resolve(streamed.answer);
+        }
+      },
+    )
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no answer"));
+      })
+      .catch(reject);
+  });
+}
+
 /** A card's pre-rendered voice (E11), when the backend has the route. */
 export const feedVoice = (token: string, profileId: string, itemId: string, language: string) =>
   apiBlob(`/profiles/${profileId}/feed/${itemId}/voice`, { token, query: { language } });
@@ -434,6 +483,12 @@ export const appointments = (token: string, profileId: string) =>
 /** The logistics card: when, where, the chief's note, who drives him, what to bring. */
 export const logistics = (token: string, profileId: string, appointmentId: string) =>
   api<LogisticsOut>(`/profiles/${profileId}/appointments/${appointmentId}/logistics`, { token });
+
+/** The cost expectation (T3): a typical fee range for this visit, cited, and what his cover
+ *  on file would likely pay for a key that holds `Scope.MONEY` (`app.insurance.
+ *  cost_expectation`). Never a quote. */
+export const costExpectation = (token: string, profileId: string, appointmentId: string) =>
+  api<CostExpectationOut>(`/profiles/${profileId}/visits/${appointmentId}/cost`, { token });
 
 /** The chief's yes to one person driving him to one visit (subject `drive`). */
 export const mintDrive = (token: string, profileId: string, appointmentId: string, personId: string) =>
@@ -1094,3 +1149,17 @@ export function findStream(
       .catch(reject);
   });
 }
+
+/** Care navigation (T3): every real need on the record right now, no drafted text yet
+ *  (`app.reasoning.navigation.needs.list_needs`). */
+export const navigationNeeds = (token: string, profileId: string) =>
+  api<NavigationNeedOut[]>(`/profiles/${profileId}/navigation/drafts`, { token });
+
+/** The drafted message for one need: text and a link built from the provider's own contact,
+ *  never sent (`app.reasoning.navigation.service.draft_message`). */
+export const draftNavigationMessage = (token: string, profileId: string, needId: string, language?: string) =>
+  api<NavigationDraftOut>(`/profiles/${profileId}/navigation/drafts/${needId}`, {
+    method: "POST",
+    token,
+    query: language ? { language } : undefined,
+  });
