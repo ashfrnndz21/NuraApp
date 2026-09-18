@@ -390,6 +390,41 @@ export interface InsightsReportEvent {
 
 export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
 
+/** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step
+ *  the instant each real stage of turning a stored photo or PDF into a review card finishes
+ *  — stored, reading, what it found, the red-flag check where one runs, a real link to a
+ *  medicine or visit where one exists, ready — then the card itself. */
+export interface ImportStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+export interface ImportCardEvent {
+  type: "card";
+  card: ReviewCardOut;
+}
+export type ImportStreamEvent = ImportStepEvent | ImportCardEvent | AskRefusalEvent;
+
+/** The not-feeling-well trace (`POST /profiles/{id}/not-feeling-well/stream`): the button
+ *  runs first, entirely unchanged — the red-flag path, the family told — and only then a
+ *  step per real check it made, then the card itself. */
+export interface NfwStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+export interface NfwCardEvent {
+  type: "card";
+  card: WhatToDoOut;
+}
+export type NfwStreamEvent = NfwStepEvent | NfwCardEvent | AskRefusalEvent;
+
+/** Whether the day's self-searches are still to run (`GET /profiles/{id}/feed/jobs/status`):
+ *  the feed's own "Nura is looking for today's reads" line, bound to a real read. */
+export interface JobsStatusOut {
+  looking: boolean;
+}
+
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */
 export type EngagementEvent = "seen" | "heard" | "tapped" | "dismissed" | "shared" | "opened" | "played" | "replayed" | "asked_more";

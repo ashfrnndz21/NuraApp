@@ -328,3 +328,11 @@ class FindIn(BaseModel):
 class FindOut(BaseModel):
     where: str
     results: list[ResultOut]
+
+
+class JobsStatusOut(BaseModel):
+    """Whether any of his self-searches is due today and has not yet run
+    (`app.delivery.feed.search.jobs_looking_today`) — the feed's own honest "Nura is looking
+    for today's reads" line, bound to a real read, never a guess or a timer."""
+
+    looking: bool

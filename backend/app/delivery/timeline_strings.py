@@ -384,6 +384,129 @@ sentence, for the trace's collapsed line, "What Nura looked at: {parts}" — the
 whoever is asking, so it needs no `_THEIRS` twin."""
 
 # @patient
+IMPORT_STEPS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "stored": "Nura is keeping your paper safe.",
+        "reading": "Nura is looking at your paper.",
+        "found": "Nura found {kind} in your paper.",
+        "found_at": "Nura found {kind} in your paper, from {facility}.",
+        "red_flag_checked": "Nura checked your paper closely.",
+        "linked_medicine": "This is about {medicine}, already on your list.",
+        "linked_visit": "This matches a visit already on your list.",
+        "ready": "Your paper is ready for you to check.",
+    },
+    "ms": {
+        "stored": "Nura sedang simpan surat anda dengan selamat.",
+        "reading": "Nura sedang melihat surat anda.",
+        "found": "Nura jumpa {kind} dalam surat anda.",
+        "found_at": "Nura jumpa {kind} dalam surat anda, dari {facility}.",
+        "red_flag_checked": "Nura sudah semak surat anda jika ada apa-apa yang segera.",
+        "linked_medicine": "Ini tentang {medicine}, sudah ada dalam senarai anda.",
+        "linked_visit": "Ini sepadan dengan lawatan yang sudah ada dalam senarai anda.",
+        "ready": "Surat anda sedia untuk anda semak.",
+    },
+    "zh": {
+        "stored": "Nura正在安全地保存您的文件。",
+        "reading": "Nura正在看您的文件。",
+        "found": "Nura在您的文件里找到了{kind}。",
+        "found_at": "Nura在您的文件里找到了{kind}，来自{facility}。",
+        "red_flag_checked": "Nura检查了您的文件，看看有没有紧急的事。",
+        "linked_medicine": "这和您已经在吃的{medicine}有关。",
+        "linked_visit": "这和您名单上已有的一次看医生记录相符。",
+        "ready": "您的文件已准备好让您检查。",
+    },
+}
+"""What the Add flow's trace says while it works (docs/design-direction.md 'Conversation,
+waiting and thinking'), one line per real stage `app.ingestion.review.review_artifact_stream`
+actually just finished — never a step that was not real (its own module docstring). Keyed by
+`app.ingestion.review.ImportStepKey`. `found`/`found_at` and `linked_medicine`/`linked_visit`
+are two lines each because a template's slots are always filled (docs/plain-words.md's own
+verifier fills every `{slot}` it finds): a page with no facility line on it, or with no real
+match, uses the shorter template rather than a slot filled with nothing."""
+
+# @patient phrase
+DOCUMENT_KIND_WORD: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "lab_report": "a blood test",
+        "medicine_label": "a medicine label",
+        "discharge_letter": "a hospital letter",
+        "clinic_slip": "a clinic slip",
+        "handwritten_prescription": "a prescription",
+        "insurance_letter": "an insurance letter",
+        "insurance_policy": "an insurance letter",
+        "insurance_claim": "an insurance claim",
+        "device_screen": "a machine screen",
+        "other": "a paper",
+        "not_health": "a paper",
+        "unknown": "a paper",
+        "unsupported_file_type": "a paper",
+    },
+    "ms": {
+        "lab_report": "ujian darah",
+        "medicine_label": "label ubat",
+        "discharge_letter": "surat hospital",
+        "clinic_slip": "slip klinik",
+        "handwritten_prescription": "preskripsi",
+        "insurance_letter": "surat insurans",
+        "insurance_policy": "surat insurans",
+        "insurance_claim": "tuntutan insurans",
+        "device_screen": "bacaan",
+        "other": "surat",
+        "not_health": "surat",
+        "unknown": "surat",
+        "unsupported_file_type": "surat",
+    },
+    "zh": {
+        "lab_report": "验血",
+        "medicine_label": "药盒标签",
+        "discharge_letter": "出院信",
+        "clinic_slip": "诊所单据",
+        "handwritten_prescription": "处方",
+        "insurance_letter": "保险信",
+        "insurance_policy": "保险信",
+        "insurance_claim": "保险索赔",
+        "device_screen": "读数",
+        "other": "文件",
+        "not_health": "文件",
+        "unknown": "文件",
+        "unsupported_file_type": "文件",
+    },
+}
+"""The bare noun `IMPORT_STEPS`' `{kind}` slot takes — his words for the kind of paper
+(`app.ingestion.extract.DocumentKind`), never "your" or a sentence, the same reason
+`ASK_STEP_NAMES` needs no `_THEIRS` twin: the sentence around it already carries who it is
+for."""
+
+# @patient
+NFW_STEPS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "checking": "Nura is checking on you.",
+        "tablets": "Nura checked your tablets today.",
+        "medicines": "Nura checked your recent medicines.",
+        "family": "Nura told your family.",
+        "ready": "Your card is ready.",
+    },
+    "ms": {
+        "checking": "Nura sedang menyemak keadaan anda.",
+        "tablets": "Nura sudah semak ubat anda hari ini.",
+        "medicines": "Nura sudah semak ubat anda yang baru.",
+        "family": "Nura sudah beritahu keluarga anda.",
+        "ready": "Kad anda sudah sedia.",
+    },
+    "zh": {
+        "checking": "Nura正在为您检查。",
+        "tablets": "Nura检查了您今天的药。",
+        "medicines": "Nura检查了您最近的药。",
+        "family": "Nura已经告诉您的家人。",
+        "ready": "您的卡片已经准备好。",
+    },
+}
+"""What the not-feeling-well trace says while it works, one line per real read
+`app.safety.not_feeling_well.not_feeling_well_stream` does before the card — streamed only
+after the red-flag path has already run its course (module docstring: "the trace must never
+delay it"), so `checking` is the first byte on the wire, never the first thing that happens."""
+
+# @patient
 READING: Mapping[str, Lines] = {
     "en": ("Your blood pressure on {date} was {top_number} over {bottom_number}.",),
     "ms": ("Tekanan darah anda pada {date} ialah {top_number} atas {bottom_number}.",),
@@ -506,8 +629,13 @@ __all__ = [
     "ASK_STEPS",
     "ASK_STEP_NAMES",
     "CHANGED",
+    "DOCUMENT_KIND_WORD",
     "HONEST",
+    "IMPORT_STEPS",
+    "IMPORT_STEPS_THEIRS",
     "LANGUAGES",
+    "NFW_STEPS",
+    "NFW_STEPS_THEIRS",
     "READING",
     "RECALL",
     "REROUTE",
@@ -607,3 +735,64 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
     },
 }
 """`ASK_STEPS`, said about him by name, for a key that is not his."""
+
+# @patient
+IMPORT_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "stored": "Nura is keeping {patient}'s paper safe.",
+        "reading": "Nura is looking at {patient}'s paper.",
+        "found": "Nura found {kind} for {patient}.",
+        "found_at": "Nura found {kind} for {patient}, from {facility}.",
+        "red_flag_checked": "Nura checked {patient}'s paper closely.",
+        "linked_medicine": "This is about {medicine}, already on {patient}'s list.",
+        "linked_visit": "This matches a visit already on {patient}'s list.",
+        "ready": "{patient}'s paper is ready to check.",
+    },
+    "ms": {
+        "stored": "Nura sedang simpan surat {patient} dengan selamat.",
+        "reading": "Nura sedang melihat surat {patient}.",
+        "found": "Nura jumpa {kind} untuk {patient}.",
+        "found_at": "Nura jumpa {kind} untuk {patient}, dari {facility}.",
+        "red_flag_checked": "Nura sudah semak jika ada apa-apa yang segera untuk {patient}.",
+        "linked_medicine": "Ini tentang {medicine}, sudah ada dalam senarai {patient}.",
+        "linked_visit": "Ini sepadan dengan lawatan yang sudah ada dalam senarai {patient}.",
+        "ready": "Surat {patient} sedia untuk disemak.",
+    },
+    "zh": {
+        "stored": "Nura正在安全地保存{patient}的文件。",
+        "reading": "Nura正在看{patient}的文件。",
+        "found": "Nura为{patient}找到了{kind}。",
+        "found_at": "Nura为{patient}找到了{kind}，来自{facility}。",
+        "red_flag_checked": "Nura为{patient}检查了是否有紧急的事。",
+        "linked_medicine": "这和{patient}已经在吃的{medicine}有关。",
+        "linked_visit": "这和{patient}名单上已有的一次看医生记录相符。",
+        "ready": "{patient}的文件已准备好检查。",
+    },
+}
+"""`IMPORT_STEPS`, said about him by name, for a key that is not his."""
+
+# @patient
+NFW_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "checking": "Nura is checking on {patient}.",
+        "tablets": "Nura checked {patient}'s tablets today.",
+        "medicines": "Nura checked {patient}'s recent medicines.",
+        "family": "Nura told {patient}'s family.",
+        "ready": "{patient}'s card is ready.",
+    },
+    "ms": {
+        "checking": "Nura sedang menyemak keadaan {patient}.",
+        "tablets": "Nura sudah semak ubat {patient} hari ini.",
+        "medicines": "Nura sudah semak ubat {patient} yang baru.",
+        "family": "Nura sudah beritahu keluarga {patient}.",
+        "ready": "Kad {patient} sudah sedia.",
+    },
+    "zh": {
+        "checking": "Nura正在为{patient}检查。",
+        "tablets": "Nura检查了{patient}今天的药。",
+        "medicines": "Nura检查了{patient}最近的药。",
+        "family": "Nura已经告诉{patient}的家人。",
+        "ready": "{patient}的卡片已经准备好。",
+    },
+}
+"""`NFW_STEPS`, said about him by name, for a key that is not his."""

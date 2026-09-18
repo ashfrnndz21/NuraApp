@@ -1,6 +1,7 @@
 import { signal } from "@preact/signals";
 import { Refused, Unreachable } from "../api/client";
 import type { ReviewCardOut } from "../api/types";
+import type { TraceStep } from "../ui/kit";
 
 /** Papers from his photos (E18-01, the web's substitute for the iOS photo-library scan): many
  *  photos or PDFs picked at once, shown as a grid he confirms, then — on his one yes, and not
@@ -41,7 +42,10 @@ export interface Picked {
 export interface BatchDeps {
   thumb(file: File): string | null;
   revoke(url: string): void;
-  send(file: File): Promise<ReviewCardOut>;
+  /** `onStep` fires the instant each real stage the backend just finished is known — stored,
+   *  reading, what it found, and so on (`app.ingestion.review.review_artifact_stream`) —
+   *  never a step this file made up (docs/design-direction.md). */
+  send(file: File, onStep: (key: string, label: string) => void): Promise<ReviewCardOut>;
   /** Whether a card has lines to check (`onboarding/review.ts`). */
   readable(card: ReviewCardOut): boolean;
 }
@@ -57,6 +61,11 @@ export class PaperBatch {
   readonly stage = signal<Stage>("empty");
   /** Which of the chosen is being sent now, from 1, and how many are going. */
   readonly sending = signal<{ n: number; total: number } | null>(null);
+  /** The item now being sent's own real trace, oldest step first — cleared before each item
+   *  starts, so a caregiver watching the grid always sees the paper in front of it working
+   *  (docs/design-direction.md 'Conversation, waiting and thinking'). Every step here is one
+   *  `onStep` from the backend really gave; nothing here invents a step or a delay. */
+  readonly trace = signal<TraceStep[]>([]);
   private readonly files = new Map<number, File>();
   private nextId = 1;
 
@@ -105,9 +114,15 @@ export class PaperBatch {
       const file = this.files.get(item.id);
       if (!file) continue;
       this.sending.value = { n: at + 1, total: going.length };
+      this.trace.value = [];
       this.set(item.id, { kind: "sending" });
       try {
-        const card = await this.deps.send(file);
+        const card = await this.deps.send(file, (key, text) => {
+          // Every step already sent stays done; the new one joins in progress, so the trace
+          // reads top to bottom exactly as the backend really finished them.
+          this.trace.value = [...this.trace.value.map((step) => ({ ...step, done: true })), { key, text, done: false }];
+        });
+        this.trace.value = this.trace.value.map((step) => ({ ...step, done: true }));
         this.set(item.id, this.deps.readable(card) ? { kind: "card", card, checked: false } : { kind: "notHealth", card });
         this.letGo(item.id);
       } catch (failure) {
@@ -121,6 +136,7 @@ export class PaperBatch {
       }
     }
     this.sending.value = null;
+    this.trace.value = [];
     this.stage.value = "done";
   }
 
@@ -138,6 +154,7 @@ export class PaperBatch {
     this.items.value = [];
     this.stage.value = "empty";
     this.sending.value = null;
+    this.trace.value = [];
   }
 
   /** Whether the phone still holds any of his photos: the files, or their pictures. */

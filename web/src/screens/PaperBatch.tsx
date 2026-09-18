@@ -5,6 +5,7 @@ import { batch } from "../capture/session";
 import { kindLine } from "../onboarding/review";
 import { fill, refusalLines, t } from "../strings";
 import { Pill } from "../ui/components";
+import { StepTrace } from "../ui/kit";
 import { Sheet, Status } from "./onboarding/parts";
 
 /** Papers from his photos (E18-01's web substitute): pick many at once with the phone's own
@@ -70,6 +71,7 @@ export function PaperBatchView({ onReview }: { onReview: (card: ReviewCardOut) =
         </>
       )}
       <Status text={sending ? fill(p.sending, { n: sending.n, total: sending.total }) : null} testId="papers-sending" />
+      {sending && <StepTrace steps={batch.trace.value} working={p.working} testId="papers-trace" />}
       {(stage === "sending" || stage === "done") && (
         <>
           <h2 class="title">{p.found}</h2>

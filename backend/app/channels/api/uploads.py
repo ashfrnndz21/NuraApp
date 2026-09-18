@@ -85,13 +85,19 @@ _PROFILE = r"/profiles/[^/]+"
 
 JSON_UPLOADS: tuple[tuple[str, Cap], ...] = (
     (rf"{_PROFILE}/photos", Cap(base64_body(MAX_PHOTO_BYTES), PhotoTooLarge)),
+    (rf"{_PROFILE}/photos/stream", Cap(base64_body(MAX_PHOTO_BYTES), PhotoTooLarge)),
     (rf"{_PROFILE}/readings/photo", Cap(base64_body(MAX_PHOTO_BYTES), PhotoTooLarge)),
     (rf"{_PROFILE}/biography/papers", Cap(base64_body(MAX_PHOTO_BYTES), PhotoTooLarge)),
     (rf"{_PROFILE}/imports", Cap(base64_body(MAX_PDF_BYTES), PdfTooLarge)),
+    (rf"{_PROFILE}/imports/stream", Cap(base64_body(MAX_PDF_BYTES), PdfTooLarge)),
     (rf"{_PROFILE}/events/[^/]+/notes", Cap(base64_body(notes.MAX_VOICE_BYTES), NoteTooLarge)),
     (rf"{_PROFILE}/documents", Cap(base64_body(MAX_PHOTO_BYTES), DocumentTooLarge)),
     (rf"{_PROFILE}/thread/photos", Cap(base64_body(MAX_PHOTO_BYTES), PhotoTooLarge)),
     (rf"{_PROFILE}/not-feeling-well", Cap(base64_body(voice.MAX_VOICE_BYTES), VoiceNoteTooLong)),
+    (
+        rf"{_PROFILE}/not-feeling-well/stream",
+        Cap(base64_body(voice.MAX_VOICE_BYTES), VoiceNoteTooLong),
+    ),
     (rf"{_PROFILE}/symptoms", Cap(base64_body(voice.MAX_VOICE_BYTES), VoiceNoteTooLong)),
     (
         rf"{_PROFILE}/appointments/[^/]+/transcript",

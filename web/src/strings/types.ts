@@ -324,6 +324,7 @@ export interface Strings {
     sourceVisits: string;
     askWithheld: string;
     askThinking: string;
+    lookingForToday: string;
     askAnswered: string;
     askLookedAt: string;
     back: string;
@@ -471,6 +472,7 @@ export interface Strings {
     sendOne: string;
     send: string;
     sending: string;
+    working: string;
     found: string;
     read: string;
     check: string;

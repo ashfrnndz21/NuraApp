@@ -15,7 +15,7 @@ import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, Pill, Tile } from "../ui/components";
-import { PillButton } from "../ui/kit";
+import { PillButton, SkeletonCard } from "../ui/kit";
 import { PlayerControls } from "../ui/Player";
 import { voice } from "../player/voice";
 import { Shell } from "./Shell";
@@ -56,6 +56,25 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const [reorderError, setReorderError] = useState<unknown>(null);
   // "Why am I seeing this?" (RE-08): which card's sheet is open, or none.
   const [whyItem, setWhyItem] = useState<FeedItemOut | null>(null);
+  // Whether the day's self-searches are still to run (docs/design-direction.md 'Conversation,
+  // waiting and thinking'): a real read (`GET /feed/jobs/status`), asked once as the feed
+  // opens, alongside `store.open()` below — never a guess or a timer of its own. `looking`
+  // starts false and only ever turns true from that one real answer, so an offline phone or
+  // a slow read never shows a line that was never true.
+  const [looking, setLooking] = useState(false);
+  useEffect(() => {
+    const bearer = token.value;
+    const papers = profile.value;
+    if (!bearer || !papers) return;
+    let live = true;
+    nura.feedJobsStatus(bearer, papers.profile_id).then(
+      (status) => live && setLooking(status.looking),
+      () => live && setLooking(false),
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
   const hasReorder = entries.some((entry) => variantOf(entry.item) === "reorder");
   useEffect(() => {
     const bearer = token.value;
@@ -230,11 +249,25 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         <Notice error={store.error.value} />
         <Notice error={store.said.value} />
         <Notice error={reorderError} />
+        {/* The day's self-searches, still to run (`GET /feed/jobs/status`, a real read): shown
+            until the live page lands, which is the same request that runs them inline
+            (`app.delivery.feed.compose._learning`) — so the line disappears exactly when they
+            really finish, never on a timer of its own. */}
+        {!blank && looking && store.origin.value !== "live" && (
+          <p class="caption" role="status" data-testid="feed-jobs-looking">
+            {s.feed.lookingForToday}
+          </p>
+        )}
         {blank && (
           <>
             <Card lines={[s.today.cannotReach]} testId="cannot-reach" />
             <Card title={s.today.emergencyTitle} lines={[s.today.emergencySoon]} testId="emergency-placeholder" />
           </>
+        )}
+        {!blank && store.origin.value === "none" && !store.error.value && (
+          <div class="feed-skeleton" data-testid="feed-skeleton" aria-hidden="true">
+            <SkeletonCard lines={3} />
+          </div>
         )}
         {!blank && store.origin.value !== "none" && !store.busy.value && !store.error.value && shown.length === 0 && (
           <Card

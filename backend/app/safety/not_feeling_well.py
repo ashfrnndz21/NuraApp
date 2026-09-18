@@ -53,9 +53,10 @@ question, not a judgement.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import StrEnum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1118,6 +1119,77 @@ async def not_feeling_well(
         missed_medicine=missed_name,
         notices=notices,
     )
+
+
+class NfwStepKey(StrEnum):
+    """One real stage the not-feeling-well trace names, in the order `not_feeling_well_stream`
+    yields them — always after the red-flag path has already run its course (module docstring,
+    "3. Red flags first"), never before: streaming starts only once the flag, if any, has
+    already been raised and escalated, so nothing here can ever delay it."""
+
+    CHECKING = "checking"
+    TABLETS = "tablets"
+    MEDICINES = "medicines"
+    FAMILY = "family"
+    READY = "ready"
+
+
+@dataclass(frozen=True, slots=True)
+class NfwStep:
+    key: NfwStepKey
+
+
+async def not_feeling_well_stream(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    store: ObjectStore,
+    transcriber: Transcriber,
+    registry: DrugRegistry,
+    via: Via,
+    words: str | None = None,
+    audio: bytes | None = None,
+    content_type: str | None = None,
+    language: str | None = None,
+    feeling: Feeling | None = None,
+) -> AsyncIterator[NfwStep | WhatToDoNow]:
+    """`not_feeling_well`, with its own real steps narrated as it runs (docs/design-direction.md
+    'Conversation, waiting and thinking'): the whole of `not_feeling_well` runs first, entirely
+    unchanged — the red-flag path, the missed-dose and new-medicine checks, telling the family,
+    writing the moment, rendering the card — and only once it is *done* does this generator
+    start yielding, from the real `WhatToDoNow` it produced. This is a deliberate choice, not
+    an oversight: the five steps inside `not_feeling_well` are one tight unit of work a red
+    flag must clear at once (module docstring), so this never interleaves a `yield` between
+    them — the only way to guarantee streaming can never be the thing that slows down, or
+    reorders, the one flow in this codebase where that would matter most.
+
+    `CHECKING` always comes first. `TABLETS` and `MEDICINES` are yielded only when
+    `not_feeling_well` really ran those checks — it skips both once a red flag is heard
+    (`heard.any` in its own body), so a red flag's trace is only `CHECKING`, `FAMILY` (already
+    told, by the ladder), then `READY`; nothing invented for the checks it never made. `FAMILY`
+    is yielded only when someone was really told (`notified_person_ids` or `notices`)."""
+    done = await not_feeling_well(
+        session,
+        context=context,
+        store=store,
+        transcriber=transcriber,
+        registry=registry,
+        via=via,
+        words=words,
+        audio=audio,
+        content_type=content_type,
+        language=language,
+        feeling=feeling,
+    )
+    yield NfwStep(NfwStepKey.CHECKING)
+    checked = not done.red_flags
+    if checked:
+        yield NfwStep(NfwStepKey.TABLETS)
+        yield NfwStep(NfwStepKey.MEDICINES)
+    if done.notified_person_ids or done.notices:
+        yield NfwStep(NfwStepKey.FAMILY)
+    yield NfwStep(NfwStepKey.READY)
+    yield done
 
 
 # --- the middle row, off the button ------------------------------------------------------------

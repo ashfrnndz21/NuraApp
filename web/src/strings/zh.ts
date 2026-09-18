@@ -737,6 +737,8 @@ export const zh = {
     // @patient
     askThinking: "Nura 正在找。",
     // @patient
+    lookingForToday: "Nura正在为您找今天的内容。",
+    // @patient
     askAnswered: "Nura回答了。",
     // @patient phrase
     askLookedAt: "Nura查看了：{parts}",
@@ -1062,6 +1064,8 @@ export const zh = {
     send: "发 {count} 份文件",
     // @patient
     sending: "Nura 正在发第 {n} 份，共 {total} 份。",
+    // @patient
+    working: "Nura正在处理。",
     // @patient headline
     found: "Nura 找到的",
     // @patient
