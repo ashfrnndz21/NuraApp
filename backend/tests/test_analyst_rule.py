@@ -4,13 +4,16 @@ shown. Mocked throughout — no live model call, no API key (`RuleAnalyst` calls
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.insurance.claim import ClaimStatus
 from app.insurance.policy import PolicyStatus
 from app.keys.scopes import KeyRole, Scope
+from app.memory.episodic import record_event
+from app.memory.models import ConfidenceState, EventKind, SourceChannel
+from app.memory.semantic import assert_fact
 from app.onboarding.settings import SettingsValues, save_settings
 from app.reasoning.analyst.pipeline import Candidate, drop_reroute, finalize
 from app.reasoning.analyst.port import (
@@ -32,14 +35,42 @@ from tests.test_insurance_policy import _write as write_policy
 from tests.timeline_support import book
 
 
-async def _report(session: AsyncSession, context, *, language: str = "en") -> Report:
+async def _report(
+    session: AsyncSession, context, *, language: str = "en", now: datetime | None = None
+) -> Report:
     analyst = RuleAnalyst(registry=REGISTRY)
     report: Report | None = None
-    async for event in analyst.report_stream(session, context=context, language=language):
+    async for event in analyst.report_stream(session, context=context, language=language, now=now):
         if isinstance(event, Report):
             report = event
     assert report is not None
     return report
+
+
+async def _lab_fact(
+    session: AsyncSession, context, *, subject: str, attribute: str, value: object, on: datetime
+) -> None:
+    """A lab-report fact (#257's own shape: subject the panel, attribute the analyte),
+    EXTRACTED — no confirmation needed — `valid_from` the day the result is from."""
+    event = await record_event(
+        session,
+        context=context,
+        kind=EventKind.READING,
+        occurred_at=on,
+        label="a lab result",
+        source_channel=SourceChannel.APP,
+    )
+    await assert_fact(
+        session,
+        context=context,
+        subject=subject,
+        attribute=attribute,
+        value=value,
+        confidence=1.0,
+        confidence_state=ConfidenceState.EXTRACTED,
+        event_id=event.id,
+        valid_from=on,
+    )
 
 
 def _section(report: Report, key: str):
@@ -108,6 +139,74 @@ async def test_a_screening_is_due_by_age_and_by_condition(sg: AsyncSession) -> N
     assert "screening:eye_check" in keys
     assert "screening:cholesterol_test" not in keys
     assert all(i.ask_who is AskWho.DOCTOR for i in section.insights)
+
+
+NOW = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+
+
+async def test_a_screening_done_inside_its_interval_is_not_due(sg: AsyncSession) -> None:
+    """The sugar test's own interval is 36 months (`app.reasoning.analyst.screenings`, sourced
+    from the ADA's own repeat guidance): a matching fact from 6 months ago means it is not due
+    even though the condition alone would otherwise open it every time."""
+    owner = await pa(sg, phone="+6591150141")
+    await save_settings(
+        sg,
+        context=owner,
+        values=SettingsValues(language="en", conditions=("diabetes",), birth_decade=2000),
+    )
+    await _lab_fact(
+        sg, owner, subject="hba1c", attribute="hba1c", value=6.1, on=NOW - timedelta(days=180)
+    )
+    report = await _report(sg, owner, now=NOW)
+    section = _section(report, "screenings_due")
+    assert section is not None
+    keys = {i.insight_id for i in section.insights}
+    assert "screening:diabetes_screening" not in keys
+    # A screening this table names no fact subject for (`eye_check`) is unaffected: it is
+    # still read as due, the same reading held before this fix.
+    assert "screening:eye_check" in keys
+
+
+async def test_a_screening_done_outside_its_interval_is_due_again(sg: AsyncSession) -> None:
+    owner = await pa(sg, phone="+6591150142")
+    await save_settings(
+        sg,
+        context=owner,
+        values=SettingsValues(language="en", conditions=("diabetes",), birth_decade=2000),
+    )
+    await _lab_fact(
+        sg, owner, subject="hba1c", attribute="hba1c", value=6.4, on=NOW - timedelta(days=365 * 4)
+    )
+    report = await _report(sg, owner, now=NOW)
+    section = _section(report, "screenings_due")
+    assert section is not None
+    keys = {i.insight_id for i in section.insights}
+    assert "screening:diabetes_screening" in keys
+
+
+async def test_the_newest_matching_fact_is_the_one_compared_against_the_interval(
+    sg: AsyncSession,
+) -> None:
+    """Two matching facts, one inside the interval and one outside it: the newest is what
+    decides, so a screening someone kept re-doing is not wrongly flagged due by its oldest
+    result alone (the tie-breaker rule, `.claude/rules` — a "latest" reading needs one)."""
+    owner = await pa(sg, phone="+6591150143")
+    await save_settings(
+        sg,
+        context=owner,
+        values=SettingsValues(language="en", conditions=("diabetes",), birth_decade=2000),
+    )
+    await _lab_fact(
+        sg, owner, subject="hba1c", attribute="hba1c", value=6.4, on=NOW - timedelta(days=365 * 4)
+    )
+    await _lab_fact(
+        sg, owner, subject="hba1c", attribute="hba1c", value=6.0, on=NOW - timedelta(days=30)
+    )
+    report = await _report(sg, owner, now=NOW)
+    section = _section(report, "screenings_due")
+    assert section is not None
+    keys = {i.insight_id for i in section.insights}
+    assert "screening:diabetes_screening" not in keys
 
 
 async def test_cost_concentration_flags_the_policy_carrying_most_of_the_spend(
@@ -240,7 +339,7 @@ async def test_a_blocked_medicine_candidate_is_rerouted_never_printed() -> None:
 
 
 async def test_the_real_reroute_files_a_doctor_question(sg: AsyncSession) -> None:
-    """`RuleAnalyst._ask_the_doctor` (via `finalize`) files a real memo when a medicine or
+    """`RuleAnalyst.ask_the_doctor` (via `finalize`) files a real memo when a medicine or
     supplement candidate's own words are blocked — exercised by forcing one of `RuleAnalyst`'s
     own duplicate-therapy candidates to carry blocked words, the way a future template change
     could accidentally do."""
@@ -251,7 +350,7 @@ async def test_the_real_reroute_files_a_doctor_question(sg: AsyncSession) -> Non
     from app.reasoning.analyst import rule as rule_module
 
     async def _blocked(session, context, language, candidate):
-        return await rule_module._ask_the_doctor(session, context, language, candidate)
+        return await rule_module.ask_the_doctor(session, context, language, candidate)
 
     candidate = Candidate(
         insight_id="med:blocked",
@@ -263,7 +362,7 @@ async def test_the_real_reroute_files_a_doctor_question(sg: AsyncSession) -> Non
         confidence=Confidence.LIKELY,
     )
     insight = await finalize(
-        candidate, language="en", reroute=lambda c: rule_module._ask_the_doctor(sg, owner, "en", c)
+        candidate, language="en", reroute=lambda c: rule_module.ask_the_doctor(sg, owner, "en", c)
     )
     assert insight is not None
     assert insight.text == "Something about one of your medicines is worth asking the doctor about."

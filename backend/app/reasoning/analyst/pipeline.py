@@ -8,7 +8,7 @@ A candidate that cites nothing is dropped outright — an insight with no eviden
 `app.reasoning.analyst` may show, whichever adapter built it. A candidate whose words fail
 `docs/plain-words.md` or carry the blocklist is not simply dropped when it is about a medicine
 or a supplement: it would have told him something about his treatment, so it is rerouted as a
-real question for the doctor (`_ask_the_doctor`, #236) and its own words are never printed —
+real question for the doctor (`ask_the_doctor`, #236) and its own words are never printed —
 `reroute` is the caller's own door to that, because only a caller holding a session and a
 State may actually file one; the pure check here never touches the database.
 """

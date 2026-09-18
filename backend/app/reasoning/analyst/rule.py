@@ -6,7 +6,9 @@ recall_stream` holds to:
 
 1. `records` — his conditions and the decade he was born in (`ProfileSettings`, under
    RECORDS): feeds `screenings_due` (age/condition against a sourced table,
-   `app.reasoning.analyst.screenings`) and the supplement check below.
+   `app.reasoning.analyst.screenings`, each already-done screening found by its newest
+   matching fact, `_last_screening_dates`, held against the table's own interval) and the
+   supplement check below.
 2. `series` — his blood-pressure series (RE-03, `app.reasoning.patterns.series.reading_
    series`, under READINGS): feeds `what_changed` against a small sourced band
    (`app.reasoning.analyst.trend_ranges`).
@@ -27,14 +29,14 @@ withheld (nothing to roll up).
 Every candidate goes through `app.reasoning.analyst.pipeline.finalize` before it is shown:
 plain words, the conclusion-or-advice blocklist, and a cite or it is dropped. A medicine or
 supplement candidate that fails either check is rerouted as a real question for the doctor
-(`_ask_the_doctor`, #236) and its own words are never printed.
+(`ask_the_doctor`, #236) and its own words are never printed.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
@@ -51,6 +53,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.strings import PLAIN_NAME, say_date
+from app.memory.semantic import current_facts
 from app.onboarding.models import ProfileSettings
 from app.reasoning.analyst import screenings as screening_table
 from app.reasoning.analyst import trend_ranges
@@ -140,7 +143,7 @@ async def _read_settings(
     return _Settings(conditions=tuple(current.conditions), age=age)
 
 
-async def _ask_the_doctor(
+async def ask_the_doctor(
     session: AsyncSession, context: KeyContext, language: str, candidate: Candidate
 ) -> Insight | None:
     """The reroute (#236): file a real question for the doctor and show a safe, fixed line
@@ -211,8 +214,33 @@ def _trend_candidates(
     return candidates
 
 
-def _screening_candidates(language: str, settings: _Settings) -> list[Candidate]:
-    due = screening_table.screenings_due(age=settings.age, conditions=settings.conditions)
+async def _last_screening_dates(
+    session: AsyncSession, context: KeyContext
+) -> dict[str, date]:
+    """The newest `valid_from` among this key's own facts under each screening's
+    `fact_subjects` (`app.reasoning.analyst.screenings.SCREENINGS`) — read under RECORDS, the
+    same door `_read_settings` already opens. A screening this table names no subject for
+    (today, only `eye_check`) never gets an entry here and stays due, the reading this module
+    already held to before this fix."""
+    dates: dict[str, date] = {}
+    for row in screening_table.SCREENINGS:
+        newest: date | None = None
+        for subject in row.fact_subjects:
+            for fact in await current_facts(session, context=context, subject=subject):
+                on = as_utc(fact.valid_from).date()
+                if newest is None or on > newest:
+                    newest = on
+        if newest is not None:
+            dates[row.key] = newest
+    return dates
+
+
+def _screening_candidates(
+    language: str, settings: _Settings, last_done: Mapping[str, date], today: date
+) -> list[Candidate]:
+    due = screening_table.screenings_due(
+        age=settings.age, conditions=settings.conditions, last_done=last_done, today=today
+    )
     candidates: list[Candidate] = []
     for row in due:
         name = words.SCREENING_NAME[language][row.key]
@@ -354,15 +382,19 @@ class RuleAnalyst:
         any_scope_held = False
 
         async def reroute(candidate: Candidate) -> Insight | None:
-            return await _ask_the_doctor(session, context, language, candidate)
+            return await ask_the_doctor(session, context, language, candidate)
 
         # 1. records — conditions and age, feeding screenings_due.
         settings: _Settings | None = None
         if context.allows(SECTION_SCOPE["screenings_due"]):
             any_scope_held = True
             settings = await _read_settings(session, context, now=moment)
+            last_screened = await _last_screening_dates(session, context)
+            today = as_utc(moment).astimezone(REGION_TZ[context.region]).date()  # type: ignore[index]
             yield Step(StepKey.RECORDS, words.STEP_LABEL[language]["records"])
-            candidates = _screening_candidates(language, settings) if settings else []
+            candidates = (
+                _screening_candidates(language, settings, last_screened, today) if settings else []
+            )
             insights = [i for c in candidates if (i := await finalize(c, language=language, reroute=reroute)) is not None]
             sections["screenings_due"] = Section(
                 "screenings_due", TITLES[language]["screenings_due"], tuple(insights)
@@ -452,4 +484,4 @@ class RuleAnalyst:
         )
 
 
-__all__ = ["RuleAnalyst"]
+__all__ = ["QUESTIONS_KEY", "RuleAnalyst", "ask_the_doctor"]
