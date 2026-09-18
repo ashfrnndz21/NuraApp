@@ -166,10 +166,24 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await expect(page.getByTestId("word-heart_doctor")).toHaveAttribute("data-size", "3");
   await page.getByTestId("word-bp_tablets").click();
   await spoken(page);
+
+  // "Or just tell me": free text, tagged into the cloud's own words by the backend's tagger —
+  // never a new word, never echoed back, only the codes it tagged.
+  await page.getByTestId("tell-me-open").click();
+  await page.getByRole("textbox", { name: "In your own words" }).fill("my sugar is a bit high");
+  await page.getByTestId("tell-me-send").click();
+  await expect(page.getByTestId("word-diabetes")).toHaveAttribute("aria-pressed", "true");
+
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: shot("word-cloud") });
   expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   await page.getByTestId("cloud-done").click();
+
+  // "Blood pressure tablets" carries a follow-up ("For how long?"): it comes before the
+  // papers, one question on its own screen for the patient, his tap the whole answer.
+  await expect(main).toHaveAttribute("data-stage", "asks");
+  await expect(page.getByTestId("ask-bp_tablets")).toContainText("For how long?");
+  await page.getByTestId("option-one_to_five_years").click();
 
   // The papers step: the sitting's words; the settings and the words saved in one PUT.
   await expect(main).toHaveAttribute("data-stage", "records");
@@ -178,8 +192,9 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await expect(page.getByTestId("photo-input")).toHaveAttribute("capture", "environment");
   const pa = await profileOf(request, phone);
   const saved = (await (await request.get(`${API}/profiles/${pa.id}/settings`, { headers: pa.auth })).json()) as Record<string, unknown>;
-  expect(saved.conditions).toEqual(expect.arrayContaining(["high_blood_pressure", "cholesterol", "bp_tablets"]));
+  expect(saved.conditions).toEqual(expect.arrayContaining(["high_blood_pressure", "cholesterol", "bp_tablets", "diabetes"]));
   expect(saved).toMatchObject({ preferred_name: "Pa", doctor_name: "Dr Tan", breakfast_time: "07:30", birth_decade: 1950, read_back: true, large_text: false });
+  expect(saved.answers).toMatchObject({ bp_tablets: "one_to_five_years" });
 
   // A photo of the lipid report: the live E02 review card.
   await page.getByTestId("photo-input").setInputFiles(photo("lipid-panel-2023-09-07"));
@@ -374,6 +389,10 @@ test("the caregiver density, for a chief setting up her father", async ({ page }
   await page.getByTestId("word-bp_at_home").click();
   await page.screenshot({ path: shot("word-cloud-caregiver") });
   await page.getByTestId("cloud-done").click();
+
+  // The caregiver density shows every follow-up on one page; she moves on without answering.
+  await expect(main).toHaveAttribute("data-stage", "asks");
+  await page.getByTestId("asks-next").click();
   await expect(page.getByRole("heading", { name: "Now, Pa's papers" })).toBeVisible();
 
   // A paper in the caregiver density: the card's header speaks, its lines do not each.
@@ -477,9 +496,12 @@ test("the Ready screen's other actions: breakfast from its card, and one person 
   await page.getByTestId("word-allergies").click();
   await page.getByTestId("word-medicine_allergy").click();
   await page.getByTestId("cloud-done").click();
+  const main = page.locator("main.onboarding");
+  // "Allergic to a medicine" carries a follow-up ("Which one?"); his tap is the whole answer.
+  await expect(main).toHaveAttribute("data-stage", "asks");
+  await page.getByTestId("option-not_sure").click();
   // No papers today: the sitting closes straight away, and says so.
   await page.getByTestId("all-done").click();
-  const main = page.locator("main.onboarding");
   await expect(main).toHaveAttribute("data-stage", "plan");
   await expect(page.getByTestId("summary")).toContainText("No papers were added this time.");
 

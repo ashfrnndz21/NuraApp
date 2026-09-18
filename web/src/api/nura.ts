@@ -100,6 +100,7 @@ import type {
   SymptomLogOut,
   SymptomLoggedOut,
   TakenOut,
+  TellMeOut,
   ThreadCardKind,
   ThreadEntryOut,
   TimelineOut,
@@ -592,6 +593,11 @@ export const confirmReviewCard = (
 /** The word cloud: public, in his language. */
 export const conditions = (token: string, language: string) =>
   api<ConditionsOut>("/onboarding/conditions", { token, query: { language } });
+
+/** "Or just tell me" (docs/onboarding.html): free text tagged into the cloud's own condition
+ *  codes by the backend's `TopicTagger`. Public, like the cloud itself — nothing he typed is
+ *  sent with a bearer, and nothing comes back but the codes and the flag. */
+export const tellMe = (text: string) => api<TellMeOut>("/onboarding/tell-me", { method: "POST", token: null, body: { text } });
 
 export const settings = (token: string, profileId: string) =>
   api<SettingsOut>(`/profiles/${profileId}/settings`, { token });

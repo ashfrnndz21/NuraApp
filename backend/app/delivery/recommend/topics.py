@@ -302,6 +302,29 @@ class KeywordTagger:
         return found.visible(matched)
 
 
+def sensitive_hit(text: str) -> bool:
+    """Whether `text` matches any of the six sensitive families (module doc, §3.5) — never
+    which one, only whether one is there. Every `TopicTagger` already strips these before its
+    own callers ever see them (`Catalogue.visible`); this is the one way a caller that must
+    know *whether* a red word was said, without ever being told which, can ask.
+
+    Onboarding's free text ("Or just tell me", docs/onboarding.html) calls this first, before
+    it ever calls a tagger: a red word never becomes a cloud pill, and the caller sends him to
+    the safety path instead. Independent of which `TopicTagger` adapter is wired — which words
+    are safety-sensitive is the catalogue's own data, not an adapter's choice."""
+    raw = normalise(text)
+    if not raw:
+        return False
+    spaced = f" {_NOT_WORD.sub(' ', raw).strip()} "
+    return any(
+        _found(term, spaced, raw)
+        for topic in catalogue().topics.values()
+        if topic.sensitive
+        for language in LANGUAGES
+        for term in topic.terms[language]
+    )
+
+
 @fixture
 class FixtureTagger:
     """Answers from fixtures keyed by the sha256 of the text.
@@ -345,5 +368,6 @@ __all__ = [
     "TopicTagger",
     "catalogue",
     "normalise",
+    "sensitive_hit",
     "text_digest",
 ]

@@ -1339,6 +1339,22 @@ export const zh = {
       countNone: "Nura 还没有记下什么。",
       // @patient
       count: "Nura 已经记下 {n} 项。",
+      // @patient phrase
+      tellMe: "或者直接告诉我",
+      // @patient
+      tellMeLead: "用您自己的话说。",
+      // @patient phrase
+      tellMeLabel: "用您自己的话",
+      // @patient phrase
+      tellMeSend: "发送",
+      // @patient
+      tellMeNothing: "Nura 没有找到对应的词。",
+      // @patient
+      tellMeNothingSub: "请试试点选。",
+      // @patient
+      tellMeSafety: "Nura 不会把这个变成上面的词。",
+      // @patient
+      tellMeSafetySub: "请告诉您信任的人，或现在就寻求帮助。",
     },
     asks: {
       // @patient
