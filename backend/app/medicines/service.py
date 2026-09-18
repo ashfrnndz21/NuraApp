@@ -43,6 +43,7 @@ from app.drugs.registry import (
 )
 from app.errors import Refusal
 from app.ingestion.models import CONFIDENCE_THRESHOLD
+from app.insurance.ledger import medicine_monthly_costs
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.language.review import queue_pending_interaction
@@ -81,7 +82,7 @@ from app.memory.episodic import require_artifact
 from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ
-from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto
+from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto, is_pill_photo
 
 if TYPE_CHECKING:
     from app.routines.service import Day
@@ -328,7 +329,10 @@ async def plan(
     may_change_medicines(context)
     match = _one_product(registry.identify(label.fields()))
     artifact = await require_artifact(session, context=context, artifact_id=source_artifact_id)
-    needs_photo = match.high_risk and artifact.kind is not ArtifactKind.PHOTO
+    needs_photo = match.high_risk and (
+        artifact.kind is not ArtifactKind.PHOTO
+        or await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
+    )
     lead = LEAD_TIME_DAYS[label.source_kind]
 
     if await _label_seen_before(
@@ -786,6 +790,9 @@ class LineView:
     """One of today's doses of this line has passed its window untapped."""
     source: str = ""
     """Where the line came from and on which day, in his words: the card's source line."""
+    monthly_cost_said: str | None = None
+    """"S$15 a month", from a pharmacy receipt's matched lines (`app.insurance.ledger.
+    medicine_monthly_costs`); None where no receipt has ever matched this generic."""
 
 
 async def _his_day(session: AsyncSession, context: KeyContext) -> Day:
@@ -921,6 +928,14 @@ async def active_lines(
     lines = await _active_lines(session, context=context)
     if not lines:
         return []
+    costs: dict[str, str] = {}
+    for cost in await medicine_monthly_costs(session, context=context, language=lang):
+        # Grouped by currency too (never summed across one, #pill-receipt): a generic bought
+        # in two currencies shows both lines, joined, rather than one silently overwriting
+        # the other.
+        costs[cost.generic] = (
+            cost.monthly_said if cost.generic not in costs else f"{costs[cost.generic]}; {cost.monthly_said}"
+        )
     ids = [line.id for line in lines]
     supplies = await audited_read(
         session, Supply, context, Scope.MEDICINES, where=(Supply.line_id.in_(ids),)
@@ -1005,6 +1020,7 @@ async def active_lines(
                     window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[1]
                     for a in Dose.from_json(line.dose).scheduled_anchors
                 ),
+                monthly_cost_said=costs.get(line.generic),
             )
         )
     return views

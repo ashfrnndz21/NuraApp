@@ -164,6 +164,7 @@ async def add_sitting_paper(
             content_type=body.content_type,
             captured_at=body.captured_at,
             paper=body.paper,
+            registry=providers.drug_registry,
         )
     return PaperAddedOut(
         paper=PaperOut.of(PaperView(paper=paper, card=card)),

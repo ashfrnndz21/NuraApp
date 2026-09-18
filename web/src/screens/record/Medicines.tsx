@@ -156,6 +156,11 @@ function LineCard({ line, busy, preview, onAsk, onYes, onNo }: LineCardProps): J
           ))}
         </div>
       )}
+      {line.monthly_cost_said && (
+        <p class="caption" data-testid="monthly-cost">
+          {line.monthly_cost_said}
+        </p>
+      )}
       <p data-testid="confidence">{sure}</p>
       {/* The register's own match, not his yes (#206): only said when Nura had to match by
           name alone, without a strength to check it against — the ordinary case, an exact
@@ -198,7 +203,7 @@ function LineCard({ line, busy, preview, onAsk, onYes, onNo }: LineCardProps): J
       <Pill onClick={() => toRecord({ name: "story", lineId: line.line_id })} testId="open-story">
         {s.record.aboutIt}
       </Pill>
-      <Hear lines={[upperFirst(line.name), ...counted, ...questions, sure, line.source]} />
+      <Hear lines={[upperFirst(line.name), ...counted, ...questions, sure, ...(line.monthly_cost_said ? [line.monthly_cost_said] : []), line.source]} />
     </Tile>
   );
 }

@@ -1,0 +1,58 @@
+{
+  "placeholder": "pill-photo-2026-09-15",
+  "sha256": "b35f9ceaf6213a05bd5dccca078c42af80c2361a3b98f1eb362a7273bb12450c",
+  "format": "png",
+  "note": "Synthetic fixture (no real patient), for the pill-and-receipt story: a loose white round tablet, imprint 'IP 190', scored, that a vision model would guess is paracetamol 500 mg — a guess only, at low confidence, matched against the licensed registry and held below the confirmation threshold either way.",
+  "document_kind": "pill_photo",
+  "document_date": "2026-09-15",
+  "fields": [
+    {
+      "subject": "pill",
+      "attribute": "imprint",
+      "value": "IP 190",
+      "unit": null,
+      "confidence": 0.86,
+      "span": { "x0": 0.3, "y0": 0.4, "x1": 0.7, "y1": 0.6 }
+    },
+    {
+      "subject": "pill",
+      "attribute": "colour",
+      "value": "white",
+      "unit": null,
+      "confidence": 0.92,
+      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.9 }
+    },
+    {
+      "subject": "pill",
+      "attribute": "shape",
+      "value": "round",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.9 }
+    },
+    {
+      "subject": "pill",
+      "attribute": "score_line",
+      "value": true,
+      "unit": null,
+      "confidence": 0.7,
+      "span": { "x0": 0.2, "y0": 0.48, "x1": 0.8, "y1": 0.52 }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "paracetamol",
+      "unit": null,
+      "confidence": 0.45,
+      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.9 }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": "500 mg",
+      "unit": null,
+      "confidence": 0.4,
+      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.9 }
+    }
+  ]
+}

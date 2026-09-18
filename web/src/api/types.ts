@@ -136,6 +136,8 @@ export interface LineOut {
   missed: boolean;
   /** The backend's source line: where the line came from and on which day, in his words. */
   source: string;
+  /** "S$15 a month", from a pharmacy receipt's matched lines; null where none has matched. */
+  monthly_cost_said?: string | null;
   /** The `medication` fact the line is the typed view of (a reorder card cites it). */
   fact_id?: string;
   /** How sure, as a number and in words (E04-01): a line written on a person's yes is
@@ -810,6 +812,8 @@ export type DocumentKind =
   | "insurance_policy"
   | "insurance_claim"
   | "device_screen"
+  | "pill_photo"
+  | "pharmacy_receipt"
   | "other"
   | "not_health"
   | "unknown"

@@ -1,0 +1,88 @@
+{
+  "placeholder": "pharmacy-receipt-red-flag-2026-08-26",
+  "sha256": "e82d7ae1869049a0c85de06c3eae68102c84ffe09d60e71c4f0ffd5b783e9a56",
+  "format": "png",
+  "note": "Synthetic fixture (no real patient), for the pill-and-receipt story: a pharmacy receipt whose item name names a red-flag word ('chest pain', RED_FLAG_WORDS' Feeling.CHEST_TIGHTNESS) \u2014 the same rule a lab report's facility remark and typed free text already go through, read here off an item line instead.",
+  "document_kind": "pharmacy_receipt",
+  "document_date": "2026-08-26",
+  "fields": [
+    {
+      "subject": "receipt",
+      "attribute": "pharmacy",
+      "value": "Unity Pharmacy",
+      "unit": null,
+      "confidence": 0.9,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.05,
+        "x1": 0.9,
+        "y1": 0.12
+      }
+    },
+    {
+      "subject": "receipt",
+      "attribute": "currency",
+      "value": "SGD",
+      "unit": null,
+      "confidence": 0.95,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.9,
+        "x1": 0.9,
+        "y1": 0.95
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "name",
+      "value": "Chest pain relief patch",
+      "unit": null,
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.1,
+        "y0": 0.3,
+        "x1": 0.6,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "quantity",
+      "value": 1,
+      "unit": null,
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.6,
+        "y0": 0.3,
+        "x1": 0.7,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "unit_price",
+      "value": 5.5,
+      "unit": "SGD",
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.7,
+        "y0": 0.3,
+        "x1": 0.8,
+        "y1": 0.35
+      }
+    },
+    {
+      "subject": "item_1",
+      "attribute": "total",
+      "value": 5.5,
+      "unit": "SGD",
+      "confidence": 0.85,
+      "span": {
+        "x0": 0.8,
+        "y0": 0.3,
+        "x1": 0.9,
+        "y1": 0.35
+      }
+    }
+  ]
+}

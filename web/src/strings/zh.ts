@@ -1446,6 +1446,10 @@ export const zh = {
       // @patient
       kindOther: "这是一份健康文件。",
       // @patient
+      kindPillPhoto: "这是一颗药丸的照片。",
+      // @patient
+      kindPharmacyReceipt: "这是一张药房收据。",
+      // @patient
       unreadable: "这一条 Nura 看不清。",
       // @patient
       typeIt: "请输入文件上写的。",
@@ -1459,6 +1463,8 @@ export const zh = {
       dated: "这份文件的日期是 {date}。",
       // @patient
       highRisk: "这种药 Nura 会格外小心。",
+      // @patient
+      pillProposal: "这看起来像{medicine}——请向药剂师确认。",
       // @patient
       fromPhoto: "来自您在 {date} 加的照片。",
       // @patient phrase
@@ -1610,6 +1616,22 @@ export const zh = {
         amount: "金额",
         date: "日期",
         for: "这次理赔是为了什么",
+      },
+      pill: {
+        imprint: "上面印的字",
+        colour: "颜色",
+        shape: "形状",
+        score_line: "是否有刻痕可以掰开",
+      },
+      receipt: {
+        pharmacy: "药房",
+        currency: "货币",
+      },
+      item: {
+        name: "买了什么",
+        quantity: "数量",
+        unit_price: "单价",
+        total: "总价",
       },
     },
   },

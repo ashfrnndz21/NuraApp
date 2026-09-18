@@ -14,18 +14,28 @@ refusal is on the trail like any other. It runs for every writer — the review 
 medicines module, WhatsApp, a voice note — because it lives under the store, not in a
 surface. The medicines module (E04) checks the same rule at its own door first, so the
 person is told before a yes is spent; this hook is the floor under it.
+
+A PHOTO artefact alone is not enough (#pill-receipt clinical-safety review): a loose pill
+photographed with no label in view is stored the same way a real label photo is
+(`ArtifactKind.PHOTO`), but its own review card says which it was
+(`DocumentKind.PILL_PHOTO` versus a label, `is_pill_photo`) — a pill's guess never grounds a
+high-risk dose, only a label does.
 """
 
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Iterator, Mapping
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.drafts import FactDraft
 from app.errors import Refusal
+from app.ingestion.extract import DocumentKind
+from app.ingestion.models import ReviewCard
 from app.keys.context import KeyContext
 from app.memory import semantic
 from app.memory.episodic import artifact_kind_on_profile
@@ -185,6 +195,24 @@ def is_a_count(draft: FactDraft) -> bool:
     return draft.subject in MEDICINE_SUBJECTS and draft.attribute.startswith(COUNT_ATTRIBUTES)
 
 
+async def is_pill_photo(
+    session: AsyncSession, *, context: KeyContext, artifact_id: uuid.UUID
+) -> bool:
+    """Whether this artefact's own review card says it is a loose pill, never a label
+    (#pill-receipt clinical-safety review). Storage kind alone (`ArtifactKind.PHOTO`) cannot
+    tell a pill photo from a real label photo — both are stored the same way — but the card
+    that read it can: `DocumentKind.PILL_PHOTO` names a guess from what a loose pill looks
+    like, held below the confirmation threshold and never a read (`app.ingestion.review`
+    module docstring). No card at all, a card of any other kind, or one the extractor could
+    not read (`unknown`) is not a pill photo and is left to the storage-kind check above."""
+    found = await session.execute(
+        select(ReviewCard.document_kind).where(
+            ReviewCard.artifact_id == artifact_id, ReviewCard.profile_id == context.profile_id
+        )
+    )
+    return found.scalars().first() is DocumentKind.PILL_PHOTO
+
+
 async def refuse_dose_without_label_photo(
     session: AsyncSession, context: KeyContext, draft: FactDraft
 ) -> None:
@@ -214,6 +242,10 @@ async def refuse_dose_without_label_photo(
     if kind is not ArtifactKind.PHOTO:
         raise HighRiskNeedsLabelPhoto(
             danger, f"a {danger} dose is saved from its label photo, not a {kind}"
+        )
+    if await is_pill_photo(session, context=context, artifact_id=draft.artifact_id):
+        raise HighRiskNeedsLabelPhoto(
+            danger, f"a {danger} dose is saved from its label photo, not a loose pill's"
         )
 
 
