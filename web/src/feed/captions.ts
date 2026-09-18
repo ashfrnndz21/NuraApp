@@ -40,3 +40,18 @@ export function cueAt(cues: readonly Cue[], elapsed: number): Cue | null {
   if (cues.length === 0 || elapsed < 0) return null;
   return cues.find((cue) => elapsed >= cue.start && elapsed < cue.end) ?? (elapsed >= cues[cues.length - 1]!.end ? cues[cues.length - 1]! : null);
 }
+
+/** A Nura-made clip's own captions (`feed/model.ts` `ClipView.captions`, milliseconds from the
+ *  clip's start — `app.delivery.feed.clipmaker.ClipScript.captions`, never re-timed on the
+ *  client) as the same `Cue` shape the publisher clip's parsed VTT already gives `cueAt`: each
+ *  line's end is the next line's start, and the last line's is the clip's own duration. */
+export function cuesFromCaptions(
+  captions: readonly { atMs: number; text: string }[],
+  durationMs: number | null
+): Cue[] {
+  return captions.map((caption, index) => {
+    const next = captions[index + 1];
+    const endMs = next ? next.atMs : (durationMs ?? caption.atMs);
+    return { start: caption.atMs / 1000, end: Math.max(endMs, caption.atMs) / 1000, text: caption.text };
+  });
+}

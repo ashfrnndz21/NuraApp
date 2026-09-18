@@ -59,7 +59,7 @@ from app.channels.about_him import Reader, reader_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.compress import Searcher
 from app.delivery.feed.sources import usable_sources
-from app.delivery.timeline_strings import reroute_lines, verified
+from app.delivery.timeline_strings import honest_lines, reroute_lines, verified
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -73,6 +73,7 @@ from app.memory.spine import UPCOMING
 from app.memory.timeline import language_for
 from app.reasoning.feelings.service import recent_notes
 from app.safety.boundary import Surface, boundary_lines
+from app.safety.plain_words import verify
 from app.safety.red_flags import detect
 from app.search.ask import (
     _LATIN_WORD,
@@ -169,6 +170,22 @@ _TOOL_DEFS: Final[dict[str, dict[str, Any]]] = {
     },
 }
 
+_RULE_HINTS: Final[dict[int, str]] = {
+    1: "each line is a whole sentence, someone doing something, ending in . ! ? or :",
+    2: "one idea per line",
+    3: "short words and short lines, under ten where it can be done, never over fifteen",
+    4: "call things what he calls them, never the chemical or clinical name alone",
+    5: "say the day and the date in words, never digits, a clock time or a time zone",
+    10: "numbers as digits, small and few — never more than three on one line",
+    11: "never a red word like missed, failed, overdue or non-compliant",
+    12: "nothing to decode — no abbreviations, no units, no jargon like dose or follow-up",
+    13: "the same words every time for the same thing",
+    14: "never a line that starts, stops or changes a medicine",
+}
+"""One short, generic instruction per `docs/plain-words.md` rule (and rule 14, the boundary
+check `_check_boundary` also runs), for the one repair round: the model is told which rules
+its lines broke, never the lines themselves — nothing it wrote leaves this process twice."""
+
 ANSWER_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
     "additionalProperties": False,
@@ -212,14 +229,47 @@ class _ToolLine:
     cite: Cite
 
 
-def _register(lines: list[_ToolLine], kind: str, id_: uuid.UUID, text: str) -> str:
-    token = f"{kind}:{id_}"
+_TOKEN_PREFIXES: Final[dict[str, str]] = {
+    "medication_line": "m",
+    "fact": "f",
+    "appointment": "v",
+    "feeling_note": "g",
+    "web": "w",
+}
+"""One letter per kind, for `_TokenCounter` — never the uuid itself. A model given `m1` and
+`v2` to cite back can actually copy them; one given a raw uuid to retype byte for byte
+regularly could not, and its whole line was dropped for a cite that matched nothing."""
+
+
+class _TokenCounter:
+    """Short, stable ids for this ask alone: one running number per kind (`m1`, `m2`, `v1`,
+    ...), reset fresh for every `ask_stream` call. Never persisted, never shown to the reader —
+    only ever cited back by the model, and matched back to a `Cite` by `known`."""
+
+    def __init__(self) -> None:
+        self._seen: dict[str, int] = {}
+
+    def next(self, kind: str) -> str:
+        prefix = _TOKEN_PREFIXES.get(kind, (kind[:1] or "x"))
+        n = self._seen.get(prefix, 0) + 1
+        self._seen[prefix] = n
+        return f"{prefix}{n}"
+
+
+def _register(
+    lines: list[_ToolLine], counter: _TokenCounter, kind: str, id_: uuid.UUID, text: str
+) -> str:
+    token = counter.next(kind)
     lines.append(_ToolLine(token=token, text=f"{token}: {text}", cite=Cite(kind=kind, id=id_)))
     return token
 
 
 async def _read_medicines(
-    session: AsyncSession, context: KeyContext, registry: DrugRegistry | None, language: str
+    session: AsyncSession,
+    context: KeyContext,
+    registry: DrugRegistry | None,
+    language: str,
+    counter: _TokenCounter,
 ) -> tuple[list[_ToolLine], int]:
     found = await audited_read(
         session,
@@ -234,13 +284,13 @@ async def _read_medicines(
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
         started = line.started_at.date().isoformat()
         _register(
-            lines, "medication_line", line.id, f"{name}, {who}, started {started}"
+            lines, counter, "medication_line", line.id, f"{name}, {who}, started {started}"
         )
     return lines, len(found)
 
 
 async def _read_readings(
-    session: AsyncSession, context: KeyContext, language: str
+    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
     lines: list[_ToolLine] = []
@@ -251,12 +301,12 @@ async def _read_readings(
             text = f"blood pressure {value['systolic']}/{value['diastolic']} on {date}"
         else:
             text = f"{fact.subject} {fact.attribute} = {fact.value} on {date}"
-        _register(lines, "fact", fact.id, text)
+        _register(lines, counter, "fact", fact.id, text)
     return lines, len(facts)
 
 
 async def _read_visits(
-    session: AsyncSession, context: KeyContext
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
 ) -> tuple[list[_ToolLine], int, list[Appointment], dict[uuid.UUID, Provider]]:
     providers = {p.id: p for p in await audited_read(session, Provider, context, Scope.VISITS)}
     visits = await audited_read(session, Appointment, context, Scope.VISITS)
@@ -266,31 +316,47 @@ async def _read_visits(
         who = provider.name if provider is not None else "an unnamed provider"
         when = visit.scheduled_at.date().isoformat()
         text = f"with {who} on {when}, status {visit.status.value}"
-        _register(lines, "appointment", visit.id, text)
+        _register(lines, counter, "appointment", visit.id, text)
     return lines, len(visits), list(visits), providers
 
 
-async def _read_records(session: AsyncSession, context: KeyContext) -> tuple[list[_ToolLine], int]:
+async def _read_records(
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
     lines: list[_ToolLine] = []
     for fact in facts:
         date = fact.valid_from.date().isoformat()
-        _register(lines, "fact", fact.id, f"{fact.subject} {fact.attribute} = {fact.value} on {date}")
+        _register(
+            lines, counter, "fact", fact.id, f"{fact.subject} {fact.attribute} = {fact.value} on {date}"
+        )
     return lines, len(facts)
 
 
-async def _read_feelings(session: AsyncSession, context: KeyContext) -> tuple[list[_ToolLine], int]:
+async def _read_feelings(
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
     notes, _withheld = await recent_notes(session, context=context)
     lines: list[_ToolLine] = []
     for note in notes:
         date = note.created_at.date().isoformat()
         said = " ".join(note.lines) if note.lines else note.headline
-        _register(lines, "feeling_note", note.id, f"he said he felt {note.word.value} on {date}: {said}")
+        _register(
+            lines,
+            counter,
+            "feeling_note",
+            note.id,
+            f"he said he felt {note.word.value} on {date}: {said}",
+        )
     return lines, len(notes)
 
 
 async def _search_online(
-    session: AsyncSession, context: KeyContext, searcher: Searcher, query: str
+    session: AsyncSession,
+    context: KeyContext,
+    searcher: Searcher,
+    query: str,
+    counter: _TokenCounter,
 ) -> tuple[list[_ToolLine], int]:
     sources = await usable_sources(session, region=context.region)
     domains = [source.domain for source in sources]
@@ -301,8 +367,7 @@ async def _search_online(
     for result in found:
         synthetic = uuid.uuid5(uuid.NAMESPACE_URL, result.url)
         text = f"{result.title} — {result.url} ({result.domain})"
-        token = f"web:{synthetic}"
-        lines.append(_ToolLine(token=token, text=f"{token}: {text}", cite=Cite(kind="web", id=synthetic)))
+        _register(lines, counter, "web", synthetic, text)
     return lines, len(found)
 
 
@@ -418,6 +483,7 @@ class ClaudeAsker:
             tool_names = _tools_for(context)
             tool_defs = [_TOOL_DEFS[name] for name in tool_names]
             known: dict[str, _ToolLine] = {}
+            counter = _TokenCounter()
             visits_seen: list[Appointment] = []
             providers_seen: dict[uuid.UUID, Provider] = {}
 
@@ -445,6 +511,7 @@ class ClaudeAsker:
             messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
 
             answer: Answer | None = None
+            repaired = False
             try:
                 for _round in range(MAX_ROUNDS):
                     response = await self._client.messages.create(  # type: ignore[call-overload]
@@ -465,9 +532,41 @@ class ClaudeAsker:
                         break
                     if stop_reason != "tool_use":
                         payload = _structured_json(response)
-                        answer = None if payload is None else _answer_from_payload(
-                            payload, known, lang, reader, mode
+                        failed_rules: set[int] = set()
+                        parsed = (
+                            None
+                            if payload is None
+                            else _answer_from_payload(
+                                payload, known, lang, reader, mode, failed_rules
+                            )
                         )
+                        if parsed is None and failed_rules and not repaired:
+                            # One repair round (defect: "the agent still returns an empty
+                            # answer"): tell the model which rules its lines broke — never
+                            # what it wrote — and give it one more try before falling back.
+                            repaired = True
+                            log.info(
+                                "claude asker: repair round, rules=%s", sorted(failed_rules)
+                            )
+                            assistant_content = getattr(response, "content", None) or []
+                            messages.append(
+                                {"role": "assistant", "content": assistant_content}
+                            )
+                            hints = "; ".join(
+                                _RULE_HINTS.get(rule, f"rule {rule}")
+                                for rule in sorted(failed_rules)
+                            )
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "Those lines did not pass the house style. Rewrite "
+                                        f"them so that: {hints}. Cite the same ids as before."
+                                    ),
+                                }
+                            )
+                            continue
+                        answer = parsed
                         break
 
                     tool_uses = _tool_use_blocks(response)
@@ -493,6 +592,7 @@ class ClaudeAsker:
                             language=lang,
                             visits_seen=visits_seen,
                             providers_seen=providers_seen,
+                            counter=counter,
                         )
                         for line in step_lines:
                             known[line.token] = line
@@ -519,7 +619,43 @@ class ClaudeAsker:
                 answer = None
 
             if answer is None or not answer.lines:
-                answer = await fallback()
+                try:
+                    answer = await fallback()
+                except Exception:
+                    # The rule-based answer is supposed to always say something and never
+                    # raise — but if it does, that must never be the reason he hears nothing
+                    # at all (defect: "the agent's answer reached the phone empty, and so did
+                    # the fallback"). Fall through to the belt-and-braces line below.
+                    log.exception(
+                        "claude asker: the rule-based fallback failed; sending the "
+                        "catalogue's honest line"
+                    )
+                    answer = None
+                if answer is None or (not answer.lines and not answer.honest):
+                    # Belt and braces: even the rule-based answer, which is supposed to
+                    # always say something, came back with nothing to say (or failed
+                    # outright, above). Never let only the boundary reach him — say the
+                    # catalogue's own honest line ourselves.
+                    log.warning(
+                        "claude asker: the rule-based fallback had nothing to say; "
+                        "sending the catalogue's honest line"
+                    )
+                    doctor = _doctor_name(visits_seen, providers_seen)
+                    withheld = tuple(
+                        dict.fromkeys(
+                            scope for scope in TOOL_SCOPES.values() if not context.allows(scope)
+                        )
+                    )
+                    answer = Answer(
+                        question_artifact_id=kept.id,
+                        mode=mode,
+                        language=lang,
+                        lines=(),
+                        honest=tuple(honest_lines(lang, doctor)),
+                        boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
+                        withheld=withheld,
+                        dropped=0,
+                    )
                 yield answer
                 return
 
@@ -594,24 +730,46 @@ class ClaudeAsker:
         language: str,
         visits_seen: list[Appointment],
         providers_seen: dict[uuid.UUID, Provider],
+        counter: _TokenCounter,
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
-            return await _read_medicines(session, context, registry, language)
+            return await _read_medicines(session, context, registry, language, counter)
         if name == "read_readings":
-            return await _read_readings(session, context, language)
+            return await _read_readings(session, context, language, counter)
         if name == "read_visits":
-            lines, count, visits, providers = await _read_visits(session, context)
+            lines, count, visits, providers = await _read_visits(session, context, counter)
             visits_seen.extend(visits)
             providers_seen.update(providers)
             return lines, count
         if name == "read_records":
-            return await _read_records(session, context)
+            return await _read_records(session, context, counter)
         if name == "read_feelings":
-            return await _read_feelings(session, context)
+            return await _read_feelings(session, context, counter)
         if name == "search_online":
             query = str(args.get("query") or "")
-            return await _search_online(session, context, self._searcher, query)
+            return await _search_online(session, context, self._searcher, query, counter)
         return [], 0
+
+
+def _drop(reason: str, *, rules: Sequence[int] = ()) -> None:
+    """One line logged, its reason class only — never its text, never a cite, never a value
+    off his record (defect: "the agent's answer reached the phone empty", fixed by knowing,
+    from the logs alone, which gate a line actually failed). `rules` names which
+    `docs/plain-words.md` rule numbers a `plain_words_failed` drop broke — still never the
+    words that broke them."""
+    if rules:
+        log.info("claude asker: dropped a line, reason=%s, rules=%s", reason, list(rules))
+    else:
+        log.info("claude asker: dropped a line, reason=%s", reason)
+
+
+def _plain_words_rules(text: str, language: str) -> tuple[int, ...]:
+    """The `docs/plain-words.md` rule numbers `text` fails, sorted — never the text itself.
+    Logged by `_drop` and, once per ask, handed to the model as `_RULE_HINTS` for the one
+    repair round: which rule, never which words."""
+    return tuple(
+        sorted({finding.rule for finding in verify(text, language, "line") if finding.severity == "fail"})
+    )
 
 
 def _answer_from_payload(
@@ -620,34 +778,57 @@ def _answer_from_payload(
     language: str,
     reader: Reader,
     mode: Mode,
+    failed_rules: set[int] | None = None,
 ) -> Answer | None:
     raw_lines = payload.get("lines")
     if not isinstance(raw_lines, list):
+        log.info("claude asker: payload had no 'lines' list")
         return None
+    # Case-insensitive, so `M1` or `m1 ` matches the `m1` a tool result actually carried —
+    # the model is asked to copy a short id back, not retype a uuid, but it still may not get
+    # the case exactly right, and a line should not be thrown away over that alone.
+    known_ci = {token.strip().lower(): line for token, line in known.items()}
     lines: list[AnswerLine] = []
     for entry in raw_lines:
         if not isinstance(entry, Mapping):
+            _drop("malformed_entry")
             continue
         raw_text, raw_cites = entry.get("text"), entry.get("cites")
         if not isinstance(raw_text, str) or not isinstance(raw_cites, list):
+            _drop("malformed_text_or_cites")
             continue
         text = raw_text.strip()
-        if not text or not verified(text, language):
+        if not text:
+            _drop("empty_text")
+            continue
+        if not verified(text, language):
+            rules = _plain_words_rules(text, language)
+            if failed_rules is not None:
+                failed_rules.update(rules)
+            _drop("plain_words_failed", rules=rules)
             continue
         if _has_conclusion_language(text, language):
+            _drop("conclusion_language")
             continue
         heard = reader.says(text)
         if not reader.his and reader.speaks_to_him(heard):
+            _drop("caregiver_voice")
             continue
         cites = tuple(
             dict.fromkeys(
-                known[str(token)].cite for token in raw_cites if str(token) in known
+                known_ci[str(token).strip().lower()].cite
+                for token in raw_cites
+                if str(token).strip().lower() in known_ci
             )
         )
         if not cites:
+            _drop("no_cite_matched")
             continue
         lines.append(AnswerLine(text=heard, cites=cites))
     if not lines:
+        log.info(
+            "claude asker: no line survived out of %d the model offered", len(raw_lines)
+        )
         return None
     kept_lines = lines[:1] if mode is Mode.VOICE else lines[:TEXT_LINES]
     return Answer(

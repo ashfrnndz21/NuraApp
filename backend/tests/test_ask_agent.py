@@ -22,13 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, Outcome
 from app.channels.about_him import Reader
 from app.delivery.feed.compress import Found
+from app.delivery.timeline_strings import honest_lines
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.scopes import KeyRole, Scope
 from app.llm.ask_agent import Cite, ClaudeAsker, _answer_from_payload, _ToolLine, _tools_for
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_lines
-from app.search.ask import AskStep, Mode, recall
+from app.search.ask import Answer, AskStep, Mode, recall
 from app.search.asker import AnswerDelta
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import REGISTRY, let_in
@@ -110,7 +111,6 @@ async def test_the_tool_use_loop_runs_two_rounds_one_step_per_call_that_ran(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     rec = await record(sg)
-    medicine_id = rec.medicine.line.id
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_medicines"),
@@ -118,7 +118,10 @@ async def test_the_tool_use_loop_runs_two_rounds_one_step_per_call_that_ran(
                 [
                     {
                         "text": "Your blood pressure tablet is on your list of medicines.",
-                        "cites": [f"medication_line:{medicine_id}"],
+                        # A short, stable id ("m1", the first — and here only — medicine
+                        # this ask read) is what the model is actually asked to copy back,
+                        # never the row's own uuid.
+                        "cites": ["m1"],
                     }
                 ]
             ),
@@ -191,6 +194,33 @@ def test_a_cite_outside_this_asks_tool_results_is_dropped() -> None:
         "Your blood pressure was 138 over 84 on Wednesday 2 September."
     ]
     assert answer.dropped == 1
+
+
+def test_a_cite_matches_a_known_id_case_insensitively() -> None:
+    """Short ids (`m1`, not a uuid) are what the model is asked to copy back — but it may
+    still change the case. A line should not be thrown away over that alone (defect: "the
+    agent's answer reached the phone empty")."""
+    medicine_id = uuid.uuid4()
+    known = {
+        "m1": _ToolLine(
+            token="m1",
+            text="m1: amlodipine 5 mg, started 2026-08-01",
+            cite=Cite(kind="medication_line", id=medicine_id),
+        )
+    }
+    payload = {
+        "lines": [
+            {
+                "text": "Your blood pressure tablet is on your list of medicines.",
+                "cites": ["M1"],
+            }
+        ]
+    }
+    answer = _answer_from_payload(payload, known, "en", Reader(his=True), Mode.TEXT)
+    assert answer is not None
+    assert [line.text for line in answer.lines] == [
+        "Your blood pressure tablet is on your list of medicines."
+    ]
 
 
 def test_a_line_with_no_surviving_cite_at_all_yields_no_answer() -> None:
@@ -269,7 +299,6 @@ async def test_the_external_model_processor_audit_line_is_written_once(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     rec = await record(sg)
-    medicine_id = rec.medicine.line.id
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_medicines"),
@@ -277,7 +306,7 @@ async def test_the_external_model_processor_audit_line_is_written_once(
                 [
                     {
                         "text": "Your blood pressure tablet is on your list of medicines.",
-                        "cites": [f"medication_line:{medicine_id}"],
+                        "cites": ["m1"],
                     }
                 ]
             ),
@@ -294,3 +323,173 @@ async def test_the_external_model_processor_audit_line_is_written_once(
     assert len(entries) == 1
     assert entries[0].outcome is Outcome.ALLOWED
     assert entries[0].shared_with_label == "anthropic"
+
+
+async def test_the_reported_empty_answer_now_survives_with_short_case_insensitive_ids(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The live-run defect, reproduced: several real tool steps stream, and the final answer
+    cites ids that do not match a tool result byte for byte (here, the model changed the
+    case). Before the fix the cite was matched by an exact-case uuid string and the whole
+    line was silently dropped — every line, every time, because the model was never going to
+    retype a uuid correctly. Short, per-kind ids matched case-insensitively fix it: the
+    answer now actually reaches the phone."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_visits"),
+            _tool_call("toolu_2", "read_medicines"),
+            _final(
+                [
+                    {
+                        "text": "Your next visit with Dr Tan is written down.",
+                        "cites": ["V1"],
+                    },
+                    {
+                        "text": "Your blood pressure tablet is on your list of medicines.",
+                        "cites": ["M1"],
+                    },
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, _deltas, answer = await _drive(
+        asker, sg, rec.owner, "what is written down about my visits and medicines", tmp_path
+    )
+
+    assert steps == ["visits", "medicines"]
+    assert len(answer.lines) == 2
+    assert answer.lines != ()
+
+
+async def test_when_even_the_fallback_has_nothing_the_catalogue_honest_line_is_sent(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Belt and braces: if the rule-based fallback itself somehow came back with nothing to
+    say (no lines, no honest line), the reader must never be left with only the boundary. This
+    should not happen in practice (`honest_lines` always fills in "your doctor"), but the fix
+    guarantees it by construction rather than by that one caller's good behaviour."""
+    rec = await record(sg)
+    client = FakeClient([FakeMessage(stop_reason="refusal")])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+
+    async def _empty_recall(*_args: Any, **_kwargs: Any) -> Answer:
+        return Answer(
+            question_artifact_id=uuid.uuid4(),
+            mode=Mode.TEXT,
+            language="en",
+            lines=(),
+            honest=(),
+            boundary=boundary_lines(Surface.RECALL, "en", doctor=None),
+            withheld=(),
+            dropped=0,
+        )
+
+    monkeypatch.setattr("app.llm.ask_agent.recall", _empty_recall)
+    _steps, _deltas, answer = await _drive(
+        asker, sg, rec.owner, "what was my blood pressure", tmp_path
+    )
+
+    assert answer.lines == ()
+    assert list(answer.honest) == honest_lines("en", None)
+    assert answer.boundary
+
+
+# A line that fails rule 3 (`docs/plain-words.md`: short words, short lines) — over fifteen
+# words, otherwise clean — the same string `test_over_fifteen_words_fail_and_over_ten_is_a_note`
+# in `test_plain_words.py` pins to rule 3 alone.
+_TOO_LONG_LINE = (
+    "Nura will ask you to say yes again the next time you open the app on your phone at home."
+)
+_SHORT_LINE = "Your blood pressure tablet is on your list of medicines."
+
+
+async def test_a_line_that_fails_plain_words_is_repaired_and_then_shown(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Defect: "the agent still returns an empty answer" — five lines dropped, no repair. The
+    fix gives the model one more try, told which rule its line broke (never the words), before
+    ever falling back."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _SHORT_LINE, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, _deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    assert steps == ["medicines"]
+    # Three calls: the tool-use round, the first (failing) final answer, and the one repair
+    # round — never a second repair.
+    assert len(client.messages.calls) == 3
+    repair_messages = client.messages.calls[2]["messages"]
+    repair_ask = repair_messages[-1]
+    assert repair_ask["role"] == "user"
+    # The rule is named; the line that broke it is not.
+    assert "short words" in repair_ask["content"]
+    assert _TOO_LONG_LINE not in repair_ask["content"]
+    assert [line.text for line in answer.lines] == [_SHORT_LINE]
+
+
+async def test_when_the_repair_also_fails_the_catalogue_line_is_sent(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Defect, part two: when even the one repair round still fails plain words, the rule-based
+    fallback must be used, and if it has nothing of its own to say, the catalogue's own "could
+    not find this" line must still reach him."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+        ]
+    )
+
+    async def _honest_only_recall(*_args: Any, **_kwargs: Any) -> Answer:
+        return Answer(
+            question_artifact_id=uuid.uuid4(),
+            mode=Mode.TEXT,
+            language="en",
+            lines=(),
+            honest=tuple(honest_lines("en", None)),
+            boundary=boundary_lines(Surface.RECALL, "en", doctor=None),
+            withheld=(),
+            dropped=0,
+        )
+
+    monkeypatch.setattr("app.llm.ask_agent.recall", _honest_only_recall)
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, _deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    # One repair round only — never a second.
+    assert len(client.messages.calls) == 3
+    assert answer.lines == ()
+    assert list(answer.honest) == honest_lines("en", None)
+    assert answer.boundary
+
+
+async def test_when_the_fallback_itself_fails_the_catalogue_line_is_still_sent(
+    sg: AsyncSession, tmp_path: Path, monkeypatch: Any
+) -> None:
+    """The rule-based answer is supposed to always say something and never raise — but if it
+    does, that must never be the one way he ends up hearing nothing at all."""
+    rec = await record(sg)
+    client = FakeClient([FakeMessage(stop_reason="refusal")])
+
+    async def _broken_recall(*_args: Any, **_kwargs: Any) -> Answer:
+        raise RuntimeError("the rule-based asker blew up")
+
+    monkeypatch.setattr("app.llm.ask_agent.recall", _broken_recall)
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, _deltas, answer = await _drive(
+        asker, sg, rec.owner, "what was my blood pressure", tmp_path
+    )
+
+    assert answer.lines == ()
+    assert list(answer.honest) == honest_lines("en", None)
+    assert answer.boundary

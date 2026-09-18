@@ -1,14 +1,15 @@
 """Health Analyst backend: the weekly report and the one new fact a rule needs to tell a
 supplement apart from a prescription line for its own purposes.
 
-`medication_line.category` is a plain string, nullable, set by nothing yet but this
-migration's own backfill: existing rows get the same word `product_kind` already gives them
-("prescription", "supplement" or "tcm") where the register named one, and `None` where it
-did not, never a guess. It is a second word beside `product_kind` on purpose — `product_kind`
-is the register's own classification of the product; `category` is the Analyst's own
-question, "is this something to ask about the way a supplement is," which is about how the
-Analyst reads the line, not about what the register matched. A future write path is free to
-diverge the two; nothing here assumes they always agree.
+`medication_line.category` is a plain string, nullable. This migration's own backfill gives
+existing rows the same word `product_kind` already gives them ("prescription", "supplement"
+or "tcm") where the register named one, and `None` where it did not, never a guess; the write
+path (`app.medicines.service._one_product`) sets it the same way for every new line from here
+on. It is a second word beside `product_kind` on purpose — `product_kind` is the register's
+own classification of the product; `category` is the Analyst's own question, "is this
+something to ask about the way a supplement is," which is about how the Analyst reads the
+line, not about what the register matched. A future write path is free to diverge the two;
+nothing here assumes they always agree.
 
 `insight_report` is one row per Health Analyst report: the week it is for, the boundary line
 it carried, and its sections and insights, kept as JSON the way `TrendCard.lines` and
@@ -17,8 +18,8 @@ it carried, and its sections and insights, kept as JSON the way `TrendCard.lines
 read (`app.db.monotonic`'s own docstring, #192/#218): two reports written in the same request,
 or under a frozen clock, must resolve to one winner, never an arbitrary one.
 
-Revision ID: 0049_health_analyst
-Revises: 0048_provider_category
+Revision ID: 0050_health_analyst
+Revises: 0049_condition_answers
 Create Date: 2026-09-18
 """
 
@@ -27,8 +28,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0049_health_analyst"
-down_revision = "0048_provider_category"
+revision = "0050_health_analyst"
+down_revision = "0049_condition_answers"
 branch_labels = None
 depends_on = None
 

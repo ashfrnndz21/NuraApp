@@ -87,13 +87,19 @@ MAX_TOKENS: Final = 1024
 """Enough for a handful of one-sentence lines; a trace this build streams never has more than
 a few real steps (E03-05's four, Find's one)."""
 
-NARRATE_DEADLINE_S: Final = 1.5
+NARRATE_DEADLINE_S: Final = 10.0
 """A step already happened before this call starts (the module docstring: this only ever
-varies how it is said). A rephrase may never hold the real step back, so the call is bounded
-by this deadline; anything slower than it, and any timeout, connection failure or non-2xx
-status the SDK itself raises, falls back to the catalogue label the same way a refusal does —
-the SSE step event goes out no later than this many seconds after the read it names already
-finished."""
+varies how it is said), and the step's own SSE event goes out at once, with its catalogue
+label, before this call is even started — never after it (`app.search.narrate.
+narrate_step_label`, awaited in the background by `app.channels.api.timeline.ask_stream` and
+`app.delivery.feed.find.find_stream`'s route). Opus 5 typically answers in two to six
+seconds; a deadline of 1.5s meant it hit this every time and the narrator was never actually
+heard. Ten seconds gives it room to answer for real while still bounding how long a
+`step_label` follow-up can arrive after its step — and it can never block a real step, a
+tool call or the answer, however long it takes: anything slower than it, and any timeout,
+connection failure or non-2xx status the SDK itself raises, falls back to the catalogue
+label the same way a refusal does, and a caller listening for a follow-up simply never gets
+one."""
 
 _FIND_STEP_NAMES: Final[dict[str, dict[str, str]]] = {
     "en": {"web": "online", "videos": "videos"},

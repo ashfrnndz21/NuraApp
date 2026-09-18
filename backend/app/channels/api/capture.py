@@ -1,7 +1,9 @@
 """Capture over HTTP: paper in, review cards out, facts on the person's yes (E02).
 
     POST /profiles/{id}/photos                        a photo of a page, with the kind he says it is
+    POST /profiles/{id}/photos/stream                 the same, streamed: a step per real stage, then the card
     POST /profiles/{id}/imports                       a PDF from a portal, an email or a share
+    POST /profiles/{id}/imports/stream                 the same, streamed
     POST /profiles/{id}/readings/photo                a photo of a machine's screen
     GET  /profiles/{id}/review-cards                  the profile's cards, newest first
     GET  /profiles/{id}/review-cards/{card_id}        one card with its fields
@@ -26,13 +28,18 @@ not read. A PDF to be read goes to `/imports`.
 
 from __future__ import annotations
 
+import json
 import uuid
+from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Query, Request, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_profile_read
-from app.channels.api.deps import Context, Db, providers_of
+from app.channels.about_him import Reader, reader_of
+from app.channels.api.deps import Context, Db, providers_of, session_scope
+from app.channels.api.refusals import refused
 from app.channels.api.schemas import (
     EventNoteIn,
     EventNoteOut,
@@ -46,17 +53,22 @@ from app.channels.api.schemas import (
     TypedIn,
 )
 from app.channels.strings import language_of
+from app.delivery.timeline_strings import DOCUMENT_KIND_WORD, IMPORT_STEPS
+from app.errors import Refusal
 from app.ingestion.documents import store_pdf
 from app.ingestion.extract import DocumentKind
 from app.ingestion.models import NoteKind, ReviewCard
 from app.ingestion.notes import add_scribble, add_voice_note, note_content, notes_for
 from app.ingestion.photos import store_photo
 from app.ingestion.review import (
+    ImportStep,
+    ImportStepKey,
     card_fields,
     confirm_review_card,
     list_review_cards,
     require_review_card,
     review_artifact,
+    review_artifact_stream,
     type_field,
 )
 from app.keys.context import KeyContext
@@ -66,6 +78,42 @@ from app.memory.semantic import current_facts
 from app.onboarding.settings import his_language
 
 router = APIRouter(prefix="/profiles", tags=["capture"])
+
+
+def _sse(payload: dict[str, object]) -> bytes:
+    """One Server-Sent Event: a `data:` line of JSON, blank line after
+    (`app.channels.api.timeline._sse`, the same shape every streaming route here uses)."""
+    return f"data: {json.dumps(payload)}\n\n".encode()
+
+
+async def _refusal_event(request: Request, refusal: Refusal) -> bytes:
+    """A refusal mid-stream, in the same shape the plain routes answer it in
+    (`app.channels.api.timeline._refusal_event`)."""
+    response = await refused(request, refusal)
+    body = json.loads(bytes(response.body))
+    return _sse({"type": "refusal", "status": response.status_code, **body})
+
+
+def _step_event(reader: Reader, lang: str, step: ImportStep) -> bytes:
+    """One `ImportStep`, in his words (or the caregiver's twin, by his name): the label the
+    Add flow's trace shows while it works. `found`/`linked` fill the catalogue's own slots
+    from the step's real fields — never a row, only the short strings `ImportStep` already
+    carries (module docstring, `app.ingestion.review.ImportStep`)."""
+    catalogue = IMPORT_STEPS[lang]
+    if step.key is ImportStepKey.FOUND:
+        kind = DOCUMENT_KIND_WORD[lang].get(step.document_kind or "", DOCUMENT_KIND_WORD[lang]["other"])
+        text = (
+            catalogue["found_at"].format(kind=kind, facility=step.facility)
+            if step.facility
+            else catalogue["found"].format(kind=kind)
+        )
+    elif step.key is ImportStepKey.LINKED and step.linked_kind == "medicine":
+        text = catalogue["linked_medicine"].format(medicine=step.linked_label or "")
+    elif step.key is ImportStepKey.LINKED:
+        text = catalogue["linked_visit"]
+    else:
+        text = catalogue[step.key.value]
+    return _sse({"type": "step", "key": step.key.value, "label": reader.says(text)})
 
 
 async def _language(session: AsyncSession, context: KeyContext) -> str:
@@ -148,6 +196,102 @@ async def import_pdf(
         source=body.source,
     )
     return await _card_out(session, context, card)
+
+
+@router.post("/{profile_id}/photos/stream")
+async def add_photo_stream(
+    body: PhotoIn, request: Request, context: Context
+) -> StreamingResponse:
+    """`POST /{id}/photos`, streamed (docs/design-direction.md 'Conversation, waiting and
+    thinking'): a `step` event the instant each real stage of `review_artifact_stream`
+    finishes — stored, reading, what it found, the red-flag check where one runs, a real
+    link to a medicine or visit where one exists — then a `card` event, the same
+    `ReviewCardOut` the plain route gives. An older web client that has never asked for this
+    route keeps using `POST /photos` unchanged.
+
+    Opens its own session (`session_scope`), never `Depends(db)`, for the reason
+    `app.channels.api.timeline.ask_stream` gives: a `StreamingResponse` is handed back, and
+    so a `yield` dependency closed, well before Starlette drives the body."""
+
+    async def events() -> AsyncIterator[bytes]:
+        try:
+            async with session_scope(request) as session:
+                providers = providers_of(request)
+                artifact = await store_photo(
+                    session,
+                    context=context,
+                    store=providers.object_store,
+                    data=body.as_bytes(),
+                    content_type=body.content_type,
+                    captured_at=body.captured_at,
+                    source_channel=SourceChannel.APP,
+                )
+                lang = await capture_language(session, context)
+                reader = await reader_of(session, context, None)
+                card: ReviewCard | None = None
+                async for event in review_artifact_stream(
+                    session,
+                    context=context,
+                    artifact_id=artifact.id,
+                    store=providers.object_store,
+                    extractor=providers.extractor,
+                    language=await _language(session, context),
+                    asked_as=body.document_kind,
+                ):
+                    if isinstance(event, ImportStep):
+                        yield _step_event(reader, lang, event)
+                    else:
+                        card = event
+                assert card is not None
+                yield _sse({"type": "card", "card": (await _card_out(session, context, card)).model_dump(mode="json")})
+        except Refusal as refusal:
+            yield await _refusal_event(request, refusal)
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.post("/{profile_id}/imports/stream")
+async def import_pdf_stream(
+    body: ImportIn, request: Request, context: Context
+) -> StreamingResponse:
+    """`POST /{id}/imports`, streamed — the same trace `POST /{id}/photos/stream` gives, for
+    a PDF from a portal, an email or a share (E02-03)."""
+
+    async def events() -> AsyncIterator[bytes]:
+        try:
+            async with session_scope(request) as session:
+                providers = providers_of(request)
+                artifact = await store_pdf(
+                    session,
+                    context=context,
+                    store=providers.object_store,
+                    data=body.as_bytes(),
+                    content_type=body.content_type,
+                    captured_at=body.captured_at,
+                )
+                lang = await capture_language(session, context)
+                reader = await reader_of(session, context, None)
+                card: ReviewCard | None = None
+                async for event in review_artifact_stream(
+                    session,
+                    context=context,
+                    artifact_id=artifact.id,
+                    store=providers.object_store,
+                    extractor=providers.extractor,
+                    language=await _language(session, context),
+                    asked_as=body.document_kind,
+                    source=body.source,
+                ):
+                    if isinstance(event, ImportStep):
+                        yield _step_event(reader, lang, event)
+                    else:
+                        card = event
+                assert card is not None
+                yield _sse({"type": "card", "card": (await _card_out(session, context, card)).model_dump(mode="json")})
+        except Refusal as refusal:
+            yield await _refusal_event(request, refusal)
+
+    return StreamingResponse(events(), media_type="text/event-stream")
 
 
 @router.post("/{profile_id}/readings/photo", status_code=status.HTTP_201_CREATED)

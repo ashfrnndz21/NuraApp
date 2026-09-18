@@ -21,6 +21,7 @@ const saved: SettingsOut = {
   profile_id: "p1",
   language: "zh",
   conditions: ["high_blood_pressure"],
+  answers: {},
   density: "detailed",
   large_text: false,
   high_contrast: false,
