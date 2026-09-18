@@ -59,7 +59,7 @@ from app.channels.about_him import Reader, reader_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.compress import Searcher
 from app.delivery.feed.sources import usable_sources
-from app.delivery.timeline_strings import reroute_lines, verified
+from app.delivery.timeline_strings import honest_lines, reroute_lines, verified
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -212,14 +212,47 @@ class _ToolLine:
     cite: Cite
 
 
-def _register(lines: list[_ToolLine], kind: str, id_: uuid.UUID, text: str) -> str:
-    token = f"{kind}:{id_}"
+_TOKEN_PREFIXES: Final[dict[str, str]] = {
+    "medication_line": "m",
+    "fact": "f",
+    "appointment": "v",
+    "feeling_note": "g",
+    "web": "w",
+}
+"""One letter per kind, for `_TokenCounter` — never the uuid itself. A model given `m1` and
+`v2` to cite back can actually copy them; one given a raw uuid to retype byte for byte
+regularly could not, and its whole line was dropped for a cite that matched nothing."""
+
+
+class _TokenCounter:
+    """Short, stable ids for this ask alone: one running number per kind (`m1`, `m2`, `v1`,
+    ...), reset fresh for every `ask_stream` call. Never persisted, never shown to the reader —
+    only ever cited back by the model, and matched back to a `Cite` by `known`."""
+
+    def __init__(self) -> None:
+        self._seen: dict[str, int] = {}
+
+    def next(self, kind: str) -> str:
+        prefix = _TOKEN_PREFIXES.get(kind, (kind[:1] or "x"))
+        n = self._seen.get(prefix, 0) + 1
+        self._seen[prefix] = n
+        return f"{prefix}{n}"
+
+
+def _register(
+    lines: list[_ToolLine], counter: _TokenCounter, kind: str, id_: uuid.UUID, text: str
+) -> str:
+    token = counter.next(kind)
     lines.append(_ToolLine(token=token, text=f"{token}: {text}", cite=Cite(kind=kind, id=id_)))
     return token
 
 
 async def _read_medicines(
-    session: AsyncSession, context: KeyContext, registry: DrugRegistry | None, language: str
+    session: AsyncSession,
+    context: KeyContext,
+    registry: DrugRegistry | None,
+    language: str,
+    counter: _TokenCounter,
 ) -> tuple[list[_ToolLine], int]:
     found = await audited_read(
         session,
@@ -234,13 +267,13 @@ async def _read_medicines(
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
         started = line.started_at.date().isoformat()
         _register(
-            lines, "medication_line", line.id, f"{name}, {who}, started {started}"
+            lines, counter, "medication_line", line.id, f"{name}, {who}, started {started}"
         )
     return lines, len(found)
 
 
 async def _read_readings(
-    session: AsyncSession, context: KeyContext, language: str
+    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
     lines: list[_ToolLine] = []
@@ -251,12 +284,12 @@ async def _read_readings(
             text = f"blood pressure {value['systolic']}/{value['diastolic']} on {date}"
         else:
             text = f"{fact.subject} {fact.attribute} = {fact.value} on {date}"
-        _register(lines, "fact", fact.id, text)
+        _register(lines, counter, "fact", fact.id, text)
     return lines, len(facts)
 
 
 async def _read_visits(
-    session: AsyncSession, context: KeyContext
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
 ) -> tuple[list[_ToolLine], int, list[Appointment], dict[uuid.UUID, Provider]]:
     providers = {p.id: p for p in await audited_read(session, Provider, context, Scope.VISITS)}
     visits = await audited_read(session, Appointment, context, Scope.VISITS)
@@ -266,31 +299,47 @@ async def _read_visits(
         who = provider.name if provider is not None else "an unnamed provider"
         when = visit.scheduled_at.date().isoformat()
         text = f"with {who} on {when}, status {visit.status.value}"
-        _register(lines, "appointment", visit.id, text)
+        _register(lines, counter, "appointment", visit.id, text)
     return lines, len(visits), list(visits), providers
 
 
-async def _read_records(session: AsyncSession, context: KeyContext) -> tuple[list[_ToolLine], int]:
+async def _read_records(
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
     lines: list[_ToolLine] = []
     for fact in facts:
         date = fact.valid_from.date().isoformat()
-        _register(lines, "fact", fact.id, f"{fact.subject} {fact.attribute} = {fact.value} on {date}")
+        _register(
+            lines, counter, "fact", fact.id, f"{fact.subject} {fact.attribute} = {fact.value} on {date}"
+        )
     return lines, len(facts)
 
 
-async def _read_feelings(session: AsyncSession, context: KeyContext) -> tuple[list[_ToolLine], int]:
+async def _read_feelings(
+    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+) -> tuple[list[_ToolLine], int]:
     notes, _withheld = await recent_notes(session, context=context)
     lines: list[_ToolLine] = []
     for note in notes:
         date = note.created_at.date().isoformat()
         said = " ".join(note.lines) if note.lines else note.headline
-        _register(lines, "feeling_note", note.id, f"he said he felt {note.word.value} on {date}: {said}")
+        _register(
+            lines,
+            counter,
+            "feeling_note",
+            note.id,
+            f"he said he felt {note.word.value} on {date}: {said}",
+        )
     return lines, len(notes)
 
 
 async def _search_online(
-    session: AsyncSession, context: KeyContext, searcher: Searcher, query: str
+    session: AsyncSession,
+    context: KeyContext,
+    searcher: Searcher,
+    query: str,
+    counter: _TokenCounter,
 ) -> tuple[list[_ToolLine], int]:
     sources = await usable_sources(session, region=context.region)
     domains = [source.domain for source in sources]
@@ -301,8 +350,7 @@ async def _search_online(
     for result in found:
         synthetic = uuid.uuid5(uuid.NAMESPACE_URL, result.url)
         text = f"{result.title} — {result.url} ({result.domain})"
-        token = f"web:{synthetic}"
-        lines.append(_ToolLine(token=token, text=f"{token}: {text}", cite=Cite(kind="web", id=synthetic)))
+        _register(lines, counter, "web", synthetic, text)
     return lines, len(found)
 
 
@@ -418,6 +466,7 @@ class ClaudeAsker:
             tool_names = _tools_for(context)
             tool_defs = [_TOOL_DEFS[name] for name in tool_names]
             known: dict[str, _ToolLine] = {}
+            counter = _TokenCounter()
             visits_seen: list[Appointment] = []
             providers_seen: dict[uuid.UUID, Provider] = {}
 
@@ -493,6 +542,7 @@ class ClaudeAsker:
                             language=lang,
                             visits_seen=visits_seen,
                             providers_seen=providers_seen,
+                            counter=counter,
                         )
                         for line in step_lines:
                             known[line.token] = line
@@ -520,6 +570,26 @@ class ClaudeAsker:
 
             if answer is None or not answer.lines:
                 answer = await fallback()
+                if not answer.lines and not answer.honest:
+                    # Belt and braces (defect: "the agent's answer reached the phone empty"):
+                    # even the rule-based answer, which is supposed to always say something,
+                    # came back with nothing to say. Never let only the boundary reach him —
+                    # say the catalogue's own honest line ourselves.
+                    log.warning(
+                        "claude asker: the rule-based fallback also had nothing to say; "
+                        "sending the catalogue's honest line"
+                    )
+                    doctor = _doctor_name(visits_seen, providers_seen)
+                    answer = Answer(
+                        question_artifact_id=answer.question_artifact_id,
+                        mode=answer.mode,
+                        language=answer.language,
+                        lines=(),
+                        honest=tuple(honest_lines(lang, doctor)),
+                        boundary=answer.boundary,
+                        withheld=answer.withheld,
+                        dropped=answer.dropped,
+                    )
                 yield answer
                 return
 
@@ -594,24 +664,32 @@ class ClaudeAsker:
         language: str,
         visits_seen: list[Appointment],
         providers_seen: dict[uuid.UUID, Provider],
+        counter: _TokenCounter,
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
-            return await _read_medicines(session, context, registry, language)
+            return await _read_medicines(session, context, registry, language, counter)
         if name == "read_readings":
-            return await _read_readings(session, context, language)
+            return await _read_readings(session, context, language, counter)
         if name == "read_visits":
-            lines, count, visits, providers = await _read_visits(session, context)
+            lines, count, visits, providers = await _read_visits(session, context, counter)
             visits_seen.extend(visits)
             providers_seen.update(providers)
             return lines, count
         if name == "read_records":
-            return await _read_records(session, context)
+            return await _read_records(session, context, counter)
         if name == "read_feelings":
-            return await _read_feelings(session, context)
+            return await _read_feelings(session, context, counter)
         if name == "search_online":
             query = str(args.get("query") or "")
-            return await _search_online(session, context, self._searcher, query)
+            return await _search_online(session, context, self._searcher, query, counter)
         return [], 0
+
+
+def _drop(reason: str) -> None:
+    """One line logged, its reason class only — never its text, never a cite, never a value
+    off his record (defect: "the agent's answer reached the phone empty", fixed by knowing,
+    from the logs alone, which gate a line actually failed)."""
+    log.info("claude asker: dropped a line, reason=%s", reason)
 
 
 def _answer_from_payload(
@@ -623,31 +701,50 @@ def _answer_from_payload(
 ) -> Answer | None:
     raw_lines = payload.get("lines")
     if not isinstance(raw_lines, list):
+        log.info("claude asker: payload had no 'lines' list")
         return None
+    # Case-insensitive, so `M1` or `m1 ` matches the `m1` a tool result actually carried —
+    # the model is asked to copy a short id back, not retype a uuid, but it still may not get
+    # the case exactly right, and a line should not be thrown away over that alone.
+    known_ci = {token.strip().lower(): line for token, line in known.items()}
     lines: list[AnswerLine] = []
     for entry in raw_lines:
         if not isinstance(entry, Mapping):
+            _drop("malformed_entry")
             continue
         raw_text, raw_cites = entry.get("text"), entry.get("cites")
         if not isinstance(raw_text, str) or not isinstance(raw_cites, list):
+            _drop("malformed_text_or_cites")
             continue
         text = raw_text.strip()
-        if not text or not verified(text, language):
+        if not text:
+            _drop("empty_text")
+            continue
+        if not verified(text, language):
+            _drop("plain_words_failed")
             continue
         if _has_conclusion_language(text, language):
+            _drop("conclusion_language")
             continue
         heard = reader.says(text)
         if not reader.his and reader.speaks_to_him(heard):
+            _drop("caregiver_voice")
             continue
         cites = tuple(
             dict.fromkeys(
-                known[str(token)].cite for token in raw_cites if str(token) in known
+                known_ci[str(token).strip().lower()].cite
+                for token in raw_cites
+                if str(token).strip().lower() in known_ci
             )
         )
         if not cites:
+            _drop("no_cite_matched")
             continue
         lines.append(AnswerLine(text=heard, cites=cites))
     if not lines:
+        log.info(
+            "claude asker: no line survived out of %d the model offered", len(raw_lines)
+        )
         return None
     kept_lines = lines[:1] if mode is Mode.VOICE else lines[:TEXT_LINES]
     return Answer(

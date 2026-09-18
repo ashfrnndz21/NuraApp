@@ -8,6 +8,7 @@ or dev run — the same gate every other fixture provider is held to.
 from __future__ import annotations
 
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -17,9 +18,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import AuditEntry
 from app.channels.api import Providers
 from app.channels.whatsapp.provider import FixtureProvider
+from app.clock import now
+from app.db import as_utc
+from app.delivery.feed.compose import refresh
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
+from app.delivery.feed.models import CardType
+from app.delivery.feed.search import Engine
+from app.delivery.recommend.rules import NEW_MEDICINE_WINDOW, RULE_NEW_MEDICINE_EXPLAINER
 from app.demo_numbers import DEMO_NUMBERS, mei_number, pa_number
-from app.demo_seed import DemoSeedOutsideDevOrDemo, require_seedable, seed_demo
+from app.demo_seed import (
+    NEW_MEDICINE,
+    NEW_MEDICINE_AGO,
+    DemoSeedOutsideDevOrDemo,
+    require_seedable,
+    seed_demo,
+)
 from app.drugs.fixture import FixtureRegistry
 from app.identity.providers import LoggingCodeSender
 from app.identity.service import find_person_by_phone
@@ -146,3 +159,60 @@ async def test_meis_key_reads_what_her_scopes_allow(sg: AsyncSession) -> None:
     mei_lines = await active_lines(sg, context=mei_ctx, registry=REGISTRY)
     assert {view.line.id for view in mei_lines} == {view.line.id for view in owner_lines}
     assert len(mei_lines) == 4
+
+
+async def test_the_seeded_blood_pressure_tablet_is_started_this_week(sg: AsyncSession) -> None:
+    """Live-run defect: "no learning cards appear" — `new_medicine_explainer` only proposes a
+    READ/CLIP for a line started within `NEW_MEDICINE_WINDOW` (14 days). A medicine reconciled
+    at seed time is dated from that moment (`reconcile`), so this held on a freshly seeded
+    database — but the demo seeds Pa once, idempotently, and a dev run's own database is never
+    nightly-wiped, so on a laptop that has had Pa seeded for a while every medicine's own
+    `started_at` just kept receding into the past. `NEW_MEDICINE` (amlodipine, his blood
+    pressure tablet) is explicitly backdated by a fixed, small amount instead, so it stays
+    inside the window regardless of how long ago the row was actually written."""
+    await seed_demo(sg, _settings(dev_code_sender=True), _providers())
+    pa = await find_person_by_phone(sg, pa_number(Region.SG))
+    assert pa is not None
+    profile = await owned_profile(sg, region=Region.SG, owner_person_id=pa.id)
+    assert profile is not None
+    owner_ctx = await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=profile.id)
+    lines = await active_lines(sg, context=owner_ctx, registry=REGISTRY)
+    [tablet] = [view for view in lines if view.line.generic == NEW_MEDICINE]
+    age = now() - as_utc(tablet.line.started_at)
+    assert age < NEW_MEDICINE_WINDOW, "inside the explainer's own 14-day window"
+    assert age >= NEW_MEDICINE_AGO - timedelta(seconds=5), "backdated, not started at seed time"
+
+    others = [view for view in lines if view.line.generic != NEW_MEDICINE]
+    assert others, "the other medicines are seeded, unaffected by the one backdate"
+    for view in others:
+        assert now() - as_utc(view.line.started_at) < timedelta(minutes=1), "started at seed time, as before"
+
+
+async def test_a_freshly_seeded_profiles_first_feed_load_shows_a_learning_card(
+    sg: AsyncSession,
+) -> None:
+    """The acceptance this story is for: a seeded profile's first feed load (`refresh`, what
+    `GET /feed` calls on a first, cursor-less page) creates the day's search jobs and, with a
+    mocked searcher and compressor (`FixtureSearcher`/`FixtureCompressor`, never a live call),
+    yields a learning card that names its rule under `Why` — not just now/visit/reading/gate/
+    recap, the live run's own report of what was missing."""
+    providers = _providers()
+    await seed_demo(sg, _settings(dev_code_sender=True), providers)
+    pa = await find_person_by_phone(sg, pa_number(Region.SG))
+    assert pa is not None
+    profile = await owned_profile(sg, region=Region.SG, owner_person_id=pa.id)
+    assert profile is not None
+    owner_ctx = await resolve_key_context(sg, region=Region.SG, person_id=pa.id, profile_id=profile.id)
+    engine = Engine(
+        searcher=providers.searcher, compressor=providers.compressor, registry=REGISTRY
+    )
+
+    _, made = await refresh(sg, context=owner_ctx, engine=engine)
+
+    learning = [item for item in made if item.type in (CardType.LEARNING, CardType.CLIP)]
+    assert learning, "the first feed load made no READ or CLIP card at all"
+    assert any(item.why.get("rule") == RULE_NEW_MEDICINE_EXPLAINER for item in learning), (
+        "the backdated blood pressure tablet should have led the learning supply"
+    )
+    for item in learning:
+        assert item.why, "every learning card names why (Why sheet, RE-08)"

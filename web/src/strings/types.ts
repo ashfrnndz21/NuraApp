@@ -578,6 +578,8 @@ export interface Strings {
       fewer: string;
       done: string;
       term: string;
+      countNone: string;
+      count: string;
     };
     asks: { lead: string };
     readBack: {

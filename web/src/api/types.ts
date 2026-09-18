@@ -268,6 +268,18 @@ export interface AskStepEvent {
   name: string;
 }
 
+/** A step's label, rephrased by a Claude-backed narrator (`NURA_NARRATOR=claude`) some time
+ *  after its own `AskStepEvent` already went out with the catalogue's own label — the
+ *  narrator's own call runs in the background and never holds a step, a tool call or the
+ *  answer back for it (`app.search.narrate.narrate_step_label`). Replaces that step's label in
+ *  place; may arrive at any point, including after `AskAnswerEvent`. An older client that has
+ *  never seen this type simply ignores it. */
+export interface AskStepLabelEvent {
+  type: "step_label";
+  key: string;
+  label: string;
+}
+
 /** The stream's last event: the finished answer, exactly `POST /profiles/{id}/ask` returns. */
 export interface AskAnswerEvent {
   type: "answer";
@@ -292,7 +304,7 @@ export interface AskRefusalEvent {
   scope?: string;
 }
 
-export type AskStreamEvent = AskStepEvent | AskAnswerDeltaEvent | AskAnswerEvent | AskRefusalEvent;
+export type AskStreamEvent = AskStepEvent | AskStepLabelEvent | AskAnswerDeltaEvent | AskAnswerEvent | AskRefusalEvent;
 
 /** The feed's web/video search, streamed the same way (`POST /profiles/{id}/find/stream`):
  *  one step while the search runs, then the results `POST /profiles/{id}/find` would return. */
@@ -305,7 +317,13 @@ export interface FindResultsEvent {
   type: "results";
   results: FindResultOut[];
 }
-export type FindStreamEvent = FindStepEvent | FindResultsEvent | AskRefusalEvent;
+/** Find's own twin of `AskStepLabelEvent`, above. */
+export interface FindStepLabelEvent {
+  type: "step_label";
+  key: string;
+  label: string;
+}
+export type FindStreamEvent = FindStepEvent | FindStepLabelEvent | FindResultsEvent | AskRefusalEvent;
 
 /** What a person did with a card (`POST /profiles/{id}/feed/{item}/engagement`). "Not for
  *  me" is `dismissed`: for the owner it holds that kind of card back for the rest of his day. */

@@ -1271,6 +1271,10 @@ export const en = {
       done: "That is everything",
       // @patient
       term: "Doctors call it {term}.",
+      // @patient
+      countNone: "Nura has not written anything down yet.",
+      // @patient
+      count: "Nura has written {n} things down.",
     },
     asks: {
       // @patient
