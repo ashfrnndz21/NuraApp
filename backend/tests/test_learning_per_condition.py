@@ -13,21 +13,79 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.access import audited_read
 from app.db import utcnow
-from app.delivery.feed.compose import refresh
+from app.delivery.feed.compose import (
+    Day,
+    household,
+    plan_learning_jobs,
+    refresh,
+    say_ahead,
+    today_for,
+)
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher
 from app.delivery.feed.models import CardType, FeedItem, Source
 from app.delivery.feed.rank import item_json
 from app.delivery.feed.search import Engine, list_jobs
+from app.delivery.feed.search import run_job as search_run_job
 from app.delivery.recommend.rules import RULE_DID_YOU_KNOW
 from app.keys.context import KeyContext
+from app.keys.scopes import Scope
+from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event
 from app.memory.models import EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.safety.boundary import Surface, boundary_line
+from app.state.service import current_state
 from tests.conftest import FEED
 from tests.medicines_support import REGISTRY
 from tests.visits import pa
+
+
+async def _run_learning(
+    session: AsyncSession, *, context: KeyContext, engine: Engine, day: Day
+) -> list[FeedItem]:
+    """Today's self-searches, run synchronously on this same session — what
+    `app.delivery.feed.background._run` does on its own session, off the request entirely, for
+    tests that check which cards a job makes, not the background module's own scheduling
+    (`tests/test_feed_background.py` covers that)."""
+    house = await household(session, context=context)
+    state = await current_state(session, context=context)
+    medicines: list[LineView] = (
+        await active_lines(session, context=context, registry=engine.registry, language=house.language)
+        if context.allows(Scope.MEDICINES)
+        else []
+    )
+    every = await audited_read(session, FeedItem, context, Scope.PROFILE)
+    keys = {item.dedupe_key for item in every}
+    plan = await plan_learning_jobs(
+        session,
+        context=context,
+        engine=engine,
+        state=state,
+        day=day,
+        house=house,
+        keys=keys,
+        medicines=medicines,
+    )
+    made: list[FeedItem] = []
+    for job in plan.jobs:
+        items = await search_run_job(
+            session,
+            context=context,
+            job=job,
+            engine=engine,
+            state=await current_state(session, context=context),
+            language=house.language,
+            around=plan.around,
+            doctor=house.doctor,
+            existing=set(keys),
+        )
+        if items:
+            await say_ahead(session, engine, context, items)
+            made.extend(items)
+            keys.update(item.dedupe_key for item in items)
+    return made
 
 ENGINE = Engine(
     searcher=FixtureSearcher(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY
@@ -71,6 +129,7 @@ async def test_a_condition_he_told_starts_a_search_and_its_card_cites_its_page(
     context = await pa(sg, language="en")
     await _told(sg, context, "diabetes", holds=True)
     await refresh(sg, context=context, engine=ENGINE)
+    await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
 
     jobs = await list_jobs(sg, context=context)
     # The explainer (a condition also starts his weekly food watch: test_feed_formats).
@@ -118,6 +177,7 @@ async def test_high_blood_pressure_is_the_blood_pressure_search_not_a_second_one
     context = await pa(sg, language="en")
     await _told(sg, context, "high_blood_pressure", holds=True)
     await refresh(sg, context=context, engine=ENGINE)
+    await _run_learning(sg, context=context, engine=ENGINE, day=today_for(context))
     terms = [
         list(j.terms) for j in await list_jobs(sg, context=context) if j.kind.value == "explainer"
     ]
@@ -148,13 +208,9 @@ async def test_a_page_the_searcher_says_is_allowlisted_but_links_elsewhere_makes
 
     context = await pa(sg, language="en")
     await _told(sg, context, "diabetes", holds=True)
-    await refresh(
-        sg,
-        context=context,
-        engine=Engine(
-            searcher=Elsewhere(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY
-        ),
-    )
+    engine = Engine(searcher=Elsewhere(FEED), compressor=FixtureCompressor(FEED), registry=REGISTRY)
+    await refresh(sg, context=context, engine=engine)
+    await _run_learning(sg, context=context, engine=engine, day=today_for(context))
     assert not [c for c in await _learning(sg, context) if c.why.get("gap") == "diabetes"]
     [job] = [
         j

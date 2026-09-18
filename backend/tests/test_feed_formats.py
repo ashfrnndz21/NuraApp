@@ -21,11 +21,14 @@ from typing import Any
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.audit.access import audited_read
 from app.audit.models import Outcome
 from app.audit.trail import read_audit
 from app.clock import FrozenClock
 from app.db import utcnow
+from app.delivery.feed import background as feed_background
 from app.delivery.feed import clips as clip_module
 from app.delivery.feed.clips import (
     ClipAsk,
@@ -35,7 +38,14 @@ from app.delivery.feed.clips import (
     clip_video,
     may_excerpt,
 )
-from app.delivery.feed.compose import refresh
+from app.delivery.feed.compose import (
+    Day,
+    household,
+    plan_learning_jobs,
+    refresh,
+    say_ahead,
+    today_for,
+)
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher, Found
 from app.delivery.feed.find import find
 from app.delivery.feed.local import check_area, relevant_to
@@ -50,13 +60,17 @@ from app.delivery.feed.models import (
     SearchJob,
 )
 from app.delivery.feed.search import Engine
+from app.delivery.feed.search import run_job as search_run_job
 from app.drugs.fixture import FixtureRegistry
 from app.keys.context import KeyContext, resolve_key_context
+from app.keys.scopes import Scope
+from app.medicines.service import LineView, active_lines
 from app.memory.episodic import record_event, store_artifact
 from app.memory.models import ArtifactKind, EventKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import Region
 from app.safety.plain_words import verify
+from app.state.service import current_state
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import FEED, Deployment, _serve
 
@@ -203,10 +217,67 @@ async def _set_area(
     )
 
 
+async def _run_learning(
+    session: AsyncSession, *, context: KeyContext, engine: Engine, day: Day
+) -> list[FeedItem]:
+    """Today's self-searches, run synchronously on this same session — what
+    `app.delivery.feed.background._run` does on its own, off the request entirely, for the one
+    test here (`test_where_the_licence_allows_it_the_server_keeps_and_serves_the_excerpt`) that
+    means to check what a custom `Engine` makes, not the background module's own scheduling."""
+    house = await household(session, context=context)
+    state = await current_state(session, context=context)
+    medicines: list[LineView] = (
+        await active_lines(session, context=context, registry=engine.registry, language=house.language)
+        if context.allows(Scope.MEDICINES)
+        else []
+    )
+    every = await audited_read(session, FeedItem, context, Scope.PROFILE)
+    keys = {item.dedupe_key for item in every}
+    plan = await plan_learning_jobs(
+        session,
+        context=context,
+        engine=engine,
+        state=state,
+        day=day,
+        house=house,
+        keys=keys,
+        medicines=medicines,
+    )
+    made: list[FeedItem] = []
+    for job in plan.jobs:
+        items = await search_run_job(
+            session,
+            context=context,
+            job=job,
+            engine=engine,
+            state=await current_state(session, context=context),
+            language=house.language,
+            around=plan.around,
+            doctor=house.doctor,
+            existing=set(keys),
+        )
+        if items:
+            await say_ahead(session, engine, context, items)
+            made.extend(items)
+            keys.update(item.dedupe_key for item in items)
+    return made
+
+
 async def _feed(deployment: Deployment, profile_id: str, token: str) -> dict[str, Any]:
+    """The settled first page: `GET /feed` starts today's self-searches in the background and
+    returns at once (#269/#276, #280, `app.delivery.feed.background`) — a card one makes is
+    not on the page that started it. Every test in this file that reads `page["items"]` wants
+    what the day actually made, so this waits for the run it started (or found already
+    running) to finish, then asks again, rather than making every call site do that itself."""
     answer = await deployment.client.get(f"/profiles/{profile_id}/feed", headers=bearer(token))
     assert answer.status_code == 200, answer.text
     page: dict[str, Any] = answer.json()
+    await feed_background.drain()
+    if page["jobs"]["state"] == "none":
+        return page
+    answer = await deployment.client.get(f"/profiles/{profile_id}/feed", headers=bearer(token))
+    assert answer.status_code == 200, answer.text
+    page = answer.json()
     return page
 
 
@@ -454,6 +525,7 @@ async def test_where_the_licence_allows_it_the_server_keeps_and_serves_the_excer
     context = await _context(deployment, pa["person_id"], profile_id)
     async with deployment.sessions() as session:
         await refresh(session, context=context, engine=engine)
+        await _run_learning(session, context=context, engine=engine, day=today_for(context))
         await session.commit()
     [clip] = await _made(deployment, profile_id, CardType.CLIP)
     assert clip.cite is not None and clip.cite["excerpt"] is True

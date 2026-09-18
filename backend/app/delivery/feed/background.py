@@ -96,6 +96,13 @@ _runs: dict[tuple[uuid.UUID, str], RunRecord] = {}
 """This process's memory of today's run, per profile. Never persisted; see the module
 docstring on what that trades away."""
 
+_tasks: set[asyncio.Task[None]] = set()
+"""Every run this module has started that may still be in flight — tests only. Nothing in
+the running app reads this: a request never waits on the task it starts (that is the whole
+point of `ensure_learning_scheduled`), so there is no caller in production that would ever
+need to. A test that calls `GET /feed` twice and expects the second call to see the first
+run's cards needs the run to have actually finished first; `drain` is that wait."""
+
 
 def run_state(profile_id: uuid.UUID, day_key: str) -> RunRecord | None:
     """A read only: never starts anything, never blocks. `None` means no run has ever been
@@ -119,8 +126,19 @@ def ensure_learning_scheduled(
         return _runs[key]
     _runs[key] = RunRecord(state="looking", started_at=utcnow())
     task = asyncio.create_task(_run(key, context=context, engine=engine, day=day, sessions=sessions))
+    _tasks.add(task)
     task.add_done_callback(_log_if_failed)
+    task.add_done_callback(_tasks.discard)
     return _runs[key]
+
+
+async def drain() -> None:
+    """Wait for every run this module has started that has not finished yet. Tests only: a
+    real caller never awaits the task `ensure_learning_scheduled` starts. Safe to call with
+    nothing in flight (returns at once) and safe to call again after a run it waited on
+    starts another (loops until the set is actually empty)."""
+    while _tasks:
+        await asyncio.gather(*list(_tasks), return_exceptions=True)
 
 
 def _log_if_failed(task: asyncio.Task[None]) -> None:
@@ -201,6 +219,13 @@ async def _run_one(
     async with semaphore:
         try:
             async with _own_session(sessions) as session:
+                # `job` was loaded (or just created) on `_plan`'s own session, already closed
+                # by the time this one opens — detached, so a plain attribute write on it
+                # (`run_job` sets `status`, `last_run_at`, `results`) is never part of this
+                # session's unit of work and is silently lost at commit, however cleanly the
+                # job itself ran: `session.merge` first, so every write `run_job` makes lands
+                # on an instance this session actually tracks.
+                job = await session.merge(job)
                 items = await asyncio.wait_for(
                     run_job(
                         session,
@@ -274,4 +299,4 @@ async def _run(
         raise
 
 
-__all__ = ["RunRecord", "ensure_learning_scheduled", "run_state"]
+__all__ = ["RunRecord", "drain", "ensure_learning_scheduled", "run_state"]

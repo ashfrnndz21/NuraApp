@@ -868,6 +868,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/deliveries"),
     Walk("GET", f"{P}/ladders"),
     Walk("GET", f"{P}/reach"),
+    Walk("GET", f"{P}/visits/proposed"),
     Walk("GET", f"{P}/sources"),
     Walk("GET", f"{P}/search-jobs"),
     Walk("GET", f"{P}/search-jobs/{{job_id}}"),
@@ -992,6 +993,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ): "writes what the card says; returns what it wrote",
     ("POST", f"{P}/events/{{event_id}}/notes"): "writes a note on an event; returns it",
     ("POST", f"{P}/feed/{{item_id}}/engagement"): "writes what he did with a card",
+    (
+        "POST",
+        f"{P}/visits/proposed/{{proposal_id}}/decline",
+    ): "hides a proposed visit for 90 days; returns no rows",
     ("POST", f"{P}/search-jobs"): "starts a search; returns the job",
     ("PATCH", f"{P}/search-jobs/{{job_id}}"): "pauses or resumes a search; returns the job",
     ("POST", f"{P}/feed/events"): "writes the phone's queue of what he did; returns their ids",
