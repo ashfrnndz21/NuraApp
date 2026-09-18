@@ -1168,6 +1168,16 @@ export const ms = {
     // @patient headline
     questionsTitle: "Soalan untuk lawatan anda",
     // @patient phrase
+    costOpen: "Anggaran kosnya",
+    // @patient phrase
+    costOpenOther: "Anggaran kos lawatan {patient}",
+    // @patient headline
+    costTitle: "Anggaran kosnya",
+    // @patient phrase
+    costCoveredLabel: "Perlindungan insurans anda mungkin membayar",
+    // @patient phrase
+    costCoveredLabelOther: "Perlindungan insurans {patient} mungkin membayar",
+    // @patient phrase
     questionLabel: "Soalan anda",
     // @patient phrase
     questionAdd: "Simpan soalan ini",

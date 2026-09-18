@@ -18,6 +18,7 @@ import type {
   ConfirmationOut,
   ConsentOut,
   ConsultOut,
+  CostExpectationOut,
   DayNudgesOut,
   DecisionIn,
   DeploymentOut,
@@ -434,6 +435,12 @@ export const appointments = (token: string, profileId: string) =>
 /** The logistics card: when, where, the chief's note, who drives him, what to bring. */
 export const logistics = (token: string, profileId: string, appointmentId: string) =>
   api<LogisticsOut>(`/profiles/${profileId}/appointments/${appointmentId}/logistics`, { token });
+
+/** The cost expectation (T3): a typical fee range for this visit, cited, and what his cover
+ *  on file would likely pay for a key that holds `Scope.MONEY` (`app.insurance.
+ *  cost_expectation`). Never a quote. */
+export const costExpectation = (token: string, profileId: string, appointmentId: string) =>
+  api<CostExpectationOut>(`/profiles/${profileId}/visits/${appointmentId}/cost`, { token });
 
 /** The chief's yes to one person driving him to one visit (subject `drive`). */
 export const mintDrive = (token: string, profileId: string, appointmentId: string, personId: string) =>

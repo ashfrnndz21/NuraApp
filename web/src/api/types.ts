@@ -533,6 +533,38 @@ export interface PolicyOut {
   set_at: string;
 }
 
+/** A typical fee range's own source (T3): who published it, the page, and the day it was
+ *  read — always shown beside the range, never a bare number. */
+export interface CostSourceOut {
+  publisher: string;
+  url: string;
+  fetched_at: string;
+}
+
+/** The cost expectation (T3, `GET /profiles/{id}/visits/{appointmentId}/cost`,
+ *  `app.insurance.cost_expectation`): a typical fee range from a public fee benchmark, cited
+ *  and dated, never a quote. `found=false` means no benchmark matched — `low_cents`,
+ *  `high_cents` and `source` are all null, said plainly in `note`, never guessed at.
+ *  `covered_shown=false` means the caller does not hold `Scope.MONEY` — `covered_low_cents`
+ *  and `covered_high_cents` are null, and `note` names who to ask instead. `*_said` are the
+ *  backend's own rendered amounts, in his region's currency — never formatted here. */
+export interface CostExpectationOut {
+  appointment_id: string;
+  found: boolean;
+  low_cents: number | null;
+  high_cents: number | null;
+  low_said: string | null;
+  high_said: string | null;
+  currency: string;
+  source: CostSourceOut | null;
+  covered_shown: boolean;
+  covered_low_cents: number | null;
+  covered_high_cents: number | null;
+  covered_low_said: string | null;
+  covered_high_said: string | null;
+  note: string[];
+}
+
 /** The emergency card (E13-01, `GET /profiles/{id}/emergency-card`): the data a stranger needs
  *  and the backend's verified lines that say it in his language. The phone keeps it (E00-08). */
 export interface EmergencyCardOut {

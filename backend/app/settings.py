@@ -106,6 +106,13 @@ class Settings:
     """NURA_DRUG_REGISTRY: which licensed drug registry the deployment runs on
     (`app.drugs.client`). Only the fixture is built; a name this build does not have refuses
     to start."""
+    estimator: str = "rule"
+    """NURA_ESTIMATOR: which adapter answers the cost-expectation estimator (T3,
+    `app.insurance.cost_expectation`). `rule` (the default) reads the small cached fee-
+    benchmark table (`app.insurance.benchmarks`); `claude` refines that same table's own
+    published page with one live fetch through Claude's `web_fetch` tool, gated the same way
+    as `NURA_SEARCHER=claude` — a declared demo or a declared dev run, and
+    `ANTHROPIC_API_KEY`. Any other name refuses to start."""
     web_dist: str | None = None
     """NURA_WEB_DIST: the built web client (`web/dist`, from `make build-web`). When the
     directory exists the API serves it at `/app`, so one origin serves the app and its API;
@@ -317,6 +324,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         compressor=source.get("NURA_COMPRESSOR", "fixture"),
         speaker_fixtures=source.get("NURA_SPEAKER_FIXTURES") or None,
         drug_registry=source.get("NURA_DRUG_REGISTRY", "fixture"),
+        estimator=source.get("NURA_ESTIMATOR", "rule"),
         web_dist=source.get("NURA_WEB_DIST") or None,
         whatsapp_provider=source.get("NURA_WHATSAPP_PROVIDER", "fixture"),
         whatsapp_number=source.get("NURA_WHATSAPP_NUMBER") or None,
