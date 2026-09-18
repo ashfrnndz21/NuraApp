@@ -385,7 +385,12 @@ async def _seed_explainer_clip(
         why_topic=story.name,
         headline=story.name[:1].upper() + story.name[1:] + ", explained",
         evidence=f"a new medicine: {line.generic} {line.strength}",
-        catalogue_lines=tuple(story.purpose),
+        # `story.purpose` alone (2 lines for amlodipine) makes a script under 20s: too short
+        # to be the clip the card claims to be (`clipmaker.clip_length_ok`). `how_to_take`
+        # says the one more thing that is genuinely his to hear before the boundary — what
+        # to do with the tablet, not only what it is for — and together they land in the
+        # 20-30s window (`MIN_LINES`/`MAX_LINES`, `clipmaker.py`'s own module doc).
+        catalogue_lines=tuple(story.purpose) + tuple(story.how_to_take),
         doctor=DOCTOR,
     )
     script = RuleClipMaker().make(topic, "en")

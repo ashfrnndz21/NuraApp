@@ -161,8 +161,11 @@ def _script(
     (`app.delivery.timeline_strings.verified`, run again per line above) never disagrees with
     what this function already checked. `None` when nothing safe is left to say."""
     kept = _script_lines(lines, language)[:MAX_LINES]
-    if not kept:
-        # Not "pad with filler": a script that has too little safe to say is not a clip.
+    if len(kept) < MIN_LINES:
+        # Not "pad with filler": a script left with fewer than MIN_LINES safe lines is not a
+        # 20-30s clip, whatever gated it down (too little material, or lines the safety
+        # checks above dropped) — it is not made at all, the same clean "nothing for him"
+        # every port in this package already answers failure with.
         return None
     told = learning_lines(
         language,
