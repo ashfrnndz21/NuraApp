@@ -335,7 +335,7 @@ an apostrophe, a hyphen. Nothing else — a digit, a bracket, a newline made to 
 second line, is never part of anyone's name."""
 
 
-def _safe_prescriber(raw: str | None) -> str | None:
+def safe_prescriber(raw: str | None) -> str | None:
     """A doctor's name is the one extractor-written field stored raw and interpolated
     straight into Nura's own sentences (`app.medicines.strings.say_doctor`, the interaction
     and doctor-question lines a person reads and hears as Nura's own words) — never sanitised
@@ -376,11 +376,11 @@ async def plan(
     will bind to.
 
     The prescriber's name is sanitised here, once, before anything downstream ever reads it
-    (`_safe_prescriber`) — the draft this returns, the fact it is minted from, and the line
+    (`safe_prescriber`) — the draft this returns, the fact it is minted from, and the line
     `reconcile` eventually writes all read the same, already-clean `label`.
     """
     may_change_medicines(context)
-    label = replace(label, prescriber=_safe_prescriber(label.prescriber))
+    label = replace(label, prescriber=safe_prescriber(label.prescriber))
     match = _one_product(registry.identify(label.fields()))
     artifact = await require_artifact(session, context=context, artifact_id=source_artifact_id)
     pill = await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
@@ -639,7 +639,7 @@ async def reconcile(
     # `test_an_accepted_label_with_hostile_prescriber_and_dose_text_stores_none_of_it`
     # (independent safety review #8) is what caught it. Both callers must sanitise the same
     # way, since neither trusts the other to have done it.
-    label = replace(label, prescriber=_safe_prescriber(label.prescriber))
+    label = replace(label, prescriber=safe_prescriber(label.prescriber))
     pill = await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
     if pill and label.confidence > PILL_MAX_CONFIDENCE:
         label = replace(label, confidence=PILL_MAX_CONFIDENCE)

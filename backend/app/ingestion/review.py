@@ -992,6 +992,9 @@ async def close_card_for_artifact(
     screen behind it) kept asking him to check something he had already said yes to
     (review defect #9).
 
+    Only a card whose every field is the medicine's own: a paper that says anything else (a
+    pharmacy's name, a receipt's priced lines) stays open, so nothing on it is lost.
+
     A no-op when the artefact never had a card at all (a typed entry keeps its own artefact
     but is never read by an extractor, so `card_from` was never called for it) or its card is
     already closed. Silent, not a refusal, when this key lacks `Scope.RECORDS` to see cards —
@@ -1010,6 +1013,16 @@ async def close_card_for_artifact(
         return
     for card in found:
         if card.confirmed_at is not None:
+            continue
+        # Only a card this add accounted for in full. A closed card leaves the papers screen
+        # for good and none of its other fields is ever written: a pharmacy's name and phone
+        # on a label, every priced line of a receipt whose file he chose on the add screen
+        # (independent review, round 2, blocker 2). Such a card stays open — he is asked to
+        # check that paper the ordinary way, and nothing on it is lost.
+        fields = await audited_read(
+            session, ReviewField, context, Scope.RECORDS, where=(ReviewField.card_id == card.id,)
+        )
+        if any(field.subject != MEDICINE_NAME[0] for field in fields):
             continue
         # `ReviewCard` is a frozen row outside its own service (`app.ingestion.models.frozen`,
         # `_review_is_in_progress`): the same marker `confirm_review_card` sets before it

@@ -75,6 +75,7 @@ from app.medicines.service import (
     proud_days,
     reconcile,
     record_dose_taken,
+    safe_prescriber,
     story,
     today,
 )
@@ -148,7 +149,10 @@ async def draft(
     }
     questions = [
         interaction_question(
-            each.interaction, names=names, prescriber=body.label.prescriber, language=lang
+            each.interaction,
+            names=names,
+            prescriber=safe_prescriber(body.label.prescriber),
+            language=lang,
         )
         for each in what.flagged
     ]
@@ -157,7 +161,10 @@ async def draft(
 
 @router.get("/{profile_id}/medicines/classify")
 async def classify_name(
-    request: Request, context: Context, session: Db, name: str = Query(..., min_length=1, max_length=64)
+    request: Request,
+    context: Context,
+    session: Db,
+    name: str = Query(..., min_length=1, max_length=64),
 ) -> ClassifyOut:
     """What the register makes of a name alone, before a label's `generic` is trusted to
     identify a product (#302): `medicine` when the register can identify it by generic or
@@ -447,7 +454,7 @@ async def more_at_home(
     session: Db,
     language: str | None = Language,
 ) -> MoreOut:
-    """"I have more at home.": the tablets found, added to the count on the person's yes for
+    """ "I have more at home.": the tablets found, added to the count on the person's yes for
     exactly this line, number and photo (subject `count_correction`). A helper's key is
     refused (`NotTheirsToChange`, 403); a yes for another number is `NotWhatWasConfirmed`
     (400); a high-risk medicine's count with no photo of the box or the label is
