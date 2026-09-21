@@ -5,7 +5,15 @@ import { InsightsCard } from "../../src/screens/Health";
 import { InsightRow, ReportBody, SectionCard } from "../../src/screens/Insights";
 import { stringsFor } from "../../src/strings";
 import { StepTrace } from "../../src/ui/kit";
-import { all, byTestId, render, text } from "./ui/render";
+import { all, byTestId, hasClass, render, text } from "./ui/render";
+
+/** The plain reading of a `SoftText` line: its own `.sr-only` span, never the word-by-word
+ *  spans beside it — reading the whole subtree would double the text (each word appears once
+ *  in the screen-reader span and again, unspaced, in its own animated span). The same rule the
+ *  e2e specs keep with Playwright's `.locator(".sr-only")` (package 10). */
+function softText(nodes: ReturnType<typeof all>): string {
+  return text(all(nodes, hasClass("sr-only")));
+}
 
 const en = stringsFor("en");
 
@@ -116,7 +124,7 @@ describe("the weekly report screen, drawn from the backend's own words", () => {
     const onGenerate = vi.fn();
     const written = report([{ key: "what_changed", title: "What changed", insights: [insight({ text: "Headline line." })] }]);
     const tree = render(<InsightsCard s={en} owner name="" report={written} checked locale="en-SG" onOpen={onOpen} onGenerate={onGenerate} />);
-    expect(text(all(tree, byTestId("insights-headline")))).toBe("Headline line.");
+    expect(softText(all(tree, byTestId("insights-headline")))).toBe("Headline line.");
     (all(tree, byTestId("insights-open"))[0]!.props.onClick as () => void)();
     expect(onOpen).toHaveBeenCalled();
     (all(tree, byTestId("insights-generate"))[0]!.props.onClick as () => void)();

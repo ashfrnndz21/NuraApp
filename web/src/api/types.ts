@@ -448,6 +448,15 @@ export interface InsightsReportEvent {
 
 export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
 
+/** One past report in "Health Analyst"'s own quiet list (`GET /profiles/{id}/insights/list`,
+ *  package 10): a date to open, never the sections themselves — those stay behind `GET
+ *  /profiles/{id}/insights/{report_id}`. */
+export interface InsightsReportSummaryOut {
+  report_id: string;
+  generated_at: string;
+  week_of: string;
+}
+
 /** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step
  *  the instant each real stage of turning a stored photo or PDF into a review card finishes
  *  — stored, reading, what it found, the red-flag check where one runs, a real link to a

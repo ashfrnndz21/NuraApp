@@ -451,6 +451,11 @@ export const ms = {
     papersTitle: "Surat anda",
     // @patient
     papersWithheld: "Kunci ini tidak meliputi surat {name}.",
+    // --- package 10: the week ring's calm empty state ---
+    // @patient
+    ringEmpty: "Belum ada ubat untuk dikira minggu ini.",
+    // @patient
+    ringEmptyOther: "Belum ada ubat untuk dikira bagi {name} minggu ini.",
   },
   insights: {
     // @patient headline
@@ -505,6 +510,13 @@ export const ms = {
     asked: "Nura menyimpan soalan ini untuk lawatan anda.",
     // @patient
     noVisit: "Belum ada lawatan ditempah untuk bawa soalan ini.",
+    // --- package 10: the Health Analyst screen ---
+    // @patient phrase
+    lookAgain: "Lihat semula",
+    // @patient headline
+    pastTitle: "Laporan lepas",
+    // @patient phrase
+    retryAfterError: "Cuba lagi",
   },
   signIn: {
     // @patient headline

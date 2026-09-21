@@ -451,6 +451,11 @@ export const en = {
     papersTitle: "Your papers",
     // @patient
     papersWithheld: "This key does not cover {name}'s papers.",
+    // --- package 10: the week ring's calm empty state ---
+    // @patient
+    ringEmpty: "No tablets to count yet this week.",
+    // @patient
+    ringEmptyOther: "No tablets to count yet for {name} this week.",
   },
   insights: {
     // @patient headline
@@ -505,6 +510,13 @@ export const en = {
     asked: "Nura kept this question for your visit.",
     // @patient
     noVisit: "There is no visit booked yet to take this to.",
+    // --- package 10: the Health Analyst screen ---
+    // @patient phrase
+    lookAgain: "Look again",
+    // @patient headline
+    pastTitle: "Earlier reports",
+    // @patient phrase
+    retryAfterError: "Try again",
   },
   signIn: {
     // @patient headline

@@ -1,4 +1,4 @@
-import type { FactOut, FoodCatalogItemOut, FoodEntryOut, Meal } from "../api/types";
+import type { FactOut, FoodCatalogItemOut, FoodEntryOut, Meal, RingOut } from "../api/types";
 import { fill, type Strings } from "../strings";
 import { dayKey } from "../today/model";
 
@@ -18,6 +18,17 @@ export function healthTitle(owner: boolean, name: string, s: Strings): string {
  *  shown withheld, named, never left off the screen in silence. */
 export function readingsWithheld(scopes: readonly string[]): boolean {
   return !scopes.includes("readings");
+}
+
+/** The week ring (`ThisWeek`, package 10): a fresh profile with no active medicines has
+ *  nothing for "doses taken this week" to count — `total` is `0` — and the backend's own words
+ *  for that count are literally "0 of 0" (`ring_words`, `app.channels.health_strings`), which
+ *  read as a broken score, not a calm nothing-yet. `total` of `null` (`check_ins`, a ring kind
+ *  this screen does not use today) counts as nothing to show either, the same caution
+ *  `ProgressRing`'s own "required, never optional" `source` rule already keeps. Pure so the
+ *  ring's empty-state branch is a unit, not only ever seen through a rendered screen. */
+export function ringHasNothingToCount(ring: Pick<RingOut, "total">): boolean {
+  return !ring.total || ring.total <= 0;
 }
 
 /** His medicines today: shown to him always, and to a key whose scope opens his medicines. */

@@ -1,7 +1,8 @@
 """The Health Analyst over HTTP.
 
     POST /profiles/{id}/insights/stream   a step per real read, then the finished report — saved
-    GET  /profiles/{id}/insights          the latest saved report, or 404 `NoReportYet`
+    GET  /profiles/{id}/insights          the latest saved report, or `null` when none exists yet
+    GET  /profiles/{id}/insights/list     every past report, newest first, summaries only
     GET  /profiles/{id}/insights/{report_id}   one saved report by id
     POST /profiles/{id}/papers/{artifact_id}/insight/stream   checkpoint 3: one confirmed
         paper, beside the record — a step per real read, then the finished insight — saved
@@ -20,6 +21,16 @@ commits before a model call is ever made, and — only if the deployment runs
 the model has already answered. No database transaction is open while that call is in flight
 (`app.reasoning.analyst.paper`'s own module doc; the defect this avoids is `app.delivery.feed.
 background`'s own docstring).
+
+`GET …/insights` used to answer 404 (`NoReportYet`) for a profile with nothing generated yet —
+correct as a refusal, but read on every single Health screen load, including a brand-new
+profile's very first one, where "nothing generated yet" is the ordinary case. A browser logs
+every failed fetch to its own console regardless of how the caller handles the rejection, so
+that ordinary case printed a console error on every fresh Health load (package 10's #2 defect,
+`web/src/screens/Health.tsx`). The route now answers `200` with a `null` body in that case —
+`latest_report_or_none` — a normal, empty result; `GET …/insights/{report_id}` keeps its 404
+for an id that genuinely does not exist, and `latest_report` (raise-and-all) is kept for the
+callers that only ever call it once a report is already known to exist.
 """
 
 from __future__ import annotations
@@ -49,7 +60,12 @@ from app.keys.scopes import Scope
 from app.memory.spine import upcoming_appointments
 from app.memory.timeline import language_for
 from app.reasoning.analyst.port import Insight, Report, Section, Step
-from app.reasoning.analyst.service import latest_report, report_by_id, save_report
+from app.reasoning.analyst.service import (
+    latest_report_or_none,
+    list_reports,
+    report_by_id,
+    save_report,
+)
 from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import current_memos, write_memo
 from app.reasoning.visits.models import MemoKind, MemoSource
@@ -209,11 +225,37 @@ async def insights_stream(request: Request, context: Context) -> StreamingRespon
 
 
 @router.get("/{profile_id}/insights")
-async def insights_latest(context: Context, session: Db) -> InsightReportOut:
-    """The newest saved report, or `NoReportYet` (404)."""
-    row = await latest_report(session, context=context)
+async def insights_latest(context: Context, session: Db) -> InsightReportOut | None:
+    """The newest saved report, or `null` when nothing has been generated for this profile
+    yet — a normal, empty result, not a refusal (see the module doc)."""
+    row = await latest_report_or_none(session, context=context)
+    if row is None:
+        return None
     reader = await reader_of(session, context, cast("str | None", row.get("language")))
     return reader.model(InsightReportOut.of_row(row))
+
+
+class InsightReportSummaryOut(BaseModel):
+    report_id: str
+    generated_at: datetime
+    week_of: date
+
+
+@router.get("/{profile_id}/insights/list")
+async def insights_list(context: Context, session: Db) -> list[InsightReportSummaryOut]:
+    """Every past Health Analyst report for this profile, newest first — summaries only, no
+    sections (`GET …/insights/{report_id}` reads one back in full). Registered ahead of
+    `GET …/insights/{report_id}` below so the literal path `list` is never parsed as a
+    `report_id`."""
+    rows = await list_reports(session, context=context)
+    return [
+        InsightReportSummaryOut(
+            report_id=cast(str, row["report_id"]),
+            generated_at=cast(datetime, row["generated_at"]),
+            week_of=cast(date, row["week_of"]),
+        )
+        for row in rows
+    ]
 
 
 @router.get("/{profile_id}/insights/{report_id}")

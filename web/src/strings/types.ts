@@ -225,6 +225,9 @@ export interface Strings {
      *  line for a key without the records scope — named, never left off the screen blank. */
     papersTitle: string;
     papersWithheld: string;
+    // --- package 10: the week ring's calm empty state (a fresh profile, no medicines yet) ---
+    ringEmpty: string;
+    ringEmptyOther: string;
   };
   /** The weekly report (W1, docs/design/nura-concept-board.html): the Health card, the live
    *  trace while it builds, the report itself, and the bell's row that opens it. */
@@ -249,6 +252,16 @@ export interface Strings {
     askThis: string;
     asked: string;
     noVisit: string;
+    // --- package 10: the Health Analyst screen, in the blueprint's language --------------
+    /** "Look again": the same `generate()` call as `generate` ("Generate now"), offered once
+     *  a report is already on screen rather than before the first one ever exists. */
+    lookAgain: string;
+    /** The quiet list of every earlier report, opened one at a time. */
+    pastTitle: string;
+    /** A connection that dropped mid-stream, or the stream's own refusal: what already
+     *  arrived stays on screen (`Notice` already says the refusal's own sentence); this is
+     *  the way to try again. */
+    retryAfterError: string;
   };
   signIn: {
     title: string;

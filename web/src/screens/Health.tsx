@@ -4,18 +4,19 @@ import * as nura from "../api/nura";
 import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, InsightsReportOut, MetricKind, ReviewCardOut } from "../api/types";
 import { useToday } from "../today/useToday";
 import { DoseSection, NextVisitTile } from "./Today";
-import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, papersWithheld, readingsWithheld } from "../health/model";
+import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, papersWithheld, readingsWithheld, ringHasNothingToCount } from "../health/model";
 import { headlineInsight } from "../health/insights";
 import { dateLine } from "../today/model";
 import { profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
-import { Icon, IconBadge, MetricRow, PaperTile, PillButton, ProgressRing, SectionHeader, type Tint, TintCard } from "../ui/kit";
+import { Icon, IconBadge, MetricRow, PaperTile, PillButton, ProgressRing, RevealGroup, SectionHeader, SoftText, type Tint, TintCard } from "../ui/kit";
 import { Notice } from "../ui/components";
 import { go } from "../flow";
 import { PaperRow } from "./record/Papers";
 import { session, toRecord, useDateOf, useRead } from "./record/parts";
 import { Shell } from "./Shell";
 import { VisitSuggestions } from "./VisitSuggest";
+import "../ui/health.css";
 
 /** The Health tab (docs/design/nura-concept-board.html, "3 · Health"): "This week"'s ring and
  *  his four everyday metrics, his readings, his day, his medicines and what is coming up. Every
@@ -61,7 +62,17 @@ function ThisWeek({ overview, locale, owner, name }: { overview: HealthOverviewO
   const s = t();
   return (
     <TintCard tint="peach" testId="health-week">
-      {overview && (
+      {overview && ringHasNothingToCount(overview.ring) && (
+        // A fresh profile with no active medicines has nothing for "doses taken this week" to
+        // count — the backend's own words for that count read "0 of 0", which is a broken
+        // score, not a calm nothing-yet (package 10 §1). The ring itself only ever draws a
+        // real figure someone can check against what they did; when there is none, this calm
+        // line stands in its place instead, never the ring with a zero in it.
+        <p class="ring-empty" data-testid="health-ring-empty">
+          {owner ? s.health.ringEmpty : fill(s.health.ringEmptyOther, { name })}
+        </p>
+      )}
+      {overview && !ringHasNothingToCount(overview.ring) && (
         <ProgressRing
           done={overview.ring.value}
           of={overview.ring.total ?? 0}
@@ -261,11 +272,7 @@ export function InsightsCard({
               {owner ? s.insights.cardNone : fill(s.insights.cardNoneOther, { name })}
             </span>
           )}
-          {headline && (
-            <span class="insights-card-headline" data-testid="insights-headline">
-              {headline.text}
-            </span>
-          )}
+          {headline && <SoftText text={headline.text} as="span" pace="body" className="insights-card-headline" testId="insights-headline" />}
         </span>
       </button>
       <PillButton variant="primary" onClick={onGenerate} testId="insights-generate">
@@ -289,37 +296,40 @@ export function HealthScreen(): JSX.Element {
   }, [language.value]);
   const { report: latestInsights, checked: insightsChecked } = useLatestInsights();
 
-  return (
-    <Shell
-      tab="health"
-      testId="health-screen"
-      topBar={{ variant: "board", title: healthTitle(owner, name, s), back: true, action: { icon: "calendar", label: s.health.addReading, onClick: () => go({ name: "reading" }) } }}
-    >
-      <InsightsCard
-        s={s}
-        owner={owner}
-        name={name}
-        report={latestInsights}
-        checked={insightsChecked}
-        locale={locale}
-        onOpen={() => go({ name: "insights" })}
-        onGenerate={() => go({ name: "insights", start: true })}
-      />
-
+  // Sections assemble in with `RevealGroup` once, on first mount, staggered the way the
+  // blueprint's own `reveal()` draws a screen's structure in — headline card, then the rest,
+  // one block after another. `RevealGroup`'s own entrance is CSS `@starting-style`, played only
+  // the instant each block is first inserted into the DOM (`Reveal.tsx`): a later data refresh
+  // (a language switch, a background refetch) updates the same mounted nodes in place and never
+  // remounts them, so the sections never re-animate on refresh, only on the screen's own
+  // arrival (package 10 §1).
+  const sections = [
+    <InsightsCard
+      s={s}
+      owner={owner}
+      name={name}
+      report={latestInsights}
+      checked={insightsChecked}
+      locale={locale}
+      onOpen={() => go({ name: "insights" })}
+      onGenerate={() => go({ name: "insights", start: true })}
+    />,
+    <>
       <SectionHeader title={s.health.thisWeek} />
       <Notice error={error} />
       <ThisWeek overview={overview} locale={locale} owner={owner} name={name} />
-
+    </>,
+    <>
       <SectionHeader title={s.health.readingsTitle} />
       <Readings scopes={scopes} owner={owner} name={name} />
-
+    </>,
+    <>
       <SectionHeader title={owner ? s.health.papersTitle : fill(s.record.titleOther, { name })} />
       <PapersSection scopes={scopes} owner={owner} name={name} />
-
-      <DayLogs owner={owner} name={name} />
-
-      {medicinesShown(owner, scopes) && <DoseSection v={v} />}
-
+    </>,
+    <DayLogs owner={owner} name={name} />,
+    medicinesShown(owner, scopes) && <DoseSection v={v} />,
+    <>
       <SectionHeader title={s.health.comingUpTitle} />
       {v.nextVisit ? <NextVisitTile visit={v.nextVisit} /> : (
         <TintCard tint="paper" testId="coming-up-none">
@@ -327,6 +337,16 @@ export function HealthScreen(): JSX.Element {
         </TintCard>
       )}
       <VisitSuggestions owner={owner} name={name} />
+    </>,
+  ].filter((section) => section !== false && section !== null);
+
+  return (
+    <Shell
+      tab="health"
+      testId="health-screen"
+      topBar={{ variant: "board", title: healthTitle(owner, name, s), back: true, action: { icon: "calendar", label: s.health.addReading, onClick: () => go({ name: "reading" }) } }}
+    >
+      <RevealGroup>{sections}</RevealGroup>
 
       <PaperTile testId="health-more">
         <nav class="place-rows" aria-label={owner ? s.record.title : fill(s.record.titleOther, { name })}>

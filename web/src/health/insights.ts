@@ -1,4 +1,4 @@
-import type { InsightConfidence, InsightOut, InsightsReportOut, InsightSectionKey } from "../api/types";
+import type { InsightConfidence, InsightOut, InsightsReportOut, InsightsReportSummaryOut, InsightSectionKey } from "../api/types";
 import type { TraceStep } from "../ui/kit";
 
 /** The weekly report (W1, docs/design/nura-concept-board.html): the six sections, always in
@@ -57,4 +57,60 @@ export function insightsTraceSteps(steps: readonly { key: string; label: string 
  *  catalogue's `worthALook`, the only one whose spelling does not match its own key. */
 export function confidenceWordKey(confidence: InsightConfidence): "sure" | "likely" | "worthALook" {
   return confidence === "worth_a_look" ? "worthALook" : confidence;
+}
+
+// --- the Health Analyst screen's own live stream (package 10) --------------------------------
+
+/** The screen while `POST …/insights/stream` is in flight, then settled — one state, never
+ *  two truths at once (a report and a working line both on screen, or a report and an error
+ *  both on screen). Pure and hookless, like every other view-logic function in this file, so
+ *  it is a unit on its own, not only ever seen through a rendered screen (`insights.test.ts`).
+ *
+ *  `working`'s `statusText` is ONE line, replaced in place as each real `step` event arrives —
+ *  never an accumulating list (`docs/design/README.md` rule 2). It starts empty (before the
+ *  connection has answered with anything at all) and is never cleared once set: a network
+ *  failure mid-stream keeps whatever the last real stage said, so the person can see how far
+ *  Nura got rather than losing that the moment the connection drops (package 10 §4, "what
+ *  arrived stays"). */
+export type AnalystStreamState =
+  | { phase: "idle" }
+  | { phase: "working"; statusText: string }
+  | { phase: "done"; report: InsightsReportOut; statusText: string }
+  | { phase: "error"; statusText: string; message: string };
+
+export type AnalystStreamAction =
+  | { type: "start" }
+  | { type: "step"; label: string }
+  | { type: "report"; report: InsightsReportOut }
+  | { type: "error"; message: string }
+  | { type: "reset" };
+
+export const ANALYST_STREAM_IDLE: AnalystStreamState = { phase: "idle" };
+
+export function analystStreamReducer(state: AnalystStreamState, action: AnalystStreamAction): AnalystStreamState {
+  switch (action.type) {
+    case "start":
+      return { phase: "working", statusText: "" };
+    case "step":
+      // A step arriving after the stream has already settled (a stray, late event) never
+      // reopens a finished or failed screen — the same "settle once" rule `insightsStream`
+      // itself keeps for its own promise.
+      return state.phase === "working" ? { phase: "working", statusText: action.label } : state;
+    case "report":
+      return { phase: "done", report: action.report, statusText: state.phase === "working" ? state.statusText : "" };
+    case "error": {
+      const statusText = state.phase === "working" || state.phase === "error" ? state.statusText : "";
+      return { phase: "error", statusText, message: action.message };
+    }
+    case "reset":
+      return ANALYST_STREAM_IDLE;
+  }
+}
+
+/** Every past report, newest first — the ordering "Health Analyst"'s own quiet list draws in
+ *  (`GET /profiles/{id}/insights/list` already answers newest first; this is the client's own
+ *  guarantee of it, not a trust in the wire order, and the tie-breaker a frozen clock in a test
+ *  or a checkpoint needs). */
+export function pastReportsNewestFirst(reports: readonly InsightsReportSummaryOut[]): InsightsReportSummaryOut[] {
+  return [...reports].sort((a, b) => Date.parse(b.generated_at) - Date.parse(a.generated_at) || b.report_id.localeCompare(a.report_id));
 }

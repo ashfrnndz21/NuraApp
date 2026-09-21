@@ -973,6 +973,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     # READINGS, RECORDS and MONEY, saved the moment the stream finishes.
     Walk("POST", f"{P}/insights/stream", json={}, stream=True),
     Walk("GET", f"{P}/insights"),
+    Walk("GET", f"{P}/insights/list"),
     Walk("GET", f"{P}/insights/{{report_id}}"),
     # Checkpoint 3's paper-scoped insight (`app.reasoning.analyst.paper`): the same mix of
     # scopes as the weekly report above, over one paper instead of the whole week. The one

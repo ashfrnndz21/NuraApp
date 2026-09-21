@@ -451,6 +451,11 @@ export const zh = {
     papersTitle: "您的文件",
     // @patient
     papersWithheld: "这把钥匙不包括{name}的文件。",
+    // --- package 10: the week ring's calm empty state ---
+    // @patient
+    ringEmpty: "这一周还没有药可以算。",
+    // @patient
+    ringEmptyOther: "这一周还没有{name}的药可以算。",
   },
   insights: {
     // @patient headline
@@ -505,6 +510,13 @@ export const zh = {
     asked: "Nura把这个问题留给您的就诊。",
     // @patient
     noVisit: "还没有预约的看诊可以带上这个问题。",
+    // --- package 10: the Health Analyst screen ---
+    // @patient phrase
+    lookAgain: "再看一次",
+    // @patient headline
+    pastTitle: "之前的报告",
+    // @patient phrase
+    retryAfterError: "再试一次",
   },
   signIn: {
     // @patient headline

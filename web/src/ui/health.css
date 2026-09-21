@@ -1,0 +1,37 @@
+/* Health and the Health Analyst (package 10), in the blueprint's own language
+   (docs/design/experience-blueprint.html scenes `health`/`analyst`) — the few rules the shared
+   kit (`web/src/ui/kit/kit.css`) and the warm system (`web/src/ui/warm.css`) do not already
+   carry. Everything else on these two screens is the existing shared kit, unchanged. */
+
+/* The week ring's calm empty state (Health, `ThisWeek`): a fresh profile with no active
+   medicines has nothing for the ring to count, so this plain line stands in its place instead
+   of a ring reading "0 of 0" — same card, same rhythm as every other grounded line on the
+   screen, never a ring geometry with nothing real inside it. */
+.ring-empty {
+  margin: 0;
+  padding: var(--space-2) 0;
+  color: var(--ink-quiet);
+  text-align: center;
+}
+
+/* The Health Analyst screen while a report streams in (`insights-thinking`): the orb beside
+   ONE status line, replaced in place as each real stage lands — never a growing list beside
+   it (docs/design/README.md rule 2). Frozen (orb not turning) once a stream has stopped on an
+   error: the same row, holding what it last really said. */
+.analyst-working {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+}
+
+/* The report's own headline (`insights-headline`, the blueprint's "Two things changed this
+   week."): the same weight and colour the Health card's own headline already carries
+   (`.insights-card-headline`), set as its own heading here since the report screen is the
+   headline's full page, not a card leading to it. */
+.analyst-headline {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: var(--text-lead, 1.05rem);
+}
