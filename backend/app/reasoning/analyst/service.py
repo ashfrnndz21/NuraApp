@@ -165,6 +165,51 @@ async def latest_report(session: AsyncSession, *, context: KeyContext) -> dict[s
     return _row_to_dict(found[0], context=context)
 
 
+async def latest_report_or_none(
+    session: AsyncSession, *, context: KeyContext
+) -> dict[str, object] | None:
+    """The same read as `latest_report`, but `None` rather than `NoReportYet` when nothing
+    has been saved yet — `GET /profiles/{id}/insights` is read on every Health screen load,
+    including a brand-new profile's very first one, where "nothing generated yet" is the
+    ordinary case, not a refusal: a 404 there made the browser log a failed request on every
+    such load (package 10's #2 defect). `latest_report` itself is kept, raise-and-all, for the
+    callers that only ever call it once a report is known to exist."""
+    found = await audited_read(
+        session,
+        InsightReport,
+        context,
+        Scope.PROFILE,
+        order_by=(desc(InsightReport.seq),),
+        limit=1,
+    )
+    if not found:
+        return None
+    return _row_to_dict(found[0], context=context)
+
+
+async def list_reports(
+    session: AsyncSession, *, context: KeyContext
+) -> list[dict[str, object]]:
+    """Every weekly/on-demand Health Analyst report saved for this profile, newest first — the
+    quiet list "Health Analyst" opens under its current report. Never a paper-scoped insight
+    (`artifact_id is not None`, checkpoint 3's own, separate feature, `app.reasoning.analyst.
+    paper`): those are read back by `GET …/papers/{artifact_id}/insight`, not here. Summaries
+    only — `report_id`, `generated_at`, `week_of` — never the sections themselves, which stay
+    behind `GET …/insights/{report_id}` and its own narrowing."""
+    found = await audited_read(
+        session,
+        InsightReport,
+        context,
+        Scope.PROFILE,
+        where=(InsightReport.artifact_id.is_(None),),
+        order_by=(desc(InsightReport.seq),),
+    )
+    return [
+        {"report_id": str(row.id), "generated_at": row.generated_at, "week_of": row.week_of}
+        for row in found
+    ]
+
+
 async def report_by_id(
     session: AsyncSession, *, context: KeyContext, report_id: uuid.UUID
 ) -> dict[str, object]:
@@ -180,4 +225,11 @@ async def report_by_id(
     return _row_to_dict(found[0], context=context)
 
 
-__all__ = ["NoReportYet", "latest_report", "report_by_id", "save_report"]
+__all__ = [
+    "NoReportYet",
+    "latest_report",
+    "latest_report_or_none",
+    "list_reports",
+    "report_by_id",
+    "save_report",
+]

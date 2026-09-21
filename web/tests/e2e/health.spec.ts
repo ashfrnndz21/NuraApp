@@ -136,10 +136,13 @@ function assertRingHolds(g: { circle: Box; number: Box; label: Box; source: Box 
   expect(boxesIntersect(g.circle, g.source), `${where}: the source line crosses the ring's stroke`).toBe(false);
 }
 
+// "0 of 0" itself is no longer a figure the ring ever draws (package 10): a total of zero
+// means there is nothing for the ring to count, so `ThisWeek` shows the calm empty state
+// (`health-ring-empty`) in its place instead — see the dedicated test below. The geometry
+// check here stays for every total the ring still draws a real figure for.
 const FIGURES: { words: string; value: number; total: number }[] = [
   { words: "5 of 5", value: 5, total: 5 },
   { words: "12 of 14", value: 12, total: 14 },
-  { words: "0 of 0", value: 0, total: 0 },
 ];
 
 for (const { words, value, total } of FIGURES) {
@@ -192,5 +195,34 @@ for (const { words, value, total } of FIGURES) {
     await page.getByTestId("tab-health").click();
     await expect(page.getByTestId("health-ring-figure")).toHaveText(words);
     assertRingHolds(await ringGeometry(page), `"${words}" large-text`);
+  });
+}
+
+// --- The ring's calm empty state (package 10): a fresh profile with no active medicines has
+// nothing for "doses taken this week" to count. The backend's own words for that count are
+// "0 of 0" (`ring_words`), which reads as a broken score, not a calm nothing-yet, so the ring
+// itself is never drawn with a zero in it — `ThisWeek` shows this line in its place, at every
+// breakpoint the ring's own geometry tests already cover above.
+
+for (const [label, size] of [
+  ["framed at 1280x800", { width: 1280, height: 800 }],
+  ["full-bleed at 390x844", { width: 390, height: 844 }],
+] as const) {
+  test(`the week ring shows a calm empty state, never "0 of 0" — ${label}`, async ({ page, request }) => {
+    await page.setViewportSize(size);
+    const pa = await seedHome(request);
+    await mockRing(page, "0 of 0", 0, 0);
+    await signInAs(page, pa, "Pa");
+    await page.getByTestId("tab-health").click();
+    await expect(page.getByTestId("health-ring")).toHaveCount(0);
+    const empty = page.getByTestId("health-ring-empty");
+    await expect(empty).toBeVisible();
+    await expect(empty).not.toHaveText("0 of 0");
+    // Still grounded in the same card, never floating loose or crossing another line.
+    const card = page.getByTestId("health-week");
+    const cardBox = await card.boundingBox();
+    const emptyBox = await empty.boundingBox();
+    if (!cardBox || !emptyBox) throw new Error("the empty ring state did not lay out");
+    expect(boxContains(cardBox, emptyBox)).toBe(true);
   });
 }

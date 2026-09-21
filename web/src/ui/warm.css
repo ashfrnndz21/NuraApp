@@ -397,7 +397,7 @@ button.list-row {
    set apart from the caption lines around it in the card's own ink, not the quiet one. */
 .insights-card-headline {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 400;
 }
 
 /* --- The weekly report: one line per insight, its "Why" opening to its evidence ------------- */

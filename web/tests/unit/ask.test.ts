@@ -28,6 +28,28 @@ describe("ask", () => {
     expect(sourceOf([])).toBeNull();
   });
 
+  it("a line about a paper still waiting for his own yes is its own source, never 'your papers'", () => {
+    // Review defect #11: a `review_card` cite fell through to `sourcePapers`, which wrongly
+    // reads as though the paper were already confirmed — a card still waiting gets its own
+    // caption instead.
+    expect(sourceOf([{ kind: "review_card", id: "r1" }])).toBe("sourceReviewCard");
+    const view = answerView(
+      answer({
+        lines: [
+          {
+            text: "A blood test dated Thursday 10 September is waiting for you to check.",
+            cites: [{ kind: "review_card", id: "r1" }],
+          },
+        ],
+      }),
+    );
+    expect(view.lines[0]).toEqual({
+      text: "A blood test dated Thursday 10 September is waiting for you to check.",
+      source: "sourceReviewCard",
+      clip: null,
+    });
+  });
+
   it("shows the backend's words only, in its order: cited lines, the honest lines, the boundary last", () => {
     const view = answerView(answer({ honest: ["Nura does not have that written down."] }));
     expect(view.lines).toEqual([{ text: "Your blood pressure on Monday 14 September was 138 over 84.", source: "sourcePapers", clip: null }]);

@@ -4,18 +4,19 @@ import * as nura from "../api/nura";
 import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, InsightsReportOut, MetricKind, ReviewCardOut } from "../api/types";
 import { useToday } from "../today/useToday";
 import { DoseSection, NextVisitTile } from "./Today";
-import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, papersWithheld, readingsWithheld } from "../health/model";
+import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, metricRowsView, papersWithheld, readingsWithheld, ringHasNothingToCount } from "../health/model";
 import { headlineInsight } from "../health/insights";
 import { dateLine } from "../today/model";
 import { profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
-import { Icon, IconBadge, MetricRow, PaperTile, PillButton, ProgressRing, SectionHeader, type Tint, TintCard } from "../ui/kit";
+import { Icon, IconBadge, MetricRow, PaperTile, PillButton, ProgressRing, RevealGroup, SectionHeader, SoftText, type Tint, TintCard } from "../ui/kit";
 import { Notice } from "../ui/components";
 import { go } from "../flow";
 import { PaperRow } from "./record/Papers";
 import { session, toRecord, useDateOf, useRead } from "./record/parts";
 import { Shell } from "./Shell";
 import { VisitSuggestions } from "./VisitSuggest";
+import "../ui/health.css";
 
 /** The Health tab (docs/design/nura-concept-board.html, "3 · Health"): "This week"'s ring and
  *  his four everyday metrics, his readings, his day, his medicines and what is coming up. Every
@@ -61,7 +62,17 @@ function ThisWeek({ overview, locale, owner, name }: { overview: HealthOverviewO
   const s = t();
   return (
     <TintCard tint="peach" testId="health-week">
-      {overview && (
+      {overview && ringHasNothingToCount(overview.ring) && (
+        // A fresh profile with no active medicines has nothing for "doses taken this week" to
+        // count — the backend's own words for that count read "0 of 0", which is a broken
+        // score, not a calm nothing-yet (package 10 §1). The ring itself only ever draws a
+        // real figure someone can check against what they did; when there is none, this calm
+        // line stands in its place instead, never the ring with a zero in it.
+        <p class="ring-empty" data-testid="health-ring-empty">
+          {owner ? s.health.ringEmpty : fill(s.health.ringEmptyOther, { name })}
+        </p>
+      )}
+      {overview && !ringHasNothingToCount(overview.ring) && (
         <ProgressRing
           done={overview.ring.value}
           of={overview.ring.total ?? 0}
@@ -71,21 +82,34 @@ function ThisWeek({ overview, locale, owner, name }: { overview: HealthOverviewO
           testId="health-ring"
         />
       )}
-      {overview?.metrics.map((row) => (
-        <MetricRow
-          key={row.kind}
-          icon={row.kind}
-          tint={METRIC_TINT[row.kind]}
-          label={row.label}
-          value={row.status === "logged" ? (row.value_words ?? "") : ""}
-          source={
-            row.status === "logged" && row.last_logged_at
-              ? fill(owner ? s.health.metricSource : s.health.metricSourceOther, { date: dateLine(new Date(row.last_logged_at), locale), name })
-              : row.status_words
-          }
-          testId={`metric-${row.kind}`}
-        />
-      ))}
+      {overview &&
+        (() => {
+          // A row with no value is not its own line — four "Not written down yet" rows in a
+          // column read as a wall of nothing (package 10 review). Only a metric that actually
+          // has a value gets its own grounded row; every metric with none is named, once, in
+          // a single quiet line underneath (`metricRowsView`).
+          const { logged, unloggedLabels } = metricRowsView(overview.metrics);
+          return (
+            <>
+              {logged.map((row) => (
+                <MetricRow
+                  key={row.kind}
+                  icon={row.kind}
+                  tint={METRIC_TINT[row.kind]}
+                  label={row.label}
+                  value={row.value_words ?? ""}
+                  source={fill(owner ? s.health.metricSource : s.health.metricSourceOther, { date: dateLine(new Date(row.last_logged_at ?? overview.ring.as_of), locale), name })}
+                  testId={`metric-${row.kind}`}
+                />
+              ))}
+              {unloggedLabels.length > 0 && (
+                <p class="caption" data-testid="metrics-not-logged">
+                  {fill(owner ? s.health.metricsNotLogged : s.health.metricsNotLoggedOther, { list: unloggedLabels.map(inSentence).join(", "), name })}
+                </p>
+              )}
+            </>
+          );
+        })()}
     </TintCard>
   );
 }
@@ -136,6 +160,10 @@ function useRecentPapers(scopes: readonly string[]): ReviewCardOut[] {
   }, [bearer, papers?.profile_id, scopes.join(",")]);
   return cards;
 }
+
+/** A label said inside a sentence, not at its start: "steps, heart rate", never "Steps, Heart
+ *  rate". Chinese has no case, so it is left as it is. */
+const inSentence = (label: string): string => label.charAt(0).toLowerCase() + label.slice(1);
 
 /** "Your papers" (E02-07 library part B #2): the newest few, the same row the full list
  *  under the Record uses — or, for a key whose scope does not cover them, the block named
@@ -261,15 +289,11 @@ export function InsightsCard({
               {owner ? s.insights.cardNone : fill(s.insights.cardNoneOther, { name })}
             </span>
           )}
-          {headline && (
-            <span class="insights-card-headline" data-testid="insights-headline">
-              {headline.text}
-            </span>
-          )}
+          {headline && <SoftText text={headline.text} as="span" pace="body" className="insights-card-headline" testId="insights-headline" />}
         </span>
       </button>
       <PillButton variant="primary" onClick={onGenerate} testId="insights-generate">
-        {s.insights.generate}
+        {report ? s.insights.lookAgain : s.insights.generate}
       </PillButton>
     </TintCard>
   );
@@ -289,37 +313,40 @@ export function HealthScreen(): JSX.Element {
   }, [language.value]);
   const { report: latestInsights, checked: insightsChecked } = useLatestInsights();
 
-  return (
-    <Shell
-      tab="health"
-      testId="health-screen"
-      topBar={{ variant: "board", title: healthTitle(owner, name, s), back: true, action: { icon: "calendar", label: s.health.addReading, onClick: () => go({ name: "reading" }) } }}
-    >
-      <InsightsCard
-        s={s}
-        owner={owner}
-        name={name}
-        report={latestInsights}
-        checked={insightsChecked}
-        locale={locale}
-        onOpen={() => go({ name: "insights" })}
-        onGenerate={() => go({ name: "insights", start: true })}
-      />
-
+  // Sections assemble in with `RevealGroup` once, on first mount, staggered the way the
+  // blueprint's own `reveal()` draws a screen's structure in — headline card, then the rest,
+  // one block after another. `RevealGroup`'s own entrance is CSS `@starting-style`, played only
+  // the instant each block is first inserted into the DOM (`Reveal.tsx`): a later data refresh
+  // (a language switch, a background refetch) updates the same mounted nodes in place and never
+  // remounts them, so the sections never re-animate on refresh, only on the screen's own
+  // arrival (package 10 §1).
+  const sections = [
+    <InsightsCard
+      s={s}
+      owner={owner}
+      name={name}
+      report={latestInsights}
+      checked={insightsChecked}
+      locale={locale}
+      onOpen={() => go({ name: "insights" })}
+      onGenerate={() => go({ name: "insights", start: true })}
+    />,
+    <>
       <SectionHeader title={s.health.thisWeek} />
       <Notice error={error} />
       <ThisWeek overview={overview} locale={locale} owner={owner} name={name} />
-
+    </>,
+    <>
       <SectionHeader title={s.health.readingsTitle} />
       <Readings scopes={scopes} owner={owner} name={name} />
-
+    </>,
+    <>
       <SectionHeader title={owner ? s.health.papersTitle : fill(s.record.titleOther, { name })} />
       <PapersSection scopes={scopes} owner={owner} name={name} />
-
-      <DayLogs owner={owner} name={name} />
-
-      {medicinesShown(owner, scopes) && <DoseSection v={v} />}
-
+    </>,
+    <DayLogs owner={owner} name={name} />,
+    medicinesShown(owner, scopes) && <DoseSection v={v} />,
+    <>
       <SectionHeader title={s.health.comingUpTitle} />
       {v.nextVisit ? <NextVisitTile visit={v.nextVisit} /> : (
         <TintCard tint="paper" testId="coming-up-none">
@@ -327,6 +354,16 @@ export function HealthScreen(): JSX.Element {
         </TintCard>
       )}
       <VisitSuggestions owner={owner} name={name} />
+    </>,
+  ].filter((section) => section !== false && section !== null);
+
+  return (
+    <Shell
+      tab="health"
+      testId="health-screen"
+      topBar={{ variant: "board", title: healthTitle(owner, name, s), back: true, action: { icon: "calendar", label: s.health.addReading, onClick: () => go({ name: "reading" }) } }}
+    >
+      <RevealGroup>{sections}</RevealGroup>
 
       <PaperTile testId="health-more">
         <nav class="place-rows" aria-label={owner ? s.record.title : fill(s.record.titleOther, { name })}>
