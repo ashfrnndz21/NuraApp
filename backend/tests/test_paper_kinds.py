@@ -36,6 +36,7 @@ from app.ingestion.review import PILL_MAX_CONFIDENCE, card_fields, confirm_revie
 from app.insurance.ledger import medicine_monthly_costs
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
+from app.medicines.service import active_lines
 from app.memory.models import ConfidenceState
 from app.memory.semantic import current_facts
 from app.regions import Region
@@ -411,6 +412,41 @@ async def test_a_pill_photos_review_card_never_grounds_a_high_risk_label_confirm
     assert label_card.document_kind is DocumentKind.MEDICINE_LABEL
     done = await add(sg, owner, label("warfarin", "3 mg", "1 tab ON"), label_photo)
     assert done.line.generic == "warfarin"
+
+
+async def test_a_pill_photos_own_source_line_never_says_the_label_he_kept(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """#2c, independent safety review: a loose tablet's own photo is not a label he kept —
+    `app.medicines.service.source_line` must say so, in the medicines list he actually reads
+    (`active_lines`), not only in the internal `is_pill_photo` check that already guards the
+    write. Paracetamol (not one of the five high-risk classes) writes cleanly from the pill
+    photo, so the list this produces is read back and its `source` line checked word for
+    word — never "the label you kept", always "a photo of a tablet"."""
+    owner = await _pa(sg)
+    pill_photo = await _photo(sg, owner, store, PILL_PHOTO)
+    pill_card = await review_photo(
+        sg, context=owner, artifact_id=pill_photo.id, store=store, extractor=extractor, language="en"
+    )
+    assert pill_card.document_kind is DocumentKind.PILL_PHOTO
+    done = await add(sg, owner, label("paracetamol", "500 mg", "1 tab prn"), pill_photo)
+    assert done.line.generic == "paracetamol"
+
+    views = await active_lines(sg, context=owner, registry=REGISTRY, language="en")
+    mine = next(v for v in views if v.line.id == done.line.id)
+    assert mine.source.startswith("This comes from a photo of a tablet")
+    assert "the label you kept" not in mine.source
+
+    # A real label photo, for comparison: still "the label you kept", never "a photo of a
+    # tablet" — `is_pill_photo` tells the two apart by the card, not by storage kind alone.
+    label_photo = await _photo(sg, owner, store, WARFARIN_LABEL)
+    await review_photo(
+        sg, context=owner, artifact_id=label_photo.id, store=store, extractor=extractor, language="en"
+    )
+    labelled = await add(sg, owner, label("warfarin", "3 mg", "1 tab ON"), label_photo)
+    labelled_views = await active_lines(sg, context=owner, registry=REGISTRY, language="en")
+    its_line = next(v for v in labelled_views if v.line.id == labelled.line.id)
+    assert its_line.source.startswith("This comes from the label you kept")
 
 
 async def test_the_before_fact_write_hook_itself_tells_a_pill_photo_from_a_label(

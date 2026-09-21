@@ -1986,6 +1986,8 @@ export const zh = {
     aboutIt: "关于这个药",
     // @patient phrase
     add: "加一个药",
+    // @patient phrase
+    addOther: "为{patient}加一个药",
     // @patient headline
     storyPurpose: "这个药是做什么的",
     // @patient headline
@@ -2052,6 +2054,8 @@ export const zh = {
     addedConnectionOther: "已加入{patient}的清单。",
     // @patient phrase
     seeInRegistry: "在您的清单里看看",
+    // @patient phrase
+    seeInRegistryOther: "在{patient}的清单里看看",
     // @patient
     addDuplicateQuestion: ["您已经有这个药了。", "这是同一种药的新盒子吗？"],
     // @patient
@@ -2060,8 +2064,40 @@ export const zh = {
     addDuplicateYes: "是的，我说说有多少",
     // @patient phrase
     addDuplicateNo: "不是，只是看看",
+    // @patient
+    addAlreadySaved: ["这已经在您的清单里了。", "没有新的东西可以添加。"],
+    // @patient
+    addAlreadySavedOther: ["这已经在{patient}的清单里了。", "没有新的东西可以添加。"],
     // @patient phrase
     todayKick: "今天",
+    // @patient phrase
+    leftChip: "还剩{n}",
+    // @patient phrase
+    backToMedicines: "回到您的清单",
+    // @patient phrase
+    backToMedicinesOther: "回到{patient}的清单",
+    // @patient
+    addEntryTurn: "拍一张标签的照片，或者自己输入。",
+    // @patient
+    addConfirmTurn: "这是 Nura 从*标签*上读到的。",
+    // @patient
+    addConfirmHint: "保存之前先看看对不对。",
+    // @patient
+    addPillConfirmTurn: "这是 Nura 从照片*猜*的。",
+    // @patient
+    addPillCaution: ["这可能是{name}。", "Nura 无法从一张药片的照片确定。", "请查看药盒，或问问药剂师。"],
+    // @patient phrase
+    addPillCheckEach: "逐一核对",
+    // @patient
+    addBoundary: ["这只是您告诉 Nura 的内容。", "吃之前，先问医生或药剂师。"],
+    // @patient phrase
+    sheetForm: "剂型",
+    // @patient phrase
+    sheetHowMany: "怎么吃",
+    // @patient phrase
+    sheetLeft: "还剩",
+    // @patient phrase
+    sheetFrom: "从哪里来的",
     // @patient
     outcomeNew: "这是您清单上的新药。",
     // @patient

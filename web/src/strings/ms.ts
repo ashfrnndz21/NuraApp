@@ -1986,6 +1986,8 @@ export const ms = {
     aboutIt: "Tentang ubat ini",
     // @patient phrase
     add: "Tambah ubat",
+    // @patient phrase
+    addOther: "Tambah ubat untuk {patient}",
     // @patient headline
     storyPurpose: "Untuk apa",
     // @patient headline
@@ -2052,6 +2054,8 @@ export const ms = {
     addedConnectionOther: "Ditambah ke senarai ubat {patient}.",
     // @patient phrase
     seeInRegistry: "Lihat dalam senarai ubat anda",
+    // @patient phrase
+    seeInRegistryOther: "Lihat dalam senarai ubat {patient}",
     // @patient
     addDuplicateQuestion: ["Anda sudah ada ubat ini.", "Adakah ini kotak baharu ubat yang sama?"],
     // @patient
@@ -2060,8 +2064,44 @@ export const ms = {
     addDuplicateYes: "Ya, saya nak beritahu berapa banyak",
     // @patient phrase
     addDuplicateNo: "Tidak, cuma menyemak",
+    // @patient
+    addAlreadySaved: ["Ini sudah ada dalam senarai anda.", "Tiada apa yang baharu untuk ditambah daripada ini."],
+    // @patient
+    addAlreadySavedOther: ["Ini sudah ada dalam senarai {patient}.", "Tiada apa yang baharu untuk ditambah daripada ini."],
     // @patient phrase
     todayKick: "Hari ini",
+    // @patient phrase
+    leftChip: "{n} lagi",
+    // @patient phrase
+    backToMedicines: "Kembali ke senarai ubat anda",
+    // @patient phrase
+    backToMedicinesOther: "Kembali ke senarai ubat {patient}",
+    // @patient
+    addEntryTurn: "Ambil gambar label, atau taip sendiri.",
+    // @patient
+    addConfirmTurn: "Ini yang Nura baca daripada *label*.",
+    // @patient
+    addConfirmHint: "Semak sebelum ia disimpan.",
+    // @patient
+    addPillConfirmTurn: "Ini yang Nura *agak* daripada gambar itu.",
+    // @patient
+    addPillCaution: [
+      "Ini mungkin {name}.",
+      "Nura tidak dapat pasti daripada gambar sebiji ubat.",
+      "Semak kotak, atau tanya ahli farmasi.",
+    ],
+    // @patient phrase
+    addPillCheckEach: "Semak satu demi satu",
+    // @patient
+    addBoundary: ["Ini hanya apa yang anda beritahu Nura.", "Tanya doktor atau ahli farmasi sebelum anda ambil ini."],
+    // @patient phrase
+    sheetForm: "Bentuk",
+    // @patient phrase
+    sheetHowMany: "Cara mengambilnya",
+    // @patient phrase
+    sheetLeft: "Baki",
+    // @patient phrase
+    sheetFrom: "Dari mana ini datang",
     // @patient
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient

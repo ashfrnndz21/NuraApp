@@ -1463,6 +1463,10 @@ export interface LabelIn {
   dose_text?: string | null;
   quantity?: number | null;
   prescriber?: string | null;
+  /** How sure the extractor was of the least-confident field this label rests on
+   *  (`labelFromCard`) — never left to the backend's own `1.0` default for anything read
+   *  off a photo, a pill photo's guess included. */
+  confidence?: number;
 }
 
 export type MedicineOutcome = "new_line" | "refill" | "dose_change" | "duplicate";
@@ -1482,10 +1486,14 @@ export interface ClassCandidateOut {
 }
 
 /** `GET …/medicines/classify`: what the register makes of a name alone. `candidates` is
- *  always empty outside `name_kind === "class"`. */
+ *  always empty outside `name_kind === "class"`. `resolved_generic` is always null outside
+ *  `name_kind === "medicine"`; when the register knows this name only as a brand, it is the
+ *  product's own generic — send THIS on to `/medicines/draft`, never the name that was
+ *  classified, or `identify()` finds nothing (a brand never matches a `LabelIn.generic`). */
 export interface ClassifyOut {
   name_kind: NameKind;
   candidates: ClassCandidateOut[];
+  resolved_generic?: string | null;
 }
 
 /** `POST …/medicines/typed`: the artefact his typed words were kept under. */

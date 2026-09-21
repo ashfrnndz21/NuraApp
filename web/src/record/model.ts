@@ -128,11 +128,15 @@ function text(value: unknown): string {
 /** A label as the photo read it, for the person to check and finish: the name, the
  *  strength with its unit, the dose line as printed, the count, the doctor. A line Nura
  *  did not read stays empty for him to type. */
-export function labelFromCard(card: Pick<ReviewCardOut, "fields">): LabelIn {
+export function labelFromCard(card: Pick<ReviewCardOut, "fields" | "document_kind">): LabelIn {
   const label: LabelIn = {};
+  let least = 1;
   for (const field of card.fields) {
     if (field.subject !== "medicine" || field.unreadable) continue;
     const value = field.corrected_value ?? field.value;
+    // A field he has since corrected is his own word, not the extractor's guess — its
+    // confidence never pulls the label's own number down.
+    if (field.state !== "corrected") least = Math.min(least, field.confidence);
     switch (field.attribute) {
       case "name":
         label.generic = text(value).toLowerCase() || null;
@@ -153,6 +157,11 @@ export function labelFromCard(card: Pick<ReviewCardOut, "fields">): LabelIn {
         break;
     }
   }
+  // Never below the register's own floor for a loose pill's guess (`PILL_MAX_CONFIDENCE`,
+  // `app.ingestion.review`): the backend caps this again regardless of what is sent, but the
+  // number shown to him before that round trip should already tell the truth.
+  if (card.document_kind === "pill_photo") least = Math.min(least, 0.79);
+  label.confidence = least;
   return label;
 }
 
@@ -161,7 +170,7 @@ export function tidyLabel(label: LabelIn): LabelIn | null {
   const generic = label.generic?.trim().toLowerCase();
   const doseText = label.dose_text?.trim();
   if (!generic || !doseText) return null;
-  const quantity = label.quantity && label.quantity > 0 ? Math.round(label.quantity) : null;
+  const quantity = label.quantity && label.quantity > 0 ? Math.min(Math.round(label.quantity), 2000) : null;
   return {
     generic,
     strength: label.strength?.trim() || null,
@@ -169,6 +178,7 @@ export function tidyLabel(label: LabelIn): LabelIn | null {
     dose_text: doseText,
     quantity,
     prescriber: label.prescriber?.trim() || null,
+    confidence: label.confidence,
   };
 }
 

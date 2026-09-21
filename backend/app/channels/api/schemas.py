@@ -1063,7 +1063,13 @@ class LabelIn(BaseModel):
     registration_no: str | None = Field(default=None, min_length=1, max_length=32)
     dose: DoseIn | None = None
     dose_text: str | None = Field(default=None, min_length=1, max_length=120)
-    quantity: int | None = Field(default=None, gt=0)
+    # 2000 is generously above the largest real pack in the licensed fixture (the register's
+    # products are all sold in packs of a few dozen to a few hundred): a bound here, not just
+    # a sanity check downstream, because an unbounded quantity reaches `reorder_date`
+    # (`app.medicines.dose`), whose `date + timedelta(days=...)` arithmetic raises
+    # `OverflowError` for an astronomically large day count — a single bad number must never
+    # 500 the whole list.
+    quantity: int | None = Field(default=None, gt=0, le=2000)
     prescriber: str | None = Field(default=None, min_length=1, max_length=80)
     dispensed_at: AwareDatetime | None = None
     source_kind: SourceKind = SourceKind.RETAIL
@@ -1215,10 +1221,14 @@ class ClassifyOut(BaseModel):
     product: `medicine` when the register can identify it; `class` when it is not a
     product but is a family the register files products under, with those products as
     `candidates`; `unknown` when the register has never heard of it. `candidates` is
-    always empty outside `class` — never a guess dressed up as a choice."""
+    always empty outside `class` — never a guess dressed up as a choice. `resolved_generic`
+    is always null outside `medicine`; when the register knows this name only as a brand
+    (#10, "Norvasc"), it is the product's own generic — what a caller must build the next
+    `LabelIn` from, never the name it asked about, or `identify()` finds nothing."""
 
     name_kind: NameKind
     candidates: list[ClassCandidateOut] = []
+    resolved_generic: str | None = None
 
     @classmethod
     def of(cls, found: NameClassification) -> ClassifyOut:
@@ -1228,6 +1238,7 @@ class ClassifyOut(BaseModel):
                 ClassCandidateOut(generic=m.generic, product_name=m.product_name or m.brand)
                 for m in found.candidates
             ],
+            resolved_generic=found.resolved_generic,
         )
 
 

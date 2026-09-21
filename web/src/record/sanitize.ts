@@ -11,10 +11,19 @@
  *  capped with an ellipsis. */
 
 /** Built from explicit `\uXXXX` escapes in an ordinary string, never as literal unicode
- *  characters in this file's own source: C0 controls and DEL, zero-width and bidi-control
- *  characters (LRM/RLM, LINE/PARAGRAPH SEPARATOR, the bidi embedding and isolate controls). */
+ *  characters in this file's own source (a control or bidi character sitting in a `.ts` file
+ *  as a real byte makes git treat the whole file as binary, invisible to review from then
+ *  on): C0 controls, DEL and NEL, the Unicode line terminators a `\n`-only strip misses
+ *  (LINE/PARAGRAPH SEPARATOR), the zero-width and bidi-control characters (LRM/RLM through
+ *  the bidi embedding/override/isolate controls, word joiner, BOM/ZWNBSP) — the same set
+ *  `app.llm.ask_agent`'s own `_CONTROL_CHARS`/`_INVISIBLE_RANGES` holds a tool-bound field
+ *  to, so a hostile field reads the same whether it is headed for a model or a screen — plus
+ *  four more invisible characters that set carries but a hostile *display* field can reach
+ *  and that one cannot: soft hyphen, Arabic letter mark, Mongolian vowel separator, and the
+ *  Hangul filler (a blank that is not whitespace, so a plain `\s` collapse never catches it). */
 const CONTROL_OR_BIDI = new RegExp(
-  "[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F\\u200B-\\u200F\\u2028\\u2029\\u202A-\\u202E\\u2066-\\u2069]",
+  "[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F\\u0085\\u00AD\\u061C\\u180E" +
+    "\\u2028\\u2029\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2069\\u3164\\uFEFF]",
   "gu",
 );
 

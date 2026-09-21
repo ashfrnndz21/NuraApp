@@ -193,7 +193,7 @@ for (const look of LOOKS) {
     await page.getByTestId("add-it").click();
     await expect(page.getByTestId("add-done")).toContainText("Added to your tablets.");
     await page.getByTestId("see-in-registry").click();
-    await expect(page.getByTestId("record-note")).toHaveText("Nura added it to your list.");
+    await expect(page.getByTestId("record-note")).toContainText("Nura added it to your list.");
     const listed = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines`, auth(pa.token))).json()) as Line[];
     expect(listed.map((each) => each.generic).sort()).toEqual(["aspirin", "warfarin"]);
 

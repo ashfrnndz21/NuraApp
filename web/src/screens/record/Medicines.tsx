@@ -26,12 +26,63 @@ import {
   severityLine,
   tidyLabel,
 } from "../../record/model";
+import { go, openMe } from "../../flow";
 import { density, profile } from "../../store/session";
 import { aboutWhom, fill, language, t } from "../../strings";
 import { Field, Hear, Notice, Pill, Tile } from "../../ui/components";
-import { ActionSheet, ChipRow, ConnectionRow, Flag, Glass, Orb, PillButton, RevealGroup, SectionLabel } from "../../ui/kit";
+import { ActionSheet, ChipRow, ConnectionRow, Flag, Glass, Icon, Orb, PillButton, RevealGroup, SectionLabel, SoftText } from "../../ui/kit";
+import { Shell } from "../Shell";
 import { Capture } from "../onboarding/parts";
-import { Paged, RecordFrame, recordNote, session, takeNote, toRecord, upperFirst, useRead } from "./parts";
+import { Paged, RecordFrame, reading, recordNote, session, takeNote, toRecord, upperFirst, useRead } from "./parts";
+
+/** A compact one-row header (redesign package 11: the owner rejected the old stacked
+ *  `Header`/`Places`-chips frame for this screen) — back chevron, the one `h1`, the menu
+ *  entry other rebuilt screens now carry (`Ask.tsx`'s own `AskHeader`, the same
+ *  `shell-head board-top-bar` grid `BoardTopBar` uses): no hub chips, no search bar (the
+ *  caller passes `ask={false}` to `Shell`), so the registry itself starts right under it. */
+function MedicinesHead({
+  title,
+  onBack,
+  backLabel,
+  backTestId = "medicines-back",
+}: {
+  title: string;
+  onBack: () => void;
+  backLabel: string;
+  backTestId?: string;
+}): JSX.Element {
+  const s = t();
+  return (
+    <header class="shell-head board-top-bar" data-testid="medicines-top-bar">
+      <span class="head-start">
+        <button type="button" class="head-button" aria-label={backLabel} onClick={onBack} data-testid={backTestId}>
+          <Icon name="back" />
+        </button>
+      </span>
+      <span class="head-mid">
+        <h1 class="title top-bar-title">{title}</h1>
+      </span>
+      <span class="head-end">
+        <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+          <Icon name="menu" />
+        </button>
+      </span>
+    </header>
+  );
+}
+
+/** One conversational turn of Add a medicine (redesign package 11): the small orb beside
+ *  her line, word by word, never a bare card title — the step's one question as the
+ *  headline, a hint as body text under it. */
+function AddTurn({ headline, body, testId }: { headline: string; body?: string; testId?: string }): JSX.Element {
+  return (
+    <div class="add-turn" data-testid={testId}>
+      <Orb testId="add-turn-orb" />
+      <SoftText as="h2" className="conversation-head" text={headline} pace="headline" testId="add-turn-headline" />
+      {body && <SoftText as="p" text={body} pace="body" testId="add-turn-body" />}
+    </div>
+  );
+}
 
 /** His medicines (E04-01): each line with where it came from and how sure Nura is, the count
  *  and — at the threshold — the reorder card's two buttons (E04-05), in the backend's words.
@@ -97,14 +148,36 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
   const opened = lines?.find((each) => each.line_id === openLine) ?? null;
 
   return (
-    <RecordFrame title={s.record.medicines} back={{ name: "hub" }} testId="record-medicines">
-      {note && (
-        <Tile paper settled role="status" testId="record-note">
-          {note.map((line, index) => (
-            <p key={index}>{line}</p>
-          ))}
-        </Tile>
-      )}
+    <Shell
+      tab="health"
+      testId="record-medicines"
+      ask={false}
+      attrs={{ "aria-busy": reading.value > 0 ? "true" : "false" }}
+      header={
+        <MedicinesHead
+          title={s.record.medicines}
+          onBack={() => toRecord({ name: "hub" })}
+          backLabel={s.record.back}
+          // The Record hub's own shared testid (`RecordFrame`'s back button, `Papers.tsx`,
+          // `parts.tsx`): every entry screen the hub opens exposes it, and the generic sweep
+          // (`a11y.spec.ts`'s `recordEntries`/`record-back` loop) clicks it by that name
+          // alone to leave whichever screen it just audited. Bypassing `RecordFrame` for this
+          // screen's header (the design rework) must not also bypass that shared contract —
+          // it broke it once already, silently: the loop could no longer leave "Your
+          // tablets" at all, and every entry screen after medicines in hub order went
+          // unaudited too.
+          backTestId="record-back"
+        />
+      }
+      bottomBar={
+        (!lines || lines.length > 0) && (
+          <Pill plum onClick={() => toRecord({ name: "add" })} testId="add-medicine">
+            {s.record.add}
+          </Pill>
+        )
+      }
+    >
+      {note && <ConnectionRow name={s.record.medicines} line={note.join(" ")} testId="record-note" attrs={{ role: "status" }} />}
       {said && (
         <Tile paper settled role="status" testId="asked">
           {said.map((line, index) => (
@@ -144,11 +217,6 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
           />
         </>
       )}
-      {(!lines || lines.length > 0) && (
-        <Pill onClick={() => toRecord({ name: "add" })} testId="add-medicine">
-          {s.record.add}
-        </Pill>
-      )}
       <ActionSheet
         open={opened !== null}
         title={opened ? registryRow(opened, s).name : ""}
@@ -159,7 +227,7 @@ export function MedicinesScreen({ start }: { start: number }): JSX.Element {
       >
         {opened && <LineDetail line={opened} />}
       </ActionSheet>
-    </RecordFrame>
+    </Shell>
   );
 }
 
@@ -192,7 +260,7 @@ function TodayDoses(): JSX.Element | null {
       <SectionLabel testId="today-kick">{s.record.todayKick}</SectionLabel>
       <RevealGroup testId="today-doses">
         {slots.map((slot) => (
-          <Glass key={key(slot)} shape="row" testId="today-dose">
+          <Glass key={key(slot)} shape="row" className="today-row" testId="today-dose">
             <div class="report-row-top">
               <div class="report-row-name">
                 <b>{slot.card}</b>
@@ -233,27 +301,34 @@ function LineCard({ line, busy, preview, onAsk, onYes, onNo, onOpen }: LineCardP
   const questions = lineQuestions(line);
   const sure = confidenceLine(line, s);
   const patient = density() === "patient";
+  // "Form · how many and when" as one quiet line, never three (redesign package 11): a field
+  // the line does not hold is simply absent from the join, never a placeholder.
+  const details = [row.form, row.howMany].filter((each): each is string => Boolean(each)).join(" · ");
+  const daysLeft = line.count?.days_left;
   return (
     <Tile paper={patient || actions !== null} glass={!patient && actions === null} testId="medicine-line">
-      <button type="button" class="medicine-line-open" onClick={onOpen} data-testid="medicine-line-open">
-        <h2 class="title">{row.name}</h2>
-        <p class="caption" data-testid="chemical">
-          {line.generic} {line.strength}
-        </p>
-      </button>
+      <div class="medicine-line-head">
+        <button type="button" class="medicine-line-open" onClick={onOpen} data-testid="medicine-line-open">
+          <h2 class="title">{row.name}</h2>
+          <p class="caption" data-testid="chemical">
+            {line.generic} {line.strength}
+          </p>
+        </button>
+        {typeof daysLeft === "number" && (
+          <span class="flag-chip" data-testid="days-left">
+            {fill(s.record.leftChip, { n: String(daysLeft) })}
+          </span>
+        )}
+      </div>
       {row.highRisk && (
         <Flag state="attention" testId="high-risk">
           {s.record.severity.major}
         </Flag>
       )}
-      {row.form && <p data-testid="form">{row.form}</p>}
-      {row.howMany && <p data-testid="how-many">{row.howMany}</p>}
-      {counted.length > 0 && (
-        <div class="lines" data-testid="count">
-          {counted.map((text, index) => (
-            <p key={index}>{text}</p>
-          ))}
-        </div>
+      {details && (
+        <p class="caption" data-testid="details">
+          {details}
+        </p>
       )}
       {questions.length > 0 && (
         <div class="lines" data-testid="questions">
@@ -283,6 +358,16 @@ function LineCard({ line, busy, preview, onAsk, onYes, onNo, onOpen }: LineCardP
         <p class="provenance" data-testid="source">
           {row.source}
         </p>
+      )}
+      {/* The count's own supply/reorder sentences (a different thing from the "N left"
+          chip above, which is only the number): still said in full for Hear and for a
+          reorder due, never dropped. */}
+      {counted.length > 0 && (
+        <div class="lines" data-testid="count">
+          {counted.map((text, index) => (
+            <p key={index}>{text}</p>
+          ))}
+        </div>
       )}
       {actions && !preview && (
         <>
@@ -318,23 +403,29 @@ function LineCard({ line, busy, preview, onAsk, onYes, onNo, onOpen }: LineCardP
 
 /** The full record, in the ActionSheet a tap on a row opens: every field the line holds, one
  *  paragraph each, a field it does not hold simply not shown (redesign package 11). */
+/** One quiet-label row in the medicine sheet (redesign package 11, the kit's own
+ *  `ActionSheet` styling): a small label, the value under it — never a placeholder for a
+ *  field the line does not hold, which the caller simply does not render. */
+function SheetRow({ label, value, testId }: { label: string; value: string; testId?: string }): JSX.Element {
+  return (
+    <div class="sheet-row" data-testid={testId}>
+      <small>{label}</small>
+      <p>{value}</p>
+    </div>
+  );
+}
+
 function LineDetail({ line }: { line: LineOut }): JSX.Element {
   const s = t();
   const row = registryRow(line, s);
   return (
-    <div class="lines" data-testid="medicine-detail">
-      {row.form && <p>{row.form}</p>}
-      {row.howMany && <p>{row.howMany}</p>}
-      {row.supplyLines.map((text, index) => (
-        <p key={index}>{text}</p>
-      ))}
+    <div class="sheet-rows" data-testid="medicine-detail">
+      {row.form && <SheetRow label={s.record.sheetForm} value={row.form} testId="sheet-form" />}
+      {row.howMany && <SheetRow label={s.record.sheetHowMany} value={row.howMany} testId="sheet-how-many" />}
+      {row.supplyLines.length > 0 && <SheetRow label={s.record.sheetLeft} value={row.supplyLines.join(" ")} testId="sheet-left" />}
       {row.monthlyCost && <p>{row.monthlyCost}</p>}
       {row.duplicate && <p>{s.record.twice}</p>}
-      {row.source && (
-        <p class="provenance" data-testid="sheet-source">
-          {row.source}
-        </p>
-      )}
+      {row.source && <SheetRow label={s.record.sheetFrom} value={row.source} testId="sheet-source" />}
     </div>
   );
 }
@@ -472,6 +563,17 @@ function duplicateLines(s: ReturnType<typeof t>): string[] {
   return name ? lines.map((line) => line.split("{patient}").join(name)) : lines;
 }
 
+/** #11: the same photo or entry already wrote this medicine once (`matched_line_id` null on
+ *  a `DUPLICATE` outcome) — nothing here is a real quantity question, unlike `duplicateLines`,
+ *  so the card built from these never offers "Yes, say how many": sent back through the same
+ *  artefact, `plan()` finds the same nothing-new every time, no matter what he types — a
+ *  loop with no way out, not a question with an answer. */
+function alreadySavedLines(s: ReturnType<typeof t>): string[] {
+  const name = aboutWhom.value;
+  const lines = name ? s.record.addAlreadySavedOther : s.record.addAlreadySaved;
+  return name ? lines.map((line) => line.split("{patient}").join(name)) : lines;
+}
+
 /** Add a medicine (E04-03, redesign package 11, #302): a photo, a screenshot or a file — the
  *  live paper-reading flow papers already use, reused rather than rebuilt — or typed in by
  *  hand. What Nura read (or what he typed) is shown back as a confirmation card, "Looks
@@ -534,7 +636,12 @@ export function AddMedicineScreen(): JSX.Element {
         setStep("which");
         return;
       }
-      await checkWith(ready);
+      // The register may know this name only as a brand ("Norvasc") — `identify()` only
+      // ever matches a `LabelIn.generic` against a product's own generic, never against its
+      // brand, so replaying the same text back would find nothing even though classify just
+      // said "medicine" (#10). Settle on the register's own generic before drafting.
+      const settled = found.resolved_generic ? { ...ready, generic: found.resolved_generic } : ready;
+      await checkWith(settled);
     });
 
   const pick = (candidate: ClassCandidateOut) =>
@@ -549,7 +656,9 @@ export function AddMedicineScreen(): JSX.Element {
     let source = artifactId;
     if (!source) {
       const { bearer, profileId } = session();
-      const kept = await nura.medicineTyped(bearer, profileId, typedSentence(label), new Date().toISOString());
+      // The tidied label he actually just checked — never the raw, untrimmed typing state
+      // (case, whitespace) a moment before it was validated.
+      const kept = await nura.medicineTyped(bearer, profileId, typedSentence(ready), new Date().toISOString());
       source = kept.artifact_id;
       setArtifactId(source);
     }
@@ -583,12 +692,21 @@ export function AddMedicineScreen(): JSX.Element {
     setLabel({ ...label, [key]: key === "quantity" ? (value.trim() === "" ? null : Number(value)) : value });
 
   const nextField = nextTypedField(label);
+  // #2b, independent safety review: a loose tablet's own photo is a guess, never a read —
+  // the confirm card must never offer a one-tap "Looks right" for one.
+  const isPillPhoto = card?.document_kind === "pill_photo";
 
   return (
-    <RecordFrame title={s.record.add} back={{ name: "medicines" }} testId="record-add">
+    <Shell
+      tab="health"
+      testId="record-add"
+      ask={false}
+      attrs={{ "aria-busy": reading.value > 0 ? "true" : "false" }}
+      header={<MedicinesHead title={s.record.add} onBack={() => toRecord({ name: "medicines" })} backLabel={s.record.backToMedicines} />}
+    >
       {step === "entry" && (
         <Tile paper testId="add-entry">
-          <p>{s.record.addLead}</p>
+          <AddTurn headline={s.record.addEntryTurn} testId="add-entry-turn" />
           <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={s.onboarding.records.photo} />
           <Pill onClick={() => setStep("label")} testId="add-type-it">
             {s.record.addTypeIt}
@@ -603,49 +721,79 @@ export function AddMedicineScreen(): JSX.Element {
       )}
       {step === "confirm" && card && (
         <Tile paper testId="add-confirm">
-          <h2 class="title">{s.record.addLead2}</h2>
-          <RevealGroup testId="add-confirm-rows">
+          {/* #2b, independent safety review: a photo of a loose tablet is a guess, not a
+              read — no one-tap "Looks right" for one, ever. The honest caveat comes before
+              he even sees the guess, and the only way forward is the field-by-field form. */}
+          {isPillPhoto ? (
+            <AddTurn headline={s.record.addPillConfirmTurn} testId="add-confirm-turn" />
+          ) : (
+            <AddTurn headline={s.record.addConfirmTurn} body={s.record.addConfirmHint} testId="add-confirm-turn" />
+          )}
+          {isPillPhoto && (
+            <div class="lines" data-testid="add-pill-caution">
+              {s.record.addPillCaution.map((line, index) => (
+                <p key={index}>{fill(line, { name: upperFirst(displayExtractedText(label.generic ?? "")) })}</p>
+              ))}
+            </div>
+          )}
+          <Glass shape="card" className="report-panel" testId="add-confirm-rows">
             {card.fields
               .filter((field) => field.subject === "medicine")
               .sort((a, b) => a.position - b.position)
               .map((field) => {
                 const row = reportRow(field, s);
-                // A label and its value, stacked — never side by side (`report-value-num`
-                // is sized for a short number, and a dose line is a sentence): a long,
-                // extracted, unconfirmed line must wrap on its own line, never overflow the
-                // card or crowd its own "Check this one" flag off the edge.
                 // A number's own unit ("5" → "5 mg") is worth repeating; a sentence field's
                 // (the dose instruction) already carries its words, so its own `unit` (the
                 // dose's tablet/mL) would only repeat the value's last word.
                 const showUnit = row.unit && field.attribute !== "dose";
                 return (
-                  <Glass key={row.fieldId} shape="row" testId={`add-confirm-row-${field.attribute}`}>
-                    <p class="caption">{row.label}</p>
-                    <p>
-                      <b>{displayExtractedText(row.valueText)}</b>
-                      {showUnit && ` ${displayExtractedText(row.unit)}`}
-                    </p>
-                    {row.needsAttention && (
-                      <span class="flag-chip question" data-testid="add-check-this-one">
-                        {s.onboarding.records.checkThisOne}
-                      </span>
-                    )}
-                  </Glass>
+                  <div class="report-table-row" key={row.fieldId} data-testid={`add-confirm-row-${field.attribute}`}>
+                    <div class="report-row-top">
+                      {/* Quiet label above, value below — the report table's own stacked
+                          `.report-row-name` (its usual name-then-printed-label order, just
+                          the other way round), never side by side: a long, extracted,
+                          unconfirmed dose sentence must wrap on its own line, never overflow
+                          the panel or crowd its own "Check this one" flag off the edge. */}
+                      <div class="report-row-name">
+                        <small>{row.label}</small>
+                        <b>
+                          {displayExtractedText(row.valueText)}
+                          {showUnit && ` ${displayExtractedText(row.unit)}`}
+                        </b>
+                      </div>
+                      {row.needsAttention && (
+                        <span class="flag-chip question" data-testid="add-check-this-one">
+                          {s.onboarding.records.checkThisOne}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
-          </RevealGroup>
-          <Pill plum onClick={() => void looksRight()} disabled={busy} testId="looks-right">
-            {s.record.addLooksRight}
-          </Pill>
-          <Pill quiet onClick={() => setStep("label")} disabled={busy} testId="add-fix">
-            {s.record.addFix}
-          </Pill>
+          </Glass>
+          {isPillPhoto ? (
+            <Pill plum onClick={() => setStep("label")} disabled={busy} testId="add-fix">
+              {s.record.addPillCheckEach}
+            </Pill>
+          ) : (
+            <>
+              <Pill plum onClick={() => void looksRight()} disabled={busy} testId="looks-right">
+                {s.record.addLooksRight}
+              </Pill>
+              <Pill quiet onClick={() => setStep("label")} disabled={busy} testId="add-fix">
+                {s.record.addFix}
+              </Pill>
+            </>
+          )}
         </Tile>
       )}
       {step === "which" && (
         <Tile paper testId="add-which">
-          <h2 class="title">{fill(s.record.addWhichLead, { name: upperFirst(displayExtractedText(label.generic ?? "")) })}</h2>
-          <p>{s.record.addWhichQuestion}</p>
+          <AddTurn
+            headline={fill(s.record.addWhichLead, { name: upperFirst(displayExtractedText(label.generic ?? "")) })}
+            body={s.record.addWhichQuestion}
+            testId="add-which-turn"
+          />
           <p class="caption">{s.record.addWhichHint}</p>
           <ChipRow testId="which-chips">
             {candidates.map((candidate) => (
@@ -695,18 +843,43 @@ export function AddMedicineScreen(): JSX.Element {
             {/* Only a new line is screened against the list (E04-03); a refill or a new amount
                 is not, so "nothing goes badly" is said only where the licensed data was asked. */}
             {draft.outcome === "new_line" && draft.flagged.length === 0 && <p data-testid="no-interactions">{s.record.flaggedNone}</p>}
+            {/* The boundary, once, in the medicine surface's own words (never the lab-ranges
+                line, `app.medicines.strings.BOUNDARY`'s own English carried here): Nura never
+                starts, stops or changes a medicine, on any outcome this step can show. */}
+            <div class="lines boundary" data-testid="add-boundary">
+              {s.record.addBoundary.map((line, index) => (
+                <p key={index}>{line}</p>
+              ))}
+            </div>
           </Tile>
           {draft.outcome === "duplicate" ? (
             <Tile paper testId="add-duplicate">
-              {duplicateLines(s).map((line, index) => (
-                <p key={index}>{line}</p>
-              ))}
-              <Pill plum onClick={() => setStep("label")} testId="duplicate-yes">
-                {s.record.addDuplicateYes}
-              </Pill>
-              <Pill quiet onClick={() => toRecord({ name: "medicines" })} testId="duplicate-no">
-                {s.record.addDuplicateNo}
-              </Pill>
+              {draft.matched_line_id ? (
+                <>
+                  {duplicateLines(s).map((line, index) => (
+                    <p key={index}>{line}</p>
+                  ))}
+                  <Pill plum onClick={() => setStep("label")} testId="duplicate-yes">
+                    {s.record.addDuplicateYes}
+                  </Pill>
+                  <Pill quiet onClick={() => toRecord({ name: "medicines" })} testId="duplicate-no">
+                    {s.record.addDuplicateNo}
+                  </Pill>
+                </>
+              ) : (
+                // #11: no active line matched (`matched_line_id` null) — this exact photo or
+                // entry already wrote this medicine once, so there is no missing amount to
+                // ask for. "Yes, say how many" would send him to the label step and back here
+                // to the very same answer, forever: the one way out is back to the registry.
+                <>
+                  {alreadySavedLines(s).map((line, index) => (
+                    <p key={index}>{line}</p>
+                  ))}
+                  <Pill plum onClick={() => toRecord({ name: "medicines" })} testId="duplicate-already-saved">
+                    {s.record.backToMedicines}
+                  </Pill>
+                </>
+              )}
             </Tile>
           ) : (
             <>
@@ -748,11 +921,12 @@ export function AddMedicineScreen(): JSX.Element {
               toRecord({ name: "medicines" });
             }}
             testId="see-in-registry"
+            attrs={{ "aria-label": s.record.seeInRegistry }}
           />
         </Tile>
       )}
       <Notice error={error} />
-    </RecordFrame>
+    </Shell>
   );
 }
 

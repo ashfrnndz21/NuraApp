@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -25,7 +25,14 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited, audited_profile_read, audited_read, audited_write
+from app.audit.access import (
+    NotOnThisProfile,
+    audited,
+    audited_profile_read,
+    audited_read,
+    audited_write,
+    person_display_name,
+)
 from app.audit.models import Action, Channel
 from app.audit.trail import record
 from app.consent.models import ConsentPurpose
@@ -42,13 +49,18 @@ from app.drugs.registry import (
     StrengthNotRead,
 )
 from app.errors import Refusal
-from app.ingestion.models import CONFIDENCE_THRESHOLD
+from app.ingestion.models import CONFIDENCE_THRESHOLD, ReviewCard
+from app.ingestion.review import (
+    PILL_MAX_CONFIDENCE,
+    close_card_for_artifact,
+    pill_photo_artifacts_of,
+)
 from app.insurance.ledger import medicine_monthly_costs
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, OutOfScope
 from app.keys.scopes import KeyRole, Scope
 from app.language.review import queue_pending_interaction
 from app.medicines import dose as arithmetic
-from app.medicines.classify import NameKind, classify_name
+from app.medicines.classify import NameKind, classify_name, identify_by_name
 from app.medicines.dose import Dose
 from app.medicines.models import (
     LEAD_TIME_DAYS,
@@ -79,7 +91,7 @@ from app.medicines.strings import (
     say_date,
 )
 from app.medicines.windows import is_late, window_status
-from app.memory.episodic import require_artifact
+from app.memory.episodic import artifact_kinds_of, require_artifact
 from app.memory.models import (
     Artifact,
     ArtifactKind,
@@ -317,6 +329,35 @@ def _draft(
     )
 
 
+_NAME_SAFE_EXTRA = frozenset(" .'-")
+"""What a person's own name may hold beside a letter: a space, a full stop (initials, "Dr."),
+an apostrophe, a hyphen. Nothing else — a digit, a bracket, a newline made to look like a
+second line, is never part of anyone's name."""
+
+
+def _safe_prescriber(raw: str | None) -> str | None:
+    """A doctor's name is the one extractor-written field stored raw and interpolated
+    straight into Nura's own sentences (`app.medicines.strings.say_doctor`, the interaction
+    and doctor-question lines a person reads and hears as Nura's own words) — never sanitised
+    for *display* the way a card's own read-only fields are (`web/src/record/sanitize.ts`),
+    because by the time it is here it is not being shown back to him for a look, it is being
+    written down and spoken. Anything that is not a letter (any script — a Chinese or Malay
+    name is not ASCII), a space, or one of `_NAME_SAFE_EXTRA` fails this outright: not folded
+    to a space and kept partially, the whole field is dropped, because a name with a stray
+    control or bidi character in it is not a name a stray extraction error produces — it is
+    exactly the shape a hostile page's text would take to survive as what reads like a
+    doctor's own name in a sentence he did not write. `None` reads as "the doctor" in every
+    language (`say_doctor`), never a blank."""
+    if raw is None:
+        return None
+    trimmed = " ".join(raw.split()).strip()
+    if not trimmed or len(trimmed) > 80:
+        return None
+    if not all(char.isalpha() or char in _NAME_SAFE_EXTRA for char in trimmed):
+        return None
+    return trimmed
+
+
 @audited(Action.READ, Scope.MEDICINES, LINE)
 async def plan(
     session: AsyncSession,
@@ -333,14 +374,23 @@ async def plan(
     change; no line is a new line, screened for interactions against everything active; the
     same label twice, or a label that adds nothing, is a duplicate. The draft is what the yes
     will bind to.
+
+    The prescriber's name is sanitised here, once, before anything downstream ever reads it
+    (`_safe_prescriber`) — the draft this returns, the fact it is minted from, and the line
+    `reconcile` eventually writes all read the same, already-clean `label`.
     """
     may_change_medicines(context)
+    label = replace(label, prescriber=_safe_prescriber(label.prescriber))
     match = _one_product(registry.identify(label.fields()))
     artifact = await require_artifact(session, context=context, artifact_id=source_artifact_id)
-    needs_photo = match.high_risk and (
-        artifact.kind is not ArtifactKind.PHOTO
-        or await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
-    )
+    pill = await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
+    needs_photo = match.high_risk and (artifact.kind is not ArtifactKind.PHOTO or pill)
+    # A loose pill's own guess never earns more confidence than the review card itself
+    # already holds it to (`PILL_MAX_CONFIDENCE`, `app.ingestion.review`) — capped here again
+    # regardless of what a client sent, so the number on the written line always tells the
+    # truth about where it came from, not only what the field-level cap showed on the card.
+    if pill and label.confidence > PILL_MAX_CONFIDENCE:
+        label = replace(label, confidence=PILL_MAX_CONFIDENCE)
     lead = LEAD_TIME_DAYS[label.source_kind]
 
     if await _label_seen_before(
@@ -430,6 +480,14 @@ class NameClassification:
 
     kind: NameKind
     candidates: Sequence[DrugMatch]
+    resolved_generic: str | None = None
+    """Set only for `NameKind.MEDICINE`: the register's own generic name for the product
+    this name identified — `identify_by_name(...)[0].generic`, the best match. A caller
+    that goes on to build a `LabelFields`/`LabelIn` for `identify()` must send *this*, not
+    the name it asked about: the register only ever matches `LabelFields.generic` against a
+    product's own generic and `LabelFields.brand` against its own brand, never one field
+    against the other, so replaying a brand ("Norvasc") back into `generic` finds nothing
+    (#10) even though `classify` correctly said `medicine`."""
 
 
 @audited(Action.READ, Scope.MEDICINES, LINE)
@@ -440,10 +498,15 @@ async def classify(
     (owner's #302 requirement): read-only, nothing written, the register decides both
     questions. `candidates` is only ever populated for `NameKind.CLASS`, and is exactly
     `registry.members_of_class(name)` — the register's own members, never a guess built
-    from the extracted text."""
+    from the extracted text. `resolved_generic` is only ever populated for
+    `NameKind.MEDICINE`, and is exactly the identified product's own generic name."""
     kind = classify_name(registry, name)
     candidates = registry.members_of_class(name) if kind is NameKind.CLASS else ()
-    return NameClassification(kind=kind, candidates=candidates)
+    resolved_generic = None
+    if kind is NameKind.MEDICINE:
+        matches = identify_by_name(registry, name)
+        resolved_generic = matches[0].generic if matches else None
+    return NameClassification(kind=kind, candidates=candidates, resolved_generic=resolved_generic)
 
 
 async def _write_line(
@@ -568,6 +631,18 @@ async def reconcile(
     refused write.
     """
     may_change_medicines(context)
+    # `plan()` sanitises the prescriber (and caps a pill photo's confidence) on its own local
+    # copy of `label`, for the draft it returns — that copy never reaches this function's own
+    # `label`, the one `_write_line`/`_write_supply` below actually read. Without doing it
+    # again here, a hostile prescriber landed on the written `MedicationLine` column even
+    # though the `Fact` it rests on, minted from `plan()`'s draft, was already clean —
+    # `test_an_accepted_label_with_hostile_prescriber_and_dose_text_stores_none_of_it`
+    # (independent safety review #8) is what caught it. Both callers must sanitise the same
+    # way, since neither trusts the other to have done it.
+    label = replace(label, prescriber=_safe_prescriber(label.prescriber))
+    pill = await is_pill_photo(session, context=context, artifact_id=source_artifact_id)
+    if pill and label.confidence > PILL_MAX_CONFIDENCE:
+        label = replace(label, confidence=PILL_MAX_CONFIDENCE)
     what = await plan(
         session,
         context=context,
@@ -603,6 +678,13 @@ async def reconcile(
             label=label,
             source_artifact_id=source_artifact_id,
             confirmed_by=fact.confirmed_by_person_id,
+            moment=moment,
+        )
+        await close_card_for_artifact(
+            session,
+            context=context,
+            artifact_id=source_artifact_id,
+            person_id=fact.confirmed_by_person_id,
             moment=moment,
         )
         return Reconciled(Outcome.REFILL, what.matched_line, refill, [])
@@ -647,6 +729,14 @@ async def reconcile(
     for each in what.flagged:
         if each.interaction.review_state is ReviewState.AWAITING_REVIEW:
             await queue_pending_interaction(session, each.interaction)
+    assert line.confirmed_by_person_id is not None
+    await close_card_for_artifact(
+        session,
+        context=context,
+        artifact_id=source_artifact_id,
+        person_id=line.confirmed_by_person_id,
+        moment=moment,
+    )
     return Reconciled(what.outcome, line, supply, flags)
 
 
@@ -853,46 +943,152 @@ a photo is — never a row holding the words themselves. Anything else with an a
 photo, a screenshot, a PDF) is "the label he kept"; no artefact at all is typed with nothing
 kept behind it (an old row, or a line the source predates this distinction)."""
 
+SELF_TYPED = "__self__"
+"""What `_typed_voice_for` answers when the reader is the very person who typed the line in
+— `source_line` says "You", never a name, and never runs a lookup to say it."""
+
 
 def source_line(
-    line: MedicationLine, zone: tzinfo, language: str, *, artifact_kind: ArtifactKind | None = None
+    line: MedicationLine,
+    zone: tzinfo,
+    language: str,
+    *,
+    artifact_kind: ArtifactKind | None = None,
+    is_pill_photo: bool = False,
+    typed_voice: str | None = None,
 ) -> str:
-    """The source line under a card that shows this medicine: the label he kept (a photo, a
-    screenshot or a PDF behind the line) or what he typed or said (`artifact_kind` MESSAGE or
-    VOICE, or no artefact at all), and the day it started, in his language.
+    """The source line under a card that shows this medicine, decided from what the source
+    artefact actually is — never merely from whether one is on file (BLOCKER 1, independent
+    safety review #1's no-migration fix): a photo of a loose tablet (`is_pill_photo`, review
+    defect #2c — never said as "the label he kept", which a pill photo is not), the label he
+    kept (any other photo, a screenshot or a PDF), what he typed or said (`artifact_kind`
+    MESSAGE or VOICE, or no artefact at all — an old row, or a line the source predates), or
+    — only when the kind itself could not be read at all — a neutral sentence that claims
+    nothing about where it came from. And the day it started, in his language.
 
-    `artifact_kind` is the artefact's own kind, when the caller has it to hand — reading it
-    is one more batched read (`_artifact_kinds_for`), not a guess. Left `None`, this keeps
-    the line's own presence-or-absence of a `source_artifact_id` as the only signal (the
-    behaviour every caller had before typed entries could carry an artefact too), so no
-    caller that has not been taught to fetch the kind changes what it already said.
+    `artifact_kind` is the artefact's own kind, read narrowly by `_artifact_kinds_for` for
+    every key that holds `Scope.MEDICINES`, whether or not it also holds `Scope.RECORDS`
+    (BLOCKER 1: a medicines-only key used to be told nothing at all here, and this function
+    filled that silence in by guessing "label" from the mere presence of a
+    `source_artifact_id" — wrong for every typed entry such a key ever read). Left `None`
+    with `line.source_artifact_id` set, the artefact genuinely could not be read (deleted,
+    or some future failure this has not seen yet) — this never falls back to "label"; it
+    says the neutral sentence instead. `is_pill_photo` is the same shape
+    (`_pill_photo_artifacts_for`), and only ever changes anything when `artifact_kind` would
+    otherwise have said "label".
+
+    `typed_voice` is `SELF_TYPED` when the reader typed the line in themself ("You"), a
+    resolved display name when someone else did and this key can read family names, or
+    `None` when that cannot be told apart either (`_typed_voice_for`) — the older, neutral
+    "typed this in" wording, never a guess at whose words they were.
     """
-    if artifact_kind is not None:
-        kind = "typed" if artifact_kind in _TYPED_KINDS else "label"
+    if line.source_artifact_id is None:
+        kind = "typed"
+    elif is_pill_photo:
+        kind = "pill"
+    elif artifact_kind is None:
+        kind = "unreadable"
+    elif artifact_kind in _TYPED_KINDS:
+        kind = "typed"
     else:
-        kind = "label" if line.source_artifact_id is not None else "typed"
+        kind = "label"
     day = as_utc(line.started_at).astimezone(zone).date()
+    if kind == "typed" and typed_voice == SELF_TYPED:
+        return SOURCE[language]["typed_self"].format(date=say_date(day, language))
+    if kind == "typed" and typed_voice:
+        return SOURCE[language]["typed_named"].format(name=typed_voice, date=say_date(day, language))
     return SOURCE[language][kind].format(date=say_date(day, language))
 
 
 async def _artifact_kinds_for(
     session: AsyncSession, *, context: KeyContext, artifact_ids: Sequence[uuid.UUID]
 ) -> dict[uuid.UUID, ArtifactKind]:
-    """The kind of each of these artefacts, read under the records scope — the same scope a
-    label photo's own artefact already stands behind (`_sources_withheld`,
-    `app.channels.api.medicines`). A key that does not hold the records scope at all reads
-    the medicines list on its own scope alone, exactly as it always could — this is never a
-    second door on `active_lines`/`today`, only an extra courtesy for a key that already
-    holds both, so it is skipped outright rather than raising for a medicines-only key. An
-    id such a key may not read (a withheld source) is likewise simply missing here;
-    `source_line` falls back to its old, presence-only behaviour for it, never a guess at a
-    kind the key cannot see."""
-    if not artifact_ids or not context.allows(Scope.RECORDS):
+    """The kind of each of these artefacts — never their bytes or text, only the enum that
+    says photo/message/voice/pdf/… — for artefacts a `MedicationLine` this key can already
+    see under `Scope.MEDICINES` names as its own source (BLOCKER 1, independent safety
+    review #1's no-migration fix). `source_artifact_id` is already a column that scope
+    discloses; reading one more field off the very same row it already named is not a new
+    leak of the record scope, and it is what lets `source_line` say the truth about a line
+    this key was always entitled to read, instead of the silent, wrong "label" guess a
+    medicines-only key used to get.
+
+    Never `scoped_select`/`audited_read`: `Artifact` is `RowScoped` under `Scope.RECORDS`
+    (`written_scope`), which a medicines-only key does not hold and may never be granted, so
+    routing this through the ordinary door would answer nothing for it regardless of which
+    scope name were asked for — the same reason `app.safety.high_risk.is_pill_photo` already
+    reads `ReviewCard` directly rather than through `scoped_select`. The raw read itself is
+    `app.memory.episodic.artifact_kinds_of` — `Artifact`'s own module, where
+    `tests.test_row_scope`'s raw-read allowlist says a read like this belongs — and this
+    function's own audit line is written by hand under `Scope.MEDICINES` here, the door this
+    whole batch is already reached through and the only scope this disclosure rests on."""
+    if not artifact_ids:
         return {}
-    found = await audited_read(
-        session, Artifact, context, Scope.RECORDS, where=(Artifact.id.in_(list(artifact_ids)),)
+    found = await artifact_kinds_of(session, context=context, artifact_ids=artifact_ids)
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.MEDICINES,
+        target=Artifact.__tablename__,
+        rows=len(found),
     )
-    return {artifact.id: artifact.kind for artifact in found}
+    return found
+
+
+async def _pill_photo_artifacts_for(
+    session: AsyncSession, *, context: KeyContext, artifact_ids: Sequence[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Which of these artefacts' own review cards say `DocumentKind.PILL_PHOTO` (review
+    defect #2c) — a loose tablet's own guess, never a label read, so `source_line` must
+    never say "the label he kept" for one. The same narrow, profile-scoped, id-restricted
+    read as `_artifact_kinds_for`, for the same reason (BLOCKER 1): a medicines-only key must
+    be told the truth here too, not only a key that also holds `Scope.RECORDS`. The raw read
+    itself is `app.ingestion.review.pill_photo_artifacts_of` — `ReviewCard`'s own module."""
+    if not artifact_ids:
+        return set()
+    found = await pill_photo_artifacts_of(session, context=context, artifact_ids=artifact_ids)
+    await record(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.MEDICINES,
+        target=ReviewCard.__tablename__,
+        rows=len(found),
+    )
+    return found
+
+
+async def _typed_voice_for(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    confirmed_by_person_id: uuid.UUID | None,
+    owner_person_id: uuid.UUID | None,
+    owner_display_name: str,
+) -> str | None:
+    """Who typed a line in, in the voice `source_line` needs (independent safety review #1's
+    "make the typed copy real and right by voice"): `SELF_TYPED` when the reader is the one
+    who typed it — "You", true whichever profile this is, since it names the reader's own
+    past action, not whose record it is, and needs no lookup at all; the profile owner's own
+    `display_name` when he typed it and someone else reads it — `Scope.PROFILE`, which every
+    key holds (`app.audit.access.audited_profile_read`'s own docstring), never `Scope.FAMILY`,
+    so a medicines-only key still gets a real name for the by far most common shape of this
+    (he typed his own medicine, a helper reads the list); a resolved display name when a
+    third family member typed it and `person_display_name` can answer for this key (needs
+    `Scope.FAMILY`); or `None` when none of that can be told apart at all (no confirmer on an
+    old row, or `Scope.FAMILY` is not held): `source_line` then falls back to the older,
+    neutral "typed this in" wording, never a guess and never a raised refusal from a card
+    that is only trying to show a source line."""
+    if confirmed_by_person_id is None:
+        return None
+    if confirmed_by_person_id == context.person_id:
+        return SELF_TYPED
+    if owner_person_id is not None and confirmed_by_person_id == owner_person_id:
+        return owner_display_name
+    try:
+        return await person_display_name(session, context, confirmed_by_person_id)
+    except (OutOfScope, NotOnThisProfile):
+        return None
 
 
 async def _taps_by_generic(
@@ -1039,6 +1235,23 @@ async def active_lines(
         context=context,
         artifact_ids=[line.source_artifact_id for line in lines if line.source_artifact_id is not None],
     )
+    pill_artifacts = await _pill_photo_artifacts_for(
+        session,
+        context=context,
+        artifact_ids=[line.source_artifact_id for line in lines if line.source_artifact_id is not None],
+    )
+    profile = await audited_profile_read(session, context)
+    typed_voices: dict[uuid.UUID, str | None] = {}
+    for line in lines:
+        confirmer = line.confirmed_by_person_id
+        if confirmer not in typed_voices:
+            typed_voices[confirmer] = await _typed_voice_for(
+                session,
+                context=context,
+                confirmed_by_person_id=confirmer,
+                owner_person_id=profile.owner_person_id,
+                owner_display_name=profile.display_name,
+            )
     views: list[LineView] = []
     for line in lines:
         name = names[line.generic]
@@ -1096,11 +1309,13 @@ async def active_lines(
                     line,
                     zone,
                     lang,
+                    typed_voice=typed_voices.get(line.confirmed_by_person_id),
                     artifact_kind=(
                         None
                         if line.source_artifact_id is None
                         else artifact_kinds.get(line.source_artifact_id)
                     ),
+                    is_pill_photo=line.source_artifact_id in pill_artifacts,
                 ),
                 due_now=any(
                     window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[0]
@@ -1211,6 +1426,23 @@ async def today(
         context=context,
         artifact_ids=[line.source_artifact_id for line in lines if line.source_artifact_id is not None],
     )
+    pill_artifacts = await _pill_photo_artifacts_for(
+        session,
+        context=context,
+        artifact_ids=[line.source_artifact_id for line in lines if line.source_artifact_id is not None],
+    )
+    profile = await audited_profile_read(session, context)
+    typed_voices: dict[uuid.UUID, str | None] = {}
+    for line in lines:
+        confirmer = line.confirmed_by_person_id
+        if confirmer not in typed_voices:
+            typed_voices[confirmer] = await _typed_voice_for(
+                session,
+                context=context,
+                confirmed_by_person_id=confirmer,
+                owner_person_id=profile.owner_person_id,
+                owner_display_name=profile.display_name,
+            )
     order = [a.value for a in arithmetic.Anchor]
     slots: list[Slot] = []
     for line in lines:
@@ -1254,6 +1486,8 @@ async def today(
                             if line.source_artifact_id is None
                             else artifact_kinds.get(line.source_artifact_id)
                         ),
+                        is_pill_photo=line.source_artifact_id in pill_artifacts,
+                        typed_voice=typed_voices.get(line.confirmed_by_person_id),
                     ),
                     taken_late=tapped
                     and _tapped_late(anchor.value, line.generic, today_taps, generic_of),

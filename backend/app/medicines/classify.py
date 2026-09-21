@@ -14,9 +14,10 @@ source of truth, exactly as it already is for `app.medicines.service._one_produc
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import StrEnum
 
-from app.drugs.registry import DrugRegistry, LabelFields
+from app.drugs.registry import DrugMatch, DrugRegistry, LabelFields
 
 
 class NameKind(StrEnum):
@@ -31,6 +32,20 @@ class NameKind(StrEnum):
     """Neither: the register has never heard of this name at all."""
 
 
+def identify_by_name(registry: DrugRegistry, name: str | None) -> Sequence[DrugMatch]:
+    """`registry.identify`, trying this one name both ways the register can hold a product
+    under — as its generic, then (only if that finds nothing) as its brand — the best
+    matches first either way (`FixtureRegistry.identify`'s own ordering). A caller that has
+    a `NameKind.MEDICINE` name and needs the product's own generic back (to send `identify`
+    a `LabelFields` that actually matches, rather than replaying the same ambiguous text as
+    `generic` when the register only knows it as a brand — #10, the "Norvasc" case) reads
+    `[0].generic` off this, never the name it was given."""
+    trimmed = (name or "").strip()
+    if not trimmed:
+        return ()
+    return registry.identify(LabelFields(generic=trimmed)) or registry.identify(LabelFields(brand=trimmed))
+
+
 def classify_name(registry: DrugRegistry, name: str | None) -> NameKind:
     """`MEDICINE` when `registry.identify` finds this name as a generic or a brand;
     `CLASS` when it is not a product but `registry.members_of_class` finds products filed
@@ -39,11 +54,11 @@ def classify_name(registry: DrugRegistry, name: str | None) -> NameKind:
     trimmed = (name or "").strip()
     if not trimmed:
         return NameKind.UNKNOWN
-    if registry.identify(LabelFields(generic=trimmed)) or registry.identify(LabelFields(brand=trimmed)):
+    if identify_by_name(registry, trimmed):
         return NameKind.MEDICINE
     if registry.members_of_class(trimmed):
         return NameKind.CLASS
     return NameKind.UNKNOWN
 
 
-__all__ = ["NameKind", "classify_name"]
+__all__ = ["NameKind", "classify_name", "identify_by_name"]

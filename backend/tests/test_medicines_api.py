@@ -30,6 +30,7 @@ from app.memory.models import ArtifactKind, Recording, SourceChannel
 from app.regions import Region
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
+from tests.paper import PILL_PHOTO, placeholder_png
 
 PA = "+6591110001"
 MEI = "+6591110002"
@@ -608,7 +609,7 @@ async def test_a_typed_medicine_keeps_its_own_artefact_and_the_list_says_so(
         r["generic"]: r
         for r in (await client.get(f"/profiles/{profile_id}/medicines?language=en", headers=his)).json()
     }
-    assert listed["fish oil"]["source"].startswith("Someone typed this in on")
+    assert listed["fish oil"]["source"].startswith("You typed this in on")
     assert listed["amlodipine"]["source"].startswith("This comes from the label you kept on")
 
 
@@ -637,13 +638,31 @@ async def test_classify_over_http_answers_medicine_class_or_unknown(
         f"/profiles/{profile_id}/medicines/classify", params={"name": "amlodipine"}, headers=his
     )
     assert medicine.status_code == 200
-    assert medicine.json() == {"name_kind": "medicine", "candidates": []}
+    assert medicine.json() == {
+        "name_kind": "medicine",
+        "candidates": [],
+        "resolved_generic": "amlodipine",
+    }
+
+    # #10: a brand-only name still classifies as a medicine, and resolves to the register's
+    # own generic — never the brand text itself, which `identify()` would never match against
+    # a `LabelIn.generic`.
+    brand = await deployment.client.get(
+        f"/profiles/{profile_id}/medicines/classify", params={"name": "Norvasc"}, headers=his
+    )
+    assert brand.status_code == 200
+    assert brand.json() == {
+        "name_kind": "medicine",
+        "candidates": [],
+        "resolved_generic": "amlodipine",
+    }
 
     family = await deployment.client.get(
         f"/profiles/{profile_id}/medicines/classify", params={"name": "STATIN"}, headers=his
     )
     assert family.status_code == 200
     assert family.json()["name_kind"] == "class"
+    assert family.json()["resolved_generic"] is None
     assert {c["generic"] for c in family.json()["candidates"]} == {
         "atorvastatin",
         "simvastatin",
@@ -656,4 +675,251 @@ async def test_classify_over_http_answers_medicine_class_or_unknown(
         headers=his,
     )
     assert unknown.status_code == 200
-    assert unknown.json() == {"name_kind": "unknown", "candidates": []}
+    assert unknown.json() == {"name_kind": "unknown", "candidates": [], "resolved_generic": None}
+
+
+async def test_adding_a_medicine_by_photo_closes_the_cards_own_review_card(
+    deployment: Deployment,
+) -> None:
+    """#9: the add-a-medicine screen runs its own confirm pipeline (`POST /medicines`), past
+    the ordinary paper review card its photo made — never `confirm_review_card` itself. Left
+    alone, that card stayed open forever, so `app.search.ask.waiting_papers` (and the ordinary
+    papers screen) kept asking him to check a label he had already said yes to through the
+    medicines screen. Writing the line must close its own card, and only its own — a second,
+    unrelated open card must still show as waiting."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+
+    photo = await _artefact(client, profile_id, pa, "closes-its-card")
+    other_photo = await _artefact(client, profile_id, pa, "stays-open")
+
+    before = await client.get(
+        f"/profiles/{profile_id}/review-cards", params={"open": "true"}, headers=his
+    )
+    assert before.status_code == 200
+    assert {c["artifact_id"] for c in before.json()} == {photo, other_photo}
+
+    amlodipine = _label("amlodipine", "5 mg", "1 tab OD", 30)
+    added = await _add(client, profile_id, pa, amlodipine, photo)
+    assert added.status_code == 201, added.text
+
+    after = await client.get(
+        f"/profiles/{profile_id}/review-cards", params={"open": "true"}, headers=his
+    )
+    assert after.status_code == 200
+    still_open = {c["artifact_id"] for c in after.json()}
+    assert still_open == {other_photo}  # the medicine's own card closed; the other did not
+
+    closed = await client.get(f"/profiles/{profile_id}/review-cards", headers=his)
+    mine = next(c for c in closed.json() if c["artifact_id"] == photo)
+    assert mine["confirmed_at"] is not None
+    assert mine["confirmed_by_person_id"] is not None
+
+
+async def test_the_two_duplicate_outcomes_are_told_apart_by_matched_line_id(
+    deployment: Deployment,
+) -> None:
+    """#11: `POST /medicines/draft` answers `outcome: "duplicate"` for two different reasons,
+    and a caller must be able to tell them apart, or a screen that offers "yes, say how many"
+    for one of them loops forever on the other.
+
+    Case A — this exact photo already wrote this exact medicine (`_label_seen_before`):
+    nothing is missing, there is no quantity that would ever change the answer, and
+    `matched_line_id` is null, exactly as `Plan(Outcome.DUPLICATE, match, None, None, ...)`
+    on the backend leaves it.
+
+    Case B — an active line already matches on strength and dose, but this label gave no
+    quantity to add as a refill: asking for one is the right next question, and
+    `matched_line_id` names the line it would refill.
+    """
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+
+    # Case A: add it once for real, then draft the very same label from the very same photo.
+    photo = await _artefact(client, profile_id, pa, "case-a")
+    amlodipine = _label("amlodipine", "5 mg", "1 tab OD", 30)
+    added = await _add(client, profile_id, pa, amlodipine, photo)
+    assert added.status_code == 201, added.text
+
+    replayed = await client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={"label": amlodipine, "source_artifact_id": photo},
+        headers=his,
+    )
+    assert replayed.status_code == 200, replayed.text
+    assert replayed.json()["outcome"] == "duplicate"
+    assert replayed.json()["matched_line_id"] is None  # nothing "yes, say how many" could fix
+
+    # Case B: a second, unrelated photo, same medicine and dose, no quantity this time.
+    second_photo = await _artefact(client, profile_id, pa, "case-b")
+    no_quantity = _label("amlodipine", "5 mg", "1 tab OD", quantity=None)
+    missing_quantity = await client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={"label": no_quantity, "source_artifact_id": second_photo},
+        headers=his,
+    )
+    assert missing_quantity.status_code == 200, missing_quantity.text
+    assert missing_quantity.json()["outcome"] == "duplicate"
+    assert missing_quantity.json()["matched_line_id"] is not None  # "how many" is the fix
+
+    # Answering it — the same photo, now with a quantity — refills the very line it named.
+    with_quantity = _label("amlodipine", "5 mg", "1 tab OD", quantity=30)
+    now_a_refill = await client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={"label": with_quantity, "source_artifact_id": second_photo},
+        headers=his,
+    )
+    assert now_a_refill.status_code == 200, now_a_refill.text
+    assert now_a_refill.json()["outcome"] == "refill"
+    assert now_a_refill.json()["matched_line_id"] == missing_quantity.json()["matched_line_id"]
+
+
+async def test_a_brand_only_name_no_longer_dead_ends_the_draft(deployment: Deployment) -> None:
+    """#10: classify says a brand-only name ("Norvasc") is a known medicine, but `identify()`
+    only ever matches `LabelIn.generic` against a product's own generic — so a caller that
+    replays the classified name straight back as `generic` gets `NotIdentified` even though
+    classify just said yes. The add path must settle on `resolved_generic` first."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+
+    classified = await client.get(
+        f"/profiles/{profile_id}/medicines/classify", params={"name": "Norvasc"}, headers=his
+    )
+    assert classified.status_code == 200
+    resolved = classified.json()["resolved_generic"]
+    assert resolved == "amlodipine"
+
+    # The dead end, reproduced: sending the brand straight back as `generic` finds nothing.
+    photo = await _artefact(client, profile_id, pa, "brand-dead-end")
+    dead_end = await client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={"label": _label("Norvasc", "5 mg", "1 tab OD", 30), "source_artifact_id": photo},
+        headers=his,
+    )
+    assert dead_end.status_code == 400, dead_end.text
+    assert dead_end.json()["refusal"] == "NotIdentified"
+
+    # Settled on the register's own generic first, exactly as the add screen now does: works.
+    fixed = await client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={"label": _label(resolved, "5 mg", "1 tab OD", 30), "source_artifact_id": photo},
+        headers=his,
+    )
+    assert fixed.status_code == 200, fixed.text
+    assert fixed.json()["match"]["generic"] == "amlodipine"
+
+
+async def test_a_medicines_only_helper_key_is_told_the_real_source_kind_not_a_guess(
+    deployment: Deployment,
+) -> None:
+    """BLOCKER 1, independent safety review #1's no-migration fix: a key that holds
+    `Scope.MEDICINES` and not `Scope.RECORDS` used to be told nothing about a line's own
+    artefact at all (`_artifact_kinds_for` answered `{}` outright), so `source_line` fell
+    back to guessing "the label you kept" from the mere presence of a `source_artifact_id` —
+    wrong for a typed entry, and never honest about a pill photo either. This fails
+    behaviourally on the prior head: Mei's read of the typed line used to say "the label you
+    kept" for a label that never existed, and of the pill photo the same.
+
+    Three real source kinds, read by Mei — a helper key holding `medicines` alone, never
+    `records` and never `family` — and the neutral fallback checked separately
+    (`test_source_line_says_a_neutral_sentence_when_the_kind_cannot_be_read`, a pure
+    function test: there is no way to make a real artefact "unreadable" through the API,
+    since every line's own artefact is always on file)."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+
+    # A label photo.
+    photo = await _artefact(client, profile_id, pa, "medicines-only-label")
+    label_added = await _add(client, profile_id, pa, _label("amlodipine", "5 mg", "1 tab OD", 30), photo)
+    assert label_added.status_code == 201, label_added.text
+
+    # A pill photo — a real one, so its review card genuinely reads `pill_photo`.
+    pill_photo_made = await client.post(
+        f"/profiles/{profile_id}/photos",
+        json={
+            "data": base64.b64encode(placeholder_png(PILL_PHOTO)).decode(),
+            "content_type": "image/png",
+            "captured_at": "2026-09-03T08:00:00Z",
+        },
+        headers=his,
+    )
+    assert pill_photo_made.status_code == 201, pill_photo_made.text
+    assert pill_photo_made.json()["document_kind"] == "pill_photo"
+    pill_photo_id = pill_photo_made.json()["artifact_id"]
+    pill_added = await _add(
+        client, profile_id, pa, _label("paracetamol", "500 mg", "1 tab prn", 20), pill_photo_id
+    )
+    assert pill_added.status_code == 201, pill_added.text
+
+    # A typed entry, by Pa himself.
+    typed = await client.post(
+        f"/profiles/{profile_id}/medicines/typed",
+        json={"text": "I take fish oil 1000 mg every morning", "captured_at": "2026-09-10T08:00:00Z"},
+        headers=his,
+    )
+    assert typed.status_code == 201, typed.text
+    typed_added = await _add(
+        client, profile_id, pa, _label("fish oil", "1000 mg", "1 capsule OD", None), typed.json()["artifact_id"]
+    )
+    assert typed_added.status_code == 201, typed_added.text
+
+    # Mei: a helper key, medicines only — never records, never family.
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await let_in(deployment, pa, profile_id, MEI, ["medicines"], "helper", role="helper")
+    granted = await client.post(
+        f"/profiles/{profile_id}/keys",
+        json={"holder_phone_e164": MEI, "role": "helper", "scopes": ["medicines"]},
+        headers=his,
+    )
+    assert granted.status_code == 201, granted.text
+    hers = bearer(mei["token"])
+
+    listed = {
+        r["generic"]: r
+        for r in (await client.get(f"/profiles/{profile_id}/medicines?language=en", headers=hers)).json()
+    }
+    # Said about him by name on Mei's own key (`app.channels.about_him`), the same as every
+    # other second-person line she reads: "the label Pa kept", never "you kept".
+    assert listed["amlodipine"]["source"].startswith("This comes from the label Pa kept on")
+    assert listed["paracetamol"]["source"].startswith("This comes from a photo of a tablet")
+    assert "the label" not in listed["paracetamol"]["source"]
+    # Pa typed it himself; Mei reads it with her own key, medicines-only — she still gets his
+    # real name (`Scope.PROFILE`, which every key holds), never "the label you kept".
+    assert listed["fish oil"]["source"].startswith("Pa typed this in on")
+    assert "the label" not in listed["fish oil"]["source"]
+
+    # Pa's own read, for comparison: he typed it himself, so it is "You", not his own name.
+    his_own = {
+        r["generic"]: r
+        for r in (await client.get(f"/profiles/{profile_id}/medicines?language=en", headers=his)).json()
+    }
+    assert his_own["fish oil"]["source"].startswith("You typed this in on")
+
+
+def test_source_line_says_a_neutral_sentence_when_the_kind_cannot_be_read() -> None:
+    """BLOCKER 1: an artefact id is on the line but its own kind could not be read (a
+    deleted artefact, or some future failure this has not seen yet) — `source_line` never
+    falls back to "the label you kept" from the mere fact that a `source_artifact_id` is on
+    file; a neutral sentence that claims nothing about where it came from instead."""
+    from zoneinfo import ZoneInfo
+
+    from app.medicines.models import MedicationLine
+    from app.medicines.service import source_line
+
+    line = MedicationLine(
+        started_at=datetime(2026, 9, 19, 8, 0, tzinfo=UTC),
+        source_artifact_id=uuid.uuid4(),
+        confirmed_by_person_id=uuid.uuid4(),
+    )
+    text = source_line(line, ZoneInfo("Asia/Singapore"), "en", artifact_kind=None, is_pill_photo=False)
+    assert text.startswith("Nura has this written down since")
+    assert "label" not in text
+    assert "pill" not in text.lower()

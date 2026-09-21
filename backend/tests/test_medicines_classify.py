@@ -11,7 +11,7 @@ from app.drugs.fixture import FixtureRegistry
 from app.drugs.registry import LabelFields
 from app.keys.context import OutOfScope
 from app.keys.scopes import KeyRole, Scope
-from app.medicines.classify import NameKind, classify_name
+from app.medicines.classify import NameKind, classify_name, identify_by_name
 from app.medicines.service import classify
 from tests.medicines_support import REGISTRY, let_in, pa
 
@@ -21,6 +21,21 @@ from tests.medicines_support import REGISTRY, let_in, pa
 def test_a_specific_product_classifies_as_a_medicine() -> None:
     assert classify_name(REGISTRY, "amlodipine") is NameKind.MEDICINE
     assert classify_name(REGISTRY, "Norvasc") is NameKind.MEDICINE  # a brand name too
+
+
+def test_a_brand_only_name_resolves_to_the_registers_own_generic() -> None:
+    # #10: the register only ever matches `LabelFields.generic` against a product's own
+    # generic, never against its brand — so a caller who goes on to build a `LabelFields`
+    # from a brand-only name must send the resolved generic, not the name it looked up, or
+    # `identify()` finds nothing even though this name is a known medicine.
+    matches = identify_by_name(REGISTRY, "Norvasc")
+    assert matches
+    assert matches[0].generic == "amlodipine"
+    assert REGISTRY.identify(LabelFields(generic="Norvasc")) == []  # the dead end, reproduced
+    assert identify_by_name(REGISTRY, "amlodipine")[0].generic == "amlodipine"  # a generic name too
+    assert list(identify_by_name(REGISTRY, "not a real thing")) == []
+    assert identify_by_name(REGISTRY, "") == ()
+    assert identify_by_name(REGISTRY, None) == ()
 
 
 def test_a_family_name_with_no_specific_product_classifies_as_a_class() -> None:
@@ -70,14 +85,21 @@ async def test_classify_is_read_only_and_scoped_like_its_neighbours(sg: AsyncSes
     medicine = await classify(sg, context=owner, registry=REGISTRY, name="amlodipine")
     assert medicine.kind is NameKind.MEDICINE
     assert medicine.candidates == ()
+    assert medicine.resolved_generic == "amlodipine"
+
+    brand = await classify(sg, context=owner, registry=REGISTRY, name="Norvasc")
+    assert brand.kind is NameKind.MEDICINE
+    assert brand.resolved_generic == "amlodipine"  # #10: never "norvasc" — identify() would find nothing
 
     family = await classify(sg, context=owner, registry=REGISTRY, name="STATIN")
     assert family.kind is NameKind.CLASS
     assert {c.generic for c in family.candidates} == {"atorvastatin", "simvastatin", "rosuvastatin"}
+    assert family.resolved_generic is None
 
     unknown = await classify(sg, context=owner, registry=REGISTRY, name="not a real thing")
     assert unknown.kind is NameKind.UNKNOWN
     assert unknown.candidates == ()
+    assert unknown.resolved_generic is None
 
 
 async def test_classify_is_refused_without_the_medicines_scope(sg: AsyncSession) -> None:

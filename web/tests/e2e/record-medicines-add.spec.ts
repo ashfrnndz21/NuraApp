@@ -165,6 +165,45 @@ test("adding the same medicine twice: put to him as a question, not a bare refus
   expect(lines).toHaveLength(1);
 });
 
+test("a pill photo (#2b, independent safety review): no one-tap accept, an honest caution, the field-by-field form only", async ({ page, request }) => {
+  const pa = await openOwn(request);
+  await signInAs(page, pa, "Pa");
+  await openRecord(page);
+  await page.getByTestId("record-medicines").click();
+  await page.getByTestId("add-medicine").click();
+  await page.getByTestId("photo-input").setInputFiles({ name: "pill.png", mimeType: "image/png", buffer: placeholderPng("pill-photo-2026-09-15") });
+
+  const confirm = page.getByTestId("add-confirm");
+  await expect(confirm).toBeVisible();
+  // The honest caution, before anything else — never a one-tap "Looks right" beside it.
+  const caution = page.getByTestId("add-pill-caution");
+  await expect(caution).toContainText("This might be Paracetamol.");
+  await expect(caution).toContainText("Nura cannot be sure from a photo of a tablet.");
+  await expect(caution).toContainText("Check the box, or ask the pharmacist.");
+  await expect(page.getByTestId("looks-right")).toHaveCount(0);
+
+  // The one way forward is the field-by-field form.
+  const checkEach = page.getByTestId("add-fix");
+  await expect(checkEach).toHaveText("Check each one");
+  await checkEach.click();
+  const labelStep = page.getByTestId("add-label");
+  await expect(labelStep).toBeVisible();
+  await expect(page.getByLabel("The name on the label")).toHaveValue("paracetamol");
+  await page.getByLabel("How strong it is").fill("500 mg");
+  await page.getByLabel("How to take it").fill("1 tab prn");
+  await page.getByTestId("check-medicine").click();
+
+  await expect(page.getByTestId("add-check")).toBeVisible();
+  await page.getByTestId("add-it").click();
+  await expect(page.getByTestId("add-done")).toBeVisible();
+
+  const [line] = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as Line[];
+  expect(line!.generic).toBe("paracetamol");
+  // #2c: never "the label you kept" for a loose tablet's own photo.
+  expect(line!.source).toContain("a photo of a tablet");
+  expect(line!.source).not.toContain("the label you kept");
+});
+
 test("a key with no medicines scope sees a refusal, never the list", async ({ page, request }) => {
   const pa = await openOwn(request);
   await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 30 });

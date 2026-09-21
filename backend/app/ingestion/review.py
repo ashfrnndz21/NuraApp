@@ -36,6 +36,7 @@ from datetime import UTC, datetime, time
 from enum import StrEnum
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -73,7 +74,7 @@ from app.ingestion.readings import (
     reading_from,
 )
 from app.keys.confirm import confirm, consume_confirmation
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
 from app.medicines.models import LineStatus, MedicationLine
@@ -972,6 +973,92 @@ async def confirm_review_card(
             by_person_id=yes.person_id,
         )
     return card, fields, written
+
+
+async def close_card_for_artifact(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    artifact_id: uuid.UUID,
+    person_id: uuid.UUID,
+    moment: datetime,
+) -> None:
+    """Close whatever open review card this artefact still has — for a caller that writes a
+    fact from an artefact's own yes without going through `confirm_review_card` itself. The
+    add-a-medicine screen is exactly this (redesign package 11): it runs its own reconcile
+    pipeline end to end, past its own confirmation card, and never calls
+    `confirm_review_card` — so, without this, a label read by photo through that screen kept
+    its card open forever, and `app.search.ask.waiting_papers` (and the ordinary papers
+    screen behind it) kept asking him to check something he had already said yes to
+    (review defect #9).
+
+    A no-op when the artefact never had a card at all (a typed entry keeps its own artefact
+    but is never read by an extractor, so `card_from` was never called for it) or its card is
+    already closed. Silent, not a refusal, when this key lacks `Scope.RECORDS` to see cards —
+    a `Scope.MEDICINES`-only key can still write the line; it simply cannot be the one to
+    close a card that belongs to the record scope its key was never granted, the same shape
+    `app.medicines.service._artifact_kinds_for` already holds for reading a card's kind."""
+    try:
+        found = await audited_read(
+            session,
+            ReviewCard,
+            context,
+            Scope.RECORDS,
+            where=(ReviewCard.artifact_id == artifact_id, _cards_held_here(context)),
+        )
+    except OutOfScope:
+        return
+    for card in found:
+        if card.confirmed_at is not None:
+            continue
+        # `ReviewCard` is a frozen row outside its own service (`app.ingestion.models.frozen`,
+        # `_review_is_in_progress`): the same marker `confirm_review_card` sets before it
+        # closes a card is required here too, or the flush below raises `ImmutableRow`.
+        session.info[REVIEW_IN_PROGRESS] = card.id
+        try:
+            card.confirmed_at = moment
+            card.confirmed_by_person_id = person_id
+            await session.flush()
+        finally:
+            session.info.pop(REVIEW_IN_PROGRESS, None)
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=CARD,
+            target_id=card.id,
+            rows=1,
+        )
+
+
+async def pill_photo_artifacts_of(
+    session: AsyncSession, *, context: KeyContext, artifact_ids: Sequence[uuid.UUID]
+) -> set[uuid.UUID]:
+    """Which of these artefacts' own review cards say `DocumentKind.PILL_PHOTO` — never any
+    other column, only that one enum (BLOCKER 1, independent safety review #1's no-migration
+    fix: `app.medicines.service.source_line`, for a line a medicines-only key can already see
+    citing its own `source_artifact_id`; review defect #2c, a loose tablet's own guess is
+    never said as "the label he kept").
+
+    A raw, profile-scoped, id-restricted read, the same shape as
+    `app.safety.high_risk.is_pill_photo` beside it in spirit (a narrow kind check that needs
+    no key) and `app.memory.episodic.artifact_kinds_of` in reason: `ReviewCard` is defined in
+    this module, which is where a read like this belongs, and the caller writes its own
+    audit line under whichever door it actually read this through, since only the caller
+    knows which one that was."""
+    if not artifact_ids:
+        return set()
+    found = (
+        await session.execute(
+            select(ReviewCard.artifact_id).where(
+                ReviewCard.artifact_id.in_(list(artifact_ids)),
+                ReviewCard.profile_id == context.profile_id,
+                ReviewCard.document_kind == DocumentKind.PILL_PHOTO,
+            )
+        )
+    ).scalars().all()
+    return set(found)
 
 
 async def _write_lab_readings(
