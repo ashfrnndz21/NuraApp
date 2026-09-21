@@ -1808,6 +1808,14 @@ class ReviewFieldOut(BaseModel):
     page: int | None
     """For a PDF of several pages, the page the field was read on, counting from 1."""
     span: dict[str, float | int] | None
+    range: dict[str, Any] | None
+    """The result's own printed reference range, when the row on the paper carried one: `low`,
+    `high` (numbers or null) and `text` (the range exactly as printed). Never a judgement of
+    ours — only ever what the paper itself prints (defect #3)."""
+    label_on_paper: str | None
+    """The words printed on the paper for this line, when the extractor named them. What the
+    web client's `fieldLabel` falls back to ahead of its own generic line name, for a line
+    outside the controlled vocabulary."""
     state: FieldState
     corrected_value: Any | None
     corrected_by_person_id: uuid.UUID | None
@@ -1835,6 +1843,8 @@ class ReviewFieldOut(BaseModel):
             confidence=field.confidence,
             needs_confirm=field.needs_confirm,
             span=field.span,
+            range=field.range,
+            label_on_paper=field.label_on_paper,
             state=field.state,
             corrected_value=field.corrected_value,
             fact_id=field.fact_id,

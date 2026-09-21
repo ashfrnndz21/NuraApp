@@ -48,6 +48,7 @@ from tests.paper import (
     INSURANCE_POLICY,
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
+    METABOLIC_PANEL,
     PAPER,
     PHARMACY_RECEIPT,
     PHARMACY_RECEIPT_RED_FLAG,
@@ -119,16 +120,50 @@ async def test_a_lab_reports_known_unit_becomes_a_reading_proposal_and_the_rest_
     assert reading_fact.value == {"glucose": 5.6}
     assert reading_fact.unit == "mmol/L"
     assert reading_fact.event_id is not None
-    # An ordinary lab row, its own metadata sibling, and a header field are plain facts.
+    # An ordinary lab row and a header field are plain facts. The fixture's `ldl_reference_
+    # range` sibling (the legacy shape) is folded onto `ldl`'s own `range` and never reaches
+    # the card as a line of its own (defect #3, `fold_legacy_reference_ranges`).
     ldl = next(f for f in decided if f.subject == "lipid_panel" and f.attribute == "ldl")
     ldl_fact = next(fact for fact in facts if fact.id == ldl.fact_id)
     assert ldl_fact.value == 140 and ldl_fact.unit == "mg/dL" and ldl_fact.event_id is None
-    ref_range = next(f for f in decided if f.attribute == "ldl_reference_range")
-    ref_fact = next(fact for fact in facts if fact.id == ref_range.fact_id)
-    assert ref_fact.value == "<130" and ref_fact.event_id is None
+    assert ldl.range == {"low": None, "high": 130.0, "text": "<130"}
+    assert not any(f.attribute == "ldl_reference_range" for f in decided)
     facility = next(f for f in decided if f.subject == "lab_report")
     facility_fact = next(fact for fact in facts if fact.id == facility.fact_id)
     assert facility_fact.subject == "lab_report" and facility_fact.value == "Bukit Lab"
+
+
+async def test_a_wider_metabolic_panel_carries_its_own_printed_ranges_and_the_other_escape_hatch(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """The controlled vocabulary added for defect #1 (kidney_panel, blood_test, liver_panel)
+    reaches the card under its own canonical codes; a result given its own `range` directly
+    (not a legacy `_reference_range` sibling) keeps it exactly; a result with no printed range
+    at all carries none; a line outside the vocabulary is `subject`/`attribute` "lipid_panel"/
+    "other" with `label_on_paper` — the words a person would still recognise the line by."""
+    owner = await _pa(sg)
+    card, fields = await _card(sg, owner, store, extractor, METABOLIC_PANEL)
+    assert card.document_kind is DocumentKind.LAB_REPORT
+    by_key = {(f.subject, f.attribute): f for f in fields}
+
+    creatinine = by_key[("kidney_panel", "creatinine")]
+    assert creatinine.value == 95 and creatinine.unit == "umol/L"
+    assert creatinine.range == {"low": 60.0, "high": 110.0, "text": "60 - 110"}
+
+    egfr = by_key[("kidney_panel", "egfr")]
+    assert egfr.range == {"low": 60.0, "high": None, "text": ">60"}
+
+    potassium = by_key[("kidney_panel", "potassium")]
+    assert potassium.range == {"low": 3.5, "high": 5.2, "text": "3.5 - 5.2"}
+
+    hba1c = by_key[("blood_test", "hba1c")]
+    assert hba1c.value == 5.4 and hba1c.range == {"low": None, "high": 5.7, "text": "<5.7"}
+
+    alt = by_key[("liver_panel", "alt")]
+    assert alt.value == 42 and alt.range is None  # no printed range at all: none invented
+
+    other = by_key[("lipid_panel", "other")]
+    assert other.value == "0.9" and other.label_on_paper == "Apo-B"
 
 
 async def test_a_lab_report_naming_a_red_word_is_flagged_before_the_card_is_shown(

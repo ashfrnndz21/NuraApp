@@ -167,12 +167,38 @@ def _number(value: Any) -> float | None:
     return None
 
 
-def _printed_range(value: Any, sibling: Any) -> tuple[float | None, float | None] | None:
-    """The range printed beside one value on the paper, in whichever of the two shapes this
-    profile's facts carry: a `range` already embedded on the value itself (a sibling
-    builder's shape, `{"value": 140, "range": "<130"}`), or the legacy sibling fact this
-    backend writes today (`{attribute}_reference_range`, a plain string). Both are read, so
-    neither shape needs to have landed for the other to work."""
+def _printed_range(
+    value: Any, sibling: Any, *, field_range: Mapping[str, Any] | None = None
+) -> tuple[float | None, float | None] | None:
+    """The range printed beside one value on the paper, in whichever shape this profile's own
+    rows carry it — read in this order, the first that answers wins:
+
+    1. `field_range` — `app.ingestion.models.ReviewField.range` (defect #3, #292): `{"low":
+       number|null, "high": number|null, "text": string}`, already parsed by the confirm
+       flow itself (`app.ingestion.extract.fold_legacy_reference_ranges`), the shape every
+       confirm from here on carries. Bounds are read straight off it — never reparsed —
+       *unless* neither bound parsed there either (both `None`, an unambiguous or compound
+       range the extractor itself could not reduce to numbers); then `text` is tried here
+       too, on the chance it is one of this module's own literal shapes after all.
+    2. A `range` already embedded on the fact's own `value` (a sibling shape no confirm here
+       writes yet, kept for forward compatibness — `{"value": 140, "range": "<130"}`).
+    3. The legacy sibling fact this backend wrote before #292 (`{attribute}_reference_range`,
+       a plain string) — a card confirmed on an older build, still on someone's record.
+
+    None of the three needs to have landed for the others to work.
+    """
+    if field_range is not None:
+        low, high = field_range.get("low"), field_range.get("high")
+        if isinstance(low, int | float) or isinstance(high, int | float):
+            return (
+                float(low) if isinstance(low, int | float) else None,
+                float(high) if isinstance(high, int | float) else None,
+            )
+        text = field_range.get("text")
+        if isinstance(text, str):
+            parsed = _parse_printed_range(text)
+            if parsed is not None:
+                return parsed
     if isinstance(value, Mapping) and "range" in value:
         embedded = value.get("range")
         if isinstance(embedded, str):
@@ -254,6 +280,18 @@ def _page_of(fields: Sequence[ReviewField], *, subject: str, attribute: str) -> 
     return None
 
 
+def _field_range_of(
+    fields: Sequence[ReviewField], *, subject: str, attribute: str
+) -> Mapping[str, Any] | None:
+    """The matching `ReviewField.range` (defect #3, #292: `{"low", "high", "text"}`), the
+    range as the confirm flow itself already parsed it off the paper — read here rather than
+    reparsed, the current, primary shape `_printed_range` prefers."""
+    for field in fields:
+        if field.subject == subject and field.attribute == attribute and isinstance(field.range, Mapping):
+            return field.range
+    return None
+
+
 def _evidence_label(paper_label: str, page: int | None) -> str:
     return f"{paper_label} (page {page})" if page is not None else paper_label
 
@@ -297,7 +335,12 @@ async def _value_candidates(
             if number is None or fact.id in seen_facts:
                 continue
             sibling = by_attribute.get(f"{attribute}_reference_range")
-            bounds = _printed_range(fact.value, sibling.value if sibling is not None else None)
+            field_range = _field_range_of(fields, subject=subject, attribute=attribute)
+            bounds = _printed_range(
+                fact.value,
+                sibling.value if sibling is not None else None,
+                field_range=field_range,
+            )
             if bounds is None or (bounds[0] is None and bounds[1] is None):
                 continue
             band = _band(number, bounds)

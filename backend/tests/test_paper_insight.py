@@ -512,43 +512,37 @@ def test_an_embedded_range_wins_over_a_conflicting_legacy_sibling() -> None:
     assert _printed_range({"value": 140, "range": "<200"}, "<130") == (None, 200.0)
 
 
-async def test_an_embedded_range_in_practice_beats_a_conflicting_legacy_sibling_fact(
-    sg: AsyncSession, store: LocalObjectStore, extractor
-) -> None:
-    """The same precedence, through a real read: a fact whose own `value` already carries an
-    embedded `range` (a sibling builder's shape) is compared against that range, never the
-    legacy `ldl_reference_range` sibling fact this backend still writes today, even though
-    both sit on the same paper."""
-    from app.memory.episodic import record_event
-    from app.memory.models import ConfidenceState, EventKind, SourceChannel
-    from app.memory.semantic import assert_fact
+def test_the_confirm_flows_own_field_range_wins_over_a_conflicting_embedded_one() -> None:
+    """`ReviewField.range` (defect #3, #292: `{"low", "high", "text"}`) is the range the
+    confirm flow already parsed off the paper itself — it wins over both the embedded shape
+    and the legacy sibling fact when it is present, even when they conflict with it."""
+    from app.reasoning.analyst.paper import _printed_range
 
-    owner = await pa(sg, phone="+6591160013")
-    card = await _confirm_paper(sg, owner, store, extractor)
-    event = await record_event(
-        sg,
-        context=owner,
-        kind=EventKind.READING,
-        occurred_at=AFTER_THE_PAPER,
-        label="a lab result",
-        source_channel=SourceChannel.APP,
+    # field_range says out-of-range (140 > 130); the embedded value and the legacy sibling,
+    # if either were read instead, would both say in-range (140 < 200 / < 300).
+    assert _printed_range(
+        {"value": 140, "range": "<300"},
+        "<300",
+        field_range={"low": None, "high": 130.0, "text": "<130"},
+    ) == (None, 130.0)
+
+
+def test_field_range_falls_back_to_its_own_text_when_neither_bound_parsed() -> None:
+    """A `field_range` whose `low`/`high` are both `null` — the extractor could not reduce a
+    compound or unusual range to numbers — is not the end of it: its own `text` is tried
+    here too, on the chance it is one of this module's own literal shapes after all."""
+    from app.reasoning.analyst.paper import _printed_range
+
+    assert _printed_range(
+        140, None, field_range={"low": None, "high": None, "text": "<130"}
+    ) == (None, 130.0)
+    # ... and when even that does not parse (compound/sex-specific text), no bounds at all.
+    assert (
+        _printed_range(
+            140, None, field_range={"low": None, "high": None, "text": "M: 0-130, F: 0-110"}
+        )
+        is None
     )
-    # Overwrite the legacy `ldl` fact from the confirm above with one whose own value already
-    # carries an embedded range that reads as in-range — same artifact, same subject/attribute.
-    await assert_fact(
-        sg,
-        context=owner,
-        subject="lipid_panel",
-        attribute="ldl",
-        value={"value": 140, "range": "<200"},
-        confidence=1.0,
-        confidence_state=ConfidenceState.EXTRACTED,
-        artifact_id=card.artifact_id,
-        event_id=event.id,
-        valid_from=AFTER_THE_PAPER,
-    )
-    result = await _drain(sg, owner, card.artifact_id)
-    assert not any(q.insight_id.startswith("paper_value:") for q in result.questions)
 
 
 # --- a key with RECORDS but no VISITS: no visit in "looked at"; keep refuses cleanly -------

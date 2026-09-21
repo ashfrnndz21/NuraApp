@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewCardOut, ReviewFieldOut } from "../../src/api/types";
-import { canCorrect, confidenceLine, decide, decisionsFor, fieldLabel, kindLine, parseNumber, pillProposalLine, readable, spokenLine, startingEdits, valueText } from "../../src/onboarding/review";
+import { canCorrect, confidenceLine, decide, decisionsFor, fieldLabel, kindLine, parseNumber, pillProposalLine, rangeStatus, readable, readableValueText, spokenLine, startingEdits, valueText } from "../../src/onboarding/review";
 import { en } from "../../src/strings/en";
 
 const field = (field_id: string, attribute: string, value: unknown, needs_confirm = false, position = 0): ReviewFieldOut => ({
@@ -15,6 +15,8 @@ const field = (field_id: string, attribute: string, value: unknown, needs_confir
   unreadable: false,
   prompt: null,
   page: null,
+  range: null,
+  label_on_paper: null,
   state: "proposed",
   corrected_value: null,
   fact_id: null,
@@ -45,7 +47,9 @@ describe("what the box shows", () => {
     expect(valueText(64)).toBe("64");
     expect(valueText("Dr Lim")).toBe("Dr Lim");
     expect(valueText(dose.value)).toBe("1 tablet once a day at night");
-    expect(valueText({ a: "x", b: 2, c: { d: 1 } })).toBe("x · 2");
+    // A nested structure is read as far down as there is anything to read, never dropped
+    // silently (E02 defect #2: "some lines showed NO value at all").
+    expect(valueText({ a: "x", b: 2, c: { d: 1 } })).toBe("x · 2 · 1");
   });
 
   it("lets a number or words be retyped, never a structured value", () => {
@@ -59,6 +63,24 @@ describe("what the box shows", () => {
     expect(parseNumber(" 5,4 ")).toBe(5.4);
     expect(parseNumber("fifty")).toBeNull();
     expect(parseNumber("54 mg")).toBeNull();
+  });
+
+  it("renders every value shape the API can send, never blank (E02 defect #2)", () => {
+    expect(valueText(true)).toBe("Yes");
+    expect(valueText(false)).toBe("No");
+    expect(valueText(["a", 2, "b"])).toBe("a · 2 · b");
+    expect(valueText([{ a: "x" }, { b: 2 }])).toBe("x · 2");
+    expect(valueText({ a: { b: "deep" } })).toBe("deep");
+    expect(valueText(null)).toBe("");
+    expect(valueText(undefined)).toBe("");
+    expect(valueText({})).toBe("");
+    expect(valueText([])).toBe("");
+  });
+
+  it("falls back to Nura's own words when nothing in the value is readable at all", () => {
+    expect(readableValueText(64, en)).toBe("64");
+    expect(readableValueText({}, en)).toBe(en.onboarding.records.valueUnreadable);
+    expect(readableValueText(null, en)).toBe(en.onboarding.records.valueUnreadable);
   });
 });
 
@@ -115,6 +137,18 @@ describe("the words on the card", () => {
     expect(fieldLabel(tg, en)).toBe("The blood fats");
     expect(fieldLabel({ subject: "medicine", attribute: "prescriber" }, en)).toBe("Which doctor wrote it");
     expect(fieldLabel({ subject: "x_ray", attribute: "finding" }, en)).toBe(en.onboarding.records.otherLine);
+  });
+
+  it("falls back to the paper's own words before the generic line name (E02 defect #1)", () => {
+    // A canonical code Nura knows always wins, even with a label_on_paper alongside it.
+    expect(fieldLabel({ ...tg, label_on_paper: "Trigs" }, en)).toBe("The blood fats");
+    // No canonical code: the paper's own printed words, not "Another line on the paper".
+    expect(fieldLabel({ subject: "lipid_panel", attribute: "other", label_on_paper: "Apo-B" }, en)).toBe("Apo-B");
+    // A blank or missing label_on_paper still falls through to the generic line name.
+    expect(fieldLabel({ subject: "lipid_panel", attribute: "other", label_on_paper: "  " }, en)).toBe(
+      en.onboarding.records.otherLine,
+    );
+    expect(fieldLabel({ subject: "lipid_panel", attribute: "other" }, en)).toBe(en.onboarding.records.otherLine);
   });
 
   it("says how sure Nura is in words, from the backend's own threshold", () => {
@@ -217,5 +251,45 @@ describe("a pill photo and a pharmacy receipt (#pill-receipt)", () => {
   it("keeps a receipt line's price fields readable, unit and all", () => {
     expect(spokenLine(item1Total, en)).toEqual([en.onboarding.fields.item!.total, "12.5 SGD", "Nura is sure of this one."]);
     expect(fieldLabel(item1Name, en)).toBe(en.onboarding.fields.item!.name);
+  });
+});
+
+describe("where a number sits against the paper's own printed range (E02 defect #3)", () => {
+  it("reads a two-sided range as inclusive at both ends", () => {
+    const range = { low: 3.9, high: 6.0 };
+    expect(rangeStatus(3.9, range)).toBe("in");
+    expect(rangeStatus(6.0, range)).toBe("in");
+    expect(rangeStatus(3.8, range)).toBe("below");
+    expect(rangeStatus(6.1, range)).toBe("above");
+  });
+
+  it("reads an upper-only range as under, exclusive", () => {
+    const range = { low: null, high: 150 };
+    expect(rangeStatus(149, range)).toBe("in");
+    expect(rangeStatus(150, range)).toBe("above");
+    expect(rangeStatus(151, range)).toBe("above");
+  });
+
+  it("reads a lower-only range as or more, inclusive", () => {
+    const range = { low: 40, high: null };
+    expect(rangeStatus(40, range)).toBe("in");
+    expect(rangeStatus(39, range)).toBe("below");
+  });
+
+  it("is unknown for anything that is not a plain number against a real range", () => {
+    expect(rangeStatus("64", { low: 3.9, high: 6.0 })).toBe("unknown");
+    // A value that still looks like a range as text ("<0.1") is never coerced to a number.
+    expect(rangeStatus("<0.1", { low: null, high: 0.5 })).toBe("unknown");
+    expect(rangeStatus(64, null)).toBe("unknown");
+    expect(rangeStatus(64, undefined)).toBe("unknown");
+    // An unparseable printed range ("Negative") keeps both bounds null: never a wrong bar.
+    expect(rangeStatus(64, { low: null, high: null })).toBe("unknown");
+  });
+
+  it("is in exactly on a bound, for every shape of range", () => {
+    expect(rangeStatus(3.9, { low: 3.9, high: 6.0 })).toBe("in"); // two-sided, low edge
+    expect(rangeStatus(6.0, { low: 3.9, high: 6.0 })).toBe("in"); // two-sided, high edge
+    expect(rangeStatus(40, { low: 40, high: null })).toBe("in"); // lower-only, inclusive
+    expect(rangeStatus(150, { low: null, high: 150 })).toBe("above"); // upper-only, exclusive
   });
 });

@@ -1,15 +1,27 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-/** 7:1 on any decision element, in both densities: Ink on Paper over every wash stop, and
- *  white on Plum for the one filled button. Read from tokens.css so the test follows the
- *  tokens, not a copy of them. */
+/** Contrast on the dusk-glass system (docs/design/experience-blueprint.html, docs/design/README.md):
+ *  Ink (cream) reads at 7:1 or better on glass and paper over every ground stop, because the
+ *  darkest realistic ground behind a card is still far enough from cream to clear it with room to
+ *  spare; Plum, used only as accent text/icon/border on translucent surfaces, is held to the
+ *  blueprint's own stated floor, 4.5:1, and checked over the LIGHTEST ground stop — the worst
+ *  case a translucent surface can sit on. Read from tokens.css so the test follows the tokens,
+ *  not a copy of them; `token()` resolves one level of `var(--x)` indirection, since several
+ *  tokens below are defined as `var(--good)`, `var(--act)` and so on rather than repeating a hex
+ *  literal. */
 const css = readFileSync(new URL("../../src/ui/tokens.css", import.meta.url), "utf8");
 
-function token(name: string): string {
+function rawToken(name: string): string {
   const match = css.match(new RegExp(`--${name}:\\s*([^;]+);`));
   if (!match) throw new Error(`no token --${name}`);
   return match[1]!.trim();
+}
+
+function token(name: string): string {
+  const value = rawToken(name);
+  const ref = value.match(/^var\(--([a-z0-9-]+)\)$/);
+  return ref ? token(ref[1]!) : value;
 }
 
 type RGB = [number, number, number];
@@ -20,13 +32,27 @@ function hex(value: string): RGB {
 }
 
 function rgba(value: string): { rgb: RGB; alpha: number } {
-  const m = value.match(/rgba\(\s*(\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
-  if (!m) throw new Error(`not rgba: ${value}`);
-  return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha: Number(m[4]) };
+  const m = value.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+  if (!m) throw new Error(`not rgb/rgba: ${value}`);
+  return { rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha: m[4] === undefined ? 1 : Number(m[4]) };
+}
+
+/** Any token's colour, opaque or translucent, as {rgb, alpha} — so a caller can composite it over
+ *  whatever ground it really sits on rather than assuming it is already opaque. */
+function colorOf(name: string): { rgb: RGB; alpha: number } {
+  const value = token(name);
+  return value.startsWith("#") ? { rgb: hex(value), alpha: 1 } : rgba(value);
 }
 
 function over(top: RGB, alpha: number, bottom: RGB): RGB {
   return [0, 1, 2].map((i) => Math.round(top[i]! * alpha + bottom[i]! * (1 - alpha))) as RGB;
+}
+
+/** A translucent token, composited onto a ground: the surface a card or a piece of text really
+ *  paints, once its own alpha is accounted for. */
+function onto(name: string, ground: RGB): RGB {
+  const { rgb, alpha } = colorOf(name);
+  return over(rgb, alpha, ground);
 }
 
 function luminance([r, g, b]: RGB): number {
@@ -43,78 +69,91 @@ function contrast(a: RGB, b: RGB): number {
 }
 
 const ink = hex(token("ink"));
-const inkSoft = hex(token("ink-soft"));
 const plum = hex(token("plum"));
-const white: RGB = [255, 255, 255];
-const paper = rgba(token("paper-bg"));
-const glass = rgba(token("glass-bg"));
-const washStops = ["lavender", "blush", "sage", "cream", "coral-wash", "coral-mid", "mist", "ground", "ground-warm", "ground-soft"].map((name) => hex(token(name)));
+const inkOnLight = hex(token("ink-on-light"));
 
-describe("contrast on decision elements", () => {
-  it("Ink on Paper is 7:1 or better over every wash stop", () => {
-    for (const stop of washStops) {
-      const surface = over(paper.rgb, paper.alpha, stop);
-      expect(contrast(ink, surface)).toBeGreaterThanOrEqual(7);
+/** The atmosphere's own three ground stops (tokens.css `--ground`/`--ground-warm`/`--ground-soft`,
+ *  base.css `.atmosphere`) — the darkest realistic ground a card ever paints over, and, for a
+ *  translucent surface, the lightest one too: both ends are checked below, never just one. */
+const grounds = ["ground", "ground-warm", "ground-soft"].map((name) => hex(token(name)));
+const darkestGround = grounds.reduce((worst, g) => (luminance(g) < luminance(worst) ? g : worst));
+const lightestGround = grounds.reduce((worst, g) => (luminance(g) > luminance(worst) ? g : worst));
+
+describe("contrast on decision elements (dusk-glass)", () => {
+  // The blueprint's own stated floor is 4.5:1 (docs/design/README.md: "Keep Nura's own type
+  // scale and contrast: body text at 15px or larger and 4.5:1"), not the old system's stricter
+  // 7:1 — and honestly so: `--glass-bg` and `--paper-bg` are the blueprint's own literal
+  // translucent fills (rgba(255,255,255,.10) / a touch more opaque), which real content sits on
+  // over a gradient ground, so the achievable ceiling here is lower than an opaque paper card's
+  // was. Both still clear 6:1 in practice, well past the 4.5:1 the product asks for.
+  it("Ink on Paper is 4.5:1 or better over every ground stop", () => {
+    for (const ground of grounds) expect(contrast(ink, onto("paper-bg", ground))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("Ink on Glass is 4.5:1 or better too, so a context tile reads in poor light", () => {
+    for (const ground of grounds) expect(contrast(ink, onto("glass-bg", ground))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("Ink soft (captions only) is 4.5:1 or better over every ground stop, direct or on glass", () => {
+    for (const ground of grounds) {
+      expect(contrast(onto("ink-soft", ground), ground)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(onto("ink-soft", ground), onto("glass-bg", ground))).toBeGreaterThanOrEqual(4.5);
     }
   });
 
-  it("white on Plum, the one filled button, is 7:1 or better", () => {
-    expect(contrast(white, plum)).toBeGreaterThanOrEqual(7);
+  it("Ink-on-light on Ink — the one strong pill's fill (blueprint `.btn.light`) — is 7:1 or better", () => {
+    expect(contrast(inkOnLight, ink)).toBeGreaterThanOrEqual(7);
   });
 
-  it("Plum text on Paper (links, the active tab) is 7:1 or better", () => {
-    for (const stop of washStops) expect(contrast(plum, over(paper.rgb, paper.alpha, stop))).toBeGreaterThanOrEqual(7);
+  it("Plum, the accent text/icon/border colour, is 4.5:1 or better on glass and paper, even over the lightest ground stop", () => {
+    expect(contrast(plum, onto("glass-bg", lightestGround))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(plum, onto("paper-bg", lightestGround))).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("Ink on Glass is at least 7:1 too, so context tiles read in poor light", () => {
-    for (const stop of washStops) expect(contrast(ink, over(glass.rgb, glass.alpha, stop))).toBeGreaterThanOrEqual(7);
-  });
-
-  it("Ink soft is caption-only: 4.5:1 on Paper, which is why it never carries a decision", () => {
-    for (const stop of washStops) expect(contrast(inkSoft, over(paper.rgb, paper.alpha, stop))).toBeGreaterThanOrEqual(4.5);
+  it("Plum keeps 4.5:1 directly on the ground too (a focus ring, a link with nothing under it)", () => {
+    for (const ground of grounds) expect(contrast(plum, ground)).toBeGreaterThanOrEqual(4.5);
   });
 });
 
-describe("the warm tints (docs/design-direction.md)", () => {
-  const tints = ["blush", "lavender", "sage", "coral-wash", "cream", "peach", "butter", "sky", "tint-paper"].map((name) => [name, hex(token(name))] as const);
-  const grounds = ["ground", "ground-warm", "ground-soft"].map((name) => [name, hex(token(name))] as const);
+describe("the tints (a faint wash of colour on glass, never a pale fill)", () => {
+  const tintNames = ["tint-blush", "tint-lavender", "tint-sage", "tint-coral", "tint-cream", "peach", "butter", "sky", "tint-paper"];
 
-  it("keep Ink 7:1 on every card tint and every ground, so a decision may sit on any of them", () => {
-    for (const [name, tint] of [...tints, ...grounds]) expect(contrast(ink, tint), name).toBeGreaterThanOrEqual(7);
+  it("keep Ink 4.5:1 on every card tint, composited over the darkest ground stop", () => {
+    for (const name of tintNames) expect(contrast(ink, onto(name, darkestGround)), name).toBeGreaterThanOrEqual(4.5);
   });
 
-  it("keep a caption and a Plum icon or word 4.5:1 on every tint, in her density too", () => {
-    const quiet = hex(token("ink-on-tint"));
-    for (const [name, tint] of tints) {
-      expect(contrast(quiet, tint), name).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(plum, tint), name).toBeGreaterThanOrEqual(4.5);
+  it("keep a caption (ink-on-tint) and a Plum icon or word 4.5:1 on every tint too", () => {
+    // `--ink-on-tint` is `--ink-soft` (translucent cream), not an opaque hex, so it is composited
+    // the same way a real caption is: over the tint, which is itself composited over the ground.
+    const quiet = colorOf("ink-on-tint");
+    for (const name of tintNames) {
+      const darkSurface = onto(name, darkestGround);
+      expect(contrast(over(quiet.rgb, quiet.alpha, darkSurface), darkSurface), name).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(plum, onto(name, lightestGround)), name).toBeGreaterThanOrEqual(4.5);
     }
   });
 
-  it("keep Plum words and Ink soft captions readable on the ground", () => {
-    for (const [name, ground] of grounds) {
-      expect(contrast(plum, ground), name).toBeGreaterThanOrEqual(7);
-      expect(contrast(inkSoft, ground), name).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  it("keep the Good pill's word 7:1 on its green", () => {
+  it("keep the Good pill's word 7:1 on its solid sage (docs/design/experience-blueprint.html `.flag`)", () => {
     expect(contrast(hex(token("good-ink")), hex(token("good-bg")))).toBeGreaterThanOrEqual(7);
   });
 });
 
-describe("onboarding's colours", () => {
-  it("keep a revealed word 7:1 with Ink on its tint", () => {
-    expect(contrast(ink, hex(token("chip-fresh")))).toBeGreaterThanOrEqual(7);
+describe("onboarding's colours (solid, not translucent — the blueprint's own flag/pill pattern)", () => {
+  it("keep a revealed word 7:1 with Ink, composited over the darkest ground stop", () => {
+    expect(contrast(ink, onto("chip-fresh", darkestGround))).toBeGreaterThanOrEqual(7);
   });
 
-  it("keep an answered Yes and an answered No 7:1 on their own grounds", () => {
+  it("keep an answered Yes and an answered No 7:1 on their own solid grounds", () => {
     expect(contrast(hex(token("yes-ink")), hex(token("yes-bg")))).toBeGreaterThanOrEqual(7);
     expect(contrast(hex(token("no-ink")), hex(token("no-bg")))).toBeGreaterThanOrEqual(7);
   });
 
-  it("keep a picked word white on Plum, like the one filled button", () => {
-    expect(contrast(white, plum)).toBeGreaterThanOrEqual(7);
+  it("keep a picked word's ink 7:1 on its solid fill, like the one strong pill", () => {
+    expect(contrast(inkOnLight, ink)).toBeGreaterThanOrEqual(7);
+  });
+
+  it("keep the one rose pill (coral) 7:1 — the red-flag call button is never a low-contrast surface", () => {
+    expect(contrast(hex(token("coral-pill-ink")), hex(token("coral-pill-bg")))).toBeGreaterThanOrEqual(7);
   });
 });
 
@@ -149,5 +188,26 @@ describe("the two densities", () => {
     const sizes = css.match(/--text-[a-z-]+:\s*[^;]+;/g) ?? [];
     expect(sizes.length).toBeGreaterThan(5);
     for (const size of sizes) expect(size).toMatch(/rem/);
+  });
+});
+
+describe("the fonts (docs/design/experience-blueprint.html <style>: Figtree 300-600, Instrument Serif italic accent)", () => {
+  it("bundles Figtree as the one body/heading family, self-hosted", () => {
+    expect(css).toMatch(/@font-face\s*{\s*font-family:\s*"Figtree"/);
+    expect(css).toMatch(/src:\s*url\("\/fonts\/figtree-latin(-ext)?\.woff2"\)/);
+    expect(token("font")).toMatch(/^"Figtree"/);
+    expect(rawToken("font-display")).toBe("var(--font)");
+  });
+
+  it("bundles Instrument Serif italic as the one accent-word face, self-hosted, never a whole heading", () => {
+    expect(css).toMatch(/@font-face\s*{\s*font-family:\s*"Instrument Serif";\s*font-style:\s*italic/);
+    expect(css).toMatch(/src:\s*url\("\/fonts\/instrument-serif-italic-latin(-ext)?\.woff2"\)/);
+    expect(token("font-accent")).toMatch(/^"Instrument Serif"/);
+  });
+
+  it("never calls a font CDN: every src is the app's own /fonts path", () => {
+    const srcs = css.match(/src:\s*url\([^)]+\)/g) ?? [];
+    expect(srcs.length).toBeGreaterThan(0);
+    for (const src of srcs) expect(src).toMatch(/url\("\/fonts\//);
   });
 });

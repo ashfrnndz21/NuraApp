@@ -15,6 +15,7 @@ The interaction language it fixes, from the owner's reference recording:
    three states (Copy, Copying, Copied). Nura never sends anything itself.
 6. The safety line appears once per screen, not on every card. "Not feeling well" is the one place the calm breaks:
    no animation, no delay.
+7. On the web the app always presents inside a phone frame above 600px; on a phone it is full-bleed.
 
 Keep Nura's own type scale and contrast: body text at 15px or larger and 4.5:1. The references this came from use
 small low-contrast type that would fail the older adults Nura is for.

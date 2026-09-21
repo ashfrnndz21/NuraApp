@@ -292,7 +292,7 @@ button.list-row:active,
 }
 .person-tile .avatar.add {
   background: transparent;
-  border: 1.5px dashed #cfc1d9;
+  border: 1.5px dashed rgba(255, 255, 255, 0.35);
   color: var(--plum);
 }
 .person-tile .avatar.add .icon {
@@ -500,13 +500,36 @@ button.list-row {
   color: var(--coral-pill-ink);
 }
 
-/* --- The progress ring ------------------------------------------------------------------------ */
+/* --- The progress ring (owner's fix required on PR #294) --------------------------------------- */
+/* `.ring` is a plain column: the circle (a fixed-size stacked box, never wider than `--ring-size`
+   whatever its parent's own width is, on a wide desktop screen included), then the label and the
+   source line under it, each its own line in normal flow, never fighting the circle's curve for
+   room and never positioned over it.
+
+   Only the NUMBER sits inside the circle now — the label used to sit in there beside it
+   (`ring-centre` held both), and the label is the backend's own words, which can run long
+   ("Tablets taken this week"): long enough that at any real ring size it does not fit inside a
+   circle's own inscribed rectangle without crossing its stroke — the exact defect the owner
+   screenshotted on Health's "This week" card, still there after the desktop-grid fix above (the
+   grid was never the label's own problem). The label reads perfectly well as a caption under the
+   circle instead, the same as the source line already was. */
 .ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.ring-circle {
   position: relative;
-  width: min(100%, 8.5rem);
+  /* --ring-size (9rem = 144px at the root size): within the owner's own 132-148px band, with
+     room to spare for "12 of 14" (tests/e2e/health.spec.ts covers 5/5, 12/14 and 0/0). Scales
+     with the root text size (rem) exactly like --ring-number below, so the two stay in the same
+     proportion at his large-text setting too — the ring is not fixed while the number grows. */
+  --ring-size: 9rem;
+  width: min(100%, var(--ring-size));
   aspect-ratio: 1;
-  display: grid;
-  place-items: center;
+  flex: none;
+  margin-top: 6px;
 }
 .ring-art {
   position: absolute;
@@ -526,24 +549,39 @@ button.list-row {
   stroke-linecap: round;
 }
 .ring-centre {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 0 18%;
+  /* 12% each side leaves ~76% of the diameter for the number — measured against the circle's
+     own inscribed rectangle at the text block's height, not a guess (see the PR body). */
+  padding: 0 12%;
 }
 .ring-number {
-  font-size: var(--text-tile-number);
-  font-weight: 600;
-  line-height: 1;
+  /* Its own size, not --text-tile-number (2.25-2.5rem/36-40px elsewhere, tuned for a plain
+     stat, not a number that has to live inside a circle): small enough, at 400 rather than
+     600 weight, that "12 of 14" still fits the circle's own inscribed rectangle on one line,
+     and wraps cleanly to two rather than overflowing it if a caller's figure ever runs longer. */
+  font-size: 1.75rem; /* 28px */
+  font-weight: 400;
+  line-height: 1.15;
   color: var(--plum-deep);
   font-variant-numeric: var(--numeric);
+  overflow-wrap: break-word;
 }
 .ring-label {
   font-size: var(--text-caption);
   color: var(--ink-quiet);
-  line-height: 1.2;
+  line-height: 1.3;
+  text-align: center;
+  max-width: 14rem;
+}
+.ring-source {
+  text-align: center;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
 }
 
 /* --- Buttons: solid Plum, small or full width; quiet ------------------------------------------ */
@@ -822,7 +860,7 @@ img.avatar {
 /* "Add a health report": a dashed card on the ground, as the board draws it. */
 .action-row.report {
   background: transparent;
-  border: 1.5px dashed #cfc1d9;
+  border: 1.5px dashed rgba(255, 255, 255, 0.35);
 }
 /* The file input is what Tab reaches: its ring is drawn round the whole card (focus-within above),
    and the input says so itself for anything that asks. */
@@ -883,7 +921,10 @@ img.avatar {
 
 /* --- Welcome, as the board draws it ------------------------------------------------------------ */
 .screen.welcome {
-  min-height: 100dvh;
+  /* Not a viewport unit: `#app` (base.css) already fills `.phone-frame` exactly, on both sides
+     of the 600px breakpoint, so `100%` here means the frame's real height, not the browser
+     window's — the same reasoning as the sheet panels' `max-height` (design.css, kit.css). */
+  min-height: 100%;
   gap: 16px;
   padding-top: calc(22px + env(safe-area-inset-top));
   background: linear-gradient(180deg, var(--peach) 0%, var(--ground-warm) 55%, var(--ground) 100%);
@@ -999,8 +1040,10 @@ img.avatar {
 .bubble[data-from="person"] {
   align-self: flex-end;
   border-bottom-right-radius: 6px;
-  background: var(--plum);
-  color: var(--white);
+  /* The blueprint's own "me" bubble (docs/design/experience-blueprint.html `.me`): solid cream,
+     dark ink — not a solid Plum fill, since Plum is the light accent colour now. */
+  background: var(--ink);
+  color: var(--ink-on-light);
 }
 .bubble[data-from="nura"] {
   align-self: flex-start;

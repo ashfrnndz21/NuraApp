@@ -1,5 +1,5 @@
 """Save and read back a paper-scoped insight (checkpoint 3, "What it means for you",
-migration 0052): a sibling of `app.reasoning.analyst.service.save_report` that reuses the
+migration 0053): a sibling of `app.reasoning.analyst.service.save_report` that reuses the
 same `insight_report` table and the same discipline — one row per run, `Scope.PROFILE`,
 never a row a narrower key could not have read had it generated the report itself — rather
 than a second table for what is still one Health Analyst report, just scoped to one paper

@@ -12,7 +12,7 @@ tree, not a table `ProfileScoped` rows already model well.
 (`app.db.monotonic`): two reports written in the same request, or under a frozen clock in a
 test or a checkpoint, must resolve to one winner, never an arbitrary one.
 
-`artifact_id`, `headline` and `looked_at` (migration 0052) are set only by a paper-scoped
+`artifact_id`, `headline` and `looked_at` (migration 0053) are set only by a paper-scoped
 insight (checkpoint 3, "What it means for you", `app.reasoning.analyst.paper`): one paper,
 just confirmed, put beside the record, rather than the whole weekly sweep. `NULL` on every
 row the weekly job or `POST …/insights/stream` writes; `week_of` is still filled on a

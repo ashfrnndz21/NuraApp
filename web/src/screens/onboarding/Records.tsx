@@ -7,7 +7,7 @@ import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
-import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, pillProposalLine, provenanceLine, readable, spokenLine, startingEdits, valueText, type FieldEdit } from "../../onboarding/review";
+import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, pillProposalLine, provenanceLine, readable, readableValueText, spokenLine, startingEdits, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { fill, language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
@@ -265,7 +265,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
             ) : (
               <>
                 <p class="label">{label}</p>
-                <p class={`value ${sure ? "sure" : "unsure"}`}>{valueText(field.value)}</p>
+                <p class={`value ${sure ? "sure" : "unsure"}`}>{readableValueText(field.value, s)}</p>
                 <p class="caption">{r.cannotChange}</p>
               </>
             )}

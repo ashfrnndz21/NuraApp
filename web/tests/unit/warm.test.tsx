@@ -134,16 +134,17 @@ describe("conversation, waiting and thinking (docs/design-direction.md)", () => 
     { key: "visits", text: "Checking the visits", done: false },
   ];
 
-  it("shows only the steps it is given, each in progress or done, under Nura is looking", () => {
+  it("shows the newest real step through ONE status line, replaced in place — never an accumulating checklist (docs/design/experience-blueprint.html think())", () => {
     const trace = one(<StepTrace steps={steps} working={words.working} />);
-    expect(text(all(trace, hasClass("thinking-line")))).toBe(words.working);
-    expect(all(trace, byType("li")).map((li) => [text(li), li.props["data-done"]])).toEqual([
-      ["Reading the medicines", "true"],
-      ["Checking the visits", "false"],
-    ]);
-    expect(all(trace, hasClass("trace-tick")).length).toBe(1);
-    expect(all(trace, hasClass("trace-spin")).length).toBe(1);
-    expect(all(one(<StepTrace steps={[]} working={words.working} />), byType("li"))).toEqual([]);
+    // The newest step reported (the last one in the array), not the first, and not both at once.
+    expect(text(all(trace, hasClass("thinking-line")))).toBe("Checking the visits");
+    expect(all(trace, byType("li"))).toEqual([]);
+    expect(all(trace, hasClass("trace-tick"))).toEqual([]);
+    expect(all(trace, hasClass("trace-spin"))).toEqual([]);
+    // No step yet: the caller's own "working" line, still through the same one status line.
+    const empty = one(<StepTrace steps={[]} working={words.working} />);
+    expect(text(all(empty, hasClass("thinking-line")))).toBe(words.working);
+    expect(all(empty, byType("li"))).toEqual([]);
   });
 
   it("folds the steps into What Nura looked at under the answer, with its sources and boundary", () => {

@@ -852,6 +852,16 @@ export interface UploadOut {
 
 export type FieldState = "proposed" | "confirmed" | "corrected" | "rejected";
 
+/** A result's own printed reference range (E02, defect #3): the range exactly as the paper
+ *  prints it (`text`), plus its lower and upper bound as numbers where that text is
+ *  unambiguous — `null` for a bound the range does not have, or that could not be read as a
+ *  number. Never a judgement of ours: only ever what the paper itself prints. */
+export interface FieldRange {
+  low: number | null;
+  high: number | null;
+  text: string;
+}
+
 export interface ReviewFieldOut {
   field_id: string;
   position: number;
@@ -868,6 +878,11 @@ export interface ReviewFieldOut {
   prompt: string[] | null;
   /** For a PDF of several pages, the page the line was read on. */
   page: number | null;
+  /** The result's own printed range, when the row on the paper carried one. */
+  range: FieldRange | null;
+  /** The words printed on the paper for this line, when the extractor named them — always
+   *  present when `attribute` is `"other"`, optional otherwise. */
+  label_on_paper: string | null;
   state: FieldState;
   corrected_value: unknown | null;
   fact_id: string | null;

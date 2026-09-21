@@ -9,7 +9,8 @@
 }
 
 html {
-  /* The page base is Mist; the wash paints over it and cross-fades when State changes. */
+  /* The page base is the dusk ground itself (docs/design/experience-blueprint.html `.atmos`),
+     so there is never a flash of anything else before `.atmosphere` (below) paints over it. */
   background: var(--mist);
   color: var(--ink);
   font-family: var(--font);
@@ -31,19 +32,128 @@ body {
   touch-action: pan-y;
 }
 
-#app {
-  position: relative;
+/* --- The phone frame (docs/design/experience-blueprint.html `.phone`, owner's scope change
+   2026-09-21) --------------------------------------------------------------------------------
+   Below 600px (a real phone) `.page-ground` and `.phone-frame` are both plain full-bleed
+   pass-throughs — no page around the app, no frame, exactly a phone app. At 600px and above,
+   `.page-ground` becomes a plain dark page (#15111d; nothing meaningful is ever drawn on it) and
+   `.phone-frame` becomes a real 390px device: radius, bezel, shadow, its own `overflow: hidden`.
+
+   `.phone-frame` is also the CONTAINING BLOCK for every `position: fixed` element the app draws
+   — a sheet, a toast, the ask bar's own sheet, `ActionSheet` — because it carries a `transform`
+   (`translateZ(0)`, on both sides of the breakpoint, so nothing has to change behaviour when the
+   viewport crosses it). A `position: fixed` descendant of a `transform`ed box is positioned, and
+   clipped by that box's own `overflow: hidden`, relative to that box rather than the viewport —
+   the one CSS mechanism this whole design change rests on: it is what keeps every sheet, the tab
+   bar and every toast inside the frame on a wide screen without editing each of them by hand. */
+.page-ground {
   min-height: 100vh;
   min-height: 100dvh;
-  /* Drawn from the wash's typed stops (tokens.css), which cross-fade when State changes. */
-  background: linear-gradient(160deg, var(--wash-a), var(--wash-b) var(--wash-at), var(--wash-c));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-#app::before {
-  content: "";
-  position: fixed;
+.phone-frame {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+@media (min-width: 600px) {
+  .page-ground {
+    background: #15111d;
+    padding: 16px;
+  }
+  .phone-frame {
+    width: 390px;
+    height: min(844px, calc(100vh - 32px));
+    border-radius: 42px;
+    box-shadow: 0 0 0 9px #0f0b17, 0 0 0 10px #3a3049, 0 30px 60px rgba(30, 15, 60, 0.35);
+  }
+}
+
+/* --- The atmosphere: one world behind everything, inside the frame --------------------------
+   docs/design/experience-blueprint.html `.atmos`: the ground gradient, drawn from the wash's
+   typed stops (tokens.css) so it still cross-fades when State changes, plus three blurred,
+   slowly drifting blobs. `position: absolute` inside `.phone-frame` — it never scrolls with the
+   page and always sits behind `[data-testid="shell-scroll"]` and every other screen — the one
+   background the whole app shares, glass cards read through rather than each screen painting
+   its own page. Reduce Motion freezes the blobs in place. */
+.atmosphere {
+  position: absolute;
   inset: 0;
-  background: var(--wash-light);
+  z-index: 0;
+  overflow: hidden;
   pointer-events: none;
+  background: linear-gradient(160deg, var(--wash-a), var(--wash-b) var(--wash-at), var(--wash-c)), var(--wash-light);
+}
+.atmosphere i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(64px);
+}
+.atmosphere i:nth-child(1) {
+  left: 8%;
+  top: -18%;
+  width: 420px;
+  height: 420px;
+  max-width: 90vw;
+  background: var(--atmos-amber);
+  opacity: 0.42;
+  animation: atmos-drift-1 16s ease-in-out infinite alternate;
+}
+.atmosphere i:nth-child(2) {
+  left: -22%;
+  top: 30%;
+  width: 460px;
+  height: 300px;
+  max-width: 90vw;
+  background: var(--atmos-violet);
+  opacity: 0.45;
+  animation: atmos-drift-2 20s ease-in-out infinite alternate-reverse;
+}
+.atmosphere i:nth-child(3) {
+  left: 14%;
+  top: 58%;
+  width: 460px;
+  height: 300px;
+  max-width: 90vw;
+  background: var(--atmos-deep);
+  opacity: 0.55;
+}
+@keyframes atmos-drift-1 {
+  to {
+    transform: translate(-24px, 22px) scale(1.08);
+  }
+}
+@keyframes atmos-drift-2 {
+  to {
+    transform: translate(28px, -18px) scale(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere i {
+    animation: none !important;
+  }
+}
+
+/* `#app` fills the frame (its `100vh`/`100dvh` below stood for the whole viewport before the
+   frame existed; now the frame itself is sized for the viewport, on both sides of 600px, so
+   `#app` only ever needs to fill its parent). It no longer paints its own background — the
+   `.atmosphere` behind it, inside the same frame, does. `.phone-frame` itself clips to the phone
+   shape (`overflow: hidden`, above) rather than scrolling, so a screen with no shell — sign-in,
+   the doors, onboarding — needs its own scroll region here; a screen with the shell
+   (`#app:has(> .shell)`, design.css) overrides this to `overflow: hidden` instead, since the
+   shell scrolls only inside its own `[data-testid="shell-scroll"]`, never the page around it. */
+#app {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .screen {
@@ -140,7 +250,7 @@ body {
   color: var(--ink-soft);
   margin-top: 4px;
   padding-top: var(--space-1);
-  border-top: 1px solid rgba(43, 39, 51, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 /* "Why am I seeing this?" (RE-08): a plain-text link under the card's own why line, opening
    the Why sheet — never a colour beyond the app's accent, never drawn as a button. */
@@ -166,7 +276,7 @@ body {
 .tile .medicine-data {
   margin-top: 4px;
   padding-top: var(--space-1);
-  border-top: 1px solid rgba(43, 39, 51, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 .tile .medicine-data p {
   font-size: var(--text-caption);
@@ -192,7 +302,7 @@ body {
   min-height: var(--target);
   width: 100%;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(78, 58, 120, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   background: var(--paper-bg);
   display: inline-flex;
   align-items: center;
@@ -208,20 +318,24 @@ body {
   padding-block: 6px;
   line-height: 1.25;
 }
+/* The one strong pill a screen carries (docs/design/experience-blueprint.html `.btn.light`):
+   solid cream, dark ink text — not a solid Plum fill, since Plum is now a light accent purple
+   that would read as light-on-light against cream. */
 .pill.plum {
-  background: var(--plum);
-  color: var(--white);
-  border-color: var(--plum);
+  background: var(--ink);
+  color: var(--ink-on-light);
+  border-color: var(--ink);
+  font-weight: 600;
 }
 .pill.coral {
-  background: #f7e4e1;
-  border-color: #efcfca;
-  color: #7a2e24;
+  background: var(--coral-pill-bg);
+  border-color: var(--coral-pill-border);
+  color: var(--coral-pill-ink);
 }
 .pill.done {
-  background: #e6f0e9;
-  color: #2f6247;
-  border-color: #d3e4d9;
+  background: var(--good-bg);
+  color: var(--good-ink);
+  border-color: var(--good);
 }
 .pill.quiet {
   border-color: transparent;
@@ -282,8 +396,11 @@ label.pill:focus-within {
   width: 100%;
   padding: 0 var(--space-2);
   border-radius: 14px;
-  border: 1px solid #ddd6e2;
-  background: var(--white);
+  /* Legible on glass (docs/design/experience-blueprint.html `.field`): the same translucent fill
+     and border as a card, not a solid white box — cream text on a solid cream field would be
+     invisible now that "white" is cream on a dusk ground. */
+  border: var(--glass-border);
+  background: var(--glass-bg);
 }
 .field.big {
   font-size: var(--text-tile-number);
@@ -312,6 +429,12 @@ label.pill:focus-within {
   color: var(--ink);
   cursor: pointer;
   min-height: var(--target);
+  /* Without this, a `<button>` keeps the browser's own default control background (Chromium:
+     an opaque light grey, ~#efefef) instead of showing its parent `.tile.paper` through — with
+     the old dark Plum that grey happened to still read, but the redesign's light Plum on a
+     light default button background is 1.2:1 (axe `color-contrast`, `tests/e2e/a11y.spec.ts`
+     "who is this for"). The tile behind it already carries the surface. */
+  background: none;
 }
 .choice .title {
   color: var(--plum);
@@ -372,7 +495,7 @@ label.pill:focus-within {
   max-width: 100%;
   padding: 6px var(--space-2);
   border-radius: var(--radius-pill);
-  border: 1.5px solid rgba(78, 58, 120, 0.18);
+  border: var(--glass-border);
   background: var(--paper-bg);
   box-shadow: var(--tile-shadow);
   text-align: left;
@@ -385,13 +508,13 @@ label.pill:focus-within {
 .word.s3 { font-size: var(--word-3); font-weight: 500; }
 .word.fresh {
   background: var(--chip-fresh);
-  border-color: rgba(78, 58, 120, 0.45);
+  border-color: var(--plum);
   animation: reveal var(--settle);
 }
 .word.picked {
-  background: var(--plum);
-  border-color: var(--plum);
-  color: var(--white);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--ink-on-light);
 }
 .word .term { font-weight: 400; }
 .word:focus-visible { outline: 3px solid var(--plum); outline-offset: 2px; }
@@ -474,7 +597,8 @@ label.pill input {
 }
 
 /* The demo banner (ADR 0008): first on every screen of a demo deployment, never scrolled away.
-   Paper-white on Ink is above 12:1. */
+   Always a dark strip with cream text, above 12:1, regardless of which way the theme's own
+   ink/ground pairing points — it is demo scaffolding, not a themed surface. */
 .demo-banner {
   position: sticky;
   top: 0;
@@ -483,8 +607,8 @@ label.pill input {
   flex-direction: column;
   gap: 2px;
   padding: max(10px, env(safe-area-inset-top)) 16px 10px;
-  background: var(--ink);
-  color: #ffffff;
+  background: var(--ground-soft);
+  color: var(--ink);
   font-size: var(--text-caption);
   line-height: var(--line-height);
 }
@@ -532,7 +656,7 @@ label.pill input {
 figure.note {
   margin: var(--space-1) 0 0;
   padding: var(--space-1) var(--space-2);
-  border-left: 3px solid rgba(78, 58, 120, 0.35);
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
 }
 figure.note blockquote {
   margin: 4px 0 0;
@@ -629,7 +753,7 @@ a.pill {
   gap: 4px;
   padding: var(--space-1);
   border-radius: var(--radius-chip);
-  border: 1px solid rgba(78, 58, 120, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   background: var(--paper-bg);
   color: var(--ink);
   text-align: left;
@@ -682,8 +806,8 @@ a.pill {
   flex-direction: column;
   gap: 2px;
   padding: 0 16px 10px;
-  background: var(--ink);
-  color: #ffffff;
+  background: var(--ground-soft);
+  color: var(--ink);
   font-size: var(--text-caption);
   line-height: var(--line-height);
 }
@@ -722,7 +846,7 @@ table.data th,
 table.data td {
   text-align: left;
   padding: 6px 4px;
-  border-top: 1px solid rgba(43, 39, 51, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
   vertical-align: top;
   overflow-wrap: anywhere;
 }
@@ -751,7 +875,7 @@ blockquote.family-words {
 .family .entry + .entry {
   margin-top: var(--space-2);
   padding-top: var(--space-1);
-  border-top: 1px solid rgba(43, 39, 51, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 .trail-line + .trail-line {
   margin-top: var(--space-1);
@@ -802,19 +926,19 @@ a.pill.plum {
   overflow: hidden;
 }
 .scene.morning {
-  background: linear-gradient(135deg, #f6e6ec, #e6ddf1 55%, #dde9e1);
+  background: linear-gradient(135deg, rgba(240, 138, 138, 0.3), rgba(143, 120, 179, 0.24) 55%, rgba(169, 211, 174, 0.2));
 }
 .scene.food {
-  background: linear-gradient(135deg, #f7e7da, #f1dce6 60%, #e6ddf1);
+  background: linear-gradient(135deg, rgba(231, 180, 143, 0.32), rgba(240, 138, 138, 0.2) 60%, rgba(143, 120, 179, 0.2));
 }
 .scene.clinic {
-  background: linear-gradient(135deg, #e3e7f3, #ebe3f0 60%, #f3e6e0);
+  background: linear-gradient(135deg, rgba(159, 208, 255, 0.26), rgba(143, 120, 179, 0.22) 60%, rgba(243, 181, 98, 0.18));
 }
 .scene.family {
-  background: linear-gradient(135deg, #e9e2f1, #f4e4ea 60%, #dde9e1);
+  background: linear-gradient(135deg, rgba(143, 120, 179, 0.3), rgba(240, 138, 138, 0.2) 60%, rgba(169, 211, 174, 0.2));
 }
 .scene.walk {
-  background: linear-gradient(135deg, #dde9e1, #e9e2f1 60%, #f3e6e0);
+  background: linear-gradient(135deg, rgba(169, 211, 174, 0.26), rgba(143, 120, 179, 0.22) 60%, rgba(243, 181, 98, 0.18));
 }
 .scene i {
   position: absolute;

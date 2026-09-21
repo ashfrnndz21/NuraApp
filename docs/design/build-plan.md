@@ -27,10 +27,12 @@ Everything lands on the `redesign` branch. `main` takes it at checkpoint 8.
 ### Checkpoint 1 — The look and the building blocks
 **Scope:** the dusk glass look across every existing screen; Figtree and the serif accent bundled into the app; the
 orb; the in-place status line with the light sweep; soft word-by-word text; staggered reveal; the action sheet with its
-three-state button; range bar and chips; the app as a phone column on wide screens; the overlapping ring on Health fixed.
+three-state button; range bar and chips; **on the web the whole app sits inside a phone frame** (above 600px wide: a
+390px device frame with a bezel, the atmosphere inside it, and every bar, sheet and toast kept inside the frame; on a
+real phone it is full-bleed with no frame); the overlapping ring on Health fixed.
 No screen is restructured and no wording changes yet.
-**You test:** open the app as Pa and walk every tab. Open `#/blueprint-kit` and try each component.
-**Passes when:** it looks like the blueprint; text is comfortable to read; nothing overlaps; large type still works.
+**You test:** open the app on the web as Pa and walk every tab inside the phone frame. Open `#/blueprint-kit` and try each component.
+**Passes when:** it looks like the blueprint's phone; nothing escapes the frame; text is comfortable to read; nothing overlaps; large type still works.
 
 ### Checkpoint 2 — Load a paper
 **Scope:** blueprint scenes 5, 6, 7. The reading screen with the orb and the real stages changing in place; the report
@@ -77,8 +79,15 @@ Needs the written spec, **which country comes first**, and **your real papers wi
   overwritten.
 - **7b Policy passport** (scene 11). You test: your own policy PDF. Passes when every line shows the right page and
   nothing says you are covered, only what the policy says.
-- **7c Medicine registry** (scene 12). You test: a prescription, a label photo and a receipt for the same medicine
-  under two names. Passes when it becomes one medicine and one question for the pharmacist.
+- **7c Medicine registry** (scene 12). A medicine can be added by a photo or screenshot of the box, strip or label, or by
+  typing or saying it. Each entry records: the name as printed, the real medicine name from the licensed register,
+  strength, form, pack size, what it is for in plain words from the register (never made up), dose as written,
+  prescriber, pharmacy, date and expiry when printed or told, how it was added with the source kept, status, supply
+  left, and the high-risk tag. Nura reads printed text only and never names a medicine it cannot read: a box that
+  says only "STATIN 40 mg, 28 tablets" records 40 mg, tablets and 28, and asks which statin it is. You test: a
+  prescription, a label photo and a receipt for the same medicine under two names, a box photo with only a family
+  name on it, and one medicine typed in. Passes when they become the right entries, the unnamed one asks, and the
+  duplicate becomes one medicine and one question for the pharmacist.
 - **7d Everything connected** (scene 13). You test: open any result. Passes when every door leads somewhere real.
 Independent safety reviews of matching, medicines, and policy and money come before each of these reaches you.
 
@@ -103,3 +112,9 @@ the doctor. Body text 15px or larger, contrast 4.5:1. Three languages and the ca
 | Date | Checkpoint | Builder time measured | Check rounds | Owner's verdict |
 |---|---|---|---|---|
 | 2026-09-21 | Build started: phase 1, feed lock fix and the spec running | | | |
+| 2026-09-21 | Blueprint v3: the Add a medicine scene (photo, screenshot, text or voice) | | | Approved: "yes exactly this" |
+| 2026-09-21 | Build spec written (#290) | 12 min | | |
+| 2026-09-21 | Checkpoint 6, part: feed database-lock fix (#291) | 52 min | | Operator's live test with real searches on: 300 other requests during a 7-minute run, slowest 0.9 s, none failed, no lock errors. Every search was refused by the API (credit balance exhausted: 3 calls succeeded, 45 refused), and the fix marked the jobs failed and retried them up to three times as designed. Under independent review. |
+| 2026-09-21 | Checkpoint 2, data: labels, ranges on their results, no blank lines (#292) | 43 min, then 11 min of fixes | | Independent safety review found two defects (sex-specific and reversed ranges taken as certain bounds; a faint range reported as sure). Both fixed; operator re-ran the parser on 20 inputs: all 11 ambiguous ones give no bounds with the text kept, all 9 clear ones parse. Merged into `redesign`. The table screen itself is still to build. |
+| 2026-09-21 | Checkpoint 3, engine: the insight after a paper (#293) | 68 min | | Independent safety review: no paper text can reach what Nura says; the model can only choose among checked questions. Two required fixes in progress (a permission check on keeping questions with no visit; the external-processor audit entry on failed model calls, also in the weekly analyst). |
+| 2026-09-21 | **Checkpoint 1 ready for the owner**: the look, the phone frame and the shared components (#294) | 99 min, then 12 min for the ring | | Operator's review as Pa: Welcome, Home, Visits and the component gallery match the blueprint inside the frame. First review FAILED on the Health ring still overlapping its text although reported fixed; fixed properly with nine geometry tests and re-checked by eye. 169 browser tests pass inside the frame. On the owner's test copy (without a model key: the operator's own process-group kill took the test server down and the key, held only in that process, was lost). Owner's verdict: pending. |

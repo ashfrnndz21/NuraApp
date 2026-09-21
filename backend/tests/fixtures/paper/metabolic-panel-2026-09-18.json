@@ -1,0 +1,70 @@
+{
+  "placeholder": "metabolic-panel-2026-09-18",
+  "sha256": "5c7aea2549e2e6d5124c9f865580f5b17628c2b7c9ad556a8c7869d212fc0f8f",
+  "note": "Synthetic fixture (no real patient): a wider metabolic panel exercising the controlled vocabulary added for defect #1 (kidney_panel, blood_test, liver_panel), a result carrying its own printed range in the current shape rather than a legacy `_reference_range` sibling (defect #3), an analyte with no printed range at all (liver_panel.alt), and one line genuinely outside the vocabulary read as attribute `other` with `label_on_paper` (defect #1's escape hatch).",
+  "document_kind": "lab_report",
+  "document_date": "2026-09-18",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "facility",
+      "value": "Bukit Lab",
+      "unit": null,
+      "confidence": 0.94,
+      "span": { "x0": 0.1, "y0": 0.05, "x1": 0.6, "y1": 0.1 }
+    },
+    {
+      "subject": "kidney_panel",
+      "attribute": "creatinine",
+      "value": 95,
+      "unit": "umol/L",
+      "confidence": 0.95,
+      "range": { "low": 60.0, "high": 110.0, "text": "60 - 110" },
+      "span": { "x0": 0.1, "y0": 0.2, "x1": 0.5, "y1": 0.24 }
+    },
+    {
+      "subject": "kidney_panel",
+      "attribute": "egfr",
+      "value": 78,
+      "unit": "mL/min/1.73m2",
+      "confidence": 0.9,
+      "range": { "low": 60.0, "high": null, "text": ">60" },
+      "span": { "x0": 0.1, "y0": 0.26, "x1": 0.5, "y1": 0.3 }
+    },
+    {
+      "subject": "kidney_panel",
+      "attribute": "potassium",
+      "value": 4.2,
+      "unit": "mmol/L",
+      "confidence": 0.93,
+      "range": { "low": 3.5, "high": 5.2, "text": "3.5 - 5.2" },
+      "span": { "x0": 0.1, "y0": 0.32, "x1": 0.5, "y1": 0.36 }
+    },
+    {
+      "subject": "blood_test",
+      "attribute": "hba1c",
+      "value": 5.4,
+      "unit": "%",
+      "confidence": 0.92,
+      "range": { "low": null, "high": 5.7, "text": "<5.7" },
+      "span": { "x0": 0.1, "y0": 0.38, "x1": 0.5, "y1": 0.42 }
+    },
+    {
+      "subject": "liver_panel",
+      "attribute": "alt",
+      "value": 42,
+      "unit": "U/L",
+      "confidence": 0.88,
+      "span": { "x0": 0.1, "y0": 0.44, "x1": 0.5, "y1": 0.48 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "other",
+      "value": "0.9",
+      "unit": "g/L",
+      "confidence": 0.6,
+      "label_on_paper": "Apo-B",
+      "span": { "x0": 0.1, "y0": 0.5, "x1": 0.5, "y1": 0.54 }
+    }
+  ]
+}

@@ -682,6 +682,7 @@ export interface Strings {
       highRisk: string;
       fromPhoto: string;
       otherLine: string;
+      valueUnreadable: string;
       kindHandwritten: string;
       kindInsuranceLetter: string;
       kindInsurancePolicy: string;

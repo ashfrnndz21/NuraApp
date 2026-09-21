@@ -251,7 +251,7 @@ test("a red word said out loud: the flag first, the urgent card as sent, and the
   await expect.poll(() => page.evaluate(() => (window as unknown as { __washRuns: string[] }).__washRuns)).toContain("--wash-a");
   await expect
     .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--wash-a").trim()), { timeout: 5000 })
-    .toBe("rgb(240, 214, 210)");
+    .toBe("rgb(107, 47, 61)"); // #6b2f3d — the dusk-glass "act" ground (tokens.css), the blueprint's own alarm stop
 });
 
 /** A feed refresh queued and already sending before a red word is said still does not reach
@@ -836,12 +836,12 @@ test("the wash cross-fades when State changes, and with Reduce Motion the new wa
     document.documentElement.getAnimations().map((each) => ({ property: (each as CSSTransition).transitionProperty, duration: each.effect?.getTiming().duration })),
   );
   expect(moving).toEqual(expect.arrayContaining([{ property: "--wash-a", duration: 1200 }]));
-  await expect.poll(stop, { timeout: 5000 }).toBe("rgb(241, 220, 230)");
+  await expect.poll(stop, { timeout: 5000 }).toBe("rgb(90, 53, 80)"); // #5a3550 — the dusk-glass "watch" ground (tokens.css)
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await runs();
   await page.evaluate(() => (document.documentElement.dataset.posture = "act"));
-  expect(await stop()).toBe("rgb(240, 214, 210)");
+  expect(await stop()).toBe("rgb(107, 47, 61)"); // #6b2f3d — the dusk-glass "act" ground (tokens.css)
   expect(await page.evaluate(() => document.documentElement.getAnimations().length)).toBe(0);
   expect(await runs()).toEqual([]);
 });

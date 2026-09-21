@@ -8,8 +8,8 @@ never did — a short line, and the plain labels of what was actually read (the 
 many medicines, the next visit if any), kept as JSON the same way `sections` already is,
 composed and already-verified text, never a row.
 
-Revision ID: 0052_paper_insight
-Revises: 0051_health_analyst
+Revision ID: 0053_paper_insight
+Revises: 0052_review_field_printed_range
 Create Date: 2026-09-21
 """
 
@@ -18,8 +18,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0052_paper_insight"
-down_revision = "0051_health_analyst"
+revision = "0053_paper_insight"
+down_revision = "0052_review_field_printed_range"
 branch_labels = None
 depends_on = None
 

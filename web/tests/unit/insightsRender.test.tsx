@@ -33,19 +33,22 @@ function report(sections: InsightsReportOut["sections"]): InsightsReportOut {
 }
 
 describe("the weekly report screen, drawn from the backend's own words", () => {
-  it("the trace shows a tick for every step done and a ring for the one still streaming, then gives way to the report", () => {
+  it("the trace shows the newest real step through one status line, then gives way to the report", () => {
     const steps = insightsTraceSteps([
       { key: "meds", label: "Reading your medicines" },
       { key: "labs", label: "Reading your blood tests" },
     ]);
     const trace = render(<StepTrace steps={steps} working="Nura is looking at this week." testId="insights-trace" />);
-    expect(text(trace)).toContain("Nura is looking at this week.");
-    expect(text(trace)).toContain("Reading your medicines");
+    // ONE line, the newest step reported — never an accumulating checklist
+    // (docs/design/experience-blueprint.html think()).
     expect(text(trace)).toContain("Reading your blood tests");
-    const ticks = all(trace, (el) => el.type === "li");
-    expect(ticks).toHaveLength(2);
-    expect(ticks[0]!.props["data-done"]).toBe("true");
-    expect(ticks[1]!.props["data-done"]).toBe("false");
+    expect(text(trace)).not.toContain("Nura is looking at this week.");
+    expect(all(trace, (el) => el.type === "li")).toHaveLength(0);
+
+    // Before any step has arrived, the caller's own "working" line still shows, through the
+    // same one status line.
+    const before = render(<StepTrace steps={[]} working="Nura is looking at this week." testId="insights-trace" />);
+    expect(text(before)).toContain("Nura is looking at this week.");
 
     // Once the stream's last event lands, the screen swaps the trace for the finished report:
     // the same backend-shaped data, drawn by `ReportBody`, never both on screen together.
