@@ -20,13 +20,26 @@ def _events(text: str) -> list[dict[str, object]]:
     ]
 
 
-async def test_no_report_yet_is_404(deployment: Deployment) -> None:
+async def test_no_report_yet_reads_as_a_plain_null_not_a_refusal(deployment: Deployment) -> None:
+    """`GET …/insights` is read on every Health screen load, a brand-new profile's first one
+    included — "nothing generated yet" is the ordinary case there, not a refusal (package 10's
+    #2 defect: a 404 here made the browser log a failed request on every such load)."""
     pa = await register_by_phone(deployment, PA, "Pa", language="en")
     profile_id = await own_profile(deployment, pa, language="en")
     his = bearer(pa["token"])
 
     got = await deployment.client.get(f"/profiles/{profile_id}/insights", headers=his)
-    assert (got.status_code, got.json()) == (404, {"refusal": "NoReportYet"})
+    assert (got.status_code, got.json()) == (200, None)
+
+    empty_list = await deployment.client.get(f"/profiles/{profile_id}/insights/list", headers=his)
+    assert (empty_list.status_code, empty_list.json()) == (200, [])
+
+    # An id that genuinely does not exist is still a real 404 — only the "nothing yet" case
+    # above changed.
+    missing = await deployment.client.get(
+        f"/profiles/{profile_id}/insights/00000000-0000-0000-0000-000000000000", headers=his
+    )
+    assert (missing.status_code, missing.json()) == (404, {"refusal": "NoReportYet"})
 
 
 async def test_the_stream_yields_steps_in_order_then_a_report_which_get_then_reads_back(
@@ -48,6 +61,16 @@ async def test_the_stream_yields_steps_in_order_then_a_report_which_get_then_rea
         "medicines",
         "ledger",
         "coverage",
+    ]
+    # The bare noun on each step (`STEP_NAME`), the same "What Nura looked at" collapse Ask's
+    # own `ASK_STEP_NAMES` already gives — this is what the report screen joins into its one
+    # quiet line once the stream settles, never five chips left standing.
+    assert [e["name"] for e in events[:-1]] == [
+        "what you have told Nura",
+        "blood pressure",
+        "medicines",
+        "what you paid",
+        "policies",
     ]
     report = events[-1]["report"]
     assert set(report.keys()) == {
@@ -89,3 +112,36 @@ async def test_the_stream_yields_steps_in_order_then_a_report_which_get_then_rea
         f"/profiles/{profile_id}/insights/00000000-0000-0000-0000-000000000000", headers=his
     )
     assert (missing.status_code, missing.json()) == (404, {"refusal": "NoReportYet"})
+
+
+async def test_insights_list_is_newest_first_summaries_only(deployment: Deployment) -> None:
+    """"Health Analyst"'s own past reports (package 10): every report this profile has ever
+    had generated, newest first, id/date only — never the sections themselves (those stay
+    behind `GET …/insights/{report_id}`)."""
+    pa = await register_by_phone(deployment, PA + "2", "Pa", language="en")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+
+    empty = await deployment.client.get(f"/profiles/{profile_id}/insights/list", headers=his)
+    assert (empty.status_code, empty.json()) == (200, [])
+
+    first = await deployment.client.post(
+        f"/profiles/{profile_id}/insights/stream", json={}, headers=his
+    )
+    first_id = _events(first.text)[-1]["report"]["report_id"]
+    second = await deployment.client.post(
+        f"/profiles/{profile_id}/insights/stream", json={}, headers=his
+    )
+    second_id = _events(second.text)[-1]["report"]["report_id"]
+    assert first_id != second_id
+
+    listed = await deployment.client.get(f"/profiles/{profile_id}/insights/list", headers=his)
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert [row["report_id"] for row in rows] == [second_id, first_id]
+    for row in rows:
+        assert set(row.keys()) == {"report_id", "generated_at", "week_of"}
+
+    # The literal path `list` is never mistaken for a `report_id`.
+    by_id = await deployment.client.get(f"/profiles/{profile_id}/insights/{first_id}", headers=his)
+    assert by_id.status_code == 200

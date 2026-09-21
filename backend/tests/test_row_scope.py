@@ -92,7 +92,7 @@ from tests.consult_audio import CONSULT, CONTENT_TYPE, DURATION_S, placeholder_c
 from tests.family_support import household
 from tests.medicines_support import add, label
 from tests.medicines_support import let_in as cut_key
-from tests.paper import LIPID_PANEL, PNG_SIGNATURE
+from tests.paper import LAB_REPORT_VITALS, LIPID_PANEL, PNG_SIGNATURE
 from tests.test_migration import _in_order, _load
 from tests.timeline_support import artefact, book, hang_on_episode, reading
 from tests.visits import ROUTINE, transcript
@@ -443,6 +443,16 @@ async def _seed(deployment: Deployment) -> Seeded:
         201,
     )
     await _ok(await confirm(deployment, pa["token"], profile_id, card, decide(card)))
+    # A second paper, left unconfirmed (W2, `app.search.ask.waiting_papers`): a review card
+    # still waiting for his own yes is his own information too, sitting under RECORDS — a key
+    # without RECORDS must never see it named, not even as "waiting", the same rule that holds
+    # for a paper already confirmed.
+    waiting_card = await _ok(
+        await client.post(
+            f"/profiles/{profile_id}/photos", json=photo(LAB_REPORT_VITALS), headers=his
+        ),
+        201,
+    )
     felt = await _ok(
         await client.post(f"/profiles/{profile_id}/feelings", json={"word": "dizzy"}, headers=his),
         201,
@@ -745,6 +755,11 @@ async def _seed(deployment: Deployment) -> Seeded:
         seeded.kinds[str(claim.id)] = "insurance_claim"
         seeded.scopes[str(saved_report.id)] = Scope.PROFILE
         seeded.kinds[str(saved_report.id)] = "insight_report"
+        # The unconfirmed card's own row (W2): under RECORDS, the same door a confirmed
+        # paper's own row already stands behind — a key without it must never see this id
+        # named anywhere, ask included, not even to say a paper is waiting.
+        seeded.scopes[str(waiting_card["card_id"])] = Scope.RECORDS
+        seeded.kinds[str(waiting_card["card_id"])] = "review_card(waiting)"
         # Ask as a conversation (W2, `app.search.conversation`): the thread row itself sits
         # under ASK, the same door its questions were always kept behind.
         conversation = await start_new_conversation(session, context=owner)
@@ -912,6 +927,13 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/providers/{{provider_id}}"),
     Walk("GET", f"{P}/changes"),
     Walk("POST", f"{P}/ask", json={"question": "what papers do I have", "mode": "text"}),
+    # A question naming the waiting paper's own kind (W2, `app.search.ask.waiting_papers`):
+    # only a holder with RECORDS may ever be told a blood test is waiting for him to check —
+    # the generic UUID scan below still catches the card's own id if it ever reached a key
+    # without RECORDS.
+    Walk(
+        "POST", f"{P}/ask", json={"question": "when was my last blood test done", "mode": "text"}
+    ),
     Walk(
         "POST",
         f"{P}/ask/stream",
@@ -974,6 +996,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     # READINGS, RECORDS and MONEY, saved the moment the stream finishes.
     Walk("POST", f"{P}/insights/stream", json={}, stream=True),
     Walk("GET", f"{P}/insights"),
+    Walk("GET", f"{P}/insights/list"),
     Walk("GET", f"{P}/insights/{{report_id}}"),
     # Checkpoint 3's paper-scoped insight (`app.reasoning.analyst.paper`): the same mix of
     # scopes as the weekly report above, over one paper instead of the whole week. The one

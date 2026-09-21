@@ -1,0 +1,152 @@
+/* Health and the Health Analyst (package 10), in the blueprint's own language
+   (docs/design/experience-blueprint.html scenes `health`/`analyst`) — the few rules the shared
+   kit (`web/src/ui/kit/kit.css`) and the warm system (`web/src/ui/warm.css`) do not already
+   carry. Everything else on these two screens is the existing shared kit, unchanged. Every
+   selector here is scoped to `[data-testid="health-screen"]`/`[data-testid="insights-screen"]`
+   (the two screens' own `<main>`) or to a class these two screens alone use, so nothing here
+   changes any other screen's spacing or type scale. */
+
+/* The week ring's calm empty state (Health, `ThisWeek`): a fresh profile with no active
+   medicines has nothing for the ring to count, so this plain line stands in its place instead
+   of a ring reading "0 of 0" — same card, same rhythm as every other grounded line on the
+   screen, never a ring geometry with nothing real inside it. */
+.ring-empty {
+  margin: 0;
+  padding: var(--space-2) 0;
+  color: var(--ink-quiet);
+  text-align: center;
+}
+
+/* The Health Analyst screen while a report streams in (`insights-thinking`): the orb beside
+   ONE status line, replaced in place as each real stage lands — never a growing list beside
+   it (docs/design/README.md rule 2). Frozen (orb not turning) once a stream has stopped on an
+   error: the same row, holding what it last really said. */
+.analyst-working {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+/* The report's own headline, finished: the small orb beside it (not thinking), the same
+   treatment Ask gives a settled turn (package 10 review #3). */
+.analyst-headline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.analyst-headline-row .orb {
+  flex: none;
+  margin-top: 2px;
+}
+.analyst-headline-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+/* The headline itself (`insights-headline`, the blueprint's "Two things changed this
+   week."): bigger than the plain finding text under it in the report's own cards
+   (package 10 review #7 — "not larger than the headline" the other way round), the same
+   weight and colour the Health card's own headline already carries
+   (`.insights-card-headline`). */
+.analyst-headline {
+  margin: 0;
+  color: var(--ink);
+  /* The redesign's conversation head (docs/design/README.md): 25px / 1.17 / 300 — light, as
+     Home's and Ask's headlines are; never bold. */
+  font-weight: 300;
+  font-size: 25px;
+  line-height: 1.17;
+}
+
+/* --- Package 10 review #7: a report card is a list of findings, not a wall of full-width
+   buttons — the chip and the "Ask … this" action sit on one tidy row where they fit, and the
+   finding's own sentence is plain body text, never larger than the headline above it. -------- */
+.insight-text {
+  margin: 0;
+  font-size: var(--text-body);
+}
+.insight-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.insight-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+.insight-actions-row .pill.compact {
+  flex: none;
+}
+
+/* --- Package 10 review #5: "Why" is a real disclosure — the same chevron
+   `.report-about-toggle` already draws (kit.css), rotating open/closed, closed by default. A
+   native `<details>`/`<summary>` here (not a controlled button) keeps this component hookless,
+   like every other one in this file, so it renders the same from the static-tree unit tests as
+   it does on the screen; the chevron keys off `details[open]` instead of `aria-expanded` for
+   exactly that reason, but draws identically. ------------------------------------------------ */
+.insight-why {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+.insight-why > summary {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+.insight-why > summary::-webkit-details-marker {
+  display: none;
+}
+.insight-why > summary:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+.insight-why > summary svg {
+  flex: none;
+  /* The kit chevron points right: closed it points down, open it points up — the same
+     rotation `.report-about-toggle` uses. */
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+.insight-why[open] > summary svg {
+  transform: rotate(-90deg);
+}
+.insight-why p {
+  margin: 4px 0;
+}
+
+/* --- Package 10 review #6: 12px between a section heading and the card right under it, 24px
+   between one section and the next — everywhere on both screens (a geometry test asserts this:
+   `web/tests/e2e/health-analyst.spec.ts`). Scoped here rather than changed on the shared
+   `.section-head`/`.reveal-group` classes, which other screens also use. ----------------------- */
+[data-testid="health-screen"] .reveal-group,
+[data-testid="insights-screen"] .reveal-group {
+  display: flex;
+  flex-direction: column;
+  /* No existing space token is exactly 24px (--space-2 is 12, --space-3 is 20, --space-4 is
+     32) — the reviewer's own figure, hardcoded rather than stretched to the nearest token. */
+  gap: 24px;
+}
+[data-testid="health-screen"] .section-head,
+[data-testid="insights-screen"] .section-head {
+  margin-bottom: var(--space-2);
+}
+[data-testid="insights-screen"] [data-testid="insights-week-of"] {
+  margin-bottom: var(--space-2);
+}
+[data-testid="insights-screen"] [data-testid="insights-looked-at"] {
+  margin-bottom: var(--space-2);
+}

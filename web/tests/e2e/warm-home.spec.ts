@@ -15,9 +15,18 @@ test("the welcome shows once a phone: Get started reaches the phone number, and 
   const welcome = page.getByTestId("welcome-screen");
   await expect(welcome).toBeVisible();
   await expect(welcome.locator("h1")).toHaveText("Nura");
-  await expect(welcome.locator(".welcome-tagline")).toHaveText("Your health, kept together. Your family, close by.");
+  // cp5-onboarding: the tagline is now a SoftText (words arrive one by one, one serif accent
+  // word) — its element renders every word twice (the animated spans, plus the full sentence
+  // kept in `.sr-only` for one screen-reader read), so the plain-text assertion moves to the
+  // `.sr-only` span rather than the element itself.
+  await expect(welcome.locator(".welcome-tagline .sr-only")).toHaveText("Your health, kept together. Your family, close by.");
   await expect(welcome.locator(".value-tile")).toHaveCount(3);
-  await expect(welcome.locator("[data-illustration]")).toHaveAttribute("aria-hidden", "true");
+  // cp5-onboarding (operator review): the static illustration and the heart mark are gone from
+  // this screen — together with a tall headline and three tall cards they pushed "Get started"
+  // below the fold at 390x844. The living orb is the hero now; nothing else on the page uses
+  // `WelcomeIllustration`, so this simply asserts it is not drawn here any more.
+  await expect(welcome.locator("[data-illustration]")).toHaveCount(0);
+  await expect(welcome.getByTestId("welcome-orb")).toBeVisible();
   await page.getByTestId("welcome-start").click();
   await expect(page.getByLabel("Your phone number")).toBeVisible();
   await page.reload();
