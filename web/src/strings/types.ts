@@ -581,6 +581,7 @@ export interface Strings {
       /** Two short lines, never one two-idea sentence (plain-words rule 2) — the calm line
        *  every section shows when nothing is on file for it. */
       notFound: readonly [string, string];
+      noPaperYet: readonly [string, string];
       worksByGuaranteeLetter: string;
       claimedThisYear: string;
       paidByInsurer: string;

@@ -1161,6 +1161,8 @@ export const ms = {
       // @patient
       notFound: ["Nura tidak menjumpai ini pada polisi itu.", "Tanya syarikat insurans itu."],
       // @patient
+      noPaperYet: ["Ini belum ditulis lagi.", "Tambah kertas polisi itu dan Nura akan membacanya."],
+      // @patient
       worksByGuaranteeLetter: "Polisi ini menggunakan surat insurans di kaunter hospital.",
       // @patient phrase
       claimedThisYear: "Dituntut tahun ini",

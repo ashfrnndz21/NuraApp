@@ -1161,6 +1161,8 @@ export const en = {
       // @patient
       notFound: ["Nura did not find this on the policy.", "Ask the insurance company."],
       // @patient
+      noPaperYet: ["This is not written down yet.", "Add the policy paper and Nura will read it."],
+      // @patient
       worksByGuaranteeLetter: "This policy uses an insurance letter at the hospital desk.",
       // @patient phrase
       claimedThisYear: "Claimed this year",

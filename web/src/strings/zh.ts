@@ -1161,6 +1161,8 @@ export const zh = {
       // @patient
       notFound: ["Nura在保单上没有找到这项。", "请询问保险公司。"],
       // @patient
+      noPaperYet: ["这项还没有写下来。", "加上保单，Nura会读它。"],
+      // @patient
       worksByGuaranteeLetter: "这份保单在医院柜台使用保险信。",
       // @patient phrase
       claimedThisYear: "今年已申请",

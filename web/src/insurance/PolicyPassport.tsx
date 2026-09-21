@@ -123,6 +123,9 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
   const chipState = policy.period_state === "ended" ? "attention" : policy.period_state === "runs_to" ? "question" : null;
   const plan = policy.plan ? sanitizeDisplayText(policy.plan, 120) : null;
   const covers = policy.covers ? sanitizeDisplayText(policy.covers, 400) : null;
+  // A policy typed in by hand has no paper Nura could have read: "did not find this on the policy"
+  // would be untrue there.
+  const missing = policy.review_card_id ? p.notFound : p.noPaperYet;
   const covered = policy.covered ? sanitizeDisplayText(policy.covered, 120) : null;
   const cut = new Set(policy.essentials_cut);
 
@@ -149,7 +152,9 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
           </div>
           {plan && <p class="insurance-passport-sub">{plan}</p>}
           <p class="insurance-passport-sub">{s.insurance.type[policy.policy_type]}</p>
-          <p class="insurance-passport-sub">{s.insurance.status[policy.status]}</p>
+          {/* "Active" is only the stored default: Nura cannot know a policy is in force, and it read
+              as a claim beside "The policy's dates have passed". What a person set is still said. */}
+          {policy.status !== "active" && <p class="insurance-passport-sub">{s.insurance.status[policy.status]}</p>}
           {period && <p class="insurance-passport-sub">{period}</p>}
           {policy.policy_reference && <p class="insurance-passport-sub">{fill(s.insurance.reference, { reference: sanitizeDisplayText(policy.policy_reference, 40) })}</p>}
           {policy.premium_due_date && <p class="insurance-passport-sub">{fill(s.insurance.premiumDue, { date: paperDate(policy.premium_due_date, locale) })}</p>}
@@ -199,7 +204,7 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
               {covers} <small class="insurance-page">{p.typedLabel}</small>
             </p>
           ) : (
-            <Fallback lines={p.notFound} />
+            <Fallback lines={missing} />
           )}
         </Section>
         <Section title={p.excludesTitle} testId="section-excludes">
@@ -209,7 +214,7 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
               {cut.has("excludes") && <CutNotice n={ESSENTIAL_LIST_CAP} lines={p.essentialsCutNotice} testId="excludes-cut-notice" />}
             </>
           ) : (
-            <Fallback lines={p.notFound} />
+            <Fallback lines={missing} />
           )}
         </Section>
         <Section title={p.benefitsTitle} testId="section-benefits">
@@ -219,7 +224,7 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
               {cut.has("benefits") && <CutNotice n={ESSENTIAL_LIST_CAP} lines={p.essentialsCutNotice} testId="benefits-cut-notice" />}
             </>
           ) : (
-            <Fallback lines={p.notFound} />
+            <Fallback lines={missing} />
           )}
         </Section>
         <Section title={p.claimTitle} testId="section-claim">
@@ -236,7 +241,7 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
               )}
             </>
           ) : (
-            <Fallback lines={p.notFound} />
+            <Fallback lines={missing} />
           )}
         </Section>
       </RevealGroup>

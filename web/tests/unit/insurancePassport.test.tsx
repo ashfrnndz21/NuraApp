@@ -72,7 +72,8 @@ describe("PolicyPassport — section composition", () => {
   });
 
   it("shows the calm 'not found' line, never a placeholder, when nothing is on file — for every one of the four sections with no backing data", () => {
-    const out = render(<PolicyPassport policy={policy()} ledger={null} testId="passport" />);
+    // A policy Nura read from a paper (it has the paper's card): "did not find" is true of it.
+    const out = render(<PolicyPassport policy={policy({ review_card_id: "card-1" })} ledger={null} testId="passport" />);
     const fallbacks = all(out, byTestId("section-not-found"));
     expect(fallbacks.length).toBe(4);
     for (const one of fallbacks) {
@@ -83,7 +84,7 @@ describe("PolicyPassport — section composition", () => {
   });
 
   it("excludes shows nothing found when the policy prints no exclusions section at all, even though covers does", () => {
-    const out = render(<PolicyPassport policy={policy({ coverage_items: [{ text: "Hospital room and board", page: 2 }] })} ledger={null} testId="passport" />);
+    const out = render(<PolicyPassport policy={policy({ review_card_id: "card-1", coverage_items: [{ text: "Hospital room and board", page: 2 }] })} ledger={null} testId="passport" />);
     const excludesSection = all(out, byTestId("section-excludes"))[0]!;
     expect(all(out, byTestId("section-excludes")).length).toBe(1);
     expect(text(excludesSection)).toBe(s.insurance.passport.notFound[0] + s.insurance.passport.notFound[1]);
@@ -302,7 +303,11 @@ describe("PolicyPassport — section composition", () => {
     expect(all(out, byTestId("section-covers")).flatMap((el) => all(el, byTestId("section-not-found"))).length).toBe(0);
     const card = all(out, byTestId("passport"))[0]!;
     expect(text(card)).toContain("Pa and Mum");
-    expect(text(card)).toContain(s.insurance.status.active);
+    // "Active" is the stored default, not something Nura knows: never said.
+    expect(text(card)).not.toContain(s.insurance.status.active);
+    // No paper was ever read for a typed policy: the empty sections say so, never "did not find".
+    expect(text(out)).toContain(s.insurance.passport.noPaperYet[0]);
+    expect(text(out)).not.toContain(s.insurance.passport.notFound[0]);
   });
 
   it("'Benefits and limits' is never second-person — correct read to him or about him alike", () => {
