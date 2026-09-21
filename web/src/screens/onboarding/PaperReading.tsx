@@ -1,4 +1,5 @@
 import type { JSX } from "preact";
+import { useState } from "preact/hooks";
 import type { ReviewCardOut } from "../../api/types";
 import { readingChips, readingHeadline, reportRow } from "../../onboarding/review";
 import { t } from "../../strings";
@@ -13,9 +14,13 @@ import { Chip, ChipRow, Flag, Glass, Icon, Orb, RevealGroup, SoftText, StatusLin
 /** His paper, as a bubble he "sent" (blueprint `.me`): the file's name, and a small thumbnail
  *  for a photo. Never the bytes themselves — only what he already sees on his own phone. */
 export function PaperBubble({ name, thumb, testId }: { name: string; thumb?: string | null; testId?: string }): JSX.Element {
+  // A picture the browser cannot draw (a HEIC photo on some browsers, a damaged file) must never
+  // show as a broken image: it falls back to the document icon, the same as a PDF (found by the
+  // owner on 2026-09-21 in a capture made from a placeholder fixture).
+  const [broken, setBroken] = useState(false);
   return (
     <div class="paper-bubble" data-testid={testId}>
-      {thumb ? <img src={thumb} alt="" /> : <Icon name="records" />}
+      {thumb && !broken ? <img src={thumb} alt="" onError={() => setBroken(true)} data-testid="paper-thumb" /> : <Icon name="records" />}
       <span>{name}</span>
     </div>
   );
