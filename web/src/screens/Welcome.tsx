@@ -7,7 +7,8 @@ import { setToken, setWelcomed } from "../store/session";
 import { t } from "../strings";
 import { Notice } from "../ui/components";
 import { WelcomeIllustration } from "../ui/illustrations";
-import { Icon, IconBadge, PillButton, type IconName, type Tint } from "../ui/kit";
+import { Icon, IconBadge, Orb, PillButton, SoftText, type IconName, type Tint } from "../ui/kit";
+import { REVEAL_STAGGER_MS } from "../ui/motion";
 
 /** The two demo/dev shortcuts under Get started, and whether they show at all — a component
  *  of its own, with no hooks, so `demo.value || dev.value` can be checked without a phone's
@@ -85,10 +86,17 @@ export function WelcomeScreen(): JSX.Element {
       setBusy(null);
     }
   };
+  // The living orb (docs/design/experience-blueprint.html `welcome`: "One living orb is the
+  // assistant... never still"), large and breathing beside the brand's own picture — kept
+  // alongside `WelcomeIllustration`, not instead of it (warm-home.spec.ts's own
+  // `[data-illustration]` check stays true of the same element it always was).
   return (
     <main class="screen welcome" data-testid="welcome-screen">
       <div class="welcome-art">
         <WelcomeIllustration class="welcome-illo" cover />
+      </div>
+      <div class="welcome-orb-wrap">
+        <Orb size="lg" testId="welcome-orb" />
       </div>
       <div class="welcome-brand">
         <span class="welcome-heart" aria-hidden="true">
@@ -96,13 +104,16 @@ export function WelcomeScreen(): JSX.Element {
         </span>
         <h1 class="welcome-word">{s.appName}</h1>
       </div>
-      <p class="welcome-tagline">
-        <span>{w.tagline1}</span> <span>{w.tagline2}</span>
-      </p>
+      {/* One serif accent word (blueprint `.ser`), the words arriving one by one
+          (`SoftText`/`stream()`) — the wording itself is unchanged from the approved copy, only
+          how it arrives on screen. Read the plain sentence from `.sr-only`
+          (warm-home.spec.ts): the visible word spans repeat the same text for their own
+          animation, so asserting on the element itself would read it twice. */}
+      <SoftText text={`${w.tagline1} ${w.tagline2}`} pace="headline" as="p" className="welcome-tagline" testId="welcome-tagline" />
       <p class="welcome-lead">{w.lead}</p>
       <ul class="value-tiles">
-        {values.map((value) => (
-          <li key={value.title} class="value-tile">
+        {values.map((value, at) => (
+          <li key={value.title} class="value-tile reveal-item" style={{ transitionDelay: `${at * REVEAL_STAGGER_MS}ms` }}>
             <IconBadge icon={value.icon} tint={value.tint} />
             <span class="value-title">{value.title}</span>
             <span class="value-line">{value.line}</span>

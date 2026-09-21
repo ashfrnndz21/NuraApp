@@ -1,4 +1,5 @@
 import type { ConditionOut } from "../api/types";
+import { fill } from "../strings";
 
 /** The word cloud's behaviour, apart from any screen: which words are showing, how big each
  *  one is, and in what order. Pure, so it is unit-tested (`tests/unit/cloud.test.ts`).
@@ -119,4 +120,28 @@ export function foldTold(picked: readonly string[], told: readonly string[]): st
   const next = [...picked];
   for (const code of told) if (!next.includes(code)) next.push(code);
   return next;
+}
+
+/** "A and B", "A, B and C" — the plain join every language reads the same way here (no serial
+ *  comma). `and` is the whole connector as that language writes it, spaces included where it
+ *  wants them (English " and ", Chinese bare "和" with none) — carried by the caller's own
+ *  string, never added here, so the join stays correct however a language spaces it. Pure and
+ *  tiny on purpose: it never touches a word's own translation, only how the already-translated
+ *  names are strung together (`tests/unit/cloud.test.ts`). */
+export function joinNames(names: readonly string[], and: string): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  return `${names.slice(0, -1).join(", ")}${and}${names[names.length - 1]}`;
+}
+
+/** Nura's one-line acknowledgement under the cloud (docs/design/experience-blueprint.html
+ *  `cloud` scene note: never a diagnosis, only what he picked, read back in plain words — "You
+ *  told me about your blood pressure and your sugar," never "You have hypertension"). Built
+ *  from the same `CloudWord.name` every bubble already shows (never a code, never the clinic's
+ *  own term), in the order he picked them; `null` when nothing is picked yet, so the caller
+ *  shows nothing rather than an empty sentence. */
+export function acknowledgementLine(pickedWords: readonly CloudWord[], template: string, and: string, slots: Record<string, string> = {}): string | null {
+  if (pickedWords.length === 0) return null;
+  const list = joinNames(pickedWords.map((word) => word.name), and);
+  return fill(template, { ...slots, list });
 }

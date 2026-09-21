@@ -258,6 +258,8 @@ export interface Strings {
     phoneLabel: string;
     nameLabel: string;
     sendCode: string;
+    sending: string;
+    sent: string;
     useEmail: string;
     usePhone: string;
     codeLead: string;
@@ -265,6 +267,10 @@ export interface Strings {
     codeWorks: string;
     codeLabel: string;
     signInButton: string;
+    checking: string;
+    signedIn: string;
+    resend: string;
+    resendDone: string;
     emailLead: string;
     emailLabel: string;
     sendLink: string;
@@ -276,6 +282,7 @@ export interface Strings {
   };
   doors: {
     title: string;
+    greeting: string;
     forMe: string;
     forMeLine: string;
     forSomeone: string;
@@ -701,6 +708,9 @@ export interface Strings {
       term: string;
       countNone: string;
       count: string;
+      ackSelf: string;
+      ackOther: string;
+      and: string;
       tellMe: string;
       tellMeLead: string;
       tellMeLabel: string;

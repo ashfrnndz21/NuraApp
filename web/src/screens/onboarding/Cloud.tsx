@@ -2,12 +2,13 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import { saveWordsAndGoOn } from "../../onboarding/actions";
-import { asksFor, cloudView, foldTold, toggle, type CloudWord } from "../../onboarding/cloud";
-import { answers, conditions, picked, say, to } from "../../onboarding/state";
+import { acknowledgementLine, asksFor, cloudView, foldTold, toggle, type CloudWord } from "../../onboarding/cloud";
+import { answers, conditions, picked, say, to, whose } from "../../onboarding/state";
 import { speak } from "../../speech/speak";
 import { token } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Notice, Pill } from "../../ui/components";
+import { Icon, Orb, SoftText } from "../../ui/kit";
 import { Sheet, Status, StepTitle } from "./parts";
 
 /** The word cloud (#117's graph): plain words, the most common biggest and first, so they are
@@ -96,26 +97,45 @@ export function CloudStep(): JSX.Element {
   };
 
   const title = say(c.titleSelf, c.titleOther);
+  const pickedWords = view.filter((word) => word.picked);
+  const ack = acknowledgementLine(pickedWords, say(c.ackSelf, c.ackOther), c.and, { name: whose().name });
   return (
     <main class="screen onboarding" data-stage="cloud">
       <StepTitle title={title} />
       <p class="lead">{c.lead}</p>
-      <div class="cloud" role="group" aria-label={title} data-testid="cloud">
+      {/* The bubble cloud (docs/design/experience-blueprint.html `cloud` scene): floating,
+          tappable bubbles, sized by how common the word is; a tick and heavier weight mark a
+          pick, never colour alone (WCAG 1.4.1). The words, sizes, order and every test id below
+          are exactly what the plain word-cloud markup this replaces already had — only the
+          shape and the drift are new. */}
+      <div class="cloud bubble-cloud" role="group" aria-label={title} data-testid="cloud">
         {view.map((word) => (
           <button
             key={word.code}
             type="button"
-            class={`word s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
+            class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
             aria-pressed={word.picked}
             data-testid={`word-${word.code}`}
             data-size={word.size}
             onClick={() => tap(word)}
           >
+            <span class="bubble-surface" aria-hidden="true" />
+            {word.picked && (
+              <span class="bubble-tick" aria-hidden="true">
+                <Icon name="check" />
+              </span>
+            )}
             {word.name}
             {word.picked && word.term && <span class="term" data-testid="term">{` (${word.term})`}</span>}
           </button>
         ))}
       </div>
+      {ack && (
+        <div class="cloud-ack">
+          <Orb size="sm" />
+          <SoftText text={ack} pace="body" as="p" className="cloud-ack-line" testId="cloud-ack" />
+        </div>
+      )}
       <Status text={status} testId="cloud-status" />
       <p class="caption" data-testid="cloud-count">
         {picked.value.length > 0 ? fill(c.count, { n: picked.value.length }) : c.countNone}

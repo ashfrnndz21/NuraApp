@@ -1,0 +1,246 @@
+/* Package 9 — onboarding in the blueprint's language (docs/design/experience-blueprint.html
+ *  scenes `welcome`, `signin`, `who`, `cloud`). New rules only: the shared surfaces (`.glass`,
+ *  `.pill`, `.tile`, `.cloud`, `.word`) stay exactly as `kit.css`/`base.css`/`warm.css` already
+ *  style them for every other screen that uses them (the not-feeling-well word cloud, other
+ *  onboarding steps a different builder owns). Everything below is additive, scoped to the
+ *  onboarding/welcome/sign-in screens by their own class names so nothing here can leak onto a
+ *  screen this package does not own. */
+
+/* --- Welcome: the living orb beside the brand -------------------------------------------- */
+.welcome-orb-wrap {
+  display: flex;
+  justify-content: center;
+  padding-block: 4px 2px;
+}
+.welcome-tagline .soft-word.accent {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-style: italic;
+  font-size: 1.12em;
+  letter-spacing: 0;
+}
+
+/* --- Sign in: one conversation step (docs/design/experience-blueprint.html `signin`) ------ */
+.signin-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.signin-say {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.signin-say .orb {
+  margin-top: 2px;
+}
+.signin-say-line {
+  flex: 1;
+  min-width: 0;
+  /* Not a fixed size of its own: the same body text every other paragraph on this screen uses
+   *  (`var(--text-body)`, tokens.css), so it grows exactly as a real "writing at 200%" setting
+   *  grows everything else (a11y.spec.ts's own check on this screen's first `<p>`) — the
+   *  blueprint's own `signin` scene sets this line as its big `<h1>` headline instead, which
+   *  this screen does not: `Header` already renders the screen's one `<h1>` above it (the
+   *  "exactly one h1 per screen" rule), so Nura's line here reads as body text beside the small
+   *  orb, not a second, competing headline. */
+  font-size: var(--text-body);
+  font-weight: 300;
+  line-height: 1.3;
+  margin: 0;
+}
+.signin-resend {
+  align-self: flex-start;
+}
+
+/* --- Who is this for: two large choose-cards (docs/design/experience-blueprint.html `who`) */
+.choose-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.choose-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 84px;
+  padding: 16px 18px;
+  border-radius: 26px;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--ink);
+  text-align: left;
+  transition: background 0.3s, transform 0.15s;
+}
+.choose-card:active {
+  transform: scale(0.99);
+}
+.choose-card-icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+}
+.choose-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.choose-card-title {
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+.choose-card-line {
+  font-size: 0.875rem;
+  opacity: 0.82;
+}
+.who-say {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+.who-say-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* --- The bubble cloud (docs/design/experience-blueprint.html `cloud`, `.bub`) -------------- */
+/* `.cloud`/`.word` stay base.css's flex-wrap paper chips for every other caller; `.bubble` is
+ *  layered on top of the same `.word` element only inside onboarding's health-cloud step, and
+ *  wins on specificity (two classes) without an `!important` or touching the shared file. */
+.cloud.bubble-cloud {
+  gap: 10px;
+  justify-content: center;
+  padding: 6px 0 10px;
+}
+/* The button itself — the real tap target — never moves: its own box is what a pointer, a
+ *  screen reader and Playwright's actionability check all measure, and a hit target that keeps
+ *  sliding out from under a slow or unsteady finger is a real usability defect, not only a test
+ *  one (docs/design/README.md's own body-text-size, big-target rules are written for exactly
+ *  this audience). The drift lives on `.bubble-surface`, an absolutely-positioned decorative
+ *  child painted first (so the label and the tick sit visually on top of it, no `z-index`
+ *  needed) — the glass fill, border and blur move a few px; the button's own layout box, used
+ *  for hit-testing, does not. */
+.word.bubble {
+  position: relative;
+  /* `z-index: 0` (not just `position: relative`) is what actually opens a stacking context here
+   *  — without it, a positioned child paints ABOVE this button's own in-flow text regardless of
+   *  DOM order (CSS 2.1 Appendix E: positioned descendants paint after in-flow inline content).
+   *  With it, `.bubble-surface`'s `z-index: -1` below is scoped to this button alone and stays
+   *  behind the label, never escaping to sit behind an ancestor of the button itself. */
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* A fixed diameter (the blueprint's own `.bub`) only works for its own hand-picked, known-
+   *  short demo words. This cloud's words are real data in three languages — "5 or more
+   *  medicines", "腰痛或背痛" — and a fixed height would clip a long one right where the brief
+   *  says a label must never be cut off. `min-width`/`min-height` (the size tiers below) still
+   *  give the small, common words a properly round bubble; a longer label past them grows the
+   *  button downward instead of overflowing it, staying inside a rounded (not perfectly
+   *  circular) shape rather than silently losing text. */
+  min-width: var(--target);
+  min-height: var(--target);
+  max-width: 132px;
+  padding: 12px 10px;
+  border-radius: 999px;
+  text-align: center;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font-weight: 400;
+  line-height: 1.15;
+  /* A bubble scrolled out of view stops costing a layout/paint tick for its own drift — the
+   *  browser's own mechanism for "paused off-screen" (docs/design/experience-blueprint.html's
+   *  own drift is a fixed, hand-placed demo cloud; this one is data-driven and can run to 20+
+   *  bubbles with "Show more words", so it needs this rather than a bespoke
+   *  IntersectionObserver). `contain-intrinsic-size` keeps its place in the flex-wrap layout
+   *  while it is skipped, so nothing reflows when it re-enters. */
+  content-visibility: auto;
+  contain-intrinsic-size: 68px 68px;
+}
+.bubble-surface {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: bubble-bob 6s ease-in-out infinite alternate;
+  pointer-events: none;
+  transition: background 0.35s;
+}
+/* Never colour alone (WCAG 1.4.1): the tick (`.bubble-tick`, in the markup) and the bolder
+ *  label weight (`.word.bubble.picked` below) carry the picked state; the surface's own fill
+ *  swap is the third, reinforcing cue — not the animated `transform`, which the running drift
+ *  already owns for this element and would otherwise fight a static one every frame. */
+.word.bubble.picked .bubble-surface {
+  background: var(--ink);
+}
+.word.bubble.fresh .bubble-surface {
+  border-color: var(--plum);
+}
+.word.bubble.s1 { min-width: 68px; min-height: 68px; font-size: var(--word-1); }
+.word.bubble.s2 { min-width: 86px; min-height: 86px; font-size: var(--word-2); }
+.word.bubble.s3 { min-width: 104px; min-height: 104px; font-size: var(--word-3); font-weight: 500; }
+/* Patient density's larger targets (tokens.css `--target: 56px`) still fit every size above;
+   a caregiver's screen (`--target: 48px`) has more headroom at the same sizes. A longer label
+   grows past its tier's minimum (never below it) rather than clipping — see the comment on
+   `.word.bubble` above. */
+.word.bubble.picked {
+  color: #2b2140;
+  font-weight: 600;
+}
+.word.bubble .bubble-tick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.word.bubble:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 3px;
+}
+/* A moving target is a hard one to tap precisely — the drift holds still the moment a pointer
+ *  sits over a bubble or it has keyboard focus, so a finger or a switch always lands on
+ *  something that has stopped moving under it. */
+.word.bubble:hover .bubble-surface,
+.word.bubble:focus-visible .bubble-surface {
+  animation-play-state: paused;
+}
+@keyframes bubble-bob {
+  to { transform: translateY(-6px); }
+}
+.cloud-ack {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.cloud-ack-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-surface {
+    animation: none !important;
+  }
+}

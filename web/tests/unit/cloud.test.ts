@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ConditionOut } from "../../src/api/types";
-import { asksFor, boost, cloudView, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
+import { acknowledgementLine, asksFor, boost, cloudView, joinNames, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
+import type { CloudWord } from "../../src/onboarding/cloud";
 
 const w = (code: string, weight: number, top: boolean, related: string[] = [], ask = false, term: string | null = null): ConditionOut => ({
   code,
@@ -111,5 +112,39 @@ describe("toggle", () => {
 describe("asksFor", () => {
   it("lists the picked words with a follow-up, in pick order", () => {
     expect(codes(asksFor(GRAPH, ["statin", "bp", "bp_meds", "doc"]))).toEqual(["statin", "bp_meds", "doc"]);
+  });
+});
+
+describe("joinNames", () => {
+  it("joins nothing, one and two-or-more differently, spacing exactly as the connector carries it", () => {
+    expect(joinNames([], " and ")).toBe("");
+    expect(joinNames(["High blood pressure"], " and ")).toBe("High blood pressure");
+    expect(joinNames(["High blood pressure", "Cholesterol"], " and ")).toBe("High blood pressure and Cholesterol");
+    expect(joinNames(["High blood pressure", "Cholesterol", "Sugar, diabetes"], " and ")).toBe(
+      "High blood pressure, Cholesterol and Sugar, diabetes",
+    );
+  });
+
+  it("never adds a space of its own — a language that wants none (Chinese) gets none", () => {
+    expect(joinNames(["高血压", "胆固醇"], "和")).toBe("高血压和胆固醇");
+  });
+});
+
+describe("acknowledgementLine", () => {
+  const bubble = (name: string): CloudWord => ({ code: name, name, term: null, size: 1, picked: true, fresh: false });
+
+  it("says nothing when nothing is picked", () => {
+    expect(acknowledgementLine([], "You told me about {list}.", " and ")).toBeNull();
+  });
+
+  it("reads back exactly what he picked, in his own words — never a diagnosis", () => {
+    const line = acknowledgementLine([bubble("High blood pressure"), bubble("Sugar, diabetes")], "You told me about {list}.", " and ");
+    expect(line).toBe("You told me about High blood pressure and Sugar, diabetes.");
+  });
+
+  it("names a caregiver's patient rather than saying 'your'", () => {
+    const line = acknowledgementLine([bubble("High blood pressure")], "Nura wrote down {list} for {name}.", " and ", { name: "Pa" });
+    expect(line).toBe("Nura wrote down High blood pressure for Pa.");
+    expect(line).not.toContain("your");
   });
 });

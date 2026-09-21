@@ -522,6 +522,10 @@ export const zh = {
     // @patient phrase
     sendCode: "发验证码给我",
     // @patient phrase
+    sending: "发送中…",
+    // @patient phrase
+    sent: "已发送",
+    // @patient phrase
     useEmail: "改用电邮登录",
     // @patient phrase
     usePhone: "改用手机号码登录",
@@ -535,6 +539,14 @@ export const zh = {
     codeLabel: "验证码",
     // @patient phrase
     signInButton: "登录",
+    // @patient phrase
+    checking: "核对中…",
+    // @patient phrase
+    signedIn: "已登录",
+    // @patient phrase
+    resend: "再发一次",
+    // @patient
+    resendDone: "Nura 已发送新的验证码。",
     // @patient
     emailLead: "请输入您的电邮地址。",
     // @patient phrase
@@ -555,6 +567,8 @@ export const zh = {
   doors: {
     // @patient headline
     title: "这是给谁用的？",
+    // @patient
+    greeting: "我要照顾的是谁？",
     // @patient phrase
     forMe: "给我自己",
     // @patient
@@ -1473,6 +1487,12 @@ export const zh = {
       countNone: "Nura 还没有记下什么。",
       // @patient
       count: "Nura 已经记下 {n} 项。",
+      // @patient
+      ackSelf: "您告诉我：{list}。",
+      // @patient
+      ackOther: "Nura 为 {name} 记下了：{list}。",
+      // @patient phrase
+      and: "和",
       // @patient phrase
       tellMe: "或者直接告诉我",
       // @patient

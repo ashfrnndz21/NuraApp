@@ -160,8 +160,11 @@ export function RefusalNotice({ refusal }: { refusal: string | undefined }): JSX
   );
 }
 
-/** What happened and what to do, in one plain sentence — never the class, never an id. */
-export function Notice({ error }: { error: unknown }): JSX.Element | null {
+/** What happened and what to do, in one plain sentence — never the class, never an id.
+ *  `errorKind` is optional and purely for a test to tell one real state from another
+ *  (`web/src/signin.ts` `classifySignInError`) without parsing the sentence itself; it changes
+ *  nothing about what is shown. */
+export function Notice({ error, errorKind }: { error: unknown; errorKind?: string }): JSX.Element | null {
   if (!error) return null;
   const lines =
     error instanceof Unreachable
@@ -171,6 +174,7 @@ export function Notice({ error }: { error: unknown }): JSX.Element | null {
         : refusalLines(undefined);
   return (
     <Tile paper role="alert" testId="notice">
+      {errorKind && <span data-error-kind={errorKind} aria-hidden="true" hidden />}
       {lines.map((line, index) => (
         <p key={index}>{line}</p>
       ))}
