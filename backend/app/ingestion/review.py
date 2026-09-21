@@ -210,7 +210,9 @@ async def _red_flag_scan(
     reasoned about."""
     seen: set[str] = set()
     for field in extraction.fields:
-        for hit in red_flags_in(field.subject.replace("_", " "), field.attribute.replace("_", " "), field.value):
+        for hit in red_flags_in(
+            field.subject.replace("_", " "), field.attribute.replace("_", " "), field.value
+        ):
             if hit.code in seen:
                 continue
             seen.add(hit.code)
@@ -279,7 +281,11 @@ def _lab_reading_split(
         if field.field_id in taken:
             continue
         measure = _LAB_READING_CODES.get((field.subject, field.attribute))
-        if measure is not None and field.unit == measure.unit and _in_range(field.value, measure.low, measure.high):
+        if (
+            measure is not None
+            and field.unit == measure.unit
+            and _in_range(field.value, measure.low, measure.high)
+        ):
             readings.append(field)
         else:
             rest.append(field)
@@ -345,7 +351,11 @@ async def _linked_match(
     (the signal-locality rule), never written anywhere. `None` when neither matches: the
     trace shows a link only when one is real (module docstring)."""
     named = next(
-        (field.value for field in extraction.fields if (field.subject, field.attribute) == MEDICINE_NAME),
+        (
+            field.value
+            for field in extraction.fields
+            if (field.subject, field.attribute) == MEDICINE_NAME
+        ),
         None,
     )
     if isinstance(named, str) and named.strip() and context.allows(Scope.MEDICINES):
@@ -358,8 +368,12 @@ async def _linked_match(
             where=(MedicationLine.superseded_at.is_(None),),
         )
         for line in lines:
-            if word in line.generic.lower() or (line.brand is not None and word in line.brand.lower()):
-                return ImportStep(key=ImportStepKey.LINKED, linked_kind="medicine", linked_label=line.generic)
+            if word in line.generic.lower() or (
+                line.brand is not None and word in line.brand.lower()
+            ):
+                return ImportStep(
+                    key=ImportStepKey.LINKED, linked_kind="medicine", linked_label=line.generic
+                )
     if extraction.document_date is not None and context.allows(Scope.VISITS):
         tz = REGION_TZ[context.region]
         visits = await audited_read(session, Appointment, context, Scope.VISITS)
@@ -435,7 +449,9 @@ async def review_artifact_stream(
         key=ImportStepKey.FOUND,
         document_kind=extraction.document_kind.value,
         facility=facility,
-        document_date=None if extraction.document_date is None else extraction.document_date.isoformat(),
+        document_date=None
+        if extraction.document_date is None
+        else extraction.document_date.isoformat(),
     )
     if extraction.document_kind in RED_FLAG_SCANNED_KINDS:
         # The red-flag path first, exactly like typed free text (`app.safety.red_flags`
@@ -538,8 +554,14 @@ def _capped_pill_fields(
     what was actually seen, not a guess."""
     name_field = next((f for f in fields if (f.subject, f.attribute) == MEDICINE_NAME), None)
     if registry is not None and name_field is not None and isinstance(name_field.value, str):
-        strength_field = next((f for f in fields if (f.subject, f.attribute) == MEDICINE_STRENGTH), None)
-        strength = strength_field.value if strength_field and isinstance(strength_field.value, str) else None
+        strength_field = next(
+            (f for f in fields if (f.subject, f.attribute) == MEDICINE_STRENGTH), None
+        )
+        strength = (
+            strength_field.value
+            if strength_field and isinstance(strength_field.value, str)
+            else None
+        )
         matches = registry.identify(LabelFields(generic=name_field.value, strength=strength))
         if not matches:
             matches = registry.identify(LabelFields(brand=name_field.value, strength=strength))
@@ -570,13 +592,33 @@ _INSURANCE_ESSENTIAL_ATTRIBUTE = re.compile(r"^(covers|excludes|benefit|claim_st
 
 _ADVICE_LANGUAGE_TOKENS: tuple[str, ...] = (
     # English
-    "you are covered", "you're covered", "you will get", "you'll get", "you can claim",
-    "entitled to", "should", "we recommend", "likely", "probably",
+    "you are covered",
+    "you're covered",
+    "you will get",
+    "you'll get",
+    "you can claim",
+    "entitled to",
+    "should",
+    "we recommend",
+    "likely",
+    "probably",
     # Malay
-    "anda dilindungi", "anda akan mendapat", "anda boleh menuntut", "berhak",
-    "sepatutnya", "kami mengesyorkan", "berkemungkinan", "mungkin",
+    "anda dilindungi",
+    "anda akan mendapat",
+    "anda boleh menuntut",
+    "berhak",
+    "sepatutnya",
+    "kami mengesyorkan",
+    "berkemungkinan",
+    "mungkin",
     # Chinese
-    "您已受保", "你已受保", "您将获得", "您可以索赔", "有权获得", "我们建议", "可能",
+    "您已受保",
+    "你已受保",
+    "您将获得",
+    "您可以索赔",
+    "有权获得",
+    "我们建议",
+    "可能",
 )
 """A policy essentials line that reads like Nura's own advice about his cover ("you are
 covered up to S$150,000", "you should claim within 30 days") rather than the paper's own
@@ -585,7 +627,16 @@ across English, Malay and Chinese, since the paper itself may print in any of th
 never a refusal, only a flag: a false positive only asks him to check the line again."""
 
 
+_UNSEEN = re.compile(
+    "[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f\\u00ad\\u061c\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ufeff]"
+)
+"""What a reader never sees and every later step strips (`app.insurance.policy._clean`, the
+web's own display path): matched on the raw value, "You a<ZWSP>re covered up to …" walked
+past the tokens below and was then read by him intact (independent review, round 2, R-2)."""
+
+
 def _carries_advice_language(text: str) -> bool:
+    text = _UNSEEN.sub("", text)
     lowered = text.lower()
     return any(token in lowered or token in text for token in _ADVICE_LANGUAGE_TOKENS)
 
@@ -1107,7 +1158,11 @@ async def _his_generics(session: AsyncSession, *, context: KeyContext) -> frozen
 
 def _receipt_currency(kept: Sequence[DecidedField]) -> str | None:
     for decided in kept:
-        if decided.subject == "receipt" and decided.attribute == "currency" and isinstance(decided.value, str):
+        if (
+            decided.subject == "receipt"
+            and decided.attribute == "currency"
+            and isinstance(decided.value, str)
+        ):
             return decided.value
     return None
 
@@ -1165,7 +1220,11 @@ async def _write_receipt(
             LabelFields(brand=name.value)
         )
         matched = next(
-            (m for m in matches if m.generic in his_generics and m.confidence >= CONFIDENCE_THRESHOLD),
+            (
+                m
+                for m in matches
+                if m.generic in his_generics and m.confidence >= CONFIDENCE_THRESHOLD
+            ),
             None,
         )
         if matched is None:

@@ -75,7 +75,7 @@ export function effectiveValue(field: Pick<ReviewFieldOut, "value" | "state" | "
  *  its display text through — not insurance-specific, since any paper's free text can carry a
  *  hostile character, not only a policy's. */
 const DISPLAY_CONTROL_CHARS_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
-const DISPLAY_BIDI_CONTROL_RE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+const DISPLAY_BIDI_CONTROL_RE = /[\u00AD\u061C\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
 
 /** A field's display text, its own printed date read as a date in his language when the
  *  value is one (E02-07 library part A #3) — the paper's own words otherwise, exactly as

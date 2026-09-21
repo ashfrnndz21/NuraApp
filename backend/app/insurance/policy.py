@@ -320,7 +320,7 @@ def may_set_a_policy(context: KeyContext) -> None:
 
 
 _CONTROL_CHARS_RE = re.compile("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f-\\x9f]")
-_BIDI_CONTROL_RE = re.compile("[\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ufeff]")
+_BIDI_CONTROL_RE = re.compile("[\\u00ad\\u061c\\u200b-\\u200f\\u202a-\\u202e\\u2066-\\u2069\\ufeff]")
 """The same code-point ranges `web/src/insurance/model.ts` `sanitizeDisplayText` strips for
 display, plus the zero-width/joiner and BOM code points the independent review's probe named
 by example (U+200B survives a plain bidi-override strip) — stripped here too, at write
