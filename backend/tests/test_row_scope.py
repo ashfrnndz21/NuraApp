@@ -1020,6 +1020,17 @@ READ_ROUTES: tuple[Walk, ...] = (
         json={"question": "what papers do I have", "mode": "text"},
         stream=True,
     ),
+    # A clarifying question's own opaque token (W2), on a turn that carries one — a foreign or
+    # stale value every holder sends here: `resolve_clarify_value` is a scoped read like any
+    # other, so this walk's generic UUID scan catches it if it ever leaked anything, and the
+    # turn still answers normally (the token simply resolves to nothing) rather than refusing
+    # outright, so this walk exercises the same route as any other question would.
+    Walk(
+        "POST",
+        f"{P}/conversations/{{conversation_id}}/turns/stream",
+        json={"question": "which one", "mode": "text", "value": "not-a-real-clarify-token"},
+        stream=True,
+    ),
     # Care navigation drafts (T3), the planner's proposed visits and a visit's cost
     # expectation (T2): reads over VISITS, with MONEY deciding whether cover is shown.
     Walk("GET", f"{P}/navigation/drafts"),

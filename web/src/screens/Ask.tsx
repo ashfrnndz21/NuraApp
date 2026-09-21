@@ -10,7 +10,6 @@ import { answerView, askMode } from "../feed/ask";
 import { appendSentence, shownSentences, type StreamedSentence } from "../feed/askStream";
 import { feedFor } from "../feed/session";
 import { go, openMe } from "../flow";
-import { prefersReducedMotion } from "../ui/motion";
 import { speak } from "../speech/speak";
 import { density, isSelf, profile, token } from "../store/session";
 import { fill, language, LOCALE, t } from "../strings";
@@ -294,11 +293,15 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
     : [fill(s.feed.askSample1Theirs, { name: patientName }), fill(s.feed.askSample2Theirs, { name: patientName }), fill(s.feed.askSample3Theirs, { name: patientName })];
 
   // The thread scrolls itself: whenever a bubble, a step or a new sentence lands, the newest
-  // content comes above the composer — a jump under Reduce Motion, never a smooth scroll
-  // (docs/design/experience-blueprint.html's own Reduce Motion rule, applied here rather than
-  // left to the browser's default `scrollIntoView`, which always smooths unless told not to).
+  // content comes above the composer — always a jump, never a smooth scroll (fix: a smooth
+  // `scrollIntoView` here was found not to run reliably at all in a headless browser — the
+  // geometry check for a clarifying question's own chips at a short, narrow viewport caught
+  // it: the thread simply never scrolled, so the newest content — the chips — could render
+  // entirely below the fold, never brought above the docked composer. An instant jump is
+  // simple and always lands, for Reduce Motion or not; `prefersReducedMotion` no longer picks
+  // between two behaviours here, since only one is reliable.)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "end" });
+    bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
   }, [pastTurns.length, displayedLines.length, busy, sentQuestion, found]);
 
   const voiceHint = () => {
@@ -539,6 +542,13 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
             )}
           </div>
         )}
+        {/* The thread's own scroll target (fix: this ref was declared but never attached, so
+           the "the thread scrolls itself" effect above was always a no-op — real on a short
+           screen with a tall answer or a clarifying question's own chips, which could render
+           visually under the docked composer with nothing to bring them into view). Always the
+           very last node in the thread, so "the newest content" really is whatever just grew
+           the thread, chips included. */}
+        <div ref={bottomRef} />
       </div>
       {found && found.results.length === 0 && (
         <Tile paper testId="found-nothing">
