@@ -13,6 +13,38 @@ number. Single components can be tried on their own at `http://localhost:8000/ap
 
 Everything lands on the `redesign` branch. `main` takes it at checkpoint 8.
 
+## Progress: the fixed list every update counts against
+
+A work package counts as **done** only when it is merged on `redesign` and, where it has a screen, the operator has
+checked its screen captures against the blueprint. Percent complete = done packages / 23. Packages are not equal in
+size, so the percent is a count, not a forecast.
+
+| # | Work package | Checkpoint | State |
+|---|---|---|---|
+| 1 | The look, the phone frame, the shared components | 1 | Done |
+| 2 | Build spec | — | Done |
+| 3 | Report data: labels, ranges on results, no blank lines | 2 | Done |
+| 4 | Reading screen and report table | 2 | In progress: fixing after the operator's visual review |
+| 5 | Insight engine after a paper | 3 | Done |
+| 6 | New Home with the living orb | 3 | In progress: fixing after the operator's visual review |
+| 7 | Insight screen ("What it means for you") wired after "Looks right" | 3 | Not started |
+| 8 | Ask Nura interface | 4 | Not started |
+| 9 | Onboarding: Welcome, sign in, who is this for, bubble cloud | 5 | Not started |
+| 10 | Health and the Health Analyst screens | 5 | Not started |
+| 11 | Medicines screens | 5 | Not started |
+| 12 | Visits and costs, Insurance screens | 5 | Not started |
+| 13 | For you feed screens | 5 | Not started |
+| 14 | Not feeling well, Connect, Mei's Home, Profile | 5 | Not started |
+| 15 | Feed database-lock fix, failed searches retried | 6 | Done |
+| 16 | Streamed reading: rows as they are read, real page progress | 6 | Not started |
+| 17 | Cost of a procedure with no visit booked | 6 | Not started |
+| 18 | The inbox for many papers | 7a | Not started: needs owner decisions |
+| 19 | The matching engine and its verdicts | 7a | Not started: needs owner decisions and real papers |
+| 20 | Policy passport | 7b | Not started: needs real policies |
+| 21 | Medicine registry and Add a medicine | 7c | Not started: needs the country decision |
+| 22 | Connections and content in context | 7d | Not started |
+| 23 | Merge to main, full checks, live pass as Pa and Mei | 8 | Not started |
+
 ## How every piece is tested before the owner sees it
 1. Unit tests for the component or rule.
 2. End-to-end browser tests on a fixture server with a frozen clock.
