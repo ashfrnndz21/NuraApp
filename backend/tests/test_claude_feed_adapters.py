@@ -556,7 +556,7 @@ def test_claude_searcher_without_queries_falls_back_to_kind_and_term() -> None:
 
 def test_claude_searcher_last_search_detail_is_none_before_any_call() -> None:
     searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=FakeClient([]))
-    assert searcher.last_search_detail() is None
+    assert searcher.last_search_detail(("explainer: x",)) is None
 
 
 def test_claude_searcher_last_search_detail_counts_the_happy_path() -> None:
@@ -583,8 +583,9 @@ def test_claude_searcher_last_search_detail_counts_the_happy_path() -> None:
         ]
     )
     searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
-    searcher.search("explainer", ["blood pressure"], ALLOWLIST)
-    detail = searcher.last_search_detail()
+    asked = ("blood pressure — what it is for",)
+    searcher.search("explainer", ["blood pressure"], ALLOWLIST, queries=asked)
+    detail = searcher.last_search_detail(asked)
     assert detail is not None
     assert detail["web_search_uses"] == 1
     assert detail["web_fetch_uses"] == 1
@@ -594,14 +595,16 @@ def test_claude_searcher_last_search_detail_counts_the_happy_path() -> None:
     assert detail["stop_reasons"] == ["end_turn"]
     assert detail["refused"] is False
     assert detail["max_uses_reached"] is False
-    assert detail["queries"] == ["explainer: blood pressure"]
+    assert detail["queries"] == 1  # how many, never the words
+    assert searcher.last_search_detail(asked) is None  # taken once, nothing accumulates
 
 
 def test_claude_searcher_last_search_detail_marks_a_refusal() -> None:
     client = FakeClient([_search_response([], stop_reason="refusal")])
     searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
-    searcher.search("explainer", ["x"], ALLOWLIST)
-    detail = searcher.last_search_detail()
+    asked = ("x — what it is for",)
+    searcher.search("explainer", ["x"], ALLOWLIST, queries=asked)
+    detail = searcher.last_search_detail(asked)
     assert detail is not None
     assert detail["refused"] is True
     assert detail["stop_reasons"] == ["refusal"]
@@ -613,8 +616,9 @@ def test_claude_searcher_last_search_detail_marks_a_max_uses_error() -> None:
         [_search_response([], tool_blocks=[error_block])]
     )
     searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
-    searcher.search("explainer", ["x"], ALLOWLIST)
-    detail = searcher.last_search_detail()
+    asked = ("x — what it is for",)
+    searcher.search("explainer", ["x"], ALLOWLIST, queries=asked)
+    detail = searcher.last_search_detail(asked)
     assert detail is not None
     assert detail["max_uses_reached"] is True
 
@@ -622,8 +626,9 @@ def test_claude_searcher_last_search_detail_marks_a_max_uses_error() -> None:
 def test_claude_searcher_last_search_detail_marks_unparseable_json_as_parse_failed() -> None:
     not_json = FakeClient([FakeResponse(content=[FakeBlock("not json at all")])])
     searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=not_json)
-    searcher.search("explainer", ["x"], ALLOWLIST)
-    detail = searcher.last_search_detail()
+    asked = ("x — what it is for",)
+    searcher.search("explainer", ["x"], ALLOWLIST, queries=asked)
+    detail = searcher.last_search_detail(asked)
     assert detail is not None
     assert detail["parse_failed"] is True
     assert detail["refused"] is False

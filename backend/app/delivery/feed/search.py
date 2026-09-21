@@ -163,7 +163,23 @@ season name — `app.delivery.feed.local.HAZARDS`/`SEASONS`), never a chemical n
 carry no intent word here and `_safe_query` passes their term through unchanged."""
 
 
-def _safe_query(term: str, kind: JobKind, registry: DrugRegistry, language: str) -> str:
+def _closed_words() -> frozenset[str]:
+    """Every non-medicine word a job term may be: the plain words the planner itself writes for
+    a condition (`CONDITION_TERMS`, and a condition CODE said with spaces — the codes are the
+    closed set `app.safety.health_words.CONDITIONS`), a food topic (`FOOD_TERMS`), the one
+    reading it plans for ("blood pressure"), a hazard and a season's own search term. Imported
+    here, not at module level: `compose` imports this module."""
+    from app.delivery.feed.compose import CONDITION_TERMS, FOOD_TERMS
+    from app.delivery.feed.local import HAZARDS, SEASONS
+    from app.safety.health_words import CONDITIONS
+
+    words = {code.replace("_", " ") for code in CONDITIONS}
+    words |= set(CONDITION_TERMS.values()) | set(FOOD_TERMS.values()) | {"blood pressure"}
+    words |= set(HAZARDS) | {season.term for season in SEASONS} | {season.code for season in SEASONS}
+    return frozenset(word.strip().lower() for word in words)
+
+
+def _safe_query(term: str, kind: JobKind, registry: DrugRegistry, language: str) -> str | None:
     """A safe, closed-vocabulary query for one job term, built for `ClaudeSearcher` — never
     free text, never a word from a paper, a note, a transcript or anything unconfirmed, and
     never anything identifying (his name, a phone number, a date, a doctor's or a facility's
@@ -177,28 +193,45 @@ def _safe_query(term: str, kind: JobKind, registry: DrugRegistry, language: str)
     purpose group (`Monograph.purpose_id`, in words: "blood pressure", "clots" — the same short
     words `docs/health-feed-spec.md`'s own example, "blood pressure", already is), so the model
     is handed the same closed vocabulary a card is built from — never the bare generic alone,
-    which is what every empty live job searched. A term that is not a medicine (a condition, a
-    food topic, a hazard, a season) is already one of these closed, human words and is used as
-    it stands, with only its intent word added.
+    which is what every empty live job searched. A term that is not a medicine is used as it
+    stands, with only its intent word added, ONLY when it is one of the closed words above.
+
+    Fails closed (independent review of #308, blocker 1): a job's term is not always closed —
+    `compose._gaps` reads a medicine-name FACT's own value, which may be an extractor's unchecked
+    read of a label ("amlodipin 5mg <his name> <his id> dr … <hospital>" went out verbatim in
+    the reviewer's proof), and `POST …/search-jobs` takes a chief's typed terms. A term the
+    licensed registry does not resolve and that is not a closed word yields `None`: no query,
+    no call, nothing leaves the machine. The same for a resolved medicine whose catalogue has
+    no plain name in any language — never the raw term as a stand-in.
     """
     intent = INTENT_WORDS.get(kind)
     try:
         monograph = registry.monograph(term)
     except UnknownDrug:
-        return f"{term} — {intent}" if intent else term
-    catalogue = PLAIN_NAME.get(language) or PLAIN_NAME["en"]
-    plain_name = catalogue.get(monograph.plain_name_id, term)
+        if term.strip().lower() not in _closed_words():
+            return None
+        word = term.strip().lower()
+        return f"{word} — {intent}" if intent else word
+    plain_name = (PLAIN_NAME.get(language) or {}).get(monograph.plain_name_id) or PLAIN_NAME["en"].get(
+        monograph.plain_name_id
+    )
+    if plain_name is None:
+        return None
     purpose = monograph.purpose_id.replace("_", " ")
     words = f"{plain_name}, for {purpose}"
     return f"{words} — {intent}" if intent else words
 
 
-def _safe_queries(job: SearchJob, registry: DrugRegistry, language: str) -> tuple[str, ...]:
-    """`_safe_query` for every term of this job, in order — what `search_and_compress` hands
-    the searcher instead of `job.terms` alone. `job.terms` itself is unchanged everywhere else
-    (dedupe keys, batch and medicine matching, hazard and season checks all still read it) —
-    only what is said to the model changes."""
-    return tuple(_safe_query(term, job.kind, registry, language) for term in job.terms)
+def _safe_queries(
+    job: SearchJob, registry: DrugRegistry, language: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """`_safe_query` for every term of this job, in order: the terms that HAVE a safe query and
+    those queries, pair for pair — what `search_and_compress` hands the searcher. A term with
+    no safe query is left out of both, so it is never asked about at all. `job.terms` itself is
+    unchanged everywhere else (dedupe keys, batch and medicine matching, hazard and season
+    checks all still read it) — only what is said to the model changes."""
+    kept = [(term, query) for term in job.terms if (query := _safe_query(term, job.kind, registry, language))]
+    return tuple(term for term, _ in kept), tuple(query for _, query in kept)
 
 
 EMPTY_BECAUSE = (
@@ -210,6 +243,7 @@ EMPTY_BECAUSE = (
     "parse_failed",
     "refused",
     "max_uses_reached",
+    "term_not_in_vocabulary",
 )
 """The closed set `search_and_compress` may write to `searched_detail["empty_because"]` when a
 job's search leaves nothing to make a card from — never free text, so a live check can read
@@ -241,7 +275,7 @@ def _empty_because(detail: Mapping[str, Any]) -> str | None:
     return "nothing_relevant"
 
 
-def _read_search_detail(searcher: Searcher) -> dict[str, Any] | None:
+def _read_search_detail(searcher: Searcher, queries: Sequence[str]) -> dict[str, Any] | None:
     """`searcher.last_search_detail()`, read defensively (`getattr`) the same way
     `external_processor` already is: `None` for the fixture searcher, which carries no such
     method and never leaves the region to have anything to report, and for any other searcher
@@ -250,7 +284,7 @@ def _read_search_detail(searcher: Searcher) -> dict[str, Any] | None:
     reader = getattr(searcher, "last_search_detail", None)
     if reader is None:
         return None
-    detail = reader()
+    detail = reader(queries)
     return dict(detail) if detail is not None else None
 
 
@@ -626,7 +660,17 @@ async def search_and_compress(
     # 30) — a safe, closed-vocabulary query built from the licensed catalogue and an intent
     # word for the job's kind. `job.terms` itself is untouched: every other check in this
     # module (dedupe, batch and medicine matching, hazard and season checks) still reads it.
-    queries = _safe_queries(job, engine.registry, code)
+    safe_terms, queries = _safe_queries(job, engine.registry, code)
+    if not safe_terms:
+        # Nothing about this job can be asked safely: no call is made at all.
+        return SearchOutcome(
+            candidates=(),
+            rejected=[],
+            domains=domains,
+            reasons=[],
+            external_processor=None,
+            searched_detail={"queries": 0, "empty_because": "term_not_in_vocabulary"},
+        )
     try:
         # `Searcher.search` is a synchronous port (the real adapter's own `messages.create`
         # call, `ClaudeSearcher._ask`), so awaiting it directly would block this event loop —
@@ -636,7 +680,7 @@ async def search_and_compress(
         # one.
         found_pages = list(
             await asyncio.to_thread(
-                engine.searcher.search, job.kind.value, job.terms, domains, queries=queries
+                engine.searcher.search, job.kind.value, safe_terms, domains, queries=queries
             )
         )
     except PortUnavailable as failed:
@@ -647,7 +691,7 @@ async def search_and_compress(
             reasons=[],
             failed_because=f"search_failed:{failed}",
             external_processor=reached,
-            searched_detail=_read_search_detail(engine.searcher),
+            searched_detail=_read_search_detail(engine.searcher, queries),
         )
     reasons: list[str] = []
     if job.kind is JobKind.LOCAL:
@@ -718,7 +762,7 @@ async def search_and_compress(
                 reasons=reasons,
                 failed_because=f"compress_failed:{failed}",
                 external_processor=reached,
-                searched_detail=_read_search_detail(engine.searcher),
+                searched_detail=_read_search_detail(engine.searcher, queries),
             )
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
@@ -728,7 +772,7 @@ async def search_and_compress(
             continue
         seen.add(key)
         candidates.append(_Candidate(found=found, compressed=compressed, season=season, key=key))
-    detail = _read_search_detail(engine.searcher)
+    detail = _read_search_detail(engine.searcher, queries)
     if detail is not None:
         # Operational counts only, never page text: what the searcher's own diagnostics
         # already carry (queries sent, tool uses, candidate/allowlist/fetch counts, stop
