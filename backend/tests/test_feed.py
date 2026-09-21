@@ -511,11 +511,13 @@ async def test_a_medicine_starts_an_explainer_and_a_daily_safety_job_and_a_notic
     her_page = await feed_page(sg, context=mei, engine=ENGINE)
     her_ids = {item.id for item in her_page.items}
     assert notice.id in her_ids and her_learning[0].id in her_ids
+    # Past the gate what Nura found for him and his story take turns, a learning card first
+    # (`rank._mixed`).
     assert [item.type for item in page.items][:4] == [
         CardType.NOW,
         CardType.GATE,
-        CardType.STORY,  # the label photo is one of his papers
         CardType.LEARNING,
+        CardType.STORY,  # the label photo is one of his papers
     ]
 
 
