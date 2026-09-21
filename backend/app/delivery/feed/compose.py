@@ -349,6 +349,94 @@ VOICE_TARGET = "feed_item_voice"
 twin — so a render failure is told apart from a refusal to write the card."""
 
 
+@dataclass(frozen=True, slots=True)
+class _SpokenAhead:
+    """One item's voice pre-render, and the exception it raised, if any."""
+
+    item: FeedItem
+    failed: BaseException | None
+
+
+async def speak_ahead(
+    engine: Engine, context: KeyContext, items: Sequence[FeedItem]
+) -> list[_SpokenAhead]:
+    """The network half of `_say_ahead`: every call `voiced` makes to the voice port, and
+    nothing else — no session, no database at all, so this never holds SQLite's write lock
+    while it waits on a narration call (#297). `app.delivery.feed.background.run_job` is the
+    caller that matters: a request's own `_say_ahead` below still wraps this and the write
+    that follows in the one session already open for the request, same as always, which is
+    fine for a handful of new cards on one request; the background run's dozen-jobs-in-a-row
+    is the one that must never do this with a transaction open.
+
+    A render that fails — the language is not one there is a voice for, the lines run past
+    thirty seconds, the store or the voice itself throws — is caught here, per item, and
+    carried back as `_SpokenAhead.failed` rather than raised: the caller decides what, if
+    anything, to write about it (`record_say_ahead_failures`); nothing here ever costs him a
+    card, which `create_item` already wrote before this runs.
+    """
+    if engine.voice is None or engine.store is None:
+        return []
+    results: list[_SpokenAhead] = []
+    for item in items:
+        try:
+            await voiced(
+                engine.store,
+                engine.voice,
+                profile_id=context.profile_id,
+                region=context.region,
+                lines=list(item.voice or item.body),
+                language=item.language,
+                boundary=item.boundary,
+            )
+            results.append(_SpokenAhead(item, None))
+        except Exception as failed:  # noqa: BLE001 — a voice down never costs him a card
+            log.warning("voice ahead failed for %s: %s", item.id, type(failed).__name__)
+            results.append(_SpokenAhead(item, failed))
+    return results
+
+
+async def record_say_ahead_failures(
+    session: AsyncSession, *, context: KeyContext, results: Sequence[_SpokenAhead]
+) -> None:
+    """The database half of `_say_ahead`: write the trail line for whichever of `results`
+    failed, under `VOICE_TARGET`, on the card's own scope, the way any other refused write is
+    (`app.audit.trail.record`) — so the gap between "the card exists" and "its twin is ready"
+    is visible to whoever reads the trail, not just to a log line nobody reads back. DB only,
+    no network: safe inside any short unit of work, including one opened fresh after
+    `speak_ahead` has already finished waiting on the voice port.
+    """
+    for outcome in results:
+        if outcome.failed is None:
+            continue
+        try:
+            async with nested_unit_of_work(session):
+                await record(
+                    session,
+                    context=context,
+                    action=Action.WRITE,
+                    scope=outcome.item.scope,
+                    target=VOICE_TARGET,
+                    target_id=outcome.item.id,
+                    outcome=Outcome.REFUSED,
+                    refused_because=type(outcome.failed).__name__,
+                    channel=Channel.SYSTEM,
+                )
+        except Exception as unwritten:  # noqa: BLE001 — see below
+            # Writing the trail line is itself a write, and the one thing it must never do is
+            # cost him the cards. Without this the failure leaves `record_say_ahead_failures`,
+            # leaves `refresh`, and reaches the request's own unit of work, which rolls the
+            # whole request back — every card `create_item` wrote in this refresh, not just
+            # the one whose voice failed, and the trail lines the earlier items in this loop
+            # had already earned. A voice that is down would take his day's cards with it. So
+            # the trail line degrades to a log line, the same way `_sample` below keeps its
+            # own bookkeeping from reaching the caller.
+            log.warning(
+                "voice ahead failure not written for %s: %s",
+                outcome.item.id,
+                type(unwritten).__name__,
+            )
+
+
 async def _say_ahead(
     session: AsyncSession, engine: Engine, context: KeyContext, items: Sequence[FeedItem]
 ) -> None:
@@ -362,56 +450,13 @@ async def _say_ahead(
     `app.channels.api.feed` always passes `providers.voice` (the fixture voice by default) and
     `providers.object_store` (required), so this runs on every refresh, including in dev.
 
-    A render that fails — the language is not one there is a voice for, the lines run past
-    thirty seconds, the store or the voice itself throws — never costs him the card: each
-    item renders in a savepoint of its own, and nothing here is allowed to unmake a card
-    `create_item` already wrote. But the failure is not swallowed either: it is written to
-    the trail under `VOICE_TARGET`, on the card's own scope, the way any other refused write
-    is (`app.audit.trail.record`), so the gap between "the card exists" and "its twin is
-    ready" is visible to whoever reads the trail, not just to a log line nobody reads back.
+    The network call and the write it may earn, back to back, on the one session already
+    open for this request (`speak_ahead` then `record_say_ahead_failures` — see either for
+    why they are two functions, not one, and `app.delivery.feed.background.run_job` for the
+    caller that needs them apart).
     """
-    if engine.voice is None or engine.store is None:
-        return
-    for item in items:
-        try:
-            async with nested_unit_of_work(session):
-                await voiced(
-                    engine.store,
-                    engine.voice,
-                    profile_id=context.profile_id,
-                    region=context.region,
-                    lines=list(item.voice or item.body),
-                    language=item.language,
-                    boundary=item.boundary,
-                )
-        except Exception as failed:  # noqa: BLE001 — a voice down never costs him a card
-            log.warning("voice ahead failed for %s: %s", item.id, type(failed).__name__)
-            try:
-                async with nested_unit_of_work(session):
-                    await record(
-                        session,
-                        context=context,
-                        action=Action.WRITE,
-                        scope=item.scope,
-                        target=VOICE_TARGET,
-                        target_id=item.id,
-                        outcome=Outcome.REFUSED,
-                        refused_because=type(failed).__name__,
-                        channel=Channel.SYSTEM,
-                    )
-            except Exception as unwritten:  # noqa: BLE001 — see below
-                # Writing the trail line is itself a write, and the one thing it must never do
-                # is cost him the cards. Without this the failure leaves `_say_ahead`, leaves
-                # `refresh`, and reaches the request's own unit of work, which rolls the whole
-                # request back — every card `create_item` wrote in this refresh, not just the
-                # one whose voice failed, and the trail lines the earlier items in this loop
-                # had already earned. A voice that is down would take his day's cards with it.
-                # So the trail line degrades to a log line, the same way `_sample` below keeps
-                # its own bookkeeping from reaching the caller.
-                log.warning(
-                    "voice ahead failure not written for %s: %s", item.id, type(unwritten).__name__
-                )
-            continue
+    results = await speak_ahead(engine, context, items)
+    await record_say_ahead_failures(session, context=context, results=results)
 
 
 def _format_of(state: StateView) -> CardFormat:
@@ -2091,7 +2136,9 @@ __all__ = [
     "household",
     "plain_day",
     "plan_learning_jobs",
+    "record_say_ahead_failures",
     "refresh",
     "say_ahead",
+    "speak_ahead",
     "today_for",
 ]

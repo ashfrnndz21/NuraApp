@@ -30,6 +30,7 @@ from app.delivery.feed.compress import (
     FixtureCompressor,
     FixtureSearcher,
     Found,
+    PortUnavailable,
     Searcher,
     changes_treatment,
 )
@@ -358,11 +359,17 @@ def test_claude_searcher_find_media_filter_excludes_articles() -> None:
     assert searcher.find(["diabetes"], ALLOWLIST, media="video") == []
 
 
-def test_claude_searcher_answers_nothing_on_a_refusal_or_a_bad_call() -> None:
+def test_claude_searcher_answers_nothing_clean_on_a_refusal() -> None:
     refused = FakeClient([_search_response([], stop_reason="refusal")])
     assert ClaudeSearcher(api_key="k", demo_mode=True, client=refused).search(
         "explainer", ["x"], ALLOWLIST
     ) == []
+
+
+def test_claude_searcher_raises_port_unavailable_on_a_bad_call() -> None:
+    """#297 defect 2: the call itself failing is never a clean `[]` — that reads to
+    `search.run_job` as "searched, found nothing" and the job is written down done, not due
+    again while the API stays down. `PortUnavailable` tells the two apart."""
 
     class Explodes:
         class messages:
@@ -370,9 +377,10 @@ def test_claude_searcher_answers_nothing_on_a_refusal_or_a_bad_call() -> None:
             def create(**_: Any) -> Any:
                 raise RuntimeError("network is down")
 
-    assert ClaudeSearcher(api_key="k", demo_mode=True, client=Explodes()).search(
-        "explainer", ["x"], ALLOWLIST
-    ) == []
+    with pytest.raises(PortUnavailable):
+        ClaudeSearcher(api_key="k", demo_mode=True, client=Explodes()).search(
+            "explainer", ["x"], ALLOWLIST
+        )
 
 
 def test_claude_searcher_with_no_domains_or_no_terms_calls_nothing() -> None:
@@ -529,17 +537,23 @@ def test_claude_compressor_refuses_cleanly_on_stop_reason_refusal() -> None:
     assert compressor.compress("some page text", "en", {}) is None
 
 
-def test_claude_compressor_answers_nothing_on_a_bad_call_or_bad_json() -> None:
+def test_claude_compressor_raises_port_unavailable_on_a_bad_call() -> None:
+    """#297 defect 2: same rule as `ClaudeSearcher` above — the call itself failing is never
+    a clean `None` ("nothing for him"), or `search.run_job` writes the job down done."""
+
     class Explodes:
         class messages:
             @staticmethod
             def create(**_: Any) -> Any:
                 raise RuntimeError("network is down")
 
-    assert ClaudeCompressor(api_key="k", demo_mode=True, client=Explodes()).compress(
-        "text", "en", {}
-    ) is None
+    with pytest.raises(PortUnavailable):
+        ClaudeCompressor(api_key="k", demo_mode=True, client=Explodes()).compress("text", "en", {})
 
+
+def test_claude_compressor_answers_nothing_clean_on_bad_json() -> None:
+    """The call itself succeeded; only its content could not be read as JSON — still a clean
+    "nothing for him", never `PortUnavailable`."""
     not_json = FakeClient([FakeResponse(content=[FakeBlock("not json at all")])])
     assert ClaudeCompressor(api_key="k", demo_mode=True, client=not_json).compress(
         "text", "en", {}

@@ -53,7 +53,28 @@ class Found:
     """For a seasonal page: the season it is about (`app.delivery.feed.local.SEASONS`)."""
 
 
+class PortUnavailable(Exception):
+    """The searcher's or the compressor's own call failed — an API error, a timeout, a
+    connection dropped — told apart from a clean "nothing for him" (an empty result, a
+    refusal, an uncited passage), so `search.run_job` can mark the job `FAILED` and retry it
+    the same day, instead of writing it down as looked at and done (#297 defect 2: on
+    2026-09-18 the Anthropic API refused every call and every job that day was recorded
+    `done`, `results=[]`, so nothing retried once the API came back). Fixture adapters never
+    raise this — they always answer a clean empty on purpose, the same "nothing for him"
+    every port in this package already uses. A real adapter raises it only from the one place
+    its own call to the model can fail; every other empty answer it gives (a refusal, no
+    matching page, unparseable output) stays a clean `[]`/`None`, unchanged."""
+
+
 class Searcher(Protocol):
+    external_processor: str | None
+    """None for a searcher that never leaves the region (the fixture); a short name (e.g.
+    "anthropic") for one whose terms and domains go to a third-party model processor outside
+    it, so `search.search_and_compress` can write that reach down (`app.ingestion.review.
+    EXTERNAL_MODEL_PROCESSOR`, the same line `Extractor`/`Narrator`/`Asker` already carry)
+    without importing the adapter itself. Read defensively (`getattr(..., None)`) by callers,
+    so a test double that predates this need not declare it."""
+
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
         """Pages for these terms, from these domains only. Never a page from anywhere else."""
         ...
@@ -82,6 +103,10 @@ class Compressed:
 
 
 class Compressor(Protocol):
+    external_processor: str | None
+    """The same meaning as `Searcher.external_processor`, for the page text and the facts a
+    compressor grounds on."""
+
     def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
         """The lines for this page and this person, or None when there is nothing for him."""
         ...
@@ -141,6 +166,9 @@ class FixtureSearcher:
     text}]}`. A page whose domain is not among the domains asked for is never returned, so
     the fixture cannot smuggle a source past the allowlist either."""
 
+    external_processor: str | None = None
+    """Answers from a file on disk; nothing ever leaves the region."""
+
     def __init__(self, root: Path) -> None:
         self._root = root
 
@@ -193,6 +221,9 @@ class FixtureCompressor:
     why_topic, passage, start_sec?, end_sec?}}`. No file, or no entry in the language, is
     "nothing for him". The `facts` are ignored by the fixture; the real adapter grounds on
     them."""
+
+    external_processor: str | None = None
+    """Answers from a file on disk; nothing ever leaves the region."""
 
     def __init__(self, root: Path) -> None:
         self._root = root
