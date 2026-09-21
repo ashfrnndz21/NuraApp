@@ -169,6 +169,8 @@ async def test_a_cost_question_with_no_procedure_asks_what_it_is_for_free_text(
         "what did the stent procedure cost",
         "how much did my blood test cost last month",
         "how much does my medicine cost",
+        "how much do I still owe the hospital",  # re-review of #311: "hospital" named nothing
+        "what was the clinic bill",
     ],
 )
 def test_a_cost_question_naming_something_never_clarifies(question: str) -> None:
@@ -664,8 +666,45 @@ def test_B2_B6_a_hostile_provider_name_is_sanitised_and_capped_in_a_visit_label(
     )
     assert rtl_override not in label
     assert "r1:" not in label
-    assert len(label) <= 80 + len("Your visit with  of Thursday 10 September")
+    assert len(label) <= 140 and label.endswith("Thursday 10 September")
     assert safe
+
+
+def test_N1_a_long_ordinary_provider_name_never_costs_the_chip_its_date() -> None:
+    """Re-review of #311, N1: the 80-character cap ran on the FINISHED label, after the said-date
+    was added — so an ordinary long clinic or doctor name either cut the date off the chip
+    ("…of Saturday", no day: two Saturdays look the same) or left a digit of it outside the safe
+    substring, which dropped the whole question in silence. The free-text part is cut where the
+    label is built, at a word boundary, and the backend's own date always follows it whole."""
+    from datetime import date
+
+    from app.llm.ask_agent import _dated_clarify_label
+
+    when = date(2026, 9, 19)
+    for who in (
+        "Bukit Merah Polyclinic Family Medicine Annexe and Dental Centre",
+        "Dr Abdul Rahman bin Mohamed Yusof Al-Haj of the Heart Clinic",
+    ):
+        label, safe = _dated_clarify_label(f"visit with {who}", when, "en", Reader(his=True))
+        assert label.endswith("Saturday 19 September"), label
+        assert "…" in label and len(label) <= 140
+        known = _known(
+            _tool_line("v1", "appointment", label, safe),
+            _tool_line(
+                "v2", "appointment", "Your visit with Dr Tan of Monday 24 August",
+                frozenset({"Monday 24 August"}),
+            ),
+        )
+        payload = {
+            "clarify": {
+                "referent_class": "which_visit",
+                "candidate_ids": ["v1", "v2"],
+                "question": "Which visit do you mean?",
+            }
+        }
+        found = _parse_clarify(payload, known, "en", Reader(his=True), frozenset(), {})
+        assert found is not None, "an ordinary long name must not silently drop the question"
+        assert found.options[0].label.endswith("Saturday 19 September")
 
 
 def test_B3_a_candidate_with_no_backend_label_is_dropped() -> None:

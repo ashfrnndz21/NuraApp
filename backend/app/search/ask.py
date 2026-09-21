@@ -1008,6 +1008,8 @@ def _mentions_cost(question: str) -> bool:
 _COST_CONTENT_WORDS: Final = MEDICINE_WORDS | VISIT_WORDS | PAPER_WORDS | frozenset(
     {
         "test", "tests", "checkup", "check-up", "procedure", "surgery", "operation",
+        "hospital", "clinic", "ward", "bill", "stay", "scan", "x-ray", "klinik", "bil",
+        "医院", "诊所", "账单",
         "ujian", "pembedahan", "prosedur", "pemeriksaan", "验血", "检查", "手术", "程序", "化验",
     }
 )

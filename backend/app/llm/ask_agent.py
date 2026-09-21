@@ -609,8 +609,25 @@ def _dated_clarify_label(
     visit's own label embeds a provider's typed name), and the said-date is the one substring
     this label may carry a digit in."""
     said = say_date(on, language)
-    clean_what = _sanitize_free_text(what)[:80]
+    clean_what = _short_words(_sanitize_free_text(what), CLARIFY_FREE_TEXT_LENGTH)
     return _clarify_option_label(clean_what, said, language, reader), frozenset({said})
+
+
+CLARIFY_FREE_TEXT_LENGTH: Final = 48
+"""How much of a free-text name (a provider he or his family typed, or accepted from a calendar)
+a choice may carry. The cap is on THIS part alone, before the backend's own said-date is added
+(re-review of #311, N1): capping the finished label instead cut the date off the chip ("…of
+Saturday", no day) or left a digit of it outside the safe substring, which silently dropped
+the whole question for an ordinary long clinic name."""
+
+
+def _short_words(text: str, limit: int) -> str:
+    """`text` whole if it fits, else cut at a word boundary with an ellipsis — never mid-word,
+    and never into anything the backend itself wrote after it."""
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:-") or text[: limit - 1]
+    return f"{cut}…"
 
 
 async def _read_readings(
@@ -1924,7 +1941,7 @@ def _parse_answer(
 
 MIN_CLARIFY_CANDIDATES: Final = 2
 MAX_CLARIFY_CANDIDATES: Final = 4
-CLARIFY_LABEL_LENGTH: Final = 80
+CLARIFY_LABEL_LENGTH: Final = 140
 
 _ASKER_DIRECTED_IDIOMS: Final[dict[str, tuple[str, ...]]] = {
     "en": ("do you mean", "did you mean", "are you asking about", "which one do you mean"),
@@ -2018,9 +2035,16 @@ def _parse_clarify(
         collision = False
         for line in resolved:
             assert line.label is not None
-            clean_label = _sanitize_free_text(line.label)[:CLARIFY_LABEL_LENGTH].strip()
+            # Sanitised, never truncated here: every free-text part was already cut to length
+            # where the label was built, BEFORE the rendered date was added. A label still
+            # longer than the hard ceiling is not cut (that is what lost the date): the
+            # candidate is left out.
+            clean_label = _sanitize_free_text(line.label).strip()
             if not clean_label:
                 _drop("clarify_label_empty_after_sanitising")
+                continue
+            if len(clean_label) > CLARIFY_LABEL_LENGTH:
+                _drop("clarify_label_too_long")
                 continue
             normalized_label = unicodedata.normalize("NFKC", clean_label)
             stripped_label = _strip_safe_substrings(normalized_label, line.label_safe)
