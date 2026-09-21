@@ -119,6 +119,44 @@ test("two blood tests seeded: 'what about my blood test?' asks which one, tappin
   await expect(page.getByTestId("answer")).toBeVisible({ timeout: 15_000 });
 });
 
+test("never two clarifying questions in a row: paper clarify, then a cost clarify, then a typed reply never re-asks", async ({ page, request }) => {
+  test.slow(); // four real turns, two with a photo upload and confirm each — genuinely heavier than the rest of this file.
+  const pa = await seedFeed(request);
+  await seedTwoBloodTests(request, pa.token, pa.profileId);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  await openAsk(page);
+
+  // Turn A: the paper-kind clarify fires, with real chips.
+  await ask(page, "what about my blood test");
+  const paperOptions = page.getByTestId("ask-clarify-options").getByRole("button");
+  await expect(paperOptions).toHaveCount(2, { timeout: 15_000 });
+  await paperOptions.first().click();
+  await expect(page.getByTestId("answer")).toBeVisible({ timeout: 15_000 });
+
+  // Turn C: a cost question, free text, no chips.
+  await ask(page, "how much will this cost");
+  await expect(page.getByTestId("answer-lines").last()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("answer-line-text").last()).toContainText("What is this cost for");
+  await expect(page.getByTestId("ask-clarify-options")).toHaveCount(0);
+
+  // Turn D: a typed reply that also happens to name "blood test" — never a second clarifying
+  // question in a row, whatever the referent: this answers with what it has (it matches his
+  // real papers) or says plainly nothing is written down, but it never asks again.
+  await ask(page, "It is for a blood test");
+  await expect(page.getByTestId("ask-earlier-turns")).toBeVisible();
+  await expect(page.getByTestId("answer")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("ask-clarify-options")).toHaveCount(0);
+  // `.catch(() => "")` alone is not enough here: resolving `.last()` on a testid with zero
+  // matches on the page still waits out the full actionability timeout before rejecting (a
+  // past turn may have no "answer-honest" line at all) — guarded by `.count()` first instead.
+  const lineLocator = page.getByTestId("answer-line-text");
+  const finalText = (await lineLocator.count()) > 0 ? await lineLocator.last().innerText() : "";
+  const honestLocator = page.getByTestId("answer-honest");
+  const honestText = (await honestLocator.count()) > 0 ? await honestLocator.last().innerText() : "";
+  expect(finalText + honestText).not.toContain("Which blood test is this about");
+});
+
 test("a cost question with no procedure named asks what it is for, free text, no options", async ({ page, request }) => {
   const pa = await seedFeed(request);
   await signInThroughTheApp(page, pa.phone, "Pa");

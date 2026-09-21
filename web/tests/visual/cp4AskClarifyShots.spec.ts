@@ -90,7 +90,7 @@ async function askClarifyingQuestion(page: Page, question: string, prefix: strin
 test.describe("cp4 Ask Clarify at 390x844", () => {
   test.use({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
 
-  test("390x844: question streaming, chips shown, after tap, typed reply, Mei", async ({ page, request }) => {
+  test("390x844: question streaming, chips shown, after tap", async ({ page, request }) => {
     const pa = await seedFeed(request);
     await seedTwoBloodTests(request, pa.token, pa.profileId);
     await signInThroughTheApp(page, pa.phone, "Pa");
@@ -106,8 +106,17 @@ test.describe("cp4 Ask Clarify at 390x844", () => {
     await expect(page.getByTestId("answer")).toBeVisible({ timeout: 15_000 });
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: `${OUT}/phone-after-tap.png`, animations: "disabled" });
+  });
 
-    // A cost question, then a typed reply instead of a tap (no chips to tap: free text).
+  // Its own fresh conversation (never chained onto the paper-clarify-then-tap flow above): the
+  // cost path's own capture, matching the same two-turn shape `ask-clarify.spec.ts`'s own
+  // "a typed reply ... dismisses it" test already proves reliable.
+  test("390x844: cost question, typed reply", async ({ page, request }) => {
+    const pa = await seedFeed(request);
+    await signInThroughTheApp(page, pa.phone, "Pa");
+    await todayReady(page);
+    await openAsk(page);
+
     await askClarifyingQuestion(page, "how much will this cost", "phone-cost");
     await page.screenshot({ path: `${OUT}/phone-typed-reply-before.png`, animations: "disabled" });
     await page.getByLabel("Your question").fill("It is for a blood test");

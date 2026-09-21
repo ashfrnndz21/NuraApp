@@ -98,7 +98,7 @@ from app.channels.about_him import Reader, reader_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.compress import Searcher
 from app.delivery.feed.sources import usable_sources
-from app.delivery.timeline_strings import day_of, honest_lines, reroute_lines, verified
+from app.delivery.timeline_strings import WHAT, day_of, honest_lines, reroute_lines, verified
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -389,6 +389,12 @@ class _ToolLine:
     confirmed data (W2) — never the model's words. `None` for a kind that never stands as a
     clarify candidate (a web result, a proposal, an insurance line): a clarify proposal naming
     one of those ids is dropped, the same as any other bad proposal."""
+    label_safe: frozenset[str] = frozenset()
+    """Every substring of `label` that is safe to carry a digit — the backend's own rendered
+    date/elapsed phrase, or (a medicine) the licensed register's own generic name and strength
+    — because this module built it, never an extractor or a hostile free-text field. Checked
+    by `_parse_clarify` (review B2/B6): with these removed, nothing safe to say a number in
+    remains, so any digit left in the label is not the backend's own."""
 
 
 _TOKEN_PREFIXES: Final[dict[str, str]] = {
@@ -457,6 +463,17 @@ were collapsed to spaces, since "r2:" mid-line still read as a plausible second 
 Never applied to the line's own genuine leading token, which `_register` adds after this runs."""
 
 
+def _sanitize_free_text(text: str) -> str:
+    """The one place a free-text field is made safe to carry anywhere in this module — a tool
+    line (`_register`), a clarifying question, or an option label (review B2/B6): the same
+    control-character strip and forged-id neutraliser, applied once here so neither a
+    clarifying question nor a label can carry what a tool line already could not — a hostile
+    provider name or a hostile page's text hiding a bidi override, a line-separator forging a
+    second line, or a forged short-id colon."""
+    clean = _CONTROL_CHARS.sub(" ", text).strip()
+    return _FORGED_ID.sub(lambda match: match.group()[:-1], clean)
+
+
 def _register(
     lines: list[_ToolLine],
     counter: _TokenCounter,
@@ -465,12 +482,18 @@ def _register(
     text: str,
     *,
     label: str | None = None,
+    label_safe: frozenset[str] = frozenset(),
 ) -> str:
     token = counter.next(kind)
-    clean = _CONTROL_CHARS.sub(" ", text).strip()
-    clean = _FORGED_ID.sub(lambda match: match.group()[:-1], clean)
+    clean = _sanitize_free_text(text)
     lines.append(
-        _ToolLine(token=token, text=f"{token}: {clean}", cite=Cite(kind=kind, id=id_), label=label)
+        _ToolLine(
+            token=token,
+            text=f"{token}: {clean}",
+            cite=Cite(kind=kind, id=id_),
+            label=label,
+            label_safe=label_safe,
+        )
     )
     return token
 
@@ -515,32 +538,79 @@ async def _read_medicines(
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
         started_on = day_of(line.started_at, context.region)
         elapsed = _elapsed(context, language, started_on, elapsed_seen)
+        label, label_safe = _medicine_clarify_label(line, name, reader, language)
         _register(
             lines,
             counter,
             "medication_line",
             line.id,
             f"{name}, {who}, started {started_on.isoformat()} ({elapsed})",
-            label=_medicine_clarify_label(name, reader, language),
+            label=label,
+            label_safe=label_safe,
         )
     return lines, len(found)
 
 
-def _medicine_clarify_label(name: str, reader: Reader, language: str) -> str:
-    """A medicine's own clarify-option label (W2): its plain name alone, in caregiver voice —
-    it never carries a date the way a test or a paper does."""
+_DETERMINER_PREFIXES: Final[dict[str, tuple[str, ...]]] = {
+    "en": ("your ", "the "),
+    "zh": ("您的", "他的", "她的"),
+}
+"""`PLAIN_NAME`'s own strings already carry a determiner ("your blood pressure tablet", "the
+water pill") — stripped here before a clarify label adds its own, so a caregiver's chip never
+doubles it ("Your your blood pressure tablet", review B4). Malay's own plain names are already
+bare (no "anda" prefix baked in the way `_plain_names`' suffix-strip in `app.search.ask`
+handles the opposite case), so it carries no entry."""
+
+
+def _bare_plain_name(name: str, language: str) -> str:
+    bare = name
+    for prefix in _DETERMINER_PREFIXES.get(language, ()):
+        if bare.lower().startswith(prefix.lower()):
+            bare = bare[len(prefix) :]
+            break
+    return bare.removesuffix(" anda").strip()
+
+
+def _medicine_clarify_label(
+    line: MedicationLine, plain_name: str, reader: Reader, language: str
+) -> tuple[str, frozenset[str]]:
+    """A medicine's own clarify-option label (W2): the plain name, in caregiver voice, never a
+    doubled determiner (review B4 — `PLAIN_NAME` already carries its own "your"/"the", so this
+    strips it and rebuilds with the right one for this reader) — then always the licensed
+    register's own generic name and strength, small and second (plain-words rule 4: his word
+    first, the chemical name second), because his own list can hold two medicines under the
+    very same plain word (two blood-pressure tablets) and a chip that cannot tell them apart is
+    worse than one that names the chemical once. `detail` (never free text — `line.generic` and
+    `line.strength` are the registry's own match, columns on his confirmed medication line, the
+    same source `MedicineRefOut` already shows him) is returned as the one substring this label
+    may carry a digit in."""
+    bare = _bare_plain_name(plain_name, language)
+    strength = (line.strength or "").strip()
+    detail = f"{line.generic} {strength}".strip() if strength else line.generic
     if language == "zh":
-        return f"{'您的' if reader.his else (reader.name or '他') + '的'}{name}"
-    if language == "ms":
-        return f"{name} {'anda' if reader.his else (reader.name or 'pesakit')}"
-    return f"{'Your' if reader.his else (reader.name or 'the patient') + chr(39) + 's'} {name}"
+        subject = "您的" if reader.his else f"{reader.name or '他'}的"
+        label = f"{subject}{bare}（{detail}）"
+    elif language == "ms":
+        who = "anda" if reader.his else (reader.name or "pesakit")
+        label = f"{bare} {who} ({detail})"
+    else:
+        subject = "Your" if reader.his else f"{reader.name or 'the patient'}'s"
+        label = f"{subject} {bare} ({detail})"
+    return label, frozenset({detail})
 
 
-def _dated_clarify_label(what: str, on: date, language: str, reader: Reader) -> str:
+def _dated_clarify_label(
+    what: str, on: date, language: str, reader: Reader
+) -> tuple[str, frozenset[str]]:
     """A test/paper/visit's own clarify-option label (W2): its plain word, and the said-date
     of it, in caregiver voice — the same shape `app.search.ask._clarify_option_label` builds
-    for the rule-based asker, so a chip reads the same whichever asker offered it."""
-    return _clarify_option_label(what, say_date(on, language), language, reader)
+    for the rule-based asker, so a chip reads the same whichever asker offered it. `what` is
+    sanitised the same way any other free-text field this module reads is (review B2/B6 — a
+    visit's own label embeds a provider's typed name), and the said-date is the one substring
+    this label may carry a digit in."""
+    said = say_date(on, language)
+    clean_what = _sanitize_free_text(what)[:80]
+    return _clarify_option_label(clean_what, said, language, reader), frozenset({said})
 
 
 async def _read_readings(
@@ -559,17 +629,20 @@ async def _read_readings(
         if _is_reading(fact):
             value = fact.value
             text = f"blood pressure {value['systolic']}/{value['diastolic']} on {on.isoformat()} ({elapsed})"
-            what = "blood pressure"
+            catalogue_word: str | None = WHAT[language].get("blood_pressure")
         else:
             text = f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})"
-            what = str(fact.subject).replace("_", " ")
+            # Review B3: the raw subject is an extractor-written code (validated only as
+            # `^[a-z][a-z0-9_]{0,63}$` — it may itself contain digits, "sugar_11_4"), never
+            # shown as a label. Only a real, closed-catalogue word for it may be offered as a
+            # clarify candidate at all; a subject this table does not know gets no label.
+            catalogue_word = WHAT[language].get(str(fact.subject))
+        label: str | None = None
+        label_safe: frozenset[str] = frozenset()
+        if catalogue_word is not None:
+            label, label_safe = _dated_clarify_label(catalogue_word, on, language, reader)
         _register(
-            lines,
-            counter,
-            "fact",
-            fact.id,
-            text,
-            label=_dated_clarify_label(what, on, language, reader),
+            lines, counter, "fact", fact.id, text, label=label, label_safe=label_safe
         )
     return lines, len(facts)
 
@@ -591,13 +664,9 @@ async def _read_visits(
         when = day_of(visit.scheduled_at, context.region)
         elapsed = _elapsed(context, language, when, elapsed_seen)
         text = f"with {who} on {when.isoformat()} ({elapsed}), status {visit.status.value}"
+        label, label_safe = _dated_clarify_label(f"visit with {who}", when, language, reader)
         _register(
-            lines,
-            counter,
-            "appointment",
-            visit.id,
-            text,
-            label=_dated_clarify_label(f"visit with {who}", when, language, reader),
+            lines, counter, "appointment", visit.id, text, label=label, label_safe=label_safe
         )
     return lines, len(visits), list(visits), providers
 
@@ -615,27 +684,37 @@ async def _read_records(
     for fact in facts:
         on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
+        # Review B3: only a real, closed-catalogue word for the subject may ever be a clarify
+        # candidate's label — never the raw, extractor-written subject code.
+        catalogue_word = WHAT[language].get(str(fact.subject))
+        label = None
+        label_safe: frozenset[str] = frozenset()
+        if catalogue_word is not None:
+            label, label_safe = _dated_clarify_label(catalogue_word, on, language, reader)
         _register(
             lines,
             counter,
             "fact",
             fact.id,
             f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})",
-            label=_dated_clarify_label(str(fact.subject).replace("_", " "), on, language, reader),
+            label=label,
+            label_safe=label_safe,
         )
     return lines, len(facts)
 
 
-def _waiting_clarify_label(kind: str, said: str | None, language: str) -> str:
+def _waiting_clarify_label(kind: str, said: str | None, language: str) -> tuple[str, frozenset[str]]:
     """The one shape a waiting paper's clarify-option label may ever take (W2, review defect
     #1's own rule carried into clarifying questions): the closed-catalogue kind word, the
     backend's own said-date, and "not yet checked" — never anything an extractor read off the
     page, never a number beyond the date itself."""
     if language == "zh":
-        return f"{said}的{kind}，还没检查" if said else f"{kind}，还没检查"
-    if language == "ms":
-        return f"{kind} bertarikh {said}, belum disemak" if said else f"{kind}, belum disemak"
-    return f"{kind} of {said}, not yet checked" if said else f"{kind}, not yet checked"
+        label = f"{said}的{kind}，还没检查" if said else f"{kind}，还没检查"
+    elif language == "ms":
+        label = f"{kind} bertarikh {said}, belum disemak" if said else f"{kind}, belum disemak"
+    else:
+        label = f"{kind} of {said}, not yet checked" if said else f"{kind}, not yet checked"
+    return label, frozenset({said}) if said else frozenset()
 
 
 async def _read_waiting_papers(
@@ -677,13 +756,15 @@ async def _read_waiting_papers(
         safe.add(added)
         card_safe_text[paper.card_id] = safe
         text = f"{paper.kind}{dated}, added {added}, not yet checked"
+        label, label_safe = _waiting_clarify_label(paper.kind, said, language)
         _register(
             lines,
             counter,
             "review_card",
             paper.card_id,
             text,
-            label=_waiting_clarify_label(paper.kind, said, language),
+            label=label,
+            label_safe=label_safe,
         )
     return lines, len(found)
 
@@ -1670,6 +1751,26 @@ def _strip_safe_substrings(text: str, safe: frozenset[str]) -> str:
     return stripped
 
 
+def _contains_a_number_shape(text: str) -> bool:
+    """Whether `text` (already NFKC-normalised and stripped of whatever substrings are safe
+    to carry one) says a number in any shape this app knows: any digit at all (so a full-width
+    "１１．４" counts once normalised), any run of two or more Chinese numeral characters, or two
+    en/ms number words in a row. A single number word alone is ordinary speech, and the
+    catalogue's own waiting lines use it — "Satu ujian darah menunggu…", 一份血液报告…, "one
+    paper is waiting", "at this point" — which an earlier version of this check rejected,
+    switching the waiting-paper line off in Malay and Chinese (third review pass, finding B).
+    Shared by `_claims_a_value_from_an_unconfirmed_card` (a line touching an unconfirmed card)
+    and `_parse_clarify` (a clarifying question, and every option label — review B1/B2/B4/B6):
+    the shape of a stated value, wherever it came from, is checked identically everywhere."""
+    if re.search(r"\d", text):
+        return True
+    if _ZH_NUMERAL_RUN.search(text):
+        return True
+    number_words = _EN_NUMBER_WORDS | _MS_NUMBER_WORDS
+    tokens = _WORD.findall(text.lower())
+    return any(a in number_words and b in number_words for a, b in itertools.pairwise(tokens))
+
+
 def _claims_a_value_from_an_unconfirmed_card(
     text: str, cites: Sequence[Cite], safe_for_card: frozenset[str]
 ) -> bool:
@@ -1677,26 +1778,14 @@ def _claims_a_value_from_an_unconfirmed_card(
     phrases this ask actually rendered for the review card(s) it cites — belt and braces over
     `WaitingPaper`'s own refusal to read a value at all (review defect #1, second pass): not a
     claim that this reads or understands prose, only that a line touching an unconfirmed card
-    is checked, after removing his own written-down date, for any digit at all (NFKC-normalised
-    first, so a full-width "１１．４" counts), any run of two or more Chinese numeral characters, or
-    two en/ms number words in a row. Fires on `any` cite naming a review card, not `all` of them — one
-    legitimate cite alongside it must never turn this check off."""
+    is checked, after removing his own written-down date, for the shape of a stated value
+    (`_contains_a_number_shape`). Fires on `any` cite naming a review card, not `all` of them —
+    one legitimate cite alongside it must never turn this check off."""
     if not any(cite.kind == "review_card" for cite in cites):
         return False
     normalized = unicodedata.normalize("NFKC", text)
     stripped = _strip_safe_substrings(normalized, safe_for_card)
-    if re.search(r"\d", stripped):
-        return True
-    if _ZH_NUMERAL_RUN.search(stripped):
-        return True
-    # A value said in words is two or more number words in a row ("eleven point four",
-    # "sebelas perpuluhan empat", 十一点四 above). ONE alone is ordinary speech, and the
-    # catalogue's own waiting lines use it — "Satu ujian darah menunggu…", 一份血液报告…,
-    # "one paper is waiting", "at this point" — which the first version of this check rejected,
-    # switching the waiting-paper line off in Malay and Chinese (third review pass, finding B).
-    number_words = _EN_NUMBER_WORDS | _MS_NUMBER_WORDS
-    tokens = _WORD.findall(stripped.lower())
-    return any(a in number_words and b in number_words for a, b in itertools.pairwise(tokens))
+    return _contains_a_number_shape(stripped)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1835,6 +1924,32 @@ def _parse_answer(
 
 MIN_CLARIFY_CANDIDATES: Final = 2
 MAX_CLARIFY_CANDIDATES: Final = 4
+CLARIFY_LABEL_LENGTH: Final = 80
+
+_ASKER_DIRECTED_IDIOMS: Final[dict[str, tuple[str, ...]]] = {
+    "en": ("do you mean", "did you mean", "are you asking about", "which one do you mean"),
+    "ms": ("adakah maksud anda", "yang mana anda maksudkan", "awak maksudkan"),
+    "zh": ("您是指", "你是指", "您说的是", "你说的是"),
+}
+"""A clarifying question addresses whoever is asking, never the patient (module docstring,
+fix 1): "Which blood test do you mean?" said to a caregiver is correct — the "you" is her, not
+Pa — but the blunt "you/your" scan `Reader.speaks_to_him` runs (built for a line ABOUT him)
+cannot tell that apart from "your blood test", said about the patient, which is wrong in her
+voice (review S4). Exempts only these known, asker-directed idioms; any other "you/your" in
+the question still fails exactly as it would for any other line."""
+
+
+def _clarify_question_voice_ok(heard: str, reader: Reader, language: str) -> bool:
+    """Whether `heard` is safe in `reader`'s own voice (review S4): always true for the
+    patient's own key; for anyone else, true when it either never speaks to him at all, or
+    every "you/your" in it is inside a known asker-directed idiom — never a possessive about
+    the patient himself, which is exactly as wrong here as it would be in any other line."""
+    if reader.his or not reader.speaks_to_him(heard):
+        return True
+    stripped = heard
+    for idiom in _ASKER_DIRECTED_IDIOMS.get(language, ()):
+        stripped = re.sub(re.escape(idiom), " ", stripped, flags=re.IGNORECASE)
+    return not reader.speaks_to_him(stripped)
 
 
 def _parse_clarify(
@@ -1849,7 +1964,17 @@ def _parse_clarify(
     ever reaches the wire — a bad proposal is dropped entirely, never repaired, never shown:
     the caller falls back to an ordinary answer (or the rule-based one) exactly as it would for
     no proposal at all. Every option's label is built here alone, from confirmed data the
-    model already read (`_ToolLine.label`) — never the model's own words for it."""
+    model already read (`_ToolLine.label`) — never the model's own words for it.
+
+    The question and every label are a new way for words to reach him, so both get every
+    protection a tool line and an answer line already have (independent safety review, the
+    round that found B1-B6): the same control-character/forged-id sanitiser `_register`
+    already applies (`_sanitize_free_text`), the same closed no-number rule everywhere a value
+    could otherwise slip through (`_contains_a_number_shape` — unconditional on the question,
+    never gated by which cites a candidate happens to carry; a label may carry a digit only
+    inside its own `label_safe` substring), a length cap, and never two options sharing one
+    label (he could never tell them apart, and the next turn would answer about the wrong
+    one)."""
     raw = payload.get("clarify")
     if not isinstance(raw, Mapping):
         return None
@@ -1857,10 +1982,14 @@ def _parse_clarify(
     if not isinstance(raw_question, str) or not raw_question.strip():
         _drop("clarify_no_question")
         return None
-    question = raw_question.strip()
+    question = _sanitize_free_text(raw_question.strip())
+    if not question:
+        _drop("clarify_no_question")
+        return None
     raw_ids = raw.get("candidate_ids")
     ids = [str(each).strip() for each in raw_ids] if isinstance(raw_ids, list) else []
     known_ci = {token.strip().lower(): line for token, line in known.items()}
+    options: tuple[ClarifyOption, ...]
     if ids:
         if not (MIN_CLARIFY_CANDIDATES <= len(ids) <= MAX_CLARIFY_CANDIDATES):
             _drop("clarify_bad_candidate_count")
@@ -1884,20 +2013,41 @@ def _parse_clarify(
                 continue
             seen_cites.add(key)
             resolved.append(line)
-        if not (MIN_CLARIFY_CANDIDATES <= len(resolved) <= MAX_CLARIFY_CANDIDATES):
+        safe_options: list[ClarifyOption] = []
+        seen_labels: set[str] = set()
+        collision = False
+        for line in resolved:
+            assert line.label is not None
+            clean_label = _sanitize_free_text(line.label)[:CLARIFY_LABEL_LENGTH].strip()
+            if not clean_label:
+                _drop("clarify_label_empty_after_sanitising")
+                continue
+            normalized_label = unicodedata.normalize("NFKC", clean_label)
+            stripped_label = _strip_safe_substrings(normalized_label, line.label_safe)
+            if _contains_a_number_shape(stripped_label):
+                # Review B1/B4: a value outside the one substring this label is allowed to
+                # carry a digit in (a rendered date, or a medicine's own generic+strength) is
+                # never repaired — this one candidate is simply dropped.
+                _drop("clarify_label_value_outside_the_safe_substring")
+                continue
+            if clean_label in seen_labels:
+                # Review B4: two options may never carry the same label — never repaired
+                # either; a collision drops the whole clarify, below.
+                collision = True
+                continue
+            seen_labels.add(clean_label)
+            safe_options.append(
+                ClarifyOption(label=clean_label, value=uuid.uuid4().hex, cite=line.cite)
+            )
+        if collision or not (MIN_CLARIFY_CANDIDATES <= len(safe_options) <= MAX_CLARIFY_CANDIDATES):
             _drop("clarify_bad_candidate_count")
             return None
-        options = tuple(
-            ClarifyOption(label=line.label, value=uuid.uuid4().hex, cite=line.cite)
-            for line in resolved
-            if line.label is not None
-        )
-        allow_other = False
+        options = tuple(safe_options)
     else:
         # No candidates: a missing required detail (a procedure, a date range) — a free-text
         # reply is expected instead. Never an ordinary answer's list of options either way.
         options = ()
-        allow_other = True
+    allow_other = not ids
     if not verified(question, language, "ask"):
         _drop("clarify_question_plain_words_failed")
         return None
@@ -1907,17 +2057,20 @@ def _parse_clarify(
     if _elapsed_claim(question, language, elapsed_given) is not None:
         _drop("clarify_question_invented_elapsed_phrase")
         return None
-    heard = reader.says(question)
-    if not reader.his and reader.speaks_to_him(heard):
-        _drop("clarify_question_caregiver_voice")
+    if _starts_with_dangling_opener(question, language):
+        _drop("clarify_question_dangling_opener")
         return None
-    option_cites = tuple(o.cite for o in options if o.cite is not None)
-    safe_for_card: set[str] = set()
-    for cite in option_cites:
-        if cite.kind == "review_card":
-            safe_for_card |= card_safe_text.get(cite.id, frozenset())
-    if _claims_a_value_from_an_unconfirmed_card(heard, option_cites, frozenset(safe_for_card)):
-        _drop("clarify_question_value_from_unconfirmed_card")
+    # Review B1: a clarifying question never needs a number at all — every date lives in the
+    # backend-built option labels, never in the sentence that asks which one. Unconditional:
+    # never gated by which cites a candidate happens to carry (the live defect this closes —
+    # "Do you mean the blood test where your sugar was 11.4?", with `candidate_ids: []`, so
+    # the old, cite-gated unconfirmed-card check never even ran for it).
+    if _contains_a_number_shape(unicodedata.normalize("NFKC", question)):
+        _drop("clarify_question_contains_a_number")
+        return None
+    heard = reader.says(question)
+    if not _clarify_question_voice_ok(heard, reader, language):
+        _drop("clarify_question_caregiver_voice")
         return None
     if detect(heard) is not None:
         _drop("clarify_question_red_word")

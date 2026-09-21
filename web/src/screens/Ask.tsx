@@ -492,12 +492,17 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
                      turn (`pastTurns` never carries a `clarify`), never reappearing once acted
                      on, never auto-sent on focus or hover. */}
                   {!busy && view?.clarify && view.clarify.options.length > 0 && (
-                    <div class="choices two ask-clarify-chips" role="group" aria-label={view.clarify.question} data-testid="ask-clarify-options">
+                    <div
+                      class={`ask-clarify-chips${view.clarify.options.some((option) => option.label.length > 22) ? " stacked" : ""}`}
+                      role="group"
+                      aria-label={view.clarify.question}
+                      data-testid="ask-clarify-options"
+                    >
                       {view.clarify.options.map((option, at) => (
                         <button
                           key={option.value}
                           type="button"
-                          class="glass-chip chip-button"
+                          class="glass-chip chip-button ask-clarify-chip"
                           aria-label={option.label}
                           onClick={() => void send(option.label, option.value)}
                           data-testid={`ask-clarify-option-${at}`}
@@ -516,8 +521,13 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
                   {/* The safety line, once, at the foot of this turn (never a diagnosis, never
                      what to do about it) — the same words `boundary_lines` always gave, read as
                      one line instead of stacked as separate captions. Once per screen: an
-                     earlier, already-settled turn above never repeats it. */}
-                  {view && view.boundary.length > 0 && (
+                     earlier, already-settled turn above never repeats it. Never under a
+                     clarifying question (W2): the backend still sends its boundary as always —
+                     this is a web-only drawing decision — but "Ask your doctor." under "Which
+                     blood test is this about?" reads as an answer to a question that was never
+                     asked; the boundary belongs on the answer turn that follows, once there is
+                     one. */}
+                  {view && !view.clarify && view.boundary.length > 0 && (
                     <p class="answer-boundary" data-testid="boundary">
                       {view.boundary.join(" ")}
                     </p>
@@ -536,7 +546,10 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
                       ))}
                     </div>
                   )}
-                  {view && <Hear lines={view.spoken} />}
+                  {/* Hear reads the whole turn back, boundary included (`view.spoken`) — never
+                     offered on a clarifying question (W2): there is nothing yet to read back
+                     but the question itself, which is already streamed and shown. */}
+                  {view && !view.clarify && <Hear lines={view.spoken} />}
                 </div>
               </div>
             )}

@@ -29,19 +29,24 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read, audited_write
-from app.audit.models import Action
+from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.trail import record as record_audit
 from app.db import utcnow
 from app.errors import Refusal
+from app.ingestion.models import ReviewCard
 from app.ingestion.objects import ObjectStore, sha256_of
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, OutOfScope
+from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
-from app.memory.models import Artifact, ArtifactKind, SourceChannel
+from app.medicines.models import MedicationLine
+from app.memory.models import Appointment, Artifact, ArtifactKind, Fact, SourceChannel
 from app.search.ask import Answer, Cite
 from app.search.models import Conversation, Turn
 
@@ -390,6 +395,58 @@ other — audited and scoped — never a write, never a value beyond which reaso
 attempt landed on."""
 
 
+_CLARIFY_RECHECK: dict[str, tuple[type, Scope]] = {
+    "paper_artifact": (Artifact, Scope.RECORDS),
+    "review_card": (ReviewCard, Scope.RECORDS),
+    "medication_line": (MedicationLine, Scope.MEDICINES),
+    "appointment": (Appointment, Scope.VISITS),
+    "fact": (Fact, Scope.RECORDS),
+}
+"""What to re-read, and under which scope, to check a resolved cite's own item still exists
+and is still offered to this key (review S2) — a `fact` may also live under `Scope.READINGS`
+instead; `_still_offered` tries that second, never a substitute for `RECORDS` failing outright
+(a withheld scope) rather than the row simply not being there under it."""
+
+
+async def _still_offered(session: AsyncSession, *, context: KeyContext, cite: Cite) -> bool:
+    """Whether `cite`'s own item still exists and this key still holds the scope it rests on
+    (review S2) — checked again at resolve time, not assumed from the fact that it was once
+    offered as a candidate: the record can change between the turn that offered it and the tap
+    that names it (the paper un-attached, the medicine line superseded, the scope itself
+    withdrawn by a grant that changed)."""
+    spec = _CLARIFY_RECHECK.get(cite.kind)
+    if spec is None:
+        return False
+    model, scope = spec
+    found: Sequence[Any]
+    try:
+        found = await audited_read(
+            session, model, context, scope, where=(model.id == cite.id,)  # type: ignore[attr-defined]
+        )
+    except OutOfScope:
+        found = []
+    if found:
+        return True
+    if cite.kind != "fact":
+        return False
+    try:
+        found_readings = await audited_read(
+            session, Fact, context, Scope.READINGS, where=(Fact.id == cite.id,)
+        )
+    except OutOfScope:
+        return False
+    return bool(found_readings)
+
+
+def _clarify_token_target_id(conversation_id: uuid.UUID, value: str) -> uuid.UUID:
+    """A deterministic id for this exact token, on this exact conversation, never the token
+    itself (review S3) — the audit trail already names `target_id`, a UUID column, so this is
+    where "has this one been spent already" is asked, without adding a table or a migration:
+    a `uuid5` of the conversation and the token, reproducible from the same two inputs, never
+    reversible back to the token."""
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"clarify-token:{conversation_id}:{value}")
+
+
 async def resolve_clarify_value(
     session: AsyncSession, *, context: KeyContext, store: ObjectStore, conversation: Conversation, value: str
 ) -> tuple[Cite, str] | None:
@@ -400,9 +457,39 @@ async def resolve_clarify_value(
     the newest turn), one from a different conversation, or one minted under a different
     profile entirely (`conversation` is always already scoped to this key's own person and
     profile by the caller — `current_conversation`/`conversation_by_id` — so a token minted
-    under someone else's thread can never even be looked up here). Single-use falls out of the
-    same rule: once a later turn is recorded, the newest turn is no longer the one that minted
-    this token, so replaying it resolves nothing, silently, every time after the first."""
+    under someone else's thread can never even be looked up here).
+
+    Single-use (review S3): a second resolve of the very same token, even before any later
+    turn is recorded, is refused — checked against the trail itself
+    (`_clarify_token_target_id`, never a new table), which already names every successful
+    resolve. `None` too (review S2) when the item it names no longer exists, or the scope it
+    rests on is no longer offered to this key: re-checked here, not assumed from the fact that
+    it was once a real candidate."""
+    # A plain scoped read, never `audited_read`: the trail is not audited against itself, or
+    # every check here would leave another entry for the next check to find.
+    spent_statement = (
+        scoped_select(AuditEntry, context, Scope.ASK)
+        .where(
+            AuditEntry.target == CLARIFY_TOKEN_TARGET,
+            AuditEntry.target_id == _clarify_token_target_id(conversation.id, value),
+            AuditEntry.outcome == Outcome.ALLOWED,
+        )
+        .limit(1)
+    )
+    already_spent = (await session.execute(spent_statement)).scalars().first()
+    if already_spent is not None:
+        await record_audit(
+            session,
+            context=context,
+            action=Action.READ,
+            scope=Scope.ASK,
+            target=CLARIFY_TOKEN_TARGET,
+            target_id=conversation.id,
+            rows=0,
+            outcome=Outcome.REFUSED,
+            refused_because="StaleClarifyToken",
+        )
+        return None
     newest = await audited_read(
         session,
         Turn,
@@ -429,9 +516,16 @@ async def resolve_clarify_value(
                 kind, raw_id = option.get("cite_kind"), option.get("cite_id")
                 if kind and raw_id:
                     try:
-                        resolved = (Cite(kind=kind, id=uuid.UUID(str(raw_id))), str(option.get("label", "")))
+                        candidate = (
+                            Cite(kind=kind, id=uuid.UUID(str(raw_id))),
+                            str(option.get("label", "")),
+                        )
                     except ValueError:
-                        resolved = None
+                        candidate = None
+                    if candidate is not None and await _still_offered(
+                        session, context=context, cite=candidate[0]
+                    ):
+                        resolved = candidate
                 break
     await record_audit(
         session,
@@ -439,7 +533,7 @@ async def resolve_clarify_value(
         action=Action.READ,
         scope=Scope.ASK,
         target=CLARIFY_TOKEN_TARGET,
-        target_id=conversation.id,
+        target_id=_clarify_token_target_id(conversation.id, value) if resolved is not None else conversation.id,
         rows=1 if resolved is not None else 0,
     )
     return resolved

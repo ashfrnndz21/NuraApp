@@ -1793,3 +1793,90 @@ async def test_a_private_card_is_on_no_other_persons_route(sg: AsyncSession) -> 
     her_week = {sent.item.id for sent in await sent_this_week(sg, context=chief)}
     assert card.id in his_week
     assert card.id not in her_week
+
+
+# --- W2: a clarifying question's own token, walked against every other holder ------------------
+
+
+async def _seed_two_lab_reports_and_ask_which(
+    deployment: Deployment, owner_token: str, profile_id: str
+) -> tuple[str, str, str]:
+    """A real clarifying question, real chips: two confirmed lab reports hung off an open
+    episode, then `POST /ask/stream` on "what about my blood test" — the paper-kind case
+    (`app.search.ask._clarify_for`) fires for real. Returns the conversation id, one option's
+    own opaque `value`, and the label words that option carries — never the row's own id."""
+    import base64
+
+    from tests.paper import placeholder_of
+
+    headers = {"Authorization": f"Bearer {owner_token}"}
+    opened = await deployment.client.post(
+        f"/profiles/{profile_id}/episodes", json={"kind": "other", "label": "check-up"}, headers=headers
+    )
+    assert opened.status_code == 201, opened.text
+    episode_id = opened.json()["episode_id"]
+    for fixture_name, at in (
+        ("lipid-panel-2025-08-29", "2025-08-29T08:00:00Z"),
+        ("lab-report-vitals-2026-09-10", "2026-09-10T08:00:00Z"),
+    ):
+        photo = await deployment.client.post(
+            f"/profiles/{profile_id}/photos",
+            json={"data": base64.b64encode(placeholder_of(fixture_name)).decode(), "content_type": "image/png", "captured_at": at},
+            headers=headers,
+        )
+        assert photo.status_code == 201, photo.text
+        card = photo.json()
+        decisions = [{"field_id": f["field_id"], "decision": "confirmed"} for f in card["fields"]]
+        minted = await deployment.client.post(
+            f"/profiles/{profile_id}/confirmations",
+            json={"subject": "review_card", "card_id": card["card_id"], "decisions": decisions, "episode_id": episode_id},
+            headers=headers,
+        )
+        assert minted.status_code == 201, minted.text
+        confirmed = await deployment.client.post(
+            f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
+            json={"decisions": decisions, "confirmation_id": minted.json()["confirmation_id"], "episode_id": episode_id},
+            headers=headers,
+        )
+        assert confirmed.status_code == 200, confirmed.text
+    asked = await deployment.client.post(
+        f"/profiles/{profile_id}/ask/stream", json={"question": "what about my blood test", "mode": "text"}, headers=headers
+    )
+    assert asked.status_code == 200, asked.text
+    events = [json.loads(line.removeprefix("data: ")) for line in asked.text.split("\n\n") if line.startswith("data: ")]
+    answer = events[-1]["answer"]
+    clarify = answer["clarify"]
+    assert clarify is not None and len(clarify["options"]) == 2
+    option = clarify["options"][0]
+    return answer["conversation_id"], option["value"], option["label"]
+
+
+async def test_a_real_clarify_token_minted_for_the_owner_leaks_nothing_to_any_other_holder(
+    deployment: Deployment,
+) -> None:
+    """W2, independent safety review (test quality: "a fake token proves nothing"): a REAL
+    token, minted from a real clarifying question on the owner's own conversation, tried
+    against every other holder this deployment can cut a key for. Never resolves (S2/S3's own
+    scoping already refuses it — `conversation` is always the CALLER's own), and — the check
+    a UUID scan alone would miss — the response for every other holder never carries the
+    option's own LABEL WORDS either (the said-date, "blood test"), not just its id."""
+    seeded = await _seed(deployment)
+    holders = await _holders(deployment, seeded)
+    _conversation_id, value, label = await _seed_two_lab_reports_and_ask_which(
+        deployment, seeded.owner.token, seeded.profile_id
+    )
+    label_word = label.split(" of ")[0]  # "Your blood test" / "Pa's blood test" — the plain word
+    assert label_word
+
+    for holder in holders:
+        if holder.name == "owner" or Scope.ASK not in holder.scopes:
+            continue
+        headers = {"Authorization": f"Bearer {holder.token}"}
+        turn = await deployment.client.post(
+            f"/profiles/{seeded.profile_id}/ask/stream",
+            json={"question": "which one", "mode": "text", "value": value},
+            headers=headers,
+        )
+        assert turn.status_code == 200, f"{holder.name}: {turn.status_code} {turn.text}"
+        assert label_word not in turn.text, f"{holder.name}'s turn carried the token's own label words: {turn.text}"
+        assert str(seeded.owner.person_id) not in turn.text

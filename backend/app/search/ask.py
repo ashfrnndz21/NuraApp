@@ -1005,6 +1005,22 @@ def _mentions_cost(question: str) -> bool:
     return any(word in low for word in _COST_WORDS)
 
 
+_COST_CONTENT_WORDS: Final = MEDICINE_WORDS | VISIT_WORDS | PAPER_WORDS | frozenset(
+    {
+        "test", "tests", "checkup", "check-up", "procedure", "surgery", "operation",
+        "ujian", "pembedahan", "prosedur", "pemeriksaan", "验血", "检查", "手术", "程序", "化验",
+    }
+)
+"""The closed word lists a cost question already names something by (review B5): a procedure,
+a medicine, a test, a visit or a paper word. A cost question naming any of these — "what did
+the stent procedure cost", "how much did my blood test cost last month" — already has
+something to try to answer from his own record; it is never an unconditional stall."""
+
+
+def _cost_question_names_nothing(question: str) -> bool:
+    return not any(word in question.lower() for word in _COST_CONTENT_WORDS)
+
+
 def _clarify_option_label(what: str, when: str, language: str, reader: Reader) -> str:
     """A choice's own words, built here alone from confirmed data (`what`, `when` — both
     already the backend's own plain-words/said-date output, never anything an extractor or a
@@ -1028,43 +1044,53 @@ def _clarify_for(
     language: str,
     reader: Reader,
 ) -> Clarify | None:
-    """The two commonest cases (W2, `app.llm.ask_agent`'s module docstring, fix 4): a question
+    """The paper-kind case (W2, `app.llm.ask_agent`'s module docstring, fix 4): a question
     naming a paper KIND with 2+ confirmed papers of that kind and no date asks which one,
-    options by said-date, newest first, capped at four; a cost question with no procedure
-    named asks what it is for, free text. Never fires with fewer than two real candidates —
-    with exactly one, the ordinary answer already handles it. Each option's `Cite` rides along
-    on the Python object alone (`ClarifyOption.cite`) for the caller to persist and later
-    resolve; it never reaches the wire."""
+    options by said-date, newest first, capped at four. Never fires with fewer than two real
+    candidates — with exactly one, the ordinary answer already handles it. Each option's
+    `Cite` rides along on the Python object alone (`ClarifyOption.cite`) for the caller to
+    persist and later resolve; it never reaches the wire. The cost case is `_cost_clarify_for`
+    — never here, and never before the ordinary answer has already been tried (review B5)."""
     by_kind: dict[str, list[Artifact]] = {}
     for artifact_id, kind in corpus.paper_kinds.items():
         artifact = corpus.papers.get(artifact_id)
         if artifact is not None:
             by_kind.setdefault(kind, []).append(artifact)
     low = text.lower()
-    if not _question_names_a_date(text):
-        for kind, artifacts in by_kind.items():
-            if len(artifacts) < 2:
-                continue
-            word = words.paper_word(kind, language)
-            if word.lower() not in low:
-                continue
-            ordered = sorted(artifacts, key=lambda a: a.captured_at, reverse=True)
-            ordered = ordered[:MAX_CLARIFY_OPTIONS]
-            options = tuple(
-                ClarifyOption(
-                    label=_clarify_option_label(
-                        word, _day(artifact.captured_at, context, language), language, reader
-                    ),
-                    value=uuid.uuid4().hex,
-                    cite=Cite(kind="paper_artifact", id=artifact.id),
-                )
-                for artifact in ordered
+    if _question_names_a_date(text):
+        return None
+    for kind, artifacts in by_kind.items():
+        if len(artifacts) < 2:
+            continue
+        word = words.paper_word(kind, language)
+        if word.lower() not in low:
+            continue
+        ordered = sorted(artifacts, key=lambda a: a.captured_at, reverse=True)
+        ordered = ordered[:MAX_CLARIFY_OPTIONS]
+        options = tuple(
+            ClarifyOption(
+                label=_clarify_option_label(
+                    word, _day(artifact.captured_at, context, language), language, reader
+                ),
+                value=uuid.uuid4().hex,
+                cite=Cite(kind="paper_artifact", id=artifact.id),
             )
-            question = words.clarify_line("which_paper", language, what=word)
-            return Clarify(question=question, options=options)
-    if _mentions_cost(text):
-        question = words.clarify_line("cost_for_what", language)
-        return Clarify(question=question, options=(), allow_other=True)
+            for artifact in ordered
+        )
+        question = words.clarify_line("which_paper", language, what=word)
+        return Clarify(question=question, options=options)
+    return None
+
+
+def _cost_clarify_for(text: str, language: str) -> Clarify | None:
+    """The cost case (review B5): fires only from the caller's own "nothing composed, nothing
+    waiting" branch — never before the ordinary answer has already been tried — and only when
+    the question names nothing at all it could already be about (`_cost_question_names_nothing`
+    — no medicine, test, visit or paper word): "what did the stent procedure cost" or "how much
+    did my blood test cost last month" already name something, so they are never a stall; only
+    a bare "how much will this cost" is."""
+    if _mentions_cost(text) and _cost_question_names_nothing(text):
+        return Clarify(question=words.clarify_line("cost_for_what", language), options=(), allow_other=True)
     return None
 
 
@@ -1211,7 +1237,13 @@ async def recall_stream(
                 if words.verified(waiting_text, lang):
                     said.append(AnswerLine(waiting_text, (Cite("review_card", matched.card_id),)))
             if not said:
-                honest = words.honest_lines(lang, doctor)
+                # Review B5: the cost clarify is tried only now — the ordinary answer, and the
+                # waiting-paper match just above, have both already come back with nothing —
+                # and only when the question itself names nothing it could already be about.
+                if not skip_clarify:
+                    clarify = _cost_clarify_for(text, lang)
+                if clarify is None:
+                    honest = words.honest_lines(lang, doctor)
         await record(
             session,
             context=context,
