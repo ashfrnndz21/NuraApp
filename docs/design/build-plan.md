@@ -106,7 +106,14 @@ booked. Independent safety review of extraction.
 
 ### Checkpoint 7 — One record (four separate checkpoints)
 Needs the written spec, **which country comes first**, and **your real papers with names removed**.
-- **7a Many papers and matching** (scenes 9, 10). You test: a folder including the same paper twice, two blood tests
+- **7a Many papers and matching** (scenes 9, 10). **Whose paper is it?** Every paper is checked against the person before
+  anything is filed: the name on it (tolerant of name order, initials, spacing, bin/binti, romanisation; not of a
+  different surname), the ID number, date of birth, sex against a sex-specific test, the hospital's patient number
+  if seen before, and dates that cannot be right (before birth, in the future). A mismatch is never filed silently
+  and never refused silently: Nura asks a plain question ("This paper says Mei Tan. Is it yours, or for someone you
+  care for?") and only the person's answer files it, moves it to the right person's record, or sets it aside. Other
+  discrepancies (a different date of birth, two strengths of one tablet) are asked about the same way. Rules decide,
+  never a model; every decision is audited. You test: a folder including the same paper twice, two blood tests
   from different dates, and a paper with someone else's name. Passes when each gets the right verdict and nothing is
   overwritten.
 - **7b Policy passport** (scene 11). You test: your own policy PDF. Passes when every line shows the right page and

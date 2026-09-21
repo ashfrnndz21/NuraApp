@@ -873,3 +873,14 @@ viewport, which is not guaranteed.
 hours. The critical path is 2 -> 3 -> 4 (fixtures -> synonym table -> matching engine) and 5 -> 6
 (streaming -> inbox), both gated on non-engineering turnaround (owner-supplied fixtures, clinical
 sign-off) that this estimate cannot compress.
+
+## Owner requirement added 2026-09-22: whose paper is it
+
+When real papers are loaded the engine must validate that each paper belongs to the person, surface any discrepancy, and ask a
+clarifying question rather than guess. Inputs compared: name (tolerant matching: order, initials, spacing, bin/binti, romanisation,
+missing middle names; NOT a different surname), national ID (NRIC/MyKad, exact after normalising separators), date of birth, sex
+against sex-specific tests, the facility's patient number when previously seen (same number under two names is a conflict), and
+impossible dates (before birth, in the future). Outcomes: `match` (file), `likely_match` (file, note the variation), `mismatch`
+(ask: yours / someone you care for / set aside; move only to a profile the caller holds a key for, with the usual scopes and
+audit), `cannot_tell` (no identifying line on the paper: file, say so once). Deterministic rules only; the model never decides
+identity. Test papers must carry a consistent made-up name and ID, plus deliberate mismatches. Needs an independent safety review.
