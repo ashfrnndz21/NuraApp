@@ -110,3 +110,4 @@ the doctor. Body text 15px or larger, contrast 4.5:1. Three languages and the ca
 | Date | Checkpoint | Builder time measured | Check rounds | Owner's verdict |
 |---|---|---|---|---|
 | 2026-09-21 | Build started: phase 1, feed lock fix and the spec running | | | |
+| 2026-09-21 | Blueprint v3: the Add a medicine scene (photo, screenshot, text or voice) | | | Approved: "yes exactly this" |
