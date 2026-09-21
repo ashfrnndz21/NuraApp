@@ -24,9 +24,9 @@ size, so the percent is a count, not a forecast.
 | 1 | The look, the phone frame, the shared components | 1 | Done |
 | 2 | Build spec | — | Done |
 | 3 | Report data: labels, ranges on results, no blank lines | 2 | Done |
-| 4 | Reading screen and report table | 2 | In progress: fixing after the operator's visual review |
+| 4 | Reading screen and report table | 2 | Done (#296; owner loaded his real PDF on 2026-09-22: works; polish and "Your papers" follow in `papers-library`) |
 | 5 | Insight engine after a paper | 3 | Done |
-| 6 | New Home with the living orb | 3 | In progress: fixing after the operator's visual review |
+| 6 | New Home with the living orb | 3 | Done (#295, third review pass; captures sent to the owner) |
 | 7 | Insight screen ("What it means for you") wired after "Looks right" | 3 | Not started |
 | 8 | Ask Nura interface | 4 | Not started |
 | 9 | Onboarding: Welcome, sign in, who is this for, bubble cloud | 5 | Not started |
