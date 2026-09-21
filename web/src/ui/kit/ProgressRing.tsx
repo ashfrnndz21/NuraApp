@@ -19,15 +19,23 @@ export function ProgressRing({ done, of, figure, label, source, testId }: { done
   const share = of > 0 ? Math.min(1, Math.max(0, done / of)) : 0;
   return (
     <div class="ring" data-testid={testId}>
-      <svg class="ring-art" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-        <circle class="ring-track" cx="50" cy="50" r={radius} />
-        <circle class="ring-fill" cx="50" cy="50" r={radius} stroke-dasharray={`${(share * around).toFixed(2)} ${around.toFixed(2)}`} transform="rotate(-90 50 50)" />
-      </svg>
-      <div class="ring-centre">
-        <span class="ring-number" data-testid={testId ? `${testId}-figure` : undefined}>
-          {figure}
-        </span>
-        <span class="ring-label">{label}</span>
+      {/* The circle and its centred figure are one stacked box (`ring-circle`), sized once by
+       *  `width: min(100%, 8.5rem)`; the source line is a normal block under it, in flow, never a
+       *  grid sibling the circle could grow over. On a wide (desktop) screen `.ring`'s own parent
+       *  can be far wider than a phone, and a bare CSS grid with two in-flow children collapses
+       *  differently depending on how much extra width the implicit column gets — this fixed the
+       *  overlap seen there (see base.css `.ring`, warm.css). */}
+      <div class="ring-circle">
+        <svg class="ring-art" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+          <circle class="ring-track" cx="50" cy="50" r={radius} />
+          <circle class="ring-fill" cx="50" cy="50" r={radius} stroke-dasharray={`${(share * around).toFixed(2)} ${around.toFixed(2)}`} transform="rotate(-90 50 50)" />
+        </svg>
+        <div class="ring-centre">
+          <span class="ring-number" data-testid={testId ? `${testId}-figure` : undefined}>
+            {figure}
+          </span>
+          <span class="ring-label">{label}</span>
+        </div>
       </div>
       <span class="ring-source" data-testid={testId ? `${testId}-source` : "ring-source"}>
         {source}

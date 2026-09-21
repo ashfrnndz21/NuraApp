@@ -292,7 +292,7 @@ button.list-row:active,
 }
 .person-tile .avatar.add {
   background: transparent;
-  border: 1.5px dashed #cfc1d9;
+  border: 1.5px dashed rgba(255, 255, 255, 0.35);
   color: var(--plum);
 }
 .person-tile .avatar.add .icon {
@@ -501,12 +501,23 @@ button.list-row {
 }
 
 /* --- The progress ring ------------------------------------------------------------------------ */
+/* `.ring` is a plain column: the circle (a fixed-size stacked box, never wider than 8.5rem
+   whatever its parent's own width is), then the source line under it in normal flow. Fixed the
+   known bug where the ring overlapped its own text on a wide (desktop) screen — `.ring-centre`
+   used to be a bare CSS grid sibling of the source line, which the grid sized differently once
+   its container was far wider than a phone; now the circle is its own sized box and nothing else
+   is ever positioned over it. */
 .ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ring-circle {
   position: relative;
   width: min(100%, 8.5rem);
   aspect-ratio: 1;
-  display: grid;
-  place-items: center;
+  flex: none;
 }
 .ring-art {
   position: absolute;
@@ -526,10 +537,12 @@ button.list-row {
   stroke-linecap: round;
 }
 .ring-centre {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   padding: 0 18%;
 }
@@ -544,6 +557,9 @@ button.list-row {
   font-size: var(--text-caption);
   color: var(--ink-quiet);
   line-height: 1.2;
+}
+.ring-source {
+  text-align: center;
 }
 
 /* --- Buttons: solid Plum, small or full width; quiet ------------------------------------------ */
@@ -822,7 +838,7 @@ img.avatar {
 /* "Add a health report": a dashed card on the ground, as the board draws it. */
 .action-row.report {
   background: transparent;
-  border: 1.5px dashed #cfc1d9;
+  border: 1.5px dashed rgba(255, 255, 255, 0.35);
 }
 /* The file input is what Tab reaches: its ring is drawn round the whole card (focus-within above),
    and the input says so itself for anything that asks. */
@@ -999,8 +1015,10 @@ img.avatar {
 .bubble[data-from="person"] {
   align-self: flex-end;
   border-bottom-right-radius: 6px;
-  background: var(--plum);
-  color: var(--white);
+  /* The blueprint's own "me" bubble (docs/design/experience-blueprint.html `.me`): solid cream,
+     dark ink — not a solid Plum fill, since Plum is the light accent colour now. */
+  background: var(--ink);
+  color: var(--ink-on-light);
 }
 .bubble[data-from="nura"] {
   align-self: flex-start;

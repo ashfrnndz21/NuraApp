@@ -1,6 +1,7 @@
 import type { ComponentChildren, JSX } from "preact";
 import { Chip, ChipRow } from "./Chip";
 import { Icon } from "./icons";
+import { StatusLine } from "./StatusLine";
 
 /** Conversation, waiting and "thinking" (docs/design-direction.md), drawn as the approved board's
  *  Ask Nura screen draws them (docs/design/nura-concept-board.html): his question as a Plum
@@ -23,9 +24,11 @@ export function MessageBubble({ from, children, label, testId }: { from: "person
   );
 }
 
-/** Nura is working: pulsing dots beside the plain line. `mark`: the seam for the brand mark's
- *  speaking motion (#176) — pass it and it stands where the dots do. With Reduce Motion the dots
- *  are still. The dots are decorative; the line is the words. */
+/** Nura is working: pulsing dots beside ONE status line, replaced in place with a light sweep as
+ *  the real line changes (`StatusLine`, docs/design/experience-blueprint.html `.status`). `mark`:
+ *  the seam for the brand mark's speaking motion (#176) — pass it and it stands where the dots
+ *  do. With Reduce Motion the dots are still and the line swaps at once. The dots are decorative;
+ *  the line is the words. */
 export function ThinkingIndicator({ line, mark, testId }: { line: string; mark?: ComponentChildren; testId?: string }): JSX.Element {
   return (
     <div class="thinking" data-testid={testId}>
@@ -38,7 +41,7 @@ export function ThinkingIndicator({ line, mark, testId }: { line: string; mark?:
           </span>
         )}
       </span>
-      <span class="thinking-line">{line}</span>
+      <StatusLine text={line} className="thinking-line" />
     </div>
   );
 }
@@ -67,12 +70,18 @@ export function TraceSteps({ steps }: { steps: readonly TraceStep[] }): JSX.Elem
   );
 }
 
-/** The trace while Nura works: a card with "Nura is looking" and every step it has really taken. */
+/** The trace while Nura works: ONE line, the newest real step it has reported (or `working`
+ *  before the first one arrives), replaced in place through `StatusLine` — never an accumulating
+ *  checklist (docs/design/experience-blueprint.html `think()`: "thinking is ONE status line that
+ *  changes in place with a light sweep. It is never an accumulating checklist."). Steps stay
+ *  exactly what the backend sent: this never adds, reorders or delays one — `steps[steps.length -
+ *  1]` is simply the latest one the caller was given. The full history still exists for "What
+ *  Nura looked at" afterwards (`LookedAt`, below, still uses `TraceSteps`), just not here, live. */
 export function StepTrace({ steps, working, mark, testId }: { steps: readonly TraceStep[]; working: string; mark?: ComponentChildren; testId?: string }): JSX.Element {
+  const current = steps.length > 0 ? steps[steps.length - 1]!.text : working;
   return (
     <div class="trace" data-testid={testId}>
-      <ThinkingIndicator line={working} mark={mark} testId="thinking" />
-      {steps.length > 0 && <TraceSteps steps={steps} />}
+      <ThinkingIndicator line={current} mark={mark} testId="thinking" />
     </div>
   );
 }

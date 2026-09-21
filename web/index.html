@@ -5,16 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Nura</title>
     <meta name="description" content="Nura keeps your papers, your medicines and your blood pressure book." />
-    <meta name="theme-color" content="#FBF6F1" />
+    <meta name="theme-color" content="#1F1731" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Nura" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-    <link rel="preload" href="fonts/outfit-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="fonts/figtree-latin.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
+    <!-- The atmosphere (docs/design/experience-blueprint.html `.atmos`): the dusk ground and its
+         three blurred blobs, fixed and behind everything, a sibling of #app rather than a child
+         of it so it is never clipped by any of the app's own overflow rules and always fills the
+         viewport, including around a centred phone-width #app on a wide screen (base.css). Static
+         markup, not a component: it only ever reads CSS custom properties already on <html>
+         (tokens.css `--wash-*`), so it needs no script of its own. -->
+    <div class="atmosphere" aria-hidden="true"><i></i><i></i><i></i></div>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

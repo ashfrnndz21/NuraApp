@@ -1,92 +1,119 @@
-/* Nura design tokens — docs/design-system.md §2, verbatim. Two densities share every token;
-   `data-density` on <html> only moves the type scale, the touch target and the surface a
-   decision sits on. The wash is the State posture, set as `data-posture` on <html>. */
+/* Nura design tokens — retokened for the dusk-glass system approved in
+   docs/design/experience-blueprint.html (its <style> block, verbatim colours/radii/type) and
+   docs/design/README.md. Two densities still share every token; `data-density` on <html> still
+   only moves the type scale, the touch target and the surface a decision sits on — this pass
+   changes what those tokens ARE, not the structure any screen already builds on them with. */
 
-/* Outfit (SIL Open Font License 1.1, public/fonts/OFL.txt), self-hosted: no font CDN is ever
-   asked for anything. One variable file per script, weights 300 to 500 — the persona dial. */
+/* Figtree (SIL Open Font License 1.1, public/fonts/OFL-Figtree.txt), self-hosted: no font CDN is
+   ever asked for anything, the same way Outfit was bundled before it. One variable file per
+   script, weights 300 to 600 — the blueprint's own range. */
 @font-face {
-  font-family: "Outfit";
+  font-family: "Figtree";
   font-style: normal;
-  font-weight: 300 500;
+  font-weight: 300 600;
   font-display: swap;
-  src: url("/fonts/outfit-latin-ext.woff2") format("woff2");
+  src: url("/fonts/figtree-latin-ext.woff2") format("woff2");
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: "Outfit";
+  font-family: "Figtree";
   font-style: normal;
-  font-weight: 300 500;
+  font-weight: 300 600;
   font-display: swap;
-  src: url("/fonts/outfit-latin.woff2") format("woff2");
+  src: url("/fonts/figtree-latin.woff2") format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-/* Newsreader (SIL Open Font License 1.1, public/fonts/OFL-Newsreader.txt), self-hosted the same way:
-   the serif display face for the wordmark and the large headings (docs/design-direction.md,
-   "Type", and the approved board docs/design/nura-concept-board.html). One variable file per script, optical size and weight; body text stays Outfit. A
-   script it does not cover (Chinese) falls to the phone's own serif, never to a font CDN. */
+/* Instrument Serif Italic (SIL Open Font License 1.1, public/fonts/OFL-InstrumentSerif.txt),
+   self-hosted the same way: the ONE italic accent word a headline carries (blueprint `.ser`),
+   never a whole heading — every heading stays Figtree. A script it does not cover (Chinese)
+   falls to the phone's own serif, never to a font CDN. */
 @font-face {
-  font-family: "Newsreader";
-  font-style: normal;
-  font-weight: 200 800;
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
   font-display: swap;
-  src: url("/fonts/newsreader-latin-ext.woff2") format("woff2");
+  src: url("/fonts/instrument-serif-italic-latin-ext.woff2") format("woff2");
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: "Newsreader";
-  font-style: normal;
-  font-weight: 200 800;
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
   font-display: swap;
-  src: url("/fonts/newsreader-latin.woff2") format("woff2");
+  src: url("/fonts/instrument-serif-italic-latin.woff2") format("woff2");
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 :root {
-  /* Colour */
-  --mist: #f5f1f4;
-  --blush: #f1dce6;
-  --lavender: #dcd5ee;
-  --sage: #dce8df;
-  --coral-wash: #f0d6d2;
-  --ink: #2b2733;
-  --ink-soft: #6a6377;
-  --plum: #4e3a78;
-  --good: #3b7a57;
-  --watch: #b8741a;
-  --act: #c24a3a;
-  --cream: #f3e6e0; /* the warm middle stop of the watch wash */
-  --coral-mid: #f2e0de; /* the middle stop of the act wash */
-  --white: #ffffff;
+  /* Colour — the blueprint's dusk-glass palette (docs/design/experience-blueprint.html <style>,
+     docs/design/README.md), replacing the warm cream system. --ink is now the blueprint's cream
+     text `#fbf6f0`, on a plum-to-ink ground rather than paper, so every token that used to read
+     as "dark ink on a pale ground" now reads as "cream text on a translucent glass card over a
+     dusk sky". The names stay: every screen's own markup already calls `var(--ink)`, `var(--plum)`,
+     `var(--glass-bg)` and so on, so retheming the values is what makes the whole app look like the
+     blueprint's world without touching a single screen's structure or wording. */
+  --mist: #1f1731; /* the ground's deepest stop, used where a flat fallback background is needed */
+  --blush: rgba(240, 138, 138, 0.16); /* the rose wash, at watch strength */
+  --lavender: rgba(143, 120, 179, 0.22);
+  --sage: rgba(169, 211, 174, 0.22);
+  --coral-wash: rgba(240, 138, 138, 0.22);
+  --ink: #fbf6f0; /* the blueprint's --c: cream text on the dusk ground */
+  --ink-soft: rgba(251, 246, 240, 0.86);
+  --plum: #e1d5f7; /* the blueprint's own focus-ring purple (#b9a3e6), lifted so it still holds
+    4.5:1 as accent text/icon/border on translucent glass over the lightest ground stop — the
+    same family of purple, tuned for use inside the dusk phone rather than on the blueprint's own
+    light outer page, where #b9a3e6 was a focus ring on a pale background instead. */
+  --good: #a9d3ae; /* sage: ok */
+  --watch: #f3b562; /* amber: above/attention */
+  --act: #f08a8a; /* rose: the red-flag call button only */
+  --cream: rgba(243, 181, 98, 0.18); /* the warm middle stop of the watch wash */
+  --coral-mid: rgba(240, 138, 138, 0.18); /* the middle stop of the act wash */
+  --white: #fbf6f0; /* "white" text/fill is the same cream everywhere on this dark ground */
 
-  /* The warm ground (docs/design-direction.md, "Palette"): a cream page, toward Eldora's warm
-     off-white, that the posture washes below are drawn from. */
-  --ground: #fbf6f1;
-  --ground-warm: #f7ede5;
-  --ground-soft: #f4ece8;
+  /* The dusk ground (docs/design/experience-blueprint.html `.atmos`): the phone's own sky, that
+     the posture washes below are drawn from. Three blurred, slowly drifting blobs sit over it as
+     a fixed layer (base.css `.atmosphere`), never as page content. */
+  --ground: #4b3c69;
+  --ground-warm: #372b52;
+  --ground-soft: #1f1731;
+  --atmos-amber: #e7b48f;
+  --atmos-violet: #8f78b3;
+  --atmos-deep: #15101f;
 
-  /* Card tints: each tile its own soft colour, the way Eldora's grid is. The first five are the
-     palette's own pastels; the three after them fill a six-tile grid without repeating one.
-     Plum icons and Ink words hold on every one (tests/unit/contrast.test.ts). */
-  --tint-blush: #f6dde5;
-  --tint-lavender: #e8e1f4;
-  --tint-sage: #e1ece2;
+  /* Card tints: on glass, a tint is a faint wash of the same hue rather than a pastel fill — the
+     ground shows through every one of them (tests/unit/contrast.test.ts still holds Ink/cream
+     text to 4.5:1 on the darkest realistic ground, since the tint only warms the glass, it never
+     lightens it toward a pale card). */
+  --tint-blush: rgba(240, 138, 138, 0.14);
+  --tint-lavender: rgba(143, 120, 179, 0.2);
+  --tint-sage: rgba(169, 211, 174, 0.16);
   --tint-coral: var(--coral-wash);
   --tint-cream: var(--cream);
-  --peach: #f8e4d6;
-  --butter: #f6ecd3;
-  --sky: #e1e9f2;
-  /* A card on the ground rather than in a grid, its hairline, and Plum's deep and pale steps:
-     the approved board's (docs/design/nura-concept-board.html). */
-  --tint-paper: #fffaf6;
-  --card-line: #eadfd7;
-  --plum-deep: #3d2d61;
-  --plum-wash: #ece6f5;
-  /* Secondary words on a tint: deeper than Ink soft, so a caption holds 4.5:1 on every tint in
-     her density too (his holds 7:1 already). */
-  --ink-on-tint: #57505f;
-  /* The soft green of a good signal's pill, with its ink (Reference A's "Good"). */
-  --good-bg: #e2efe6;
-  --good-ink: #24503a;
+  --peach: rgba(231, 180, 143, 0.18);
+  --butter: rgba(243, 181, 98, 0.16);
+  --sky: rgba(159, 208, 255, 0.16);
+  /* A card on the ground rather than in a grid, its hairline, and Plum's deep and pale steps —
+     "paper" is now the blueprint's own glass, just a touch more opaque than a bare tile so text
+     set directly on it still holds contrast without a tint under it. */
+  --tint-paper: rgba(255, 255, 255, 0.14);
+  --card-line: rgba(255, 255, 255, 0.22);
+  --plum-deep: #fbf6f0;
+  --plum-wash: rgba(255, 255, 255, 0.18);
+  /* Secondary words on a tint: the same soft cream as everywhere else — a dark-ground app has one
+     ink and one soft ink, not a deeper one per surface (tests/unit/contrast.test.ts). */
+  --ink-on-tint: var(--ink-soft);
+  /* A status flag/pill is drawn SOLID, the way the blueprint's own `.flag`/`.btn.red` are — never
+     translucent, since a badge has to read at a glance. `--ink-on-light` is the one dark ink the
+     whole app uses wherever text sits directly on a solid pastel or on cream (the blueprint's own
+     `.btn.light{color:#2b2140}`): every flag, chip and pill below shares it rather than each
+     carrying its own near-identical dark hex, and it holds >=4.5:1 on sage, amber and rose alike. */
+  --ink-on-light: #2b2140;
+  /* The blueprint's OTHER dark ink (`.flag{color:#231a12}`, `.btn.red{color:#2a0d12}`): a touch
+     warmer and darker than `--ink-on-light`, used only where text sits on a solid sage/amber/rose
+     badge or pill — never on cream, which keeps `--ink-on-light`. */
+  --ink-on-tone: #201509;
+  --good-bg: var(--good); /* solid sage */
+  --good-ink: var(--ink-on-tone);
 
   /* Illustrations (web/src/ui/illustrations): the palette, plus the few colours a drawn person
      needs. Decorative only, so they carry no contrast duty, but they live here, not in a file. */
@@ -96,13 +123,13 @@
   --illo-hair: #e9e4ea;
   --illo-hair-shade: #cfc7d3;
   --illo-hair-dark: #5b4a3f;
-  --illo-line: #4a3b5c;
+  --illo-line: #fbf6f0;
   --illo-cheek: #f2a9a0;
   --illo-sun: #f6cf7e;
   --illo-leaf: #9fc6a9;
   --illo-leaf-deep: #6fa27e;
   --illo-trunk: #b88a6a;
-  --illo-plum-soft: #8c76b5;
+  --illo-plum-soft: #b9a3e6;
   --illo-rose: #e9a7b8;
   --illo-cardigan: #b4a3da;
   --illo-cardigan-deep: #9985c6;
@@ -110,44 +137,49 @@
   --illo-sweater-deep: #76a887;
   --illo-pot: #e59a82;
   --illo-pot-deep: #cf8069;
-  --illo-cloud: #ffffff;
-  /* Onboarding (W3): a word the last tap revealed, and the two answered read-back buttons.
-     Each pair is 7:1 or better (tests/unit/contrast.test.ts). */
-  --chip-fresh: #f3eef8;
-  --yes-bg: #e6f0e9;
-  --yes-ink: #24503a;
-  --no-bg: #f7e4e1;
-  --no-ink: #7a2e24;
+  --illo-cloud: #fbf6f0;
+  /* Onboarding (W3): a word the last tap revealed, and the two answered read-back buttons — solid
+     sage/rose, the blueprint's own ok/not-ok pastels, each with `--ink-on-tone`
+     (tests/unit/contrast.test.ts). */
+  --chip-fresh: rgba(255, 255, 255, 0.18);
+  --yes-bg: var(--good);
+  --yes-ink: var(--ink-on-tone);
+  --no-bg: var(--act);
+  --no-ink: var(--ink-on-tone);
 
-  /* The one coral: "I'm not feeling well", a soft coral-tinted paper pill, never a red button.
-     Its ink on its ground is 7:1 or better (tests/unit/contrast.test.ts). */
-  --coral-pill-bg: #f7e4e1;
-  --coral-pill-border: #efcfca;
-  --coral-pill-ink: #7a2e24;
-  /* The range band behind a sparkline: Plum at 8%. */
-  --band: rgba(78, 58, 120, 0.08);
+  /* The one rose: "I'm not feeling well" — the blueprint's own red-flag colour, the one place it
+     is ever a solid fill (docs/design/experience-blueprint.html, `.btn.red`). Its ink on its
+     ground is >=7:1 (tests/unit/contrast.test.ts). */
+  --coral-pill-bg: var(--act);
+  --coral-pill-border: var(--act);
+  --coral-pill-ink: var(--ink-on-tone);
+  /* The range band behind a sparkline: cream at 12% on the dusk ground. */
+  --band: rgba(251, 246, 240, 0.12);
 
-  /* Surfaces: glass carries chrome and context, paper carries any decision */
-  --glass-bg: rgba(255, 255, 255, 0.55);
-  --glass-blur: blur(18px) saturate(1.2);
-  --glass-border: 1px solid rgba(255, 255, 255, 0.7);
-  --glass-highlight: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
-  --tile-shadow: 0 8px 24px rgba(60, 40, 80, 0.06);
-  --paper-bg: rgba(255, 255, 255, 0.92);
-  --paper-border: 1px solid rgba(255, 255, 255, 0.9);
-  /* A chip: glass at a smaller blur, 12px radius, Ink text — never white on a colour. */
-  --chip-bg: rgba(255, 255, 255, 0.55);
+  /* Surfaces (docs/design/experience-blueprint.html `.glass`): fill rgba(255,255,255,.10), a
+     1px rgba(255,255,255,.22) border, 18px backdrop blur — glass carries chrome and context.
+     "Paper", where a decision sits, is the same glass a touch more opaque so its text never
+     needs a tint under it. */
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(18px);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.22);
+  --glass-highlight: 0 1px 0 rgba(255, 255, 255, 0.14) inset;
+  --tile-shadow: 0 20px 44px rgba(15, 10, 24, 0.32);
+  --paper-bg: rgba(255, 255, 255, 0.14);
+  --paper-border: 1px solid rgba(255, 255, 255, 0.22);
+  /* A chip: glass at a smaller blur, the pill radius (blueprint `.chip`), Ink text. */
+  --chip-bg: rgba(255, 255, 255, 0.14);
   --chip-blur: blur(12px);
-  --chip-border: 1px solid rgba(255, 255, 255, 0.75);
+  --chip-border: 1px solid rgba(255, 255, 255, 0.22);
   /* A hairline between rows and above a why line. */
-  --hairline: 1px solid rgba(43, 39, 51, 0.08);
+  --hairline: 1px solid rgba(255, 255, 255, 0.14);
 
-  /* Shape */
-  --radius-sheet: 28px;
-  --radius-tile: 22px;
-  --radius-card: 24px;
-  --radius-badge: 14px;
-  --radius-chip: 12px;
+  /* Shape — the blueprint's own radii: 26-28 for a card, 18 for a row, 999 for a pill. */
+  --radius-sheet: 30px;
+  --radius-tile: 26px;
+  --radius-card: 27px;
+  --radius-badge: 18px;
+  --radius-chip: 999px;
   --radius-pill: 999px;
 
   /* Spacing: an 8px grid */
@@ -160,25 +192,32 @@
   --tile-pad: var(--space-3); /* tile padding */
   --tile-gap: var(--space-2); /* gap between tiles */
 
-  /* Type: one family, weight is the persona dial. `rem` so the system text size scales it. */
-  --font: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  /* The serif display face: the wordmark, a screen's greeting, a card's big heading. */
-  --font-display: "Newsreader", "Iowan Old Style", Georgia, "Songti SC", "Noto Serif CJK SC", serif;
-  /* Eldora's soft card shadow: barely there, warm. */
-  --card-shadow: 0 1px 2px rgba(80, 50, 40, 0.04), 0 10px 28px rgba(80, 50, 40, 0.07);
+  /* Type: Figtree throughout (docs/design/experience-blueprint.html <style>, weights 300-600);
+     `rem` so the system text size scales it. */
+  --font: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  /* Headings stay Figtree too (the blueprint's `.big`/`.head` are Figtree 300, never a whole
+     heading in serif) — `--font-display` is kept as its own token so a caller that reaches for it
+     still gets the right family, it is simply the same family now. The italic accent word a
+     headline may carry (blueprint `.ser`) is `--font-accent`, used only by `SoftText`'s `*word*`
+     marker (web/src/ui/kit/SoftText.tsx), never a whole heading. */
+  --font-display: var(--font);
+  --font-accent: "Instrument Serif", Georgia, "Songti SC", "Noto Serif CJK SC", serif;
+  /* The dusk card shadow: soft, deep, toward the ground rather than warm. */
+  --card-shadow: 0 20px 44px rgba(15, 10, 24, 0.32);
   --line-height: 1.5;
   /* Numbers use tabular figures everywhere. */
   --numeric: tabular-nums;
 
-  /* Washes: 160° linear, plus one soft white radial light at top-left */
-  --wash-light: radial-gradient(circle at 25% 10%, rgba(255, 255, 255, 0.65), transparent 55%);
-  --wash-stable: linear-gradient(160deg, var(--ground), var(--ground-warm) 45%, var(--ground-soft));
-  --wash-watch: linear-gradient(160deg, var(--blush), var(--cream) 50%, var(--ground-warm));
-  --wash-act: linear-gradient(160deg, var(--coral-wash), var(--coral-mid) 50%, var(--lavender));
+  /* Washes: 160° linear, plus one soft light glow at top-left, over the dusk ground */
+  --wash-light: radial-gradient(circle at 25% 10%, rgba(255, 255, 255, 0.1), transparent 55%);
+  --wash-stable: linear-gradient(160deg, var(--ground), var(--ground-warm) 46%, var(--ground-soft));
+  --wash-watch: linear-gradient(160deg, var(--ground), var(--coral-wash) 50%, var(--ground-soft));
+  --wash-act: linear-gradient(160deg, var(--ground-warm), var(--coral-wash) 50%, var(--ground-soft));
 
-  /* Motion: only ever an answer to an action (docs/design/motion.md). --settle: a card or row
-     entering after a fetch or a stream event, 220ms. --press: a pill or row under a finger,
-     90ms — always shorter than --settle, since a tap must feel instant and an entrance may not. */
+  /* Motion: only ever an answer to an action (docs/design/motion.md and, for the conversational
+     kit, web/src/ui/motion.ts). --settle: a card or row entering after a fetch or a stream event,
+     220ms. --press: a pill or row under a finger, 90ms — always shorter than --settle, since a
+     tap must feel instant and an entrance may not. */
   --settle: 220ms ease-out;
   --press: 90ms ease-out;
   --wash-fade: 1200ms ease-in-out;
@@ -228,9 +267,10 @@
   --text-tab: 1rem; /* 16px: four words under four icons */
   --target: 56px;
   --icon-size: 28px;
-  /* Secondary text holds 7:1 on paper in his density (docs/design-system.md §5), so it is a
-     deeper Ink soft than the caregiver's — the one token the patient density darkens. */
-  --ink-quiet: #57505f;
+  /* Secondary text holds 7:1 on paper in his density (docs/design-system.md §5): on the dusk
+     ground the extra contrast his density asks for is the full bright Ink, cream on dusk, rather
+     than the soft translucent one every other surface uses — the one token his density lifts. */
+  --ink-quiet: var(--ink);
   --card-bg: var(--paper-bg);
   --card-blur: none;
   /* Never below the 20px body, however light the word. */
@@ -239,19 +279,23 @@
   --word-3: 1.5rem; /* 24px */
 }
 
-/* --- The wash is the status ------------------------------------------------------------- */
+/* --- The wash is the status: also the atmosphere's own gradient (base.css `.atmosphere`) ------ */
 /* A browser does not interpolate one gradient into another, so the wash is drawn from three
    typed colour stops and a typed middle (`@property`): a State change moves each stop, and the
    gradient drawn from them cross-fades over --wash-fade (E15-01). Reduce Motion makes the fade
-   0ms: the new wash is simply there. A browser without @property swaps it at once. */
-@property --wash-a { syntax: "<color>"; inherits: true; initial-value: #fbf6f1; }
-@property --wash-b { syntax: "<color>"; inherits: true; initial-value: #f7ede5; }
-@property --wash-c { syntax: "<color>"; inherits: true; initial-value: #f4ece8; }
-@property --wash-at { syntax: "<percentage>"; inherits: true; initial-value: 45%; }
+   0ms: the new wash is simply there. A browser without @property swaps it at once.
+
+   This is the same gradient the blueprint's `.atmos` paints, and "watch"/"act" are the same move
+   its own alarm state makes (`.phone.alarm .atmos`): the ground itself shifts toward rose, never
+   a colour laid over the cards. */
+@property --wash-a { syntax: "<color>"; inherits: true; initial-value: #4b3c69; }
+@property --wash-b { syntax: "<color>"; inherits: true; initial-value: #372b52; }
+@property --wash-c { syntax: "<color>"; inherits: true; initial-value: #1f1731; }
+@property --wash-at { syntax: "<percentage>"; inherits: true; initial-value: 46%; }
 :root,
-:root[data-posture="stable"] { --wash: var(--wash-stable); --wash-a: var(--ground); --wash-b: var(--ground-warm); --wash-c: var(--ground-soft); --wash-at: 45%; }
-:root[data-posture="watch"] { --wash: var(--wash-watch); --wash-a: var(--blush); --wash-b: var(--cream); --wash-c: var(--ground-warm); --wash-at: 50%; }
-:root[data-posture="act"] { --wash: var(--wash-act); --wash-a: var(--coral-wash); --wash-b: var(--coral-mid); --wash-c: var(--lavender); --wash-at: 50%; }
+:root[data-posture="stable"] { --wash: var(--wash-stable); --wash-a: var(--ground); --wash-b: var(--ground-warm); --wash-c: var(--ground-soft); --wash-at: 46%; }
+:root[data-posture="watch"] { --wash: var(--wash-watch); --wash-a: #5a3550; --wash-b: #402c46; --wash-c: var(--ground-soft); --wash-at: 50%; }
+:root[data-posture="act"] { --wash: var(--wash-act); --wash-a: #6b2f3d; --wash-b: #47202d; --wash-c: #1f1218; --wash-at: 50%; }
 :root {
   transition:
     --wash-a var(--wash-fade),

@@ -1,0 +1,392 @@
+/* The dusk-glass conversational kit's own styles (docs/design/experience-blueprint.html <style>,
+ * web/src/ui/motion.ts). Loaded once, as a side effect of importing `./index` (`kit/index.ts`),
+ * after base.css/design.css/warm.css, so nothing here needs to repeat a token — every colour,
+ * radius and surface below is one of tokens.css's own. The literal millisecond numbers here must
+ * match web/src/ui/motion.ts by hand (a CSS file cannot import a JS constant); each block says
+ * which constant it mirrors. */
+
+/* --- The orb: the assistant, always turning ------------------------------------------------- */
+.orb {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  width: 36px;
+  height: 36px;
+  box-shadow: 0 0 14px rgba(201, 169, 232, 0.55), inset 0 0 8px rgba(255, 255, 255, 0.5);
+}
+.orb i {
+  position: absolute;
+  inset: -35%;
+  background: conic-gradient(from 0deg, #fbe3cf, #c9a9e8, #6f4fc4, #f0b48f, #9fd0ff, #fbe3cf);
+  filter: blur(5px);
+  animation: orb-spin 7s linear infinite;
+}
+.orb b {
+  position: absolute;
+  left: 18%;
+  top: 10%;
+  width: 45%;
+  height: 32%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  filter: blur(3px);
+}
+.orb.lg {
+  width: 128px;
+  height: 128px;
+  box-shadow: 0 0 46px rgba(201, 169, 232, 0.55), inset 0 0 22px rgba(255, 255, 255, 0.5);
+  animation: orb-breathe 4.5s ease-in-out infinite;
+}
+.orb.lg i {
+  filter: blur(15px);
+}
+.orb.lg b {
+  filter: blur(8px);
+}
+.orb.thinking i {
+  animation-duration: 2.2s;
+}
+@keyframes orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes orb-breathe {
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* --- StatusLine: one line, replaced in place, with a light sweep (motion.ts STATUS_*) -------- */
+.status-line {
+  display: inline-block;
+  font: inherit;
+  font-weight: 300;
+  background: linear-gradient(90deg, rgba(251, 246, 240, 0.45) 0 35%, var(--ink) 50%, rgba(251, 246, 240, 0.45) 65% 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* STATUS_SWEEP_MS (1500ms, linear, looping) + a quick blur-in on first paint. */
+  animation: status-sweep 1500ms linear infinite, status-in 260ms ease both;
+}
+/* STATUS_OUT_MS (200ms): the blur-out `StatusLine` plays before swapping to the next line. */
+.status-line.out {
+  animation: status-sweep 1500ms linear infinite, status-out 200ms ease both;
+}
+@keyframes status-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@keyframes status-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+@keyframes status-out {
+  to {
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+/* --- SoftText: words arrive one by one, blurred to sharp (motion.ts WORD_*) ------------------- */
+.soft-word {
+  display: inline-block;
+  margin-right: 0.27em;
+}
+/* Only a word that is genuinely new since the last render gets this — an old word keeps plain
+   `.soft-word` and never carries `animation-delay`, so it can never replay (SoftText.tsx). */
+.soft-word-enter {
+  /* WORD_FADE_MS (500ms); each word's own `animation-delay` is set inline, per word. */
+  animation: soft-word-in 500ms ease both;
+}
+.soft-word.accent {
+  font-family: var(--font-accent);
+  font-style: italic;
+  font-size: 1.12em;
+  letter-spacing: 0;
+}
+@keyframes soft-word-in {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+    transform: translateY(2px);
+  }
+}
+
+/* --- Reveal / RevealGroup: structure assembles after the words (motion.ts REVEAL_*) ----------- */
+/* `@starting-style` (below) is the browser's own way to give an element a "from" state for its
+   first paint only — the entrance plays once, on mount, with no JS needed to toggle a class a
+   frame later (Reveal.tsx is deliberately hookless). */
+.reveal-item {
+  opacity: 1;
+  filter: none;
+  transform: none;
+  /* REVEAL_MS (550ms). */
+  transition: opacity 550ms ease, filter 550ms ease, transform 550ms ease;
+}
+@starting-style {
+  .reveal-item {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(10px);
+  }
+}
+
+/* --- ActionSheet: slides up over the shell (motion.ts SHEET_MS/SHEET_EASE) --------------------- */
+.action-sheet-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.action-sheet-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 10, 24, 0.45);
+}
+.action-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  max-height: calc(100dvh - var(--space-3) - env(safe-area-inset-top));
+  padding: 14px 22px calc(22px + env(safe-area-inset-bottom));
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  background: rgba(27, 20, 44, 0.9);
+  border-top: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--ink);
+  /* SHEET_MS (550ms) SHEET_EASE (cubic-bezier(.2,.8,.2,1)); the closed "from" state is
+     `@starting-style` below, the same mount-only technique `.reveal-item` uses, so ActionSheet.tsx
+     needs no extra render just to flip a class open a frame after mounting. */
+  transform: none;
+  transition: transform 550ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@starting-style {
+  .action-sheet {
+    transform: translateY(105%);
+  }
+}
+.action-sheet-grab {
+  align-self: center;
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  flex: none;
+}
+.action-sheet-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 400;
+}
+.action-sheet-sub {
+  margin: 2px 0 0;
+  font-size: var(--text-caption);
+  opacity: 0.78;
+}
+.action-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.action-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.action-sheet-actions .btn {
+  flex: 1 1 auto;
+}
+
+/* --- The blueprint's own button/pill/chip shapes, for the kit and the gallery ----------------- */
+.btn {
+  min-height: var(--target);
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-button);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.3s, color 0.3s, transform var(--press);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn.light {
+  background: var(--ink);
+  color: var(--ink-on-light);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.btn.dark {
+  background: rgba(21, 16, 31, 0.62);
+  border-color: transparent;
+}
+.btn.done {
+  background: var(--good);
+  border-color: var(--good);
+  color: var(--ink-on-tone);
+  font-weight: 600;
+}
+.btn.busy {
+  opacity: 0.75;
+}
+.btn.red {
+  background: var(--act);
+  border-color: var(--act);
+  color: var(--ink-on-tone);
+  font-weight: 700;
+  min-height: calc(var(--target) + 12px);
+  font-size: 18px;
+}
+.btn:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+
+/* --- Glass: the one shared translucent surface -------------------------------------------------- */
+.glass-surface {
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-highlight);
+}
+/* Named `glass-card`/`glass-row` rather than the blueprint's own bare `.card`/`.row` — `.row` is
+   already a different, existing layout utility elsewhere in this app (base.css), and giving the
+   kit's shapes their own names keeps this addition from silently changing what that class does
+   on every screen that already uses it. */
+.glass-card {
+  border-radius: var(--radius-tile);
+  padding: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.glass-row {
+  border-radius: 18px;
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- RangeBar: an in-range segment and a marker, amber or sage ---------------------------------- */
+.range-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+}
+.range-bar-segment {
+  position: absolute;
+  top: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(169, 211, 174, 0.75);
+}
+.range-bar-marker {
+  position: absolute;
+  top: -4px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 3px solid var(--watch);
+}
+.range-bar-marker.ok {
+  border-color: var(--good);
+}
+
+/* --- Flag: ok / attention / question, a solid pastel or an outline ------------------------------ */
+.flag-chip {
+  flex-shrink: 0;
+  min-width: 62px;
+  text-align: center;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-on-tone);
+  background: var(--good);
+}
+.flag-chip.attention {
+  background: var(--watch);
+}
+.flag-chip.question {
+  background: transparent;
+  color: var(--watch);
+  border: 1px solid var(--watch);
+}
+
+/* --- ConnectionRow: a person or a place, a line, a way in ---------------------------------------- */
+.connection-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 11px 14px;
+  border-radius: 18px;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.connection-row:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.connection-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.connection-row-name b {
+  font-size: 15px;
+  font-weight: 500;
+}
+.connection-row-name small {
+  font-size: 11.5px;
+  opacity: 0.74;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orb i,
+  .status-line,
+  .status-line.out {
+    animation: none !important;
+  }
+}
