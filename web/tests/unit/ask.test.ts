@@ -80,6 +80,39 @@ describe("ask", () => {
     expect(view.lines[0]).toEqual({ text: "Dr Tan talked about this on Monday 14 September.", source: "sourceVisits", clip });
   });
 
+  it("carries a clarifying question through, never together with lines (W2)", () => {
+    const view = answerView(
+      answer({
+        lines: [],
+        clarify: {
+          question: "Which test is this about?",
+          options: [
+            { label: "Your blood test of Saturday 12 September", value: "tok-1" },
+            { label: "Your hospital letter of Thursday 20 August", value: "tok-2" },
+          ],
+          allow_other: false,
+        },
+      }),
+    );
+    expect(view.clarify).not.toBeNull();
+    expect(view.clarify?.question).toBe("Which test is this about?");
+    expect(view.clarify?.options).toHaveLength(2);
+    expect(view.clarify?.options[0]?.value).toBe("tok-1");
+  });
+
+  it("is null when the answer carries no clarifying question — every ordinary answer, exactly as today", () => {
+    const view = answerView(answer());
+    expect(view.clarify).toBeNull();
+  });
+
+  it("a free-text clarify (a cost question) carries no options and allow_other", () => {
+    const view = answerView(
+      answer({ lines: [], clarify: { question: "What is this cost for?", options: [], allow_other: true } }),
+    );
+    expect(view.clarify?.options).toEqual([]);
+    expect(view.clarify?.allow_other).toBe(true);
+  });
+
   it("a line saying the visit's card waits for his yes is from his visits, and plays nothing", () => {
     const view = answerView(
       answer({

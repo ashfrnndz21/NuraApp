@@ -890,9 +890,12 @@ iframe.record {
 a.pill {
   text-decoration: none;
 }
-a.pill.plum {
-  color: var(--white);
-}
+/* `.pill.plum`'s own `background: var(--ink)` (the dusk system's light cream stop) and
+   `color: var(--ink-on-light)` already contrast correctly (#2b2140 on cream) — this used to
+   override an anchor's text to `--white`, which the dusk-glass retokening (2026-09-22 review)
+   made the SAME cream as the background, painting an anchor styled `.pill.plum` (the feed's
+   own "Watch the whole video…" link, Consents.tsx's "save-record") with invisible text. No
+   override needed: an anchor reads the same as a button here. */
 /* The staff page (E22-04): the caregiver density, a queue to work down. */
 .review .item-meta {
   font-size: var(--text-caption);

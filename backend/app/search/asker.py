@@ -109,7 +109,13 @@ class RuleBasedAsker:
         language: str | None = None,
         history: ConversationMemory | None = None,
     ) -> AsyncIterator[AskStep | AnswerDelta | Answer]:
-        del history  # unused: the rule-based answer never resolves a follow-up from it
+        # `history` is never used to resolve a follow-up's "that" (the rule-based answer never
+        # does that) — only its two clarify-specific signals (W2): whether the turn right
+        # before this one on the same thread was itself a clarifying question (never two in a
+        # row about the same thing), and a tap's own already-resolved referent, if this turn
+        # carries one.
+        skip_clarify = bool(history is not None and history.recent and history.recent[-1].was_clarify)
+        focus = None if history is None else history.resolved_focus
         async for event in recall_stream(
             session,
             context=context,
@@ -119,8 +125,12 @@ class RuleBasedAsker:
             store=store,
             registry=registry,
             language=language,
+            focus=focus,
+            skip_clarify=skip_clarify,
         ):
             if isinstance(event, Answer):
+                if event.clarify is not None:
+                    yield AnswerDelta(text=event.clarify.question, cites=())
                 for line in event.lines:
                     yield AnswerDelta(text=line.text, cites=line.cites)
             yield event

@@ -486,6 +486,7 @@ export interface Strings {
     play: string;
     watchAgain: string;
     watchWhole: string;
+    watchWholeShort: string;
     askOrSearch: string;
     filterLabel: string;
     filterRecords: string;

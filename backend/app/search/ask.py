@@ -43,6 +43,7 @@ from app.audit.access import (
 )
 from app.audit.models import Action
 from app.audit.trail import record
+from app.channels.about_him import Reader, reader_of
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.db import as_utc, utcnow
@@ -207,6 +208,39 @@ class AnswerLine:
 
 
 @dataclass(frozen=True, slots=True)
+class ClarifyOption:
+    """One choice on a clarifying question (W2, natural clarifying questions): `label` is
+    built by the backend alone, from confirmed record data through the same plain-words/
+    said-date helpers every answer line uses — never free text from an unconfirmed card,
+    never a string the model wrote. `value` is an opaque token a caller (the web screen)
+    carries back unread on the next turn; the backend alone resolves it, scoped to the same
+    conversation and the same key, single-use (`app.search.conversation.resolve_clarify_value`).
+    Never the row's own id, never anything that could be replayed on another profile or
+    conversation."""
+
+    label: str
+    value: str
+    cite: Cite | None = field(default=None, compare=False)
+    """What `value` resolves to (`app.search.conversation.resolve_clarify_value`) — kept on
+    the Python object alone, so it can be persisted alongside the label for the next turn to
+    resolve; never serialised to the wire (`ClarifyOptionOut` carries `label` and `value`
+    only)."""
+
+
+@dataclass(frozen=True, slots=True)
+class Clarify:
+    """One clarifying question instead of an answer (W2): the asker may ask this, never as a
+    stall, only when the question genuinely cannot be answered without a choice he must make.
+    `question` is one plain sentence in Nura's voice, streamed like any other sentence before
+    this turn's `Answer`. `options` is 2-4 choices built by the backend, or empty when the
+    reader is expected to type a free-text reply instead (`allow_other`)."""
+
+    question: str
+    options: tuple[ClarifyOption, ...] = ()
+    allow_other: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Proposal:
     """A next step the agent asker offered, never taken by itself (W2, `app.llm.ask_agent`'s
     `propose_action` tool): `kind` is one of the confirm flow's own action kinds, `label` the
@@ -233,6 +267,10 @@ class Answer:
     proposals: tuple[Proposal, ...] = ()
     """Zero or more next steps offered alongside the answer (W2) — never written, booked or
     sent by themselves; each still needs his own yes through the existing confirm flow."""
+    clarify: Clarify | None = None
+    """One clarifying question instead of an answer (W2) — never together with `lines`: when
+    this is set, `lines` is empty and the turn's whole content is the question. `None` on
+    every ordinary answer, exactly as today."""
 
     @property
     def answered(self) -> bool:
@@ -240,8 +278,15 @@ class Answer:
 
     @property
     def spoken(self) -> list[str]:
-        """The whole answer as it is read or heard, the boundary last."""
-        return [line.text for line in self.lines] + list(self.honest) + list(self.boundary)
+        """The whole answer as it is read or heard, the boundary last. A clarifying question
+        (never together with `lines`) is said the same way any lead line would be."""
+        clarify_line = [self.clarify.question] if self.clarify is not None else []
+        return (
+            clarify_line
+            + [line.text for line in self.lines]
+            + list(self.honest)
+            + list(self.boundary)
+        )
 
 
 STEP_KEYS = ("visits", "readings", "medicines", "records")
@@ -929,6 +974,128 @@ def _compose(
     return groups
 
 
+# --- natural clarifying questions (W2): the two commonest cases the rule-based asker settles
+# deterministically, never as a stall — only when 2+ real candidates exist. See the module
+# docstring; `app.llm.ask_agent` holds the agent asker's own model-proposed clarification.
+
+
+_COST_WORDS = frozenset(
+    {"cost", "costs", "price", "how much", "bayar", "harga", "kos", "费用", "多少钱", "价钱"}
+)
+_DATE_HINT = re.compile(
+    r"\b(january|february|march|april|may|june|july|august|september|october|november"
+    r"|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{4}|\d{1,2}/\d{1,2}"
+    r")\b",
+    re.IGNORECASE,
+)
+"""A rough sense that the question already names a date (rule 1b's "missing required
+parameter" is never true when he already gave one) — a month, a weekday, a year or a slashed
+date. Deliberately loose: a false positive here only means the clarifying question is skipped
+in favour of the ordinary answer, never the other way round."""
+
+MAX_CLARIFY_OPTIONS: Final = 4
+
+
+def _question_names_a_date(question: str) -> bool:
+    return bool(_DATE_HINT.search(question))
+
+
+def _mentions_cost(question: str) -> bool:
+    low = question.lower()
+    return any(word in low for word in _COST_WORDS)
+
+
+_COST_CONTENT_WORDS: Final = MEDICINE_WORDS | VISIT_WORDS | PAPER_WORDS | frozenset(
+    {
+        "test", "tests", "checkup", "check-up", "procedure", "surgery", "operation",
+        "hospital", "clinic", "ward", "bill", "stay", "scan", "x-ray", "klinik", "bil",
+        "医院", "诊所", "账单",
+        "ujian", "pembedahan", "prosedur", "pemeriksaan", "验血", "检查", "手术", "程序", "化验",
+    }
+)
+"""The closed word lists a cost question already names something by (review B5): a procedure,
+a medicine, a test, a visit or a paper word. A cost question naming any of these — "what did
+the stent procedure cost", "how much did my blood test cost last month" — already has
+something to try to answer from his own record; it is never an unconditional stall."""
+
+
+def _cost_question_names_nothing(question: str) -> bool:
+    return not any(word in question.lower() for word in _COST_CONTENT_WORDS)
+
+
+def _clarify_option_label(what: str, when: str, language: str, reader: Reader) -> str:
+    """A choice's own words, built here alone from confirmed data (`what`, `when` — both
+    already the backend's own plain-words/said-date output, never anything an extractor or a
+    model wrote) — never free text from an unconfirmed card. Caregiver voice: his own name in
+    place of "your" for anyone reading about him, the same distinction every other surface in
+    this app already makes."""
+    if language == "zh":
+        subject = "您的" if reader.his else f"{reader.name or '他'}的"
+        return f"{subject}{when}{what}"
+    if language == "ms":
+        who = "anda" if reader.his else (reader.name or "pesakit")
+        return f"{what} {who} pada {when}"
+    subject = "Your" if reader.his else f"{reader.name or 'the patient'}'s"
+    return f"{subject} {what} of {when}"
+
+
+def _clarify_for(
+    text: str,
+    corpus: _Corpus,
+    context: KeyContext,
+    language: str,
+    reader: Reader,
+) -> Clarify | None:
+    """The paper-kind case (W2, `app.llm.ask_agent`'s module docstring, fix 4): a question
+    naming a paper KIND with 2+ confirmed papers of that kind and no date asks which one,
+    options by said-date, newest first, capped at four. Never fires with fewer than two real
+    candidates — with exactly one, the ordinary answer already handles it. Each option's
+    `Cite` rides along on the Python object alone (`ClarifyOption.cite`) for the caller to
+    persist and later resolve; it never reaches the wire. The cost case is `_cost_clarify_for`
+    — never here, and never before the ordinary answer has already been tried (review B5)."""
+    by_kind: dict[str, list[Artifact]] = {}
+    for artifact_id, kind in corpus.paper_kinds.items():
+        artifact = corpus.papers.get(artifact_id)
+        if artifact is not None:
+            by_kind.setdefault(kind, []).append(artifact)
+    low = text.lower()
+    if _question_names_a_date(text):
+        return None
+    for kind, artifacts in by_kind.items():
+        if len(artifacts) < 2:
+            continue
+        word = words.paper_word(kind, language)
+        if word.lower() not in low:
+            continue
+        ordered = sorted(artifacts, key=lambda a: a.captured_at, reverse=True)
+        ordered = ordered[:MAX_CLARIFY_OPTIONS]
+        options = tuple(
+            ClarifyOption(
+                label=_clarify_option_label(
+                    word, _day(artifact.captured_at, context, language), language, reader
+                ),
+                value=uuid.uuid4().hex,
+                cite=Cite(kind="paper_artifact", id=artifact.id),
+            )
+            for artifact in ordered
+        )
+        question = words.clarify_line("which_paper", language, what=word)
+        return Clarify(question=question, options=options)
+    return None
+
+
+def _cost_clarify_for(text: str, language: str) -> Clarify | None:
+    """The cost case (review B5): fires only from the caller's own "nothing composed, nothing
+    waiting" branch — never before the ordinary answer has already been tried — and only when
+    the question names nothing at all it could already be about (`_cost_question_names_nothing`
+    — no medicine, test, visit or paper word): "what did the stent procedure cost" or "how much
+    did my blood test cost last month" already name something, so they are never a stall; only
+    a bare "how much will this cost" is."""
+    if _mentions_cost(text) and _cost_question_names_nothing(text):
+        return Clarify(question=words.clarify_line("cost_for_what", language), options=(), allow_other=True)
+    return None
+
+
 def _would_change_treatment(question: str, hits: Sequence[Candidate]) -> bool:
     low = question.lower()
     latin = set(_LATIN_WORD.findall(low))
@@ -979,6 +1146,8 @@ async def recall_stream(
     store: ObjectStore,
     registry: DrugRegistry | None = None,
     language: str | None = None,
+    focus: Cite | None = None,
+    skip_clarify: bool = False,
 ) -> AsyncIterator[AskStep | Answer]:
     """Answer a question from his own record, with citations, the boundary last — streamed: an
     `AskStep` the moment each part of the record is actually read (`_corpus_stream`), then the
@@ -995,7 +1164,14 @@ async def recall_stream(
     the question is about (`waiting_papers`, `_mentions_a_waiting_kind`): then one line says
     plainly that it is waiting, cited to the card alone. The question is kept as a MESSAGE
     artefact and the ask is written to the trail, naming it.
-    """
+
+    `focus` (W2): the referent a clarifying question's own option already resolved on a
+    previous turn (`app.search.conversation.resolve_clarify_value`) — when it names a
+    candidate this key's corpus actually holds, the retriever is bypassed and the answer is
+    composed about that one thing alone, never re-asked. `skip_clarify` (W2): true when the
+    turn right before this one was itself a clarifying question on the same thread — never two
+    clarifying questions in a row about the same thing; this turn answers with the
+    best-grounded reading instead (the caller says which reading was taken)."""
     async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):
         context.require(Scope.ASK)
         text = question.strip()
@@ -1012,7 +1188,26 @@ async def recall_stream(
         assert corpus is not None
         hits = retriever.retrieve(text, corpus.candidates)
         doctor = _doctor(corpus)
-        groups = _compose(hits, corpus, context, lang, registry)
+        clarify: Clarify | None = None
+        if focus is not None:
+            # A previous turn's clarifying question already resolved to one thing (W2): answer
+            # about that alone, the retriever bypassed entirely, never re-asked.
+            focus_hit = next(
+                (
+                    candidate
+                    for candidate in corpus.candidates
+                    if focus.kind == "paper_artifact"
+                    and candidate.kind == "paper"
+                    and candidate.ref == focus.id
+                ),
+                None,
+            )
+            if focus_hit is not None:
+                hits = [focus_hit]
+        elif not skip_clarify and not _would_change_treatment(text, hits):
+            reader = await reader_of(session, context, lang)
+            clarify = _clarify_for(text, corpus, context, lang, reader)
+        groups = [] if clarify is not None else _compose(hits, corpus, context, lang, registry)
         passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
         dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)
         said: list[AnswerLine] = []
@@ -1021,8 +1216,10 @@ async def recall_stream(
                 break
             said.extend(group)
         honest: list[str] = []
-        change_of_treatment = _would_change_treatment(text, hits)
-        if change_of_treatment:
+        change_of_treatment = clarify is None and _would_change_treatment(text, hits)
+        if clarify is not None:
+            pass
+        elif change_of_treatment:
             honest = words.reroute_lines(lang, doctor)
         elif not said:
             # The obvious case (W2, `app.llm.ask_agent`'s fix): nothing confirmed answers, but
@@ -1042,7 +1239,13 @@ async def recall_stream(
                 if words.verified(waiting_text, lang):
                     said.append(AnswerLine(waiting_text, (Cite("review_card", matched.card_id),)))
             if not said:
-                honest = words.honest_lines(lang, doctor)
+                # Review B5: the cost clarify is tried only now — the ordinary answer, and the
+                # waiting-paper match just above, have both already come back with nothing —
+                # and only when the question itself names nothing it could already be about.
+                if not skip_clarify:
+                    clarify = _cost_clarify_for(text, lang)
+                if clarify is None:
+                    honest = words.honest_lines(lang, doctor)
         await record(
             session,
             context=context,
@@ -1061,6 +1264,7 @@ async def recall_stream(
             boundary=boundary_lines(Surface.RECALL, lang, doctor=doctor),
             withheld=tuple(corpus.withheld),
             dropped=dropped,
+            clarify=clarify,
         )
 
 
@@ -1074,6 +1278,8 @@ async def recall(
     store: ObjectStore,
     registry: DrugRegistry | None = None,
     language: str | None = None,
+    focus: Cite | None = None,
+    skip_clarify: bool = False,
 ) -> Answer:
     """`recall_stream`, drained: the answer alone, for a caller that does not stream (the
     existing `POST /profiles/{id}/ask` route, unchanged)."""
@@ -1087,6 +1293,8 @@ async def recall(
         store=store,
         registry=registry,
         language=language,
+        focus=focus,
+        skip_clarify=skip_clarify,
     ):
         if isinstance(event, Answer):
             result = event
@@ -1103,6 +1311,8 @@ __all__ = [
     "AnswerLine",
     "AskStep",
     "Cite",
+    "Clarify",
+    "ClarifyOption",
     "ClipRef",
     "Mode",
     "NotAQuestion",

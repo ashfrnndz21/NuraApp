@@ -957,6 +957,8 @@ export const zh = {
     // @patient phrase
     watchWhole: "在{publisher}看完整的视频",
     // @patient phrase
+    watchWholeShort: "看完整的视频",
+    // @patient phrase
     askOrSearch: "提问或搜索",
     // @patient phrase
     filterLabel: "在哪里找",

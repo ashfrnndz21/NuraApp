@@ -572,8 +572,14 @@ test("offline: the pager opens on the kept first page, dated, with no spinner; p
 /** Nothing is ever drawn over a line. At the centre of every line of the card — scrolled to
  *  inside the card's own region when it is below the fold — the element the page hits is that
  *  line: never a button, the tab bar or another card. After the region is scrolled to its end
- *  the last boundary line is hit too. Every button is hit at its own centre, clear of the tab
- *  bar, and (patient density) at least 56 by 56. */
+ *  the last boundary line is hit too. Every button (and the clip card's own anchor styled as
+ *  one) is hit at its own centre, clear of the tab bar, and (patient density) at least 56 by
+ *  56 — the primary action never needs scrolling to reach: it is checked at `scrollTop = 0`,
+ *  never after `everyLineReadable` has already scrolled the body to find it (layout fix: the
+ *  clip's own "Watch the whole video…" used to sit inside the scrolling body, past the media
+ *  and the byline, and a short card could push it below the fold with nothing to say so). A
+ *  clip card's own media frame is checked too: a flat 16:9 (never the card's pill radius), a
+ *  radius no bigger than a chip's, and its byline fully readable without scrolling either. */
 async function everyLineReadable(card: Locator): Promise<string[]> {
   return card.evaluate(async (article) => {
     const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null))));
@@ -584,6 +590,47 @@ async function everyLineReadable(card: Locator): Promise<string[]> {
       const at = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
       return at !== null && (at === element || element.contains(at));
     };
+    const withinCard = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      const card = article.getBoundingClientRect();
+      return box.left >= card.left - 1 && box.right <= card.right + 1 && box.bottom <= card.bottom + 1;
+    };
+
+    // The primary action: the one thing that must need no scroll at all (layout fix — it used
+    // to sit inside the scrolling body, past the media and the byline, and a short card could
+    // push it below the fold with no visible way to know it was there). Checked first, at rest
+    // (scrollTop = 0), never after the loop below has already moved the scroll looking for
+    // something else. The clip's own byline is not held to the same "no scroll" bar — it is a
+    // line like any other, and the general loop below already scrolls to find every line and
+    // checks it is never covered once found, the same guarantee every other card's lines get.
+    body.scrollTop = 0;
+    await frame();
+    const controls = article.querySelector<HTMLElement>(".feed-controls")!;
+    const primary = controls.querySelector<HTMLElement>(":scope > .pill, :scope > a.pill");
+    if (primary) {
+      if (!hit(primary)) problems.push(`the primary action needs scrolling or is covered: ${primary.textContent}`);
+      if (!withinCard(primary)) problems.push(`the primary action is not fully inside the card: ${primary.textContent}`);
+      const actionRow = article.querySelector<HTMLElement>(".feed-actions");
+      if (actionRow && primary.getBoundingClientRect().bottom > actionRow.getBoundingClientRect().top + 1) {
+        problems.push("the primary action is not above the action row");
+      }
+    }
+    const byline = body.querySelector<HTMLElement>(".clip-byline");
+    if (byline) {
+      const box = byline.getBoundingClientRect();
+      const cardBox = article.getBoundingClientRect();
+      if (box.left < cardBox.left - 1 || box.right > cardBox.right + 1) problems.push(`the clip byline overflows the card sideways: ${byline.textContent}`);
+    }
+    const media = body.querySelector<HTMLElement>(".clip-media");
+    if (media) {
+      const box = media.getBoundingClientRect();
+      const ratio = box.width / box.height;
+      if (Math.abs(ratio - 16 / 9) / (16 / 9) > 0.02) problems.push(`the clip media is not 16:9 (${box.width}x${box.height})`);
+      const radius = parseFloat(getComputedStyle(media).borderRadius);
+      if (radius > 20) problems.push(`the clip media's radius is bigger than 20px (${radius}px)`);
+      if (!withinCard(media)) problems.push("the clip media is not fully inside the card");
+    }
+
     const lines = [...body.querySelectorAll<HTMLElement>("h2, p")];
     if (lines.length === 0) problems.push("no lines");
     body.scrollTop = 0;
@@ -602,7 +649,7 @@ async function everyLineReadable(card: Locator): Promise<string[]> {
     if (lastBoundary && !hit(lastBoundary)) problems.push(`the last boundary line is covered at the end: ${lastBoundary.textContent}`);
     if (!hit(lines.at(-1)!)) problems.push(`the last line is covered at the end: ${lines.at(-1)!.textContent}`);
     const bar = document.querySelector("nav.tabbar")!.getBoundingClientRect();
-    for (const button of article.querySelectorAll<HTMLElement>(".feed-controls button")) {
+    for (const button of article.querySelectorAll<HTMLElement>(".feed-controls button, .feed-controls a")) {
       const box = button.getBoundingClientRect();
       if (box.bottom > bar.top) problems.push(`under the tab bar: ${button.textContent}`);
       if (box.height < 56 || box.width < 56) problems.push(`smaller than 56: ${button.textContent}`);
@@ -619,13 +666,13 @@ for (const [label, viewport] of [
   test.describe(`nothing covers a line — ${label}`, () => {
     if (viewport) test.use({ viewport });
 
-    test(`a visit, a reorder and a learning card: every line readable, the boundary last and readable, the buttons clear of the tab bar (${label})`, async ({ page, request }) => {
+    test(`a visit, a reorder, a learning and a clip card: every line readable, the boundary last and readable, the buttons clear of the tab bar (${label})`, async ({ page, request }) => {
       const pa = await seedFeed(request);
       await seedVisit(request, pa.token, pa.profileId);
       await signInThroughTheApp(page, pa.phone, "Pa");
       await todayReady(page);
       await openPager(page);
-      for (const type of ["visit", "reorder", "learning"]) {
+      for (const type of ["visit", "reorder", "learning", "clip"]) {
         await pageUntil(page, type);
         const { index } = await onScreen(page);
         const card = page.locator(`article.feed-card[data-index="${index}"]`);
@@ -634,6 +681,7 @@ for (const [label, viewport] of [
           await expect(card.getByTestId("boundary").locator("p").last()).toHaveText("Ask your doctor.");
           if (viewport) await shotAs(page, "w2-feed-learning-card-small-phone-end");
         }
+        if (type === "clip" && viewport) await shotAs(page, "w2-feed-clip-card-small-phone");
       }
     });
   });
