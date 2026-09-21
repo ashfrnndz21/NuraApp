@@ -77,6 +77,60 @@ describe("SoftText", () => {
     const words = all(el, hasClass("soft-word-enter"));
     expect(words.map((w) => w.props.style)).toEqual([{ animationDelay: "0ms" }, { animationDelay: "36ms" }, { animationDelay: "72ms" }]);
   });
+
+  // #303 review, S6: `*...*` used to be matched per space-split word (`ACCENT_WORD_RE`), which
+  // missed a Chinese line (no spaces at all — the token never even starts with `*`) and a
+  // multi-word accent (neither half of "*Mei Ling.*" closes on its own) — both rendered their
+  // asterisks as literal text, and the `.sr-only` reading read them out too. `textUnits` parses
+  // the accent span across the whole line first, before splitting for display.
+  describe("*...* accent spans, parsed across the whole line (#303 review, S6)", () => {
+    it("en, a single-word accent: the one word italic, asterisks never shown, never read", () => {
+      const el = one(<SoftText text="Here is what I would *ask.*" testId="headline" />);
+      expect(text(all(el, hasClass("sr-only")))).toBe("Here is what I would ask.");
+      const accentWords = all(el, hasClass("accent"));
+      expect(accentWords.length).toBe(1);
+      expect(text(accentWords[0]!)).toBe("ask.");
+      for (const w of all(el, hasClass("soft-word"))) expect(text(w)).not.toContain("*");
+    });
+
+    it("en, a two-word accent: both words italic, still two separate stagger steps, asterisks never shown", () => {
+      const el = one(<SoftText text="Here is what I would ask about *Mei Ling.*" testId="headline" />);
+      expect(text(all(el, hasClass("sr-only")))).toBe("Here is what I would ask about Mei Ling.");
+      const accentWords = all(el, hasClass("accent"));
+      expect(accentWords.map((w) => text(w))).toEqual(["Mei", "Ling."]);
+      for (const w of all(el, hasClass("soft-word"))) expect(text(w)).not.toContain("*");
+    });
+
+    it("ms, a single-word accent: the same shape as en", () => {
+      const el = one(<SoftText text="Ini yang saya akan *tanya.*" testId="headline" />);
+      expect(text(all(el, hasClass("sr-only")))).toBe("Ini yang saya akan tanya.");
+      const accentWords = all(el, hasClass("accent"));
+      expect(accentWords.length).toBe(1);
+      expect(text(accentWords[0]!)).toBe("tanya.");
+    });
+
+    it("zh, no spaces at all: the accent span is still found and styled, never left as literal asterisks", () => {
+      const el = one(<SoftText text="这是我会*问*的。" testId="headline" />);
+      expect(text(all(el, hasClass("sr-only")))).toBe("这是我会问的。");
+      const accentWords = all(el, hasClass("accent"));
+      expect(accentWords.length).toBe(1);
+      expect(text(accentWords[0]!)).toBe("问");
+      // Every unit — the whole line, none of it space-delimited — carries the tight (no gap)
+      // class, never the Latin/Malay word-gap margin a real space would call for.
+      for (const w of all(el, hasClass("soft-word"))) expect(hasClass("soft-word-tight")(w)).toBe(true);
+      // More than one stagger step: the line is genuinely split per character/segment, not
+      // rendered as one single, unanimated block.
+      expect(all(el, hasClass("soft-word")).length).toBeGreaterThan(1);
+    });
+
+    it("a stray, unmatched asterisk is left as ordinary text — never an accent with nothing to close it", () => {
+      const el = one(<SoftText text="3 * 4 = 12" testId="headline" />);
+      expect(text(all(el, hasClass("sr-only")))).toBe("3 * 4 = 12");
+      expect(all(el, hasClass("accent")).length).toBe(0);
+      const words = all(el, hasClass("soft-word")).map((w) => text(w));
+      expect(words).toContain("*");
+    });
+  });
 });
 
 describe("Reveal / RevealGroup", () => {

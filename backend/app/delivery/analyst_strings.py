@@ -426,20 +426,32 @@ ASK_THE_DOCTOR_WHY: Mapping[str, str] = {
 # --- the paper-scoped insight (checkpoint 3, "What it means for you") -----------------------
 # One paper, just confirmed, beside his medicines and his next visit. Every line below is
 # checked the same way the weekly report's own lines are (`app.reasoning.analyst.pipeline.
-# finalize`): plain words, the conclusion-or-advice blocklist, a cite or it is not shown.
+# finalize`): plain words, the conclusion-or-advice blocklist, a cite or it is not shown. The
+# card's own questions (`PAPER_SINGLE_VALUE_*`, `PAPER_AGGREGATE_VALUE`, `PAPER_MEDICINE_
+# QUESTION`, `PAPER_RETEST_QUESTION`) are first person — his own words to bring to the visit
+# (docs/design/experience-blueprint.html scene `insight`'s own card) — so, unlike every other
+# line in this file, their self-voiced form never says "you"/"your" and cannot be caught by
+# `app.channels.about_him`'s generic swap, which only looks for that (`TO_HIM`). Their own
+# `*_THEIRS` twin is chosen explicitly, by `app.reasoning.analyst.paper` itself, from the
+# `Reader` the route already resolved — never left to the generic pass to find on its own
+# (see `paper.py`'s own `_render` for the choice). Each is one whole sentence, one question,
+# never a statement beside its question: kept onto the visit's own card, `app.reasoning.
+# visits.questions.patient_card` verifies every line again on the way out, in its own default
+# `line` profile (one idea, at most fifteen words) — a two-sentence line would pass here and
+# then be refused there, so these are written to hold to `line` from the start.
 
-# @patient
+# @patient headline
 PAPER_HEADLINE: Mapping[str, str] = {
-    "en": "Here is what is worth asking about this paper.",
-    "ms": "Ini yang patut ditanya tentang surat ini.",
-    "zh": "这是关于这份文件，值得问的事。",
+    "en": "Here is what I would *ask.*",
+    "ms": "Ini yang saya akan *tanya.*",
+    "zh": "这是我会*问*的。",
 }
 
-# @patient
+# @patient headline
 PAPER_HEADLINE_THEIRS: Mapping[str, str] = {
-    "en": "Here is what is worth asking about {patient}'s paper.",
-    "ms": "Ini yang patut ditanya tentang surat {patient}.",
-    "zh": "这是关于{patient}的文件，值得问的事。",
+    "en": "Here is what I would ask about {patient}'s *paper.*",
+    "ms": "Ini yang saya akan tanya tentang surat *{patient}.*",
+    "zh": "这是关于{patient}的文件，我会*问*的。",
 }
 
 # @patient
@@ -457,18 +469,108 @@ PAPER_NOTHING_LINE_THEIRS: Mapping[str, str] = {
 }
 
 # @patient
-PAPER_VALUE_LINE: Mapping[str, str] = {
-    "en": "{name} on this paper is outside the range printed on it.",
-    "ms": "{name} dalam surat ini berada di luar julat yang tertulis padanya.",
-    "zh": "这份文件上的{name}超出了文件上印的范围。",
+PAPER_SINGLE_VALUE_ABOVE: Mapping[str, str] = {
+    "en": "Why is my {label} above the range on this paper?",
+    "ms": "Kenapa {label} saya melebihi julat pada surat ini?",
+    "zh": "为什么我的{label}超出了这份文件上的范围？",
 }
 
 # @patient
-PAPER_VALUE_LINE_THEIRS: Mapping[str, str] = {
-    "en": "{name} on {patient}'s paper is outside the range printed on it.",
-    "ms": "{name} dalam surat {patient} berada di luar julat yang tertulis padanya.",
-    "zh": "{patient}这份文件上的{name}超出了文件上印的范围。",
+PAPER_SINGLE_VALUE_ABOVE_THEIRS: Mapping[str, str] = {
+    "en": "Why is {patient}'s {label} above the range on this paper?",
+    "ms": "Kenapa {label} {patient} melebihi julat pada surat ini?",
+    "zh": "为什么{patient}的{label}超出了这份文件上的范围？",
 }
+
+# @patient
+PAPER_SINGLE_VALUE_BELOW: Mapping[str, str] = {
+    "en": "Why is my {label} below the range on this paper?",
+    "ms": "Kenapa {label} saya di bawah julat pada surat ini?",
+    "zh": "为什么我的{label}在这份文件的范围之下？",
+}
+
+# @patient
+PAPER_SINGLE_VALUE_BELOW_THEIRS: Mapping[str, str] = {
+    "en": "Why is {patient}'s {label} below the range on this paper?",
+    "ms": "Kenapa {label} {patient} di bawah julat pada surat ini?",
+    "zh": "为什么{patient}的{label}在这份文件的范围之下？",
+}
+
+# @patient
+PAPER_AGGREGATE_VALUE: Mapping[str, str] = {
+    "en": "Why are {n} of my numbers outside the range on this paper?",
+    "ms": "Kenapa {n} nombor saya berada di luar julat pada surat ini?",
+    "zh": "为什么我这份文件上有{n}个数字超出了范围？",
+}
+
+# @patient
+PAPER_AGGREGATE_VALUE_THEIRS: Mapping[str, str] = {
+    "en": "Why are {n} of {patient}'s numbers outside the range on this paper?",
+    "ms": "Kenapa {n} nombor {patient} berada di luar julat pada surat ini?",
+    "zh": "为什么{patient}这份文件上有{n}个数字超出了范围？",
+}
+
+# No medicine-linked question this release (#303 review, B2): `ANALYTE_DRUG_CLASS_HINTS`
+# (`app.reasoning.analyst.paper`, removed) fired for a value's own band without regard to
+# which way the medicine actually pushes it, and its analyte-to-drug-class mapping was never
+# pharmacist-reviewed. `PAPER_MEDICINE_QUESTION`/`_THEIRS`/`PAPER_MEDICINE_WHY` are deleted,
+# not left dormant — they return only once a pharmacist-reviewed mapping exists.
+
+# @patient
+PAPER_RETEST_QUESTION: Mapping[str, str] = {
+    "en": "Does this test need to be repeated, and when?",
+    "ms": "Perlukah ujian ini dibuat semula, dan bila?",
+    "zh": "这项检查需要再做一次吗，什么时候做？",
+}
+"""No `_THEIRS` twin: the line names only the test, never a person, so it reads the same in
+either voice — `app.reasoning.analyst.paper` uses this one value for both."""
+
+# @patient phrase
+ANALYTE_PLAIN_LABEL: Mapping[str, Mapping[tuple[str, str], str]] = {
+    "en": {
+        ("lipid_panel", "total_cholesterol"): "the total cholesterol",
+        ("lipid_panel", "hdl"): "the good cholesterol",
+        ("lipid_panel", "ldl"): "the bad cholesterol",
+        ("lipid_panel", "triglycerides"): "the blood fats",
+        ("blood_sugar", "glucose"): "the sugar number",
+        ("kidney_panel", "potassium"): "your body salt",
+        ("blood_test", "hba1c"): "your sugar test",
+        ("blood_test", "tsh"): "your thyroid test",
+    },
+    "ms": {
+        ("lipid_panel", "total_cholesterol"): "jumlah kolesterol",
+        ("lipid_panel", "hdl"): "kolesterol baik",
+        ("lipid_panel", "ldl"): "kolesterol jahat",
+        ("lipid_panel", "triglycerides"): "lemak dalam darah",
+        ("blood_sugar", "glucose"): "nombor gula",
+        ("kidney_panel", "potassium"): "garam badan anda",
+        ("blood_test", "hba1c"): "ujian gula anda",
+        ("blood_test", "tsh"): "ujian tiroid anda",
+    },
+    "zh": {
+        ("lipid_panel", "total_cholesterol"): "总胆固醇",
+        ("lipid_panel", "hdl"): "好的胆固醇",
+        ("lipid_panel", "ldl"): "坏的胆固醇",
+        ("lipid_panel", "triglycerides"): "血里的油脂",
+        ("blood_sugar", "glucose"): "血糖数字",
+        ("kidney_panel", "potassium"): "身体的盐",
+        ("blood_test", "hba1c"): "您的血糖检查",
+        ("blood_test", "tsh"): "您的甲状腺检查",
+    },
+}
+"""The same plain word the report table itself already shows for this line (`web/src/strings/
+*.ts`'s own `onboarding.fields` catalogue: "The bad cholesterol", "Your body salt") — carried
+here byte for byte, determiner and all, rather than a hand-bared duplicate that could drift
+from it. `app.reasoning.analyst.paper._bare_word` strips that determiner back off before this
+module's own callers say "my {label}" or "{patient}'s {label}" around it, so the same entry
+serves both voices without ever doubling into "my the bad cholesterol". (`kidney_panel.
+potassium`'s own zh catalogue entry, "您身体的盐", does not carry its "您" as a clean prefix
+`_bare_word` can strip — this table's own zh entry for it is the bare "身体的盐" instead, the
+same word without the part that would not come off cleanly.) Only the small set of analytes
+`app.reasoning.analyst.paper.ANALYTE_DRUG_CLASS_HINTS` ever asks a single-value question
+about; a code with no entry here falls back to the paper's own printed label (`ReviewField.
+label_on_paper`), and with neither, the question about that one value is left out rather than
+naming a raw code."""
 
 # @patient
 PAPER_VALUE_WHY: Mapping[str, str] = {
@@ -485,69 +587,44 @@ PAPER_VALUE_WHY_THEIRS: Mapping[str, str] = {
 }
 
 # @patient
-PAPER_REPEAT_LINE: Mapping[str, str] = {
-    "en": "This paper has a number outside its own printed range.",
-    "ms": "Surat ini mempunyai nombor di luar julat yang tertulis padanya.",
-    "zh": "这份文件上有一个数字超出了它自己印的范围。",
-}
-
-# @patient
-PAPER_REPEAT_LINE_THEIRS: Mapping[str, str] = {
-    "en": "{patient}'s paper has a number outside its own printed range.",
-    "ms": "Surat {patient} mempunyai nombor di luar julat yang tertulis padanya.",
-    "zh": "{patient}的这份文件上有一个数字超出了它自己印的范围。",
-}
-
-# @patient
 PAPER_REPEAT_WHY: Mapping[str, str] = {
     "en": "This is only what this one paper shows, once.",
     "ms": "Ini hanya apa yang ditunjukkan oleh surat ini, sekali sahaja.",
     "zh": "这只是这一份文件一次的结果。",
 }
 
-# @patient
-PAPER_REPEAT_WHY_THEIRS: Mapping[str, str] = {
-    "en": "This is only what {patient}'s one paper shows, once.",
-    "ms": "Ini hanya apa yang ditunjukkan oleh surat {patient}, sekali sahaja.",
-    "zh": "这只是{patient}这一份文件一次的结果。",
-}
-
 # @patient phrase
 LOOKED_AT_LABEL: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "this paper",
-        "medicines": "{count} of your medicines",
         "visit": "your next visit",
     },
     "ms": {
         "paper": "surat ini",
-        "medicines": "{count} daripada ubat anda",
         "visit": "lawatan anda seterusnya",
     },
     "zh": {
         "paper": "这份文件",
-        "medicines": "您的{count}种药",
         "visit": "您的下一次门诊",
     },
 }
 """What `looked_at` names on the paper-scoped insight (checkpoint 3): the plain label for
-each real read that actually happened, never a fixed list (`app.reasoning.analyst.paper`)."""
+each real read that actually happened, never a fixed list (`app.reasoning.analyst.paper`).
+No `"medicines"` entry this release (#303 review, B2): medicines are not read for this card
+at all while it offers no medicine-linked question."""
 
 # @patient phrase
 LOOKED_AT_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "this paper",
-        "medicines": "{count} of {patient}'s medicines",
         "visit": "{patient}'s next visit",
     },
     "ms": {
         "paper": "surat ini",
-        "medicines": "{count} daripada ubat {patient}",
         "visit": "lawatan {patient} seterusnya",
     },
     "zh": {
         "paper": "这份文件",
-        "medicines": "{patient}的{count}种药",
         "visit": "{patient}的下一次门诊",
     },
 }
@@ -556,43 +633,38 @@ LOOKED_AT_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
 PAPER_STEP_LABEL: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "Looking at this paper.",
-        "medicines": "Looking at your medicines.",
         "history": "Looking at what this paper's numbers were before.",
         "visit": "Looking at your next visit.",
     },
     "ms": {
         "paper": "Melihat surat ini.",
-        "medicines": "Melihat ubat anda.",
         "history": "Melihat apa nombor dalam surat ini sebelum ini.",
         "visit": "Melihat lawatan anda seterusnya.",
     },
     "zh": {
         "paper": "正在查看这份文件。",
-        "medicines": "查看您的药物。",
         "history": "查看这份文件上的数字以前是怎样的。",
         "visit": "查看您的下一次门诊。",
     },
 }
 """One label per `app.reasoning.analyst.paper.PaperStepKey`, said the moment that real read
-finishes — the same "real work already happened" discipline `STEP_LABEL` above holds to."""
+finishes — the same "real work already happened" discipline `STEP_LABEL` above holds to. No
+`"medicines"` entry this release, for the same reason `LOOKED_AT_LABEL` has none."""
 
 # @patient
 PAPER_STEP_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "Looking at this paper.",
-        "medicines": "Looking at {patient}'s medicines.",
         "history": "Looking at what this paper's numbers were before.",
         "visit": "Looking at {patient}'s next visit.",
     },
     "ms": {
         "paper": "Melihat surat ini.",
-        "medicines": "Melihat ubat {patient}.",
         "history": "Melihat apa nombor dalam surat ini sebelum ini.",
         "visit": "Melihat lawatan {patient} seterusnya.",
     },
     "zh": {
         "paper": "正在查看这份文件。",
-        "medicines": "查看{patient}的药物。",
         "history": "查看这份文件上的数字以前是怎样的。",
         "visit": "查看{patient}的下一次门诊。",
     },
@@ -628,6 +700,7 @@ def fill(line: str, **slots: object) -> str:
 
 
 __all__ = [
+    "ANALYTE_PLAIN_LABEL",
     "ASK_THE_DOCTOR_LINE",
     "ASK_THE_DOCTOR_LINE_THEIRS",
     "ASK_THE_DOCTOR_WHY",
@@ -647,18 +720,20 @@ __all__ = [
     "LANGUAGES",
     "LOOKED_AT_LABEL",
     "LOOKED_AT_LABEL_THEIRS",
+    "PAPER_AGGREGATE_VALUE",
+    "PAPER_AGGREGATE_VALUE_THEIRS",
     "PAPER_HEADLINE",
     "PAPER_HEADLINE_THEIRS",
     "PAPER_NOTHING_LINE",
     "PAPER_NOTHING_LINE_THEIRS",
-    "PAPER_REPEAT_LINE",
-    "PAPER_REPEAT_LINE_THEIRS",
     "PAPER_REPEAT_WHY",
-    "PAPER_REPEAT_WHY_THEIRS",
+    "PAPER_RETEST_QUESTION",
+    "PAPER_SINGLE_VALUE_ABOVE",
+    "PAPER_SINGLE_VALUE_ABOVE_THEIRS",
+    "PAPER_SINGLE_VALUE_BELOW",
+    "PAPER_SINGLE_VALUE_BELOW_THEIRS",
     "PAPER_STEP_LABEL",
     "PAPER_STEP_LABEL_THEIRS",
-    "PAPER_VALUE_LINE",
-    "PAPER_VALUE_LINE_THEIRS",
     "PAPER_VALUE_WHY",
     "PAPER_VALUE_WHY_THEIRS",
     "SCREENING_LINE",

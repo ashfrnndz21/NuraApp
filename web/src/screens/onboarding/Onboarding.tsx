@@ -9,6 +9,7 @@ import { InviteStep } from "./Invite";
 import { PlanStep } from "./Plan";
 import { QuestionsStep } from "./Questions";
 import { ReadBackStep } from "./ReadBack";
+import { InsightStep } from "./Insight";
 import { BatchStep, RecordsStep, ReviewStep } from "./Records";
 
 /** Onboarding (TASKS.md Session 12, on the web per ADR 0001): about you, the word cloud, the
@@ -31,6 +32,8 @@ export function OnboardingScreen(): JSX.Element {
       return <RecordsStep />;
     case "review":
       return <ReviewStep key={current.card.card_id} card={current.card} />;
+    case "insight":
+      return <InsightStep key={current.card.card_id} card={current.card} />;
     case "questions":
       return <QuestionsStep />;
     case "plan":

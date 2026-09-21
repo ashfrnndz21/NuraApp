@@ -164,6 +164,66 @@ async def test_a_blocked_medicine_choice_is_never_printed_and_files_a_doctor_que
     assert memos[0].kind is MemoKind.ASK
 
 
+async def test_a_clean_text_with_a_blocked_why_plain_is_never_printed_and_files_a_doctor_question(
+    sg: AsyncSession,
+) -> None:
+    """#303 review, B1a — the independent safety reviewer's own proof: `finalize` used to
+    check only `candidate.text`; a model choice with a clean `text` and a `why_plain` naming
+    a dose change ("Ask the doctor to double the dose today.") was printed as-is. `why_plain`
+    now runs through the exact same gate `text` does — plain words and the conclusion-or-
+    advice blocklist — and either failing either refuses the whole candidate, the same as a
+    blocked `text` always has: rerouted as a real, filed question for the doctor for a
+    medicine or supplement kind, its words — text OR why — never printed."""
+    rule_report, owner = await _duplicate_report(sg)
+    section = _section(rule_report, "medicines_and_supplements")
+    assert section is not None
+    duplicate = next(i for i in section.insights if i.kind is InsightKind.MEDICINE)
+
+    clean_text = "2 of your medicines are written down under the same kind."
+    blocked_why = "Ask the doctor to double the dose today."
+    client = FakeClient(
+        [
+            FakeMessage(
+                content=[
+                    _text_block(
+                        {
+                            "insights": [
+                                {
+                                    "insight_id": duplicate.insight_id,
+                                    "text": clean_text,
+                                    "why_plain": blocked_why,
+                                }
+                            ]
+                        }
+                    )
+                ]
+            )
+        ]
+    )
+    analyst = ClaudeAnalyst(client=client, registry=REGISTRY)
+    report: Report | None = None
+    async for event in analyst.report_stream(sg, context=owner, language="en"):
+        if isinstance(event, Report):
+            report = event
+    assert report is not None
+
+    # Never printed anywhere in the report, whatever section it landed in — neither the
+    # clean text (it never stood alone: the whole candidate was refused) nor the why.
+    for section in report.sections:
+        for insight in section.insights:
+            assert insight.text != clean_text
+            assert blocked_why not in insight.why_plain
+            assert "double the dose" not in insight.why_plain.lower()
+
+    # A real question was filed for the doctor — the reroute, never a silent drop, never the
+    # clean text shown with the dangerous why quietly missing.
+    memos = await audited_read(
+        sg, Memo, owner, Scope.VISITS, where=(Memo.source == MemoSource.ANALYST,)
+    )
+    assert len(memos) == 1
+    assert memos[0].kind is MemoKind.ASK
+
+
 async def test_a_safe_rephrase_is_kept_as_the_models_own_words(sg: AsyncSession) -> None:
     rule_report, owner = await _duplicate_report(sg)
     section = _section(rule_report, "medicines_and_supplements")

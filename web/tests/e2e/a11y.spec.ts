@@ -19,6 +19,7 @@ import {
   seedOwner,
   seedVisit,
   signInThroughTheApp,
+  throughInsight,
   underTheTabBar,
   coveredByTheTabBar,
   pastWelcome,
@@ -209,6 +210,9 @@ for (const [look, banner] of [
     await expect(page.getByTestId("review-card")).toBeVisible();
     await audit(page, where("a review card"));
     await page.getByTestId("looks-right").click();
+    await expect(page.getByTestId("insight-headline")).toBeVisible();
+    await audit(page, where("what it means for you"));
+    await page.getByTestId("insight-leave").click();
     await expect(page.getByTestId("paper-checked")).toBeVisible();
     await page.getByTestId("batch-done").click();
     await page.getByTestId("all-done").click();

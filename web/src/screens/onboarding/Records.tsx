@@ -143,6 +143,26 @@ export function BatchStep(): JSX.Element {
   );
 }
 
+/** What "Looks right" used to do at once, now deferred behind the insight screen's own way on
+ *  (checkpoint 3, package 7, `Stage`'s `"insight"`): the sitting takes the paper in (its
+ *  read-back reads the card's facts back to him) or, from the Ready screen, closes the gap the
+ *  fact fills — then the step he was on before the paper (`returnTo`). Run once, from the
+ *  insight step's own "Next" — never from `ReviewStep` itself any more, and never twice for the
+ *  same paper. */
+export async function continueAfterPaper(card: ReviewCardOut): Promise<void> {
+  const { bearer, profileId } = who();
+  if (returnTo.value === "records" || returnTo.value === "batch") {
+    await nura.attachPaper(bearer, profileId, card.card_id);
+    await refreshBiography();
+  } else {
+    // From the Ready screen the sitting is closed: the gap closes as the fact arrives.
+    await refreshPlan();
+  }
+  if (returnTo.value === "batch") batch.checked(card.card_id);
+  lastPaper.value = card.card_id;
+  to({ name: returnTo.value });
+}
+
 /** The capture review card (E02-07): each line of the paper as it was read, how sure Nura
  *  is in words (solid underline, or dotted and "Please check this one."), a box to correct
  *  it, "Leave this one out", and one "Looks right" that mints the yes for exactly these
@@ -166,6 +186,11 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
   const [edits, setEdits] = useState<Record<string, FieldEdit>>(() => startingEdits(card));
   const [waiting, setWaiting] = useState<string[]>([]);
   const [confirmed, setConfirmed] = useState(false);
+  // The freshly confirmed card (checkpoint 3): `confirmReviewCard` hands back the same card
+  // with every correction already merged into its fields — the insight screen right after
+  // reads its "what stands out" straight off this, never off the stale, pre-confirm `card`
+  // prop above, which still holds whatever Nura first read before he corrected a line.
+  const [confirmedCard, setConfirmedCard] = useState<ReviewCardOut | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const [fixHint, setFixHint] = useState(false);
@@ -218,26 +243,22 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
     setError(null);
     try {
       const { bearer, profileId } = who();
+      let fresh = confirmedCard;
       if (!confirmed) {
         const yes = await nura.mintReviewYes(bearer, profileId, card.card_id, decisions);
-        await nura.confirmReviewCard(bearer, profileId, card.card_id, decisions, yes.confirmation_id);
+        const { card: recorded } = await nura.confirmReviewCard(bearer, profileId, card.card_id, decisions, yes.confirmation_id);
+        fresh = recorded;
+        setConfirmedCard(recorded);
         setConfirmed(true);
       }
+      // "Looks right" is confirmed: what it means for him comes next (checkpoint 3, package 7),
+      // before the sitting takes the paper in or the Ready screen's gap closes — both deferred
+      // to `continueAfterPaper`, run once the insight screen's own way on is tapped, never here.
       if (onDone) {
-        onDone(card);
+        onDone(fresh ?? card);
         return;
       }
-      if (returnTo.value === "records" || returnTo.value === "batch") {
-        // The sitting takes the paper in; its read-back will read the card's facts back to him.
-        await nura.attachPaper(bearer, profileId, card.card_id);
-        await refreshBiography();
-      } else {
-        // From the Ready screen the sitting is closed: the gap closes as the fact arrives.
-        await refreshPlan();
-      }
-      if (returnTo.value === "batch") batch.checked(card.card_id);
-      lastPaper.value = card.card_id;
-      to({ name: returnTo.value });
+      to({ name: "insight", card: fresh ?? card });
     } catch (failure) {
       setError(failure);
       throw failure;
