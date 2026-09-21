@@ -28,6 +28,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import Sequence
+from dataclasses import replace as dataclass_replace
 from typing import Any
 
 from fastapi import APIRouter, Query, Request, status
@@ -86,6 +87,7 @@ from app.search.conversation import (
     current_conversation,
     memory_for,
     record_turn,
+    resolve_clarify_value,
     start_new_conversation,
     turn_view,
     turns_of,
@@ -419,6 +421,18 @@ async def _stream_turn(
     history = await memory_for(
         session, context=context, store=outside.object_store, conversation=conversation
     )
+    if body.value:
+        # A tap on a clarifying question's own chip (W2): resolved FIRST, scoped to this same
+        # conversation and this same key — before the asker ever runs — so the answer is
+        # about the chosen thing from the very first round. A stale or foreign token (a
+        # different conversation, a different profile entirely) simply resolves to nothing;
+        # the turn then proceeds as an ordinary question, never an error the reader sees.
+        resolved = await resolve_clarify_value(
+            session, context=context, store=outside.object_store, conversation=conversation, value=body.value
+        )
+        if resolved is not None:
+            cite, label = resolved
+            history = dataclass_replace(history, resolved_focus=cite, resolved_focus_label=label)
     steps_so_far: list[NarratedStep] = []
     reached_out = False
     narration_tasks: list[asyncio.Task[None]] = []

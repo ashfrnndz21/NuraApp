@@ -134,10 +134,14 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
   // Leaving Ask: a clip stops and its recording is let go.
   useEffect(() => () => voice.forget(), []);
 
-  const send = async () => {
+  // A tap on a clarifying question's own chip (W2): the chip's label becomes his own words for
+  // this turn — the same bubble a typed question would draw — with the chip's opaque `value`
+  // riding along unread, for the backend alone to resolve. `overrideText`/`chipValue` are
+  // unset for an ordinary send from the composer.
+  const send = async (overrideText?: string, chipValue?: string) => {
     const bearer = token.value;
     const papers = profile.value;
-    const text = question.trim();
+    const text = (overrideText ?? question).trim();
     if (!bearer || !papers || busy || !text) return;
     // W2: the turn about to be replaced on screen (if any) becomes the thread's own history —
     // never dropped just because a new question was asked. Only `records` turns join the
@@ -145,7 +149,11 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
     if (where === "records" && sentQuestion && answer) {
       const seen = answerView(answer);
       const lookedAtParts = (answer.looked_at && answer.looked_at.length > 0 ? answer.looked_at.map((each) => each.label) : steps.map((step) => step.name)).join(", ");
-      setPastTurns((was) => [...was, { question: sentQuestion, lines: seen.lines.map((line) => ({ text: line.text, clip: line.clip })), honest: seen.honest, lookedAtParts, steps }]);
+      // A clarifying question (W2), once it becomes an earlier turn, shows as Nura's own reply
+      // — the question she asked — never blank; its chips are never carried forward (history
+      // shows only the question and his own next turn, never a stale set of choices).
+      const lines = seen.clarify ? [{ text: seen.clarify.question, clip: null }] : seen.lines.map((line) => ({ text: line.text, clip: line.clip }));
+      setPastTurns((was) => [...was, { question: sentQuestion, lines, honest: seen.honest, lookedAtParts, steps }]);
     }
     setBusy(true);
     setError(null);
@@ -177,8 +185,8 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
         const onSentence = (sentenceText: string, cites: AnswerLineOut["cites"]) => setSentences((was) => appendSentence(was, sentenceText, cites));
         const onStepLabel = (key: string, label: string) => setSteps((was) => was.map((step) => (step.key === key ? { ...step, label } : step)));
         const heard = conversationId
-          ? await nura.turnStream(bearer, papers.profile_id, conversationId, text, mode, language.value, onStep, onSentence, onStepLabel)
-          : await nura.askStream(bearer, papers.profile_id, text, mode, language.value, onStep, onSentence, onStepLabel);
+          ? await nura.turnStream(bearer, papers.profile_id, conversationId, text, mode, language.value, onStep, onSentence, onStepLabel, chipValue)
+          : await nura.askStream(bearer, papers.profile_id, text, mode, language.value, onStep, onSentence, onStepLabel, chipValue);
         // A red flag heard in the question went the red-flag path on the backend first: what to
         // do now, the backend's card, exactly as after a red word tapped on Today.
         if (heard.red_flag?.red_flag) {
@@ -263,7 +271,10 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
   // The answer, sentence by sentence: the finished answer's own lines (with a clip, when one
   // is there) once they arrive — otherwise the sentences streamed so far, text only. Never
   // both (`shownSentences`), so nothing is ever shown twice once the final `answer` lands.
-  const finalLines = view ? view.lines.map((line) => ({ text: line.text, clip: line.clip })) : null;
+  // A clarifying question (W2) draws exactly like any other answer line — its sentence streams
+  // in the same way, word by word — never together with `view.lines` (the backend never sends
+  // both): the clarify question stands alone as this turn's whole content.
+  const finalLines = view ? (view.clarify ? [{ text: view.clarify.question, clip: null }] : view.lines.map((line) => ({ text: line.text, clip: line.clip }))) : null;
   const streamedAsLines = sentences.map((sentence) => ({ text: sentence.text, clip: null as ClipOut | null }));
   const displayedLines = shownSentences(streamedAsLines, finalLines);
   // "Looked at": the backend's own structured `looked_at` once the answer has landed (P1);
@@ -466,6 +477,30 @@ export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut
                             <HearClip name={`ask-clip:${at}`} clip={line.clip} line={line.text} label={fill(s.visit.hearClip, { doctor: line.clip.doctor })} onError={setError} />
                           )}
                         </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* A clarifying question's own choices (W2): real buttons, never a numbered
+                     menu in the sentence itself. Tapping one sends it as his own turn at once
+                     — the chip's label becomes his bubble, the chips gone the instant he does
+                     (the whole block only ever draws from THIS live turn's own `view`, which a
+                     new `send()` always replaces first). Typing in the composer instead works
+                     just as well, and dismisses the chips the same way. Never shown for a past
+                     turn (`pastTurns` never carries a `clarify`), never reappearing once acted
+                     on, never auto-sent on focus or hover. */}
+                  {!busy && view?.clarify && view.clarify.options.length > 0 && (
+                    <div class="choices two ask-clarify-chips" role="group" aria-label={view.clarify.question} data-testid="ask-clarify-options">
+                      {view.clarify.options.map((option, at) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          class="glass-chip chip-button"
+                          aria-label={option.label}
+                          onClick={() => void send(option.label, option.value)}
+                          data-testid={`ask-clarify-option-${at}`}
+                        >
+                          {option.label}
+                        </button>
                       ))}
                     </div>
                   )}

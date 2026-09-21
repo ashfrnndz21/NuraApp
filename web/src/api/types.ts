@@ -254,6 +254,24 @@ export interface LookedAtOut {
   label: string;
 }
 
+/** One choice on a clarifying question (W2): `label` is built by the backend alone, from
+ *  confirmed record data — never free text from an unconfirmed card, never a string the model
+ *  wrote. `value` is opaque: carried back unread on the next turn's `value`, riding along with
+ *  the chip's own label as the words he "typed". */
+export interface ClarifyOptionOut {
+  label: string;
+  value: string;
+}
+
+/** A clarifying question instead of an answer (W2) — never together with `lines`: one plain
+ *  sentence, streamed like any other (`answer_sentence`), and 2-4 choices, or none at all when
+ *  a free-text reply is expected (`allow_other`). */
+export interface ClarifyOut {
+  question: string;
+  options: ClarifyOptionOut[];
+  allow_other: boolean;
+}
+
 export interface AnswerOut {
   /** The question as it was kept; null when a red word in it took the red-flag path instead. */
   question_artifact_id: string | null;
@@ -283,6 +301,9 @@ export interface AnswerOut {
    *  tapped on the feeling cloud would (the moment written, the flag raised, the family told).
    *  Null when the question carries none. */
   red_flag?: FeelingOut | null;
+  /** One clarifying question instead of an answer (W2) — never together with `lines`. Null on
+   *  every ordinary answer, exactly as today. */
+  clarify?: ClarifyOut | null;
 }
 
 /** One turn on a conversation thread (W2), read back from `GET

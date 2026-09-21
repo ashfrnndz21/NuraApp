@@ -131,9 +131,12 @@ from app.search.ask import (
     AnswerLine,
     AskStep,
     Cite,
+    Clarify,
+    ClarifyOption,
     Mode,
     NotAQuestion,
     Proposal,
+    _clarify_option_label,
     _facts_under,
     _is_reading,
     _keep_question,
@@ -337,6 +340,36 @@ ANSWER_SCHEMA: Final[dict[str, Any]] = {
             "description": "Handing anything beyond the record to his doctor. Never shown as "
             "written; the app says this itself.",
         },
+        "clarify": {
+            "type": ["object", "null"],
+            "description": "Propose ONE clarifying question instead of answering — only when "
+            "the question genuinely cannot be answered without a choice he must make (an "
+            "ambiguous referent with 2+ real candidates in what you read this ask, a missing "
+            "required detail, a pronoun with no antecedent). Leave 'lines' empty when you "
+            "propose this. Never propose this twice in a row about the same thing, and never "
+            "for a red-flag/emergency message.",
+            "additionalProperties": False,
+            "required": ["referent_class", "candidate_ids", "question"],
+            "properties": {
+                "referent_class": {
+                    "type": "string",
+                    "description": "What kind of choice this is, e.g. 'which_test', "
+                    "'which_medicine', 'which_visit', 'which_paper', 'missing_parameter'.",
+                },
+                "candidate_ids": {
+                    "type": "array",
+                    "description": "2 to 4 of the tools' own short ids, the real candidates — "
+                    "empty when the question is missing a detail no tool result can list "
+                    "(a free-text reply is expected instead).",
+                    "items": {"type": "string"},
+                },
+                "question": {
+                    "type": "string",
+                    "description": "One short, warm, natural sentence — never 'Please "
+                    "specify', never a numbered menu, never two questions.",
+                },
+            },
+        },
     },
 }
 
@@ -350,6 +383,11 @@ class _ToolLine:
     token: str
     text: str
     cite: Cite
+    label: str | None = None
+    """A clarifying question's own option label for this line, built here alone from
+    confirmed data (W2) — never the model's words. `None` for a kind that never stands as a
+    clarify candidate (a web result, a proposal, an insurance line): a clarify proposal naming
+    one of those ids is dropped, the same as any other bad proposal."""
 
 
 _TOKEN_PREFIXES: Final[dict[str, str]] = {
@@ -416,12 +454,20 @@ Never applied to the line's own genuine leading token, which `_register` adds af
 
 
 def _register(
-    lines: list[_ToolLine], counter: _TokenCounter, kind: str, id_: uuid.UUID, text: str
+    lines: list[_ToolLine],
+    counter: _TokenCounter,
+    kind: str,
+    id_: uuid.UUID,
+    text: str,
+    *,
+    label: str | None = None,
 ) -> str:
     token = counter.next(kind)
     clean = _CONTROL_CHARS.sub(" ", text).strip()
     clean = _FORGED_ID.sub(lambda match: match.group()[:-1], clean)
-    lines.append(_ToolLine(token=token, text=f"{token}: {clean}", cite=Cite(kind=kind, id=id_)))
+    lines.append(
+        _ToolLine(token=token, text=f"{token}: {clean}", cite=Cite(kind=kind, id=id_), label=label)
+    )
     return token
 
 
@@ -450,6 +496,7 @@ async def _read_medicines(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     found = await audited_read(
         session,
@@ -470,8 +517,26 @@ async def _read_medicines(
             "medication_line",
             line.id,
             f"{name}, {who}, started {started_on.isoformat()} ({elapsed})",
+            label=_medicine_clarify_label(name, reader, language),
         )
     return lines, len(found)
+
+
+def _medicine_clarify_label(name: str, reader: Reader, language: str) -> str:
+    """A medicine's own clarify-option label (W2): its plain name alone, in caregiver voice —
+    it never carries a date the way a test or a paper does."""
+    if language == "zh":
+        return f"{'您的' if reader.his else (reader.name or '他') + '的'}{name}"
+    if language == "ms":
+        return f"{name} {'anda' if reader.his else (reader.name or 'pesakit')}"
+    return f"{'Your' if reader.his else (reader.name or 'the patient') + chr(39) + 's'} {name}"
+
+
+def _dated_clarify_label(what: str, on: date, language: str, reader: Reader) -> str:
+    """A test/paper/visit's own clarify-option label (W2): its plain word, and the said-date
+    of it, in caregiver voice — the same shape `app.search.ask._clarify_option_label` builds
+    for the rule-based asker, so a chip reads the same whichever asker offered it."""
+    return _clarify_option_label(what, say_date(on, language), language, reader)
 
 
 async def _read_readings(
@@ -480,6 +545,7 @@ async def _read_readings(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
     lines: list[_ToolLine] = []
@@ -489,9 +555,18 @@ async def _read_readings(
         if _is_reading(fact):
             value = fact.value
             text = f"blood pressure {value['systolic']}/{value['diastolic']} on {on.isoformat()} ({elapsed})"
+            what = "blood pressure"
         else:
             text = f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})"
-        _register(lines, counter, "fact", fact.id, text)
+            what = str(fact.subject).replace("_", " ")
+        _register(
+            lines,
+            counter,
+            "fact",
+            fact.id,
+            text,
+            label=_dated_clarify_label(what, on, language, reader),
+        )
     return lines, len(facts)
 
 
@@ -501,6 +576,7 @@ async def _read_visits(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    reader: Reader,
 ) -> tuple[list[_ToolLine], int, list[Appointment], dict[uuid.UUID, Provider]]:
     providers = {p.id: p for p in await audited_read(session, Provider, context, Scope.VISITS)}
     visits = await audited_read(session, Appointment, context, Scope.VISITS)
@@ -511,7 +587,14 @@ async def _read_visits(
         when = day_of(visit.scheduled_at, context.region)
         elapsed = _elapsed(context, language, when, elapsed_seen)
         text = f"with {who} on {when.isoformat()} ({elapsed}), status {visit.status.value}"
-        _register(lines, counter, "appointment", visit.id, text)
+        _register(
+            lines,
+            counter,
+            "appointment",
+            visit.id,
+            text,
+            label=_dated_clarify_label(f"visit with {who}", when, language, reader),
+        )
     return lines, len(visits), list(visits), providers
 
 
@@ -521,6 +604,7 @@ async def _read_records(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
     lines: list[_ToolLine] = []
@@ -533,8 +617,21 @@ async def _read_records(
             "fact",
             fact.id,
             f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})",
+            label=_dated_clarify_label(str(fact.subject).replace("_", " "), on, language, reader),
         )
     return lines, len(facts)
+
+
+def _waiting_clarify_label(kind: str, said: str | None, language: str) -> str:
+    """The one shape a waiting paper's clarify-option label may ever take (W2, review defect
+    #1's own rule carried into clarifying questions): the closed-catalogue kind word, the
+    backend's own said-date, and "not yet checked" — never anything an extractor read off the
+    page, never a number beyond the date itself."""
+    if language == "zh":
+        return f"{said}的{kind}，还没检查" if said else f"{kind}，还没检查"
+    if language == "ms":
+        return f"{kind} bertarikh {said}, belum disemak" if said else f"{kind}, belum disemak"
+    return f"{kind} of {said}, not yet checked" if said else f"{kind}, not yet checked"
 
 
 async def _read_waiting_papers(
@@ -561,6 +658,7 @@ async def _read_waiting_papers(
     lines: list[_ToolLine] = []
     for paper in found:
         safe: set[str] = set()
+        said: str | None = None
         if paper.document_date is not None:
             said = say_date(paper.document_date, language)
             doc_elapsed = _elapsed(context, language, paper.document_date, elapsed_seen)
@@ -574,7 +672,14 @@ async def _read_waiting_papers(
         safe.add(added)
         card_safe_text[paper.card_id] = safe
         text = f"{paper.kind}{dated}, added {added}, not yet checked"
-        _register(lines, counter, "review_card", paper.card_id, text)
+        _register(
+            lines,
+            counter,
+            "review_card",
+            paper.card_id,
+            text,
+            label=_waiting_clarify_label(paper.kind, said, language),
+        )
     return lines, len(found)
 
 
@@ -722,18 +827,38 @@ def _history_block(history: ConversationMemory | None) -> str:
     the smallest change this file takes to let a follow-up resolve "that" or "it" against
     what was just asked and found. `None`, or a thread with nothing on it yet, adds nothing.
     Never the whole record — only what was already said in this thread."""
-    if history is None or (not history.recent and not history.summary):
+    if history is None or (not history.recent and not history.summary and history.resolved_focus is None):
         return ""
     parts = ["\n\nThis is a continuing conversation. Earlier in it:"]
     if history.summary:
         parts.append(f"Summary of earlier turns: {history.summary}")
     for turn in history.recent[-HISTORY_TURNS:]:
-        said = "; ".join(turn.answer_lines) or "; ".join(turn.honest) or "nothing was found"
+        if turn.was_clarify:
+            said = "Nura asked a clarifying question instead of answering"
+        else:
+            said = "; ".join(turn.answer_lines) or "; ".join(turn.honest) or "nothing was found"
         parts.append(f'He asked: "{turn.question}" — Nura said: {said}')
     parts.append(
         'If this question refers back to something above (e.g. "that", "it", "the same '
         'thing"), resolve it using the above before deciding which tools to call.'
     )
+    if history.resolved_focus_label:
+        # W2: he tapped a clarifying question's own option (or typed a free-text reply the
+        # backend already resolved) — the answer is about exactly this, never asked again.
+        parts.append(
+            f"He just chose: {history.resolved_focus_label}. Answer directly about that; do "
+            "not propose a clarifying question about it again."
+        )
+    if history.recent and history.recent[-1].was_clarify:
+        # Fix 1 (module docstring): never two clarifying questions in a row about the same
+        # thing. This turn must answer with the best-grounded reading — and say, in the
+        # answer's own first line, which reading was taken.
+        parts.append(
+            "You already asked a clarifying question last turn and were not given a specific "
+            "choice back. Do NOT propose another clarifying question now, on any subject — "
+            "answer with your single best-grounded reading of this question, and say plainly, "
+            "in your first line, which reading you took."
+        )
     return "\n".join(parts)
 
 
@@ -814,6 +939,10 @@ class ClaudeAsker:
         history: ConversationMemory | None = None,
     ) -> AsyncIterator[AskStep | AnswerDelta | Answer]:
         async def fallback() -> Answer:
+            # W2: the fallback holds the same "never twice in a row" and "already resolved"
+            # signals the model's own attempt did — a bad or missing proposal from the model
+            # never gives the rule-based safety net a second free clarifying question either.
+            focus = None if history is None else history.resolved_focus
             return await recall(
                 session,
                 context=context,
@@ -823,6 +952,8 @@ class ClaudeAsker:
                 store=store,
                 registry=registry,
                 language=language,
+                focus=focus,
+                skip_clarify=already_clarified,
             )
 
         async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):
@@ -876,6 +1007,13 @@ class ClaudeAsker:
             )
             messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
 
+            already_clarified = bool(history is not None and history.recent and history.recent[-1].was_clarify)
+            """Fix 1 (module docstring): the turn right before this one on the same thread was
+            itself a clarifying question — never two in a row about the same thing. Enforced
+            here, server-side, never trusted to the prompt alone (`_history_block`'s own
+            instruction is a hint, not the guarantee): any clarify the model proposes this
+            round is simply never looked at."""
+
             answer: Answer | None = None
             line_repaired = False
             whole_repaired = False
@@ -900,6 +1038,28 @@ class ClaudeAsker:
                         break
                     if stop_reason != "tool_use":
                         payload = _structured_json(response)
+                        if payload is not None and not already_clarified:
+                            clarify = _parse_clarify(
+                                payload,
+                                known,
+                                lang,
+                                reader,
+                                frozenset(elapsed_seen),
+                                {card: frozenset(safe) for card, safe in card_safe_text.items()},
+                            )
+                            if clarify is not None:
+                                answer = Answer(
+                                    question_artifact_id=uuid.uuid4(),
+                                    mode=mode,
+                                    language=lang,
+                                    lines=(),
+                                    honest=(),
+                                    boundary=(),
+                                    withheld=(),
+                                    dropped=0,
+                                    clarify=clarify,
+                                )
+                                break
                         failed_findings: dict[int, Finding] = {}
                         parsed = (
                             None
@@ -1046,6 +1206,7 @@ class ClaudeAsker:
                             proposals=proposals,
                             elapsed_seen=elapsed_seen,
                             card_safe_text=card_safe_text,
+                            reader=reader,
                         )
                         for line in step_lines:
                             known[line.token] = line
@@ -1071,7 +1232,7 @@ class ClaudeAsker:
                 log.exception("claude asker: the call failed; the rule-based answer said it")
                 answer = None
 
-            if answer is None or not answer.lines:
+            if answer is None or (not answer.lines and answer.clarify is None):
                 try:
                     answer = await fallback()
                 except Exception:
@@ -1084,7 +1245,9 @@ class ClaudeAsker:
                         "catalogue's honest line"
                     )
                     answer = None
-                if answer is None or (not answer.lines and not answer.honest):
+                if answer is None or (
+                    not answer.lines and not answer.honest and answer.clarify is None
+                ):
                     # Belt and braces: even the rule-based answer, which is supposed to
                     # always say something, came back with nothing to say (or failed
                     # outright, above). Never let only the boundary reach him — say the
@@ -1109,6 +1272,8 @@ class ClaudeAsker:
                         withheld=withheld,
                         dropped=0,
                     )
+                if answer.clarify is not None:
+                    yield AnswerDelta(text=answer.clarify.question, cites=())
                 yield answer
                 return
 
@@ -1132,7 +1297,7 @@ class ClaudeAsker:
                 any(cite.kind == "medication_line" for cite in line.cites)
                 for line in answer.lines
             )
-            if _would_change_treatment(text, about_medicine):
+            if answer.clarify is None and _would_change_treatment(text, about_medicine):
                 # The same reroute `recall_stream` gives: a question that would change
                 # treatment is answered with a question for his doctor, never a model's own
                 # lines about it — whatever it composed is not shown.
@@ -1149,6 +1314,8 @@ class ClaudeAsker:
                 yield answer
                 return
 
+            if answer.clarify is not None:
+                yield AnswerDelta(text=answer.clarify.question, cites=())
             for answer_line in answer.lines:
                 yield AnswerDelta(text=answer_line.text, cites=answer_line.cites)
             answer = Answer(
@@ -1161,6 +1328,7 @@ class ClaudeAsker:
                 withheld=withheld,
                 dropped=answer.dropped,
                 proposals=tuple(proposals),
+                clarify=answer.clarify,
             )
             await record_audit(
                 session,
@@ -1188,20 +1356,23 @@ class ClaudeAsker:
         proposals: list[Proposal],
         elapsed_seen: set[str],
         card_safe_text: dict[uuid.UUID, set[str]],
+        reader: Reader,
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
-            return await _read_medicines(session, context, registry, language, counter, elapsed_seen)
+            return await _read_medicines(
+                session, context, registry, language, counter, elapsed_seen, reader
+            )
         if name == "read_readings":
-            return await _read_readings(session, context, language, counter, elapsed_seen)
+            return await _read_readings(session, context, language, counter, elapsed_seen, reader)
         if name == "read_visits":
             lines, count, visits, providers = await _read_visits(
-                session, context, language, counter, elapsed_seen
+                session, context, language, counter, elapsed_seen, reader
             )
             visits_seen.extend(visits)
             providers_seen.update(providers)
             return lines, count
         if name == "read_records":
-            return await _read_records(session, context, language, counter, elapsed_seen)
+            return await _read_records(session, context, language, counter, elapsed_seen, reader)
         if name == "read_feelings":
             return await _read_feelings(session, context, counter)
         if name == "search_online":
@@ -1649,6 +1820,98 @@ def _parse_answer(
         dropped=len(raw_lines) - len(kept_lines),
     )
     return _Parsed(answer, lead_dropped=lead_dropped, dangling=dangling)
+
+
+MIN_CLARIFY_CANDIDATES: Final = 2
+MAX_CLARIFY_CANDIDATES: Final = 4
+
+
+def _parse_clarify(
+    payload: Mapping[str, Any],
+    known: Mapping[str, _ToolLine],
+    language: str,
+    reader: Reader,
+    elapsed_given: frozenset[str],
+    card_safe_text: Mapping[uuid.UUID, frozenset[str]],
+) -> Clarify | None:
+    """The model's own proposed clarifying question (W2), validated before a single word of it
+    ever reaches the wire — a bad proposal is dropped entirely, never repaired, never shown:
+    the caller falls back to an ordinary answer (or the rule-based one) exactly as it would for
+    no proposal at all. Every option's label is built here alone, from confirmed data the
+    model already read (`_ToolLine.label`) — never the model's own words for it."""
+    raw = payload.get("clarify")
+    if not isinstance(raw, Mapping):
+        return None
+    raw_question = raw.get("question")
+    if not isinstance(raw_question, str) or not raw_question.strip():
+        _drop("clarify_no_question")
+        return None
+    question = raw_question.strip()
+    raw_ids = raw.get("candidate_ids")
+    ids = [str(each).strip() for each in raw_ids] if isinstance(raw_ids, list) else []
+    known_ci = {token.strip().lower(): line for token, line in known.items()}
+    if ids:
+        if not (MIN_CLARIFY_CANDIDATES <= len(ids) <= MAX_CLARIFY_CANDIDATES):
+            _drop("clarify_bad_candidate_count")
+            return None
+        resolved: list[_ToolLine] = []
+        seen_cites: set[tuple[str, uuid.UUID]] = set()
+        for raw_id in ids:
+            line = known_ci.get(raw_id.lower())
+            if line is None:
+                _drop("clarify_candidate_not_in_tool_results")
+                return None
+            if line.label is None:
+                # This kind never stands as a clarify candidate (a web result, a proposal, an
+                # insurance line): the model named one anyway — the whole proposal is dropped,
+                # never partially shown (module docstring: "a bad proposal never reaches the
+                # wire").
+                _drop("clarify_candidate_has_no_backend_label")
+                return None
+            key = (line.cite.kind, line.cite.id)
+            if key in seen_cites:
+                continue
+            seen_cites.add(key)
+            resolved.append(line)
+        if not (MIN_CLARIFY_CANDIDATES <= len(resolved) <= MAX_CLARIFY_CANDIDATES):
+            _drop("clarify_bad_candidate_count")
+            return None
+        options = tuple(
+            ClarifyOption(label=line.label, value=uuid.uuid4().hex, cite=line.cite)
+            for line in resolved
+            if line.label is not None
+        )
+        allow_other = False
+    else:
+        # No candidates: a missing required detail (a procedure, a date range) — a free-text
+        # reply is expected instead. Never an ordinary answer's list of options either way.
+        options = ()
+        allow_other = True
+    if not verified(question, language, "ask"):
+        _drop("clarify_question_plain_words_failed")
+        return None
+    if _has_conclusion_language(question, language):
+        _drop("clarify_question_conclusion_language")
+        return None
+    if _elapsed_claim(question, language, elapsed_given) is not None:
+        _drop("clarify_question_invented_elapsed_phrase")
+        return None
+    heard = reader.says(question)
+    if not reader.his and reader.speaks_to_him(heard):
+        _drop("clarify_question_caregiver_voice")
+        return None
+    option_cites = tuple(o.cite for o in options if o.cite is not None)
+    safe_for_card: set[str] = set()
+    for cite in option_cites:
+        if cite.kind == "review_card":
+            safe_for_card |= card_safe_text.get(cite.id, frozenset())
+    if _claims_a_value_from_an_unconfirmed_card(heard, option_cites, frozenset(safe_for_card)):
+        _drop("clarify_question_value_from_unconfirmed_card")
+        return None
+    if detect(heard) is not None:
+        _drop("clarify_question_red_word")
+        return None
+    return Clarify(question=heard, options=options, allow_other=allow_other)
 
 
 def _answer_from_payload(
