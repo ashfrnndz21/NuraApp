@@ -14,7 +14,7 @@ export interface RangeBarProps {
   testId?: string;
 }
 
-/** A reading against its normal range (docs/design/experience-blueprint.html `.bar`): the
+/** A reading against the range printed on its paper (docs/design/experience-blueprint.html `.bar`): the
  *  in-range segment as a sage band, the reading itself as a marker — amber-ringed when it falls
  *  outside the band, sage-ringed when it is inside. */
 export function RangeBar({ bandStart, bandWidth, markerAt, tone, label, testId }: RangeBarProps): JSX.Element {

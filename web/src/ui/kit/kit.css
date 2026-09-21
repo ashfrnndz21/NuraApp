@@ -159,7 +159,10 @@
   width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  max-height: calc(100dvh - var(--space-3) - env(safe-area-inset-top));
+  /* Not `100dvh` — see design.css's `.sheet-panel` for why: `.action-sheet-layer` is
+     `position:fixed;inset:0` inside `.phone-frame` (base.css's `transform`), so its own height
+     already tracks the frame; a percentage here follows that, a viewport unit would not. */
+  max-height: calc(100% - var(--space-3) - env(safe-area-inset-top));
   padding: 14px 22px calc(22px + env(safe-area-inset-bottom));
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   background: rgba(27, 20, 44, 0.9);
@@ -379,7 +382,9 @@
   font-weight: 500;
 }
 .connection-row-name small {
-  font-size: 11.5px;
+  /* A caption, not a flag chip: the blueprint's 11.5px is the flag's own one exception, never a
+     line of real content like a person's role. */
+  font-size: 12.5px;
   opacity: 0.74;
 }
 

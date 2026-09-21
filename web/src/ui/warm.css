@@ -899,7 +899,10 @@ img.avatar {
 
 /* --- Welcome, as the board draws it ------------------------------------------------------------ */
 .screen.welcome {
-  min-height: 100dvh;
+  /* Not a viewport unit: `#app` (base.css) already fills `.phone-frame` exactly, on both sides
+     of the 600px breakpoint, so `100%` here means the frame's real height, not the browser
+     window's — the same reasoning as the sheet panels' `max-height` (design.css, kit.css). */
+  min-height: 100%;
   gap: 16px;
   padding-top: calc(22px + env(safe-area-inset-top));
   background: linear-gradient(180deg, var(--peach) 0%, var(--ground-warm) 55%, var(--ground) 100%);

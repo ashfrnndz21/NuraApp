@@ -38,9 +38,11 @@ describe("StatusLine", () => {
 });
 
 describe("SoftText", () => {
-  it("puts the full text in one aria-label, every word aria-hidden, *word* as the italic accent", () => {
+  it("puts the full text in one visually-hidden reading, every word aria-hidden, *word* as the italic accent", () => {
     const el = one(<SoftText text="Your health, in *plain* words." testId="headline" />);
-    expect(el.props["aria-label"]).toBe("Your health, in plain words.");
+    // A real sr-only text node, not `aria-label` (axe's aria-prohibited-attr refuses that on a
+    // plain paragraph/heading role).
+    expect(text(all(el, hasClass("sr-only")))).toBe("Your health, in plain words.");
     const words = all(el, hasClass("soft-word"));
     expect(words.length).toBe(5);
     for (const w of words) expect(w.props["aria-hidden"]).toBe("true");

@@ -23,9 +23,11 @@
 /* --- The shell: header, the scrolling page, the tab bar under it ---------------------------
    The page scrolls inside its own region and the tab bar is the next thing in the flow, so it
    reserves its own space: nothing ever scrolls beneath it, and it never covers a line. */
+/* `#app` already fills its frame exactly (base.css) on both sides of the 600px phone-frame
+   breakpoint, so the shelled app only needs `height: 100%` here now, not a viewport unit of its
+   own — the frame is what is actually sized to the viewport (or to 390x844-ish on a wide one). */
 #app:has(> .shell) {
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -732,7 +734,12 @@
   position: relative;
   width: 100%;
   max-width: 480px;
-  max-height: calc(100dvh - var(--space-3) - env(safe-area-inset-top));
+  /* Not `100dvh`: `.sheet-layer` above is `position:fixed;inset:0`, whose containing block is
+     `.phone-frame` (base.css's `transform`), so its OWN rendered height is already the frame's
+     — a percentage here follows the frame; a viewport unit would not (a viewport unit is always
+     the real browser window, whatever establishes the containing block), letting a tall sheet's
+     panel reach past the frame's bottom edge on a wide screen. */
+  max-height: calc(100% - var(--space-3) - env(safe-area-inset-top));
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -768,6 +775,11 @@
 }
 
 /* --- For the review screenshots only: the whole page, the tab bar at its end ---------------- */
+html.shot-full .phone-frame,
+html.shot-full .page-ground {
+  height: auto !important;
+  overflow: visible !important;
+}
 html.shot-full #app {
   height: auto !important;
   overflow: visible !important;

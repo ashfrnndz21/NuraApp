@@ -23,14 +23,21 @@ interface ThreeStateButtonProps {
  *  action it names has actually reached. */
 export function ThreeStateButton({ label, busyLabel, doneLabel, onAct, variant = "light", testId }: ThreeStateButtonProps): JSX.Element {
   const [state, setState] = useState<ThreeState>("idle");
+  // A ref, not the state above, guards against a real double-tap: Preact's state update from the
+  // first click is not yet committed when a second click fires in the same tick (both would
+  // otherwise still read "idle" and both call `onAct`). `acting` is read and set synchronously,
+  // the same guard the blueprint's own `openSheet()` uses (`b.dataset.s`).
+  const acting = useRef(false);
 
   async function handleClick(): Promise<void> {
-    if (state !== "idle") return;
+    if (acting.current) return;
+    acting.current = true;
     setState("busy");
     try {
       await onAct();
       setState("done");
     } catch {
+      acting.current = false;
       setState("idle");
     }
   }

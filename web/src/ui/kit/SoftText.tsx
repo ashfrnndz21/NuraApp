@@ -29,9 +29,11 @@ interface SoftTextProps {
  *  untouched (same key, same computed style), so the browser never restarts its animation.
  *
  *  `*word*` marks the one italic serif accent a line may carry (blueprint `.ser`); stripped of
- *  its `*`s wherever the word is drawn. The full text is always in the DOM: the container carries
- *  `aria-label` (the plain reading, accents unmarked), and every word span is `aria-hidden`, so a
- *  screen reader hears the line once, at once, never word by word.
+ *  its `*`s wherever the word is drawn. The full text is always in the DOM: a visually-hidden
+ *  (`.sr-only`, base.css) span carries the plain reading as real text content — not `aria-label`,
+ *  which axe's `aria-prohibited-attr` rightly refuses on a plain paragraph/heading role — and
+ *  every word span is `aria-hidden`, so a screen reader hears the line once, at once, never word
+ *  by word.
  *
  *  Under `prefers-reduced-motion: reduce` this reads as plain text: the same global rule that
  *  turns off every animation in the app (`web/src/ui/base.css`) removes `.soft-word-enter`'s
@@ -42,7 +44,8 @@ export function SoftText({ text, previousText = "", pace = "headline", as = "p",
   const already = previousText === text ? words.length : splitWords(previousText).length;
   const gap = pace === "body" ? WORD_GAP_BODY_MS : WORD_GAP_HEADLINE_MS;
   return (
-    <Tag class={className} aria-label={plainWords(text)} data-testid={testId}>
+    <Tag class={className} data-testid={testId}>
+      <span class="sr-only">{plainWords(text)}</span>
       {words.map((word, at) => {
         const m = word.match(ACCENT_WORD_RE);
         const shown = m ? `${m[1]}${m[2]}` : word;

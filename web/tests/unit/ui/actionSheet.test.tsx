@@ -13,9 +13,11 @@ import { ActionSheet, ThreeStateButton } from "../../../src/ui/kit";
  *  Preact's own `render`. */
 
 function flush(): Promise<void> {
-  // Preact schedules `useEffect` callbacks as a microtask after commit; a resolved promise tick
-  // is enough to let them run before the next assertion.
-  return new Promise((resolve) => setTimeout(resolve, 0));
+  // Preact schedules `useEffect` callbacks asynchronously after commit. A 0ms timeout is not
+  // reliably late enough in happy-dom (observed flaky: the assertion below sometimes runs before
+  // the effect that moves focus into the sheet), so this waits a short, deliberately generous
+  // beat instead.
+  return new Promise((resolve) => setTimeout(resolve, 20));
 }
 
 let root: HTMLDivElement;
@@ -31,20 +33,23 @@ afterEach(() => {
     preactRender(null, root);
     root.remove();
   }
+  // A stray `opener` button a test made for itself, or anything else left over: a clean
+  // `document.body` per test, so one test's focus never leaks into the next.
+  document.body.innerHTML = "";
 });
 
 describe("ActionSheet", () => {
   it("opens over the shell, with a title, a sub-line and a body slot", async () => {
     mount(
       <ActionSheet open title="Tell me in your own words" sub="Nura listens, then shows you what it wrote down" notNowLabel="Not now" onClose={() => {}} testId="sheet">
-        <p>I have high blood pressure.</p>
+        <p>I take three tablets every morning.</p>
       </ActionSheet>,
     );
     await flush();
     expect(root.querySelector('[data-testid="sheet"]')).toBeTruthy();
     expect(root.querySelector(".action-sheet-title")?.textContent).toBe("Tell me in your own words");
     expect(root.querySelector(".action-sheet-sub")?.textContent).toBe("Nura listens, then shows you what it wrote down");
-    expect(root.querySelector(".action-sheet-body")?.textContent).toBe("I have high blood pressure.");
+    expect(root.querySelector(".action-sheet-body")?.textContent).toBe("I take three tablets every morning.");
     expect(root.querySelector(".action-sheet-grab")).toBeTruthy();
     expect(root.querySelector('[data-testid="action-sheet-not-now"]')?.textContent).toBe("Not now");
   });
@@ -104,8 +109,9 @@ describe("ActionSheet", () => {
     document.dispatchEvent(event);
     expect(onClose).toHaveBeenCalledOnce();
 
-    // The caller reacts to onClose by setting open=false; simulate that and confirm focus returns.
-    mount(<ActionSheet open={false} title="x" notNowLabel="Not now" onClose={onClose} testId="sheet" />);
+    // The caller reacts to onClose by setting open=false — a real re-render of the SAME root, not
+    // a fresh mount, so the same component instance's effect cleanup actually runs.
+    preactRender(<ActionSheet open={false} title="x" notNowLabel="Not now" onClose={onClose} testId="sheet" />, root);
     await flush();
     expect(document.activeElement).toBe(opener);
     opener.remove();

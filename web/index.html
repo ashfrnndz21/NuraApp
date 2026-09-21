@@ -15,14 +15,23 @@
     <link rel="preload" href="fonts/figtree-latin.woff2" as="font" type="font/woff2" crossorigin />
   </head>
   <body>
-    <!-- The atmosphere (docs/design/experience-blueprint.html `.atmos`): the dusk ground and its
-         three blurred blobs, fixed and behind everything, a sibling of #app rather than a child
-         of it so it is never clipped by any of the app's own overflow rules and always fills the
-         viewport, including around a centred phone-width #app on a wide screen (base.css). Static
-         markup, not a component: it only ever reads CSS custom properties already on <html>
-         (tokens.css `--wash-*`), so it needs no script of its own. -->
-    <div class="atmosphere" aria-hidden="true"><i></i><i></i><i></i></div>
-    <div id="app"></div>
+    <!-- The phone frame (docs/design/experience-blueprint.html `.phone`, owner's scope change
+         2026-09-21): above 600px wide, `.page-ground` is a plain dark page and `.phone-frame` is
+         a real 390px device — bezel, radius, shadow — centred on it; below 600px (a real phone)
+         `.phone-frame` is a full-bleed pass-through with no frame of its own (base.css). The
+         atmosphere lives INSIDE the frame now, as its first child, so it is what the frame's own
+         `overflow: hidden` clips rather than the browser viewport. Static markup, not a
+         component: it only ever reads CSS custom properties already on <html> (tokens.css
+         `--wash-*`), so it needs no script of its own. `.phone-frame` is also the containing
+         block for every `position: fixed` element the app draws (a sheet, a toast, the tab bar's
+         own sheet) — base.css gives it a `transform`, which is what makes that true — so nothing
+         the app opens can ever land outside the frame on a wide screen. -->
+    <div class="page-ground">
+      <div class="phone-frame" id="phone-frame">
+        <div class="atmosphere" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div id="app"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

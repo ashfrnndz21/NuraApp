@@ -208,11 +208,15 @@
   /* Numbers use tabular figures everywhere. */
   --numeric: tabular-nums;
 
-  /* Washes: 160° linear, plus one soft light glow at top-left, over the dusk ground */
+  /* Washes: 160° linear, plus one soft light glow at top-left, over the dusk ground. `--wash`
+     itself (the composed gradient) is a fallback for a browser with no `@property` support — the
+     atmosphere (base.css `.atmosphere`) paints from the typed `--wash-a/b/c` stops directly, so
+     these three stay hand-matched to the literal stops each posture rule sets below, not derived
+     from them, the same way that rule cannot derive from a `linear-gradient()`. */
   --wash-light: radial-gradient(circle at 25% 10%, rgba(255, 255, 255, 0.1), transparent 55%);
   --wash-stable: linear-gradient(160deg, var(--ground), var(--ground-warm) 46%, var(--ground-soft));
-  --wash-watch: linear-gradient(160deg, var(--ground), var(--coral-wash) 50%, var(--ground-soft));
-  --wash-act: linear-gradient(160deg, var(--ground-warm), var(--coral-wash) 50%, var(--ground-soft));
+  --wash-watch: linear-gradient(160deg, #5a3550, #402c46 50%, #241a2e);
+  --wash-act: linear-gradient(160deg, #6b2f3d, #47202d 50%, #1f1218);
 
   /* Motion: only ever an answer to an action (docs/design/motion.md and, for the conversational
      kit, web/src/ui/motion.ts). --settle: a card or row entering after a fetch or a stream event,
@@ -294,7 +298,10 @@
 @property --wash-at { syntax: "<percentage>"; inherits: true; initial-value: 46%; }
 :root,
 :root[data-posture="stable"] { --wash: var(--wash-stable); --wash-a: var(--ground); --wash-b: var(--ground-warm); --wash-c: var(--ground-soft); --wash-at: 46%; }
-:root[data-posture="watch"] { --wash: var(--wash-watch); --wash-a: #5a3550; --wash-b: #402c46; --wash-c: var(--ground-soft); --wash-at: 50%; }
+/* All three stops genuinely change value on every posture change (tests/e2e/day.spec.ts's own
+   invariant: a `transitionrun` fires for --wash-a/b/c on every move) — watch's --wash-c is its
+   own value, a touch warmer than the stable ground's, not a repeat of it. */
+:root[data-posture="watch"] { --wash: var(--wash-watch); --wash-a: #5a3550; --wash-b: #402c46; --wash-c: #241a2e; --wash-at: 50%; }
 :root[data-posture="act"] { --wash: var(--wash-act); --wash-a: #6b2f3d; --wash-b: #47202d; --wash-c: #1f1218; --wash-at: 50%; }
 :root {
   transition:

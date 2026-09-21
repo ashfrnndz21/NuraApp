@@ -32,17 +32,57 @@ body {
   touch-action: pan-y;
 }
 
-/* --- The atmosphere: one fixed world behind everything --------------------------------------
+/* --- The phone frame (docs/design/experience-blueprint.html `.phone`, owner's scope change
+   2026-09-21) --------------------------------------------------------------------------------
+   Below 600px (a real phone) `.page-ground` and `.phone-frame` are both plain full-bleed
+   pass-throughs — no page around the app, no frame, exactly a phone app. At 600px and above,
+   `.page-ground` becomes a plain dark page (#15111d; nothing meaningful is ever drawn on it) and
+   `.phone-frame` becomes a real 390px device: radius, bezel, shadow, its own `overflow: hidden`.
+
+   `.phone-frame` is also the CONTAINING BLOCK for every `position: fixed` element the app draws
+   — a sheet, a toast, the ask bar's own sheet, `ActionSheet` — because it carries a `transform`
+   (`translateZ(0)`, on both sides of the breakpoint, so nothing has to change behaviour when the
+   viewport crosses it). A `position: fixed` descendant of a `transform`ed box is positioned, and
+   clipped by that box's own `overflow: hidden`, relative to that box rather than the viewport —
+   the one CSS mechanism this whole design change rests on: it is what keeps every sheet, the tab
+   bar and every toast inside the frame on a wide screen without editing each of them by hand. */
+.page-ground {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.phone-frame {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+@media (min-width: 600px) {
+  .page-ground {
+    background: #15111d;
+    padding: 16px;
+  }
+  .phone-frame {
+    width: 390px;
+    height: min(844px, calc(100vh - 32px));
+    border-radius: 42px;
+    box-shadow: 0 0 0 9px #0f0b17, 0 0 0 10px #3a3049, 0 30px 60px rgba(30, 15, 60, 0.35);
+  }
+}
+
+/* --- The atmosphere: one world behind everything, inside the frame --------------------------
    docs/design/experience-blueprint.html `.atmos`: the ground gradient, drawn from the wash's
    typed stops (tokens.css) so it still cross-fades when State changes, plus three blurred,
-   slowly drifting blobs. It is `position:fixed`, so it never scrolls with the page and always
-   sits behind `[data-testid="shell-scroll"]` and every other screen — the one background the
-   whole app shares, glass cards read through rather than each screen painting its own page. On
-   a wide (desktop) viewport it still fills the browser window; `#app` itself stays a centred
-   phone-width column on top of it (below), so the app reads as a phone floating on its world
-   rather than a document stretched edge to edge. Reduce Motion freezes the blobs in place. */
+   slowly drifting blobs. `position: absolute` inside `.phone-frame` — it never scrolls with the
+   page and always sits behind `[data-testid="shell-scroll"]` and every other screen — the one
+   background the whole app shares, glass cards read through rather than each screen painting
+   its own page. Reduce Motion freezes the blobs in place. */
 .atmosphere {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
@@ -99,20 +139,21 @@ body {
   }
 }
 
-/* `#app` no longer paints its own background (the fixed `.atmosphere` behind it, above, does) and
-   sits on top of it. On a viewport wider than a phone, `#app` centres as a phone-width column so
-   the atmosphere reads as the app's world rather than the app looking like a stretched document —
-   every screen already caps its own content at 480px (`.screen`, `.shell`); this only removes the
-   empty full-bleed page around them on desktop. `#app` keeps `overflow: visible` (unset) here so
-   a sheet or a menu, which positions itself against the viewport, is never clipped to this box. */
+/* `#app` fills the frame (its `100vh`/`100dvh` below stood for the whole viewport before the
+   frame existed; now the frame itself is sized for the viewport, on both sides of 600px, so
+   `#app` only ever needs to fill its parent). It no longer paints its own background — the
+   `.atmosphere` behind it, inside the same frame, does. `.phone-frame` itself clips to the phone
+   shape (`overflow: hidden`, above) rather than scrolling, so a screen with no shell — sign-in,
+   the doors, onboarding — needs its own scroll region here; a screen with the shell
+   (`#app:has(> .shell)`, design.css) overrides this to `overflow: hidden` instead, since the
+   shell scrolls only inside its own `[data-testid="shell-scroll"]`, never the page around it. */
 #app {
   position: relative;
   z-index: 1;
-  min-height: 100vh;
-  min-height: 100dvh;
   width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .screen {
@@ -388,6 +429,12 @@ label.pill:focus-within {
   color: var(--ink);
   cursor: pointer;
   min-height: var(--target);
+  /* Without this, a `<button>` keeps the browser's own default control background (Chromium:
+     an opaque light grey, ~#efefef) instead of showing its parent `.tile.paper` through — with
+     the old dark Plum that grey happened to still read, but the redesign's light Plum on a
+     light default button background is 1.2:1 (axe `color-contrast`, `tests/e2e/a11y.spec.ts`
+     "who is this for"). The tile behind it already carries the surface. */
+  background: none;
 }
 .choice .title {
   color: var(--plum);
