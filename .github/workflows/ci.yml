@@ -25,7 +25,9 @@ jobs:
     # over a 30-minute limit at random — a cancelled job, not a failing test, which reads as a
     # red check and costs a re-run each time. 60 gives it room. The real fix is a faster suite
     # (see the issue this note points at); until then a slow honest job beats a flaky one.
-    timeout-minutes: 60
+    # 22 Sep 2026: 38 to 45 minutes on a good runner, and twice in one night a slow runner was
+    # cancelled at 60 with no failure (at 64% on #311, at 68% on #315). 90 for the same reason.
+    timeout-minutes: 90
     services:
       postgres:
         image: postgres:16
