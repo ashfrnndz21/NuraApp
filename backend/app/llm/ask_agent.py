@@ -71,6 +71,7 @@ asker_for`, gated by `app.llm.residency.allow_external_model`).
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import re
@@ -429,7 +430,10 @@ _INVISIBLE_RANGES: Final = (
     (0xFEFF, 0xFEFF),  # zero-width no-break space / byte-order mark
 )
 _CONTROL_CHARS: Final = re.compile(
-    "[\r\n\t\x00-\x08\x0b\x0c\x0e-\x1f\x7f"
+    # The ASCII controls and the newline family — including the three Unicode line terminators
+    # a "\n"-only strip misses: NEL (U+0085), LINE SEPARATOR (U+2028), PARAGRAPH SEPARATOR
+    # (U+2029). Third review pass: with those kept, the round-1 forgery survived byte for byte.
+    "[\r\n\t\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x85\u2028\u2029"
     + "".join(f"{chr(lo)}-{chr(hi)}" for lo, hi in _INVISIBLE_RANGES)
     + "]+"
 )
@@ -444,7 +448,7 @@ page could use to hide or reorder text past a human reviewer while still reading
 characters to code that does not special-case them. Every line goes through `_register`, the
 one place a tool result is built, so this is stripped once, for every tool, not per field."""
 
-_FORGED_ID = re.compile(r"\b[a-z]{1,2}\d+:")
+_FORGED_ID = re.compile(r"\b[a-z]{1,2}\d+:", re.IGNORECASE)
 """A free-text field's value cannot forge a second tool-result line by starting with something
 that reads like this ask's own short-id shape (`_TokenCounter`, "m1:", "r2:") — only the colon
 is dropped, so the token stays as harmless text (review defect #2, second pass: a hostile
@@ -663,7 +667,8 @@ async def _read_waiting_papers(
             said = say_date(paper.document_date, language)
             doc_elapsed = _elapsed(context, language, paper.document_date, elapsed_seen)
             safe.add(said)
-            safe.add(str(paper.document_date.year))
+            # Never the bare year: `say_date` says no year (plain words rule 5), and with it in
+            # the safe set "Your sugar was 2026." passed (third review pass, note C).
             safe.add(doc_elapsed)
             dated = f", dated {said} ({doc_elapsed})"
         else:
@@ -1651,7 +1656,7 @@ _MS_NUMBER_WORDS: Final[frozenset[str]] = frozenset(
         "sembilan", "sepuluh", "belas", "puluh", "ratus", "ribu", "perpuluhan",
     }
 )
-_ZH_NUMERAL_RUN: Final = re.compile(r"[零一二三四五六七八九十百千两〇点]")
+_ZH_NUMERAL_RUN: Final = re.compile(r"[零一二三四五六七八九十百千两〇点]{2,}")
 _WORD: Final = re.compile(r"[a-z]+")
 
 
@@ -1673,8 +1678,8 @@ def _claims_a_value_from_an_unconfirmed_card(
     `WaitingPaper`'s own refusal to read a value at all (review defect #1, second pass): not a
     claim that this reads or understands prose, only that a line touching an unconfirmed card
     is checked, after removing his own written-down date, for any digit at all (NFKC-normalised
-    first, so a full-width "１１．４" counts), any run of Chinese numeral characters, or any
-    en/ms number word. Fires on `any` cite naming a review card, not `all` of them — one
+    first, so a full-width "１１．４" counts), any run of two or more Chinese numeral characters, or
+    two en/ms number words in a row. Fires on `any` cite naming a review card, not `all` of them — one
     legitimate cite alongside it must never turn this check off."""
     if not any(cite.kind == "review_card" for cite in cites):
         return False
@@ -1684,8 +1689,14 @@ def _claims_a_value_from_an_unconfirmed_card(
         return True
     if _ZH_NUMERAL_RUN.search(stripped):
         return True
-    words = set(_WORD.findall(stripped.lower()))
-    return bool(words & _EN_NUMBER_WORDS) or bool(words & _MS_NUMBER_WORDS)
+    # A value said in words is two or more number words in a row ("eleven point four",
+    # "sebelas perpuluhan empat", 十一点四 above). ONE alone is ordinary speech, and the
+    # catalogue's own waiting lines use it — "Satu ujian darah menunggu…", 一份血液报告…,
+    # "one paper is waiting", "at this point" — which the first version of this check rejected,
+    # switching the waiting-paper line off in Malay and Chinese (third review pass, finding B).
+    number_words = _EN_NUMBER_WORDS | _MS_NUMBER_WORDS
+    tokens = _WORD.findall(stripped.lower())
+    return any(a in number_words and b in number_words for a, b in itertools.pairwise(tokens))
 
 
 @dataclass(frozen=True, slots=True)
