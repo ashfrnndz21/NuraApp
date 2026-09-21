@@ -63,6 +63,8 @@ test("a sheet opened above 600px lies inside the frame, not the full browser win
   await openMe(page);
   const sheet = page.getByTestId("me-sheet");
   await expect(sheet).toBeVisible();
+  // The sheet slides up over 0.55s: wait until it has come to rest before measuring it.
+  await expect.poll(async () => { const box = await sheet.boundingBox(); return box ? box.y + box.height : Infinity; }).toBeLessThanOrEqual(frameBox.y + frameBox.height + 1);
   const sheetBox = (await sheet.boundingBox())!;
   expect(sheetBox.x).toBeGreaterThanOrEqual(frameBox.x - 1);
   expect(sheetBox.x + sheetBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + 1);

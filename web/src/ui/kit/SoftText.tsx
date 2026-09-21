@@ -1,5 +1,5 @@
 import type { JSX } from "preact";
-import { ACCENT_WORD_RE, WORD_GAP_BODY_MS, WORD_GAP_HEADLINE_MS, plainWords, splitWords } from "../motion";
+import { WORD_GAP_BODY_MS, WORD_GAP_HEADLINE_MS, plainWords, textUnits } from "../motion";
 
 type Pace = "headline" | "body";
 type Tag = "p" | "h1" | "h2" | "h3" | "span";
@@ -40,21 +40,21 @@ interface SoftTextProps {
  *  entrance too, so every word is simply there — no branch needed here for it. */
 export function SoftText({ text, previousText = "", pace = "headline", as = "p", className, testId }: SoftTextProps): JSX.Element {
   const Tag = as;
-  const words = splitWords(text);
-  const already = previousText === text ? words.length : splitWords(previousText).length;
+  const units = textUnits(text);
+  const already = previousText === text ? units.length : textUnits(previousText).length;
   const gap = pace === "body" ? WORD_GAP_BODY_MS : WORD_GAP_HEADLINE_MS;
   return (
     <Tag class={className} data-testid={testId}>
       <span class="sr-only">{plainWords(text)}</span>
-      {words.map((word, at) => {
-        const m = word.match(ACCENT_WORD_RE);
-        const shown = m ? `${m[1]}${m[2]}` : word;
+      {units.map((unit, at) => {
         const isNew = at >= already;
-        const cls = ["soft-word", m && "accent", isNew && "soft-word-enter"].filter(Boolean).join(" ");
+        const cls = ["soft-word", unit.tight && "soft-word-tight", unit.accent && "accent", isNew && "soft-word-enter"]
+          .filter(Boolean)
+          .join(" ");
         const style = isNew ? { animationDelay: `${(at - already) * gap}ms` } : undefined;
         return (
           <span key={at} class={cls} aria-hidden="true" style={style}>
-            {shown}
+            {unit.text}
           </span>
         );
       })}

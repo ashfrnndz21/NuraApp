@@ -152,7 +152,11 @@ test.describe("the phone frame (owner's scope change 2026-09-21)", () => {
     const frame = page.locator("#phone-frame");
     const frameBox = (await frame.boundingBox())!;
     await page.getByTestId("gallery-open-sheet").click();
-    const sheetBox = (await page.getByTestId("gallery-sample-sheet").locator('[role="dialog"]').boundingBox())!;
+    const dialog = page.getByTestId("gallery-sample-sheet").locator('[role="dialog"]');
+    // The sheet slides up over 0.55s: measured the instant it opens it is still below the frame
+    // (CI caught it at 1116px against a frame bottom of 785). Wait until it has come to rest.
+    await expect.poll(async () => { const box = await dialog.boundingBox(); return box ? box.y + box.height : Infinity; }).toBeLessThanOrEqual(frameBox.y + frameBox.height + 1);
+    const sheetBox = (await dialog.boundingBox())!;
     expect(sheetBox.x).toBeGreaterThanOrEqual(frameBox.x - 1);
     expect(sheetBox.x + sheetBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + 1);
     expect(sheetBox.y).toBeGreaterThanOrEqual(frameBox.y - 1);
