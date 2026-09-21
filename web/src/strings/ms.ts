@@ -219,6 +219,34 @@ export const ms = {
     showFewer: "Tunjuk kurang",
     // @patient
     bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
+    // @patient headline
+    todayKicker: "Hari ini",
+    // @patient headline
+    insightTitle: "Kesihatan anda",
+    // @patient headline
+    insightTitleOther: "Kesihatan {patient}",
+    // @patient phrase
+    insightOpen: "Lihat lebih lanjut",
+    // @patient
+    quietPrompt: "Apa yang kita nak lihat?",
+    // @patient
+    quietPromptOther: "Apa yang kita nak lihat untuk {patient}?",
+    // @patient phrase
+    chipReport: "Baca satu surat",
+    // @patient phrase
+    chipMedicines: "Ubat saya",
+    // @patient phrase
+    chipMedicinesOther: "Ubat {patient}",
+    // @patient phrase
+    chipVisit: "Lawatan seterusnya saya",
+    // @patient phrase
+    chipVisitOther: "Lawatan seterusnya {patient}",
+    // @patient phrase
+    chipWeek: "Macam mana minggu saya?",
+    // @patient phrase
+    chipWeekOther: "Macam mana minggu {patient}?",
+    // @patient phrase
+    askNura: "Tanya Nura apa-apa saja",
   },
   activity: {
     // @patient headline

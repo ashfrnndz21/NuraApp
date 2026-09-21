@@ -56,29 +56,25 @@ for (const [label, viewport] of [
       await todayReady(page);
       await expect(page.locator("html")).toHaveAttribute("data-density", "patient");
 
-      // The hero is the backend's count and words, never one worked out on the phone.
-      const now = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines/now?language=en`, auth(pa.token))).json()) as { count: number | null; words: string | null };
-      if (now.count === null) await expect(page.getByTestId("hero-figure")).toHaveCount(0);
-      else {
-        await expect(page.getByTestId("today-hero").getByTestId("hero-figure")).toHaveText(String(now.count));
-        await expect(page.getByTestId("today-hero").getByTestId("hero-words")).toHaveText(now.words!);
-      }
+      // Home's own doses still come from the backend's own numbers, never one worked out on
+      // the phone (cp3-home moved the hero's old "count/words" figure into the Now section and
+      // the busy-day insight card; `hero-figure`/`hero-words` no longer exist on Home).
       const slots = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines/today?language=en`, auth(pa.token))).json()) as { due_now: boolean; taken: boolean }[];
       await expect(page.getByTestId("now-card")).toHaveCount(slots.filter((slot) => slot.due_now && !slot.taken).length);
-      if (now.count !== null && slots.some((slot) => slot.due_now)) await expect(page.getByTestId("now-card")).toHaveCount(now.count);
 
-      // One tab set (D1, the reset), his ask bar, the family's note, the visit, and the coral
-      // pill under the hero.
+      // One tab set (D1, the reset), his own docked ask bar with the orb, the family's note,
+      // the visit, and the coral "Not well?" pill in the header (cp3-home).
       await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
-      await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask Nura a question");
+      await expect(page.getByTestId("home-ask-bar").getByTestId("home-ask-open")).toHaveText("Ask Nura anything");
+      await expect(page.getByTestId("home-ask-bar").getByTestId("home-ask-orb")).toBeVisible();
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");
       await expect(page.getByTestId("visit-tile")).toBeVisible();
-      // The way in when he feels unwell comes before anything ranked: right under the hero.
-      expect(await page.getByTestId("today-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
+      // The way in when he feels unwell is in the header, beside the greeting (cp3-home).
+      await expect(page.getByTestId("home-head").getByTestId("not-well")).toBeVisible();
       await expect(page.getByTestId("not-well")).toHaveAttribute("class", /coral/);
       // At most one Plum-filled button on the screen.
-      expect(await page.locator("main button.plum, main .askbar-go").count()).toBeLessThanOrEqual(1);
+      expect(await page.locator("main button.plum").count()).toBeLessThanOrEqual(1);
 
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label", controls: "button", minTarget: 56 })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);
@@ -116,15 +112,20 @@ for (const [label, viewport] of [
       await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
 
       const state = (await (await request.get(`${API}/profiles/${family.profileId}/state?language=en`, auth(family.meiToken))).json()) as { word: string; line: string; drivers: { text: string }[] };
-      const hero = page.getByTestId("home-hero");
-      await expect(hero.getByTestId("hero-figure")).toHaveText(state.word);
-      await expect(hero.getByTestId("hero-words")).toHaveText(state.line);
+      // cp3-home: the State's word, line and provenance sit in their own panel under the header
+      // (`home-state`), shown whenever there is a current State — unchanged from before this
+      // rebuild — with the drivers and the sparkline; the safety/boundary sentences themselves
+      // stay to once per screen, on the State card when one is also on the page, else in the
+      // foot note (`home-safety-note`).
+      const panel = page.getByTestId("home-state");
+      await expect(panel).toContainText(state.word);
+      await expect(panel).toContainText(state.line);
       if (state.drivers.length > 0) await expect(page.getByTestId("drivers").locator(".glass-chip")).toHaveText(state.drivers.map((driver) => driver.text));
-      await expect(hero.getByTestId("sparkline")).toBeVisible();
-      await expect(hero.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last blood pressure had a top number of 138.");
-      // Where the State came from, and the way in when he is unwell, on her Home too.
-      await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
-      expect(await page.getByTestId("home-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
+      await expect(panel.getByTestId("sparkline")).toBeVisible();
+      await expect(panel.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last blood pressure had a top number of 138.");
+      await expect(panel.getByTestId("home-from")).toContainText("Nura worked this out on");
+      // The way in when he is unwell is in the header, beside her greeting (cp3-home).
+      await expect(page.getByTestId("home-head").getByTestId("not-well")).toBeVisible();
 
       // "What changed" is back on her Home (#207): `GET /changes?peek=true` answers the same
       // words without spending his look, so the tile draws without writing his trail — it is
@@ -141,11 +142,12 @@ for (const [label, viewport] of [
       // key's own two panels, immediately below the row (F1, #177).
       await expect(page.getByTestId("watching")).toBeVisible();
       await expect(page.getByTestId("sent")).toBeVisible();
-      await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
+      // "Ask about Pa" is Home's own docked ask bar now (cp3-home's `home-ask-bar`), not a
+      // separate pill in the flow.
+      await expect(page.getByTestId("home-ask-bar").getByTestId("home-ask-open")).toHaveText("Ask about Pa");
 
       // The same list for her: density changes the look, never the tabs.
       await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
-      await expect(page.locator(".shell-ask").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask about Pa");
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label" })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
@@ -163,16 +165,17 @@ for (const [label, viewport] of [
   });
 }
 
-/** A red word typed into Ask or search (on the top of his Today) goes the red-flag path first,
- *  on the backend, exactly as the same word tapped on the feeling cloud: what to do now, never
- *  an answer looked up first. */
+/** A red word typed into Ask (reached from Home's own docked ask bar, cp3-home) goes the
+ *  red-flag path first, on the backend, exactly as the same word tapped on the feeling cloud:
+ *  what to do now, never an answer looked up first. */
 test("a red word typed into Ask or search: the red-flag path first, then what to do now", async ({ page, request }) => {
   const pa = await seedHome(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await todayReady(page);
-  const ask = page.getByTestId("askbar").getByTestId("ask-input");
-  await ask.fill("My chest is tight");
-  await ask.press("Enter");
+  await page.getByTestId("home-ask-open").click();
+  await expect(page.getByTestId("ask-screen")).toBeVisible();
+  await page.getByLabel("Your question").fill("My chest is tight");
+  await page.getByTestId("ask-send").click();
   await expect(page.getByTestId("what-to-do-screen")).toBeVisible();
   await expect(page.getByTestId("what-to-do-lines").locator("p").first()).toBeVisible();
   await expect(page.getByTestId("answer")).toHaveCount(0);

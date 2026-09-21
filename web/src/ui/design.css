@@ -180,6 +180,13 @@
   flex: none;
   padding: 0 var(--gutter) var(--space-1);
 }
+/* Home's own ask bar (a screen's `bottomBar`): docked above the tab bar, in the flex column's
+   own flow like the tab bar itself — never `position:fixed` over content, never scrolled past
+   with the page (`.shell-scroll` is the only region that scrolls). */
+.shell-bottom-bar {
+  flex: none;
+  padding: 0 var(--gutter);
+}
 /* The page itself: the old `.screen` column, now the region that scrolls. */
 .shell > .shell-scroll {
   flex: 1 1 auto;
@@ -1176,4 +1183,249 @@ html.shot-full .shell > .shell-scroll {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* --- Home's new hero (P1's living orb, cp3-home): the header, the busy day's headline and
+   insight card, the quiet day's large orb, and the docked ask bar. Sits on the ground like the
+   old Hero did (no tile of its own); every surface under it is `Glass`/`glass-chip`. ---------- */
+.home-head {
+  display: flex;
+  align-items: center;
+  /* At a large text size, the greeting and the question run long before the "Not well?" pill
+     has any room left (the `.switcher`'s own reasoning, above): wrapping, the pill drops to a
+     row of its own rather than being pushed past the edge of the phone (a11y.spec.ts's own
+     `sideways`, 200% text on a 360px phone). */
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+.home-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-head-hello {
+  font-size: var(--text-caption);
+  opacity: 0.85;
+}
+.home-head-question {
+  font-size: 1.25rem;
+  font-weight: var(--weight-title);
+  line-height: 1.2;
+}
+.home-head-date {
+  font-size: var(--text-caption);
+  opacity: 0.7;
+  margin-top: 2px;
+}
+.home-head .pill.coral {
+  flex: none;
+}
+
+.home-state-word {
+  font-size: var(--text-body);
+  opacity: 0.9;
+  margin: 0;
+}
+.home-state-word strong {
+  font-weight: var(--weight-title);
+}
+
+.home-kick {
+  display: block;
+  opacity: 0.75;
+  font-size: var(--text-caption);
+  margin-bottom: 4px;
+}
+.home-headline {
+  font-size: 33px;
+  line-height: 1.08;
+  font-weight: 300;
+  margin: 0 0 var(--space-2);
+}
+.home-insight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.home-insight h3 {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  margin: 0 0 var(--space-1);
+}
+.home-insight-body {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.home-date-chip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-chip);
+  background: var(--chip-bg);
+  border: var(--chip-border);
+}
+.home-date-chip b {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.home-date-chip small {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+.home-insight-lines {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.home-insight-lines p {
+  margin: 0 0 4px;
+}
+.home-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target);
+  padding: 12px var(--space-2);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-row);
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: start;
+}
+.home-row:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+
+.home-quiet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-4) 0 var(--space-3);
+}
+.home-quiet .orb.lg {
+  margin-bottom: var(--space-1);
+}
+.home-quiet-greeting {
+  font-size: 33px;
+  line-height: 1.08;
+  font-weight: 300;
+  margin: 0;
+}
+.home-quiet-prompt {
+  font-size: var(--text-body);
+  opacity: 0.85;
+  margin: 0;
+}
+.quiet-chips {
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+.chip-button {
+  position: relative;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  font: inherit;
+}
+.chip-button:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+/* "Read a report", the quiet day's own chip: the file input is the whole tappable chip, the
+   same trick `.action-row input[type=file]` (above) uses for the full-size version. */
+.chip-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.home-safety-note {
+  opacity: 0.75;
+  font-size: var(--text-caption);
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
+/* Home's docked ask bar (Shell's `bottomBar`): the small orb, the wording, the Speak pill —
+   two real buttons side by side (never one button nested inside another). */
+.home-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 8px 8px 8px 14px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-highlight);
+}
+.home-ask-word {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--target);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--ink);
+  opacity: 0.9;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-ask-word:focus-visible,
+.home-ask-speak:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.home-ask-speak {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--target);
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--chip-bg);
+  border: var(--chip-border);
+  font: inherit;
+  font-size: var(--text-button);
+  color: var(--ink);
+  cursor: pointer;
+}
+.home-ask-speak:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
 }

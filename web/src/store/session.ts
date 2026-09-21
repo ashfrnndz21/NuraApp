@@ -48,6 +48,16 @@ export function density(): Density {
   return densityFor(profile.value?.standing, densityChosen.value);
 }
 
+/** Whether the signed-in person owns the papers open now: the one fact that decides whose
+ *  voice the app speaks in ("Ask Nura anything" versus "Ask about Pa"). Deliberately never
+ *  `density()` — that is only ever a device "Look" preference (bigger type, a simpler layout,
+ *  `Me.tsx`'s "patient"/"caregiver" pills), which an owner may set for himself without it
+ *  putting caregiver wording about himself in his own mouth. Home's greeting and its ask bar
+ *  read this, not `density()` (the bug the owner found: "Ask about Tan" on Tan's own phone). */
+export function isSelf(): boolean {
+  return profile.value?.standing === "owner";
+}
+
 function root(): HTMLElement | null {
   return typeof document === "undefined" ? null : document.documentElement;
 }

@@ -204,20 +204,25 @@ interface ShellProps {
   /** Only for the five tab-root screens (see `TopBarSpec` above): the board's own topbar in
    *  place of the global header. Left off, the screen keeps the global `ShellHeader`. */
   topBar?: TopBarSpec;
+  /** A bar of the screen's own, docked above the tab bar and never under the fold it scrolls
+   *  behind (docs/design/experience-blueprint.html's `dock()`): Home's own ask bar, with the
+   *  living orb, in both densities — replacing the header's caregiver-only `AskField` for this
+   *  screen, not stacking under it. */
+  bottomBar?: ComponentChildren;
 }
 
 /** Every screen with the tab bar (D1): the header, in the chief's density the ask bar — "Ask
  *  about Pa", on every one of her screens — then the page, which scrolls in its own region, and
  *  the tab bar under it in the flow. The bar reserves its own space: nothing scrolls under it
  *  and it never covers a line. */
-export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, bar = true, ask = true, topBar }: ShellProps): JSX.Element {
+export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, bar = true, ask = true, topBar, bottomBar }: ShellProps): JSX.Element {
   const s = t();
   const d = density();
   const papers = profile.value;
   return (
     <main class={["shell", fills && "fill", extraClass].filter(Boolean).join(" ")} data-density={d} data-testid={testId} {...attrs}>
       {topBar ? <BoardTopBar spec={topBar} /> : <ShellHeader />}
-      {ask && d === "caregiver" && papers && (
+      {!bottomBar && ask && d === "caregiver" && papers && (
         <div class="shell-ask">
           <AskField placeholder={fill(s.shell.askAbout, { name: papers.display_name })} />
         </div>
@@ -225,6 +230,7 @@ export function Shell({ tab, children, fill: fills, testId, attrs, extraClass, b
       <div class="screen shell-scroll" data-testid="shell-scroll">
         {children}
       </div>
+      {bottomBar && <div class="shell-bottom-bar">{bottomBar}</div>}
       {bar && <TabBar tabs={tabsFor(d, s, papers?.scopes ?? [], papers?.standing === "owner")} current={tab} onSelect={(id) => openTab(id as Tab)} label={s.appName} />}
     </main>
   );

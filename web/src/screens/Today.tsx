@@ -6,75 +6,70 @@ import type { JSX } from "preact";
 import * as family from "../api/family";
 import * as nura from "../api/nura";
 import type { AppointmentOut, ChangesOut, FeedItemOut, LineOut, LogisticsOut, VisitQuestionOut } from "../api/types";
+import { batch } from "../capture/session";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
 import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
 import { go, openTab } from "../flow";
-import { density, me, profile, token } from "../store/session";
+import { speak } from "../speech/speak";
+import { density, isSelf, me, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import {
   clockWords,
   lineTitle,
+  dateChip,
   dateLine,
   dueCards,
   feedLines,
   greeting,
   heroFurnitureAllowed,
+  homeHeadline,
   homeHero,
+  homeState,
   nearestToRunOut,
   readingLead,
   stateLines,
   systolics,
   timeLine,
   todayList,
+  topOfDay,
   weekdayOf,
   whyLine,
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
-import { Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, IconBadge, PanelList, PillButton, SectionLabel, Sparkline, TintCard, toneOf } from "../ui/kit";
-import { CoupleIllustration } from "../ui/illustrations";
+import { Avatar, Chip, ChipRow, FeedCard, Glass, GlassTile, Icon, IconBadge, Orb, PanelList, PillButton, SectionLabel, SoftText, Sparkline, TintCard, toneOf } from "../ui/kit";
 import { AddReport, CheckInCard, DoGrid, HomeSkeleton, Upcoming } from "./HomeParts";
-import { AskField, Shell } from "./Shell";
+import { Shell } from "./Shell";
 import { ChiefPanels } from "./ChiefPanels";
 
-/** Today (D1, docs/ui-mockup.html and docs/ui-mockup-v2.html): his Today in the patient's
- *  density, the chief's Home in the caregiver's. Both read the same page (`useToday`); every
- *  line on either is the backend's or the catalogue's, every card has its source and its
- *  spoken twin, and nothing is drawn over a line. */
+/** Home (cp3-home, the living orb): his own Home in the patient's density, the chief's Home in
+ *  the caregiver's — both read the same page (`useToday`) and both draw through `HomeHero`
+ *  below, which is the one place that decides whose voice Home speaks in (`isSelf()`, never
+ *  `density()`: a "Look" chosen for size or simplicity must never put the wrong voice in
+ *  either mouth — the bug the owner found, "Ask about Tan" on Tan's own phone, was `density()`
+ *  doing that job). Every line is the backend's or the catalogue's; nothing is drawn over a
+ *  line; the safety line appears once (`SafetyNote` below, or the State card's own boundary
+ *  when a State card is already on the page — never both). */
 export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   return density() === "patient" ? <DadToday saved={saved ?? false} /> : <ChiefHome saved={saved ?? false} />;
 }
 
-/** His Today: ask or search; the one big number on the wash; "Now", a tile for each dose due
- *  with its pill and a full-width Taken; the day's check-in; "For you today" in the card
- *  grammar; the next visit with what to bring; a note from the family; and the coral pill,
- *  always last, always there — offline too. */
+/** His Home: the orb-led hero, "Now" for a dose due with its pill and a full-width Taken, the
+ *  day's check-in, "For you today" in the card grammar, the next visit with what to bring, a
+ *  note from the family, and the coral "Not well?" pill in the header, always there. */
 function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
-  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, stateAt, now, nextVisit, papers } = v;
-  const locale = LOCALE[language.value];
+  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, stateAt, nextVisit, papers } = v;
   const name = papers?.display_name || me.value?.display_name || "";
-  const hero = page?.hero ?? null;
   // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
-  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
+  // it — not even the hero's question or the daily check-in (today/model.ts:260-269).
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
+  const showsBoundary = stateAt === "top" || stateAt === "now" || stateAt === "forYou";
   return (
-    <Shell tab="home" testId="today-screen" topBar={{ variant: "home" }}>
-      <AskField placeholder={s.shell.askNura} />
-      <Hero
-        greeting={greeting(now.getHours(), name, s)}
-        wave={furniture}
-        ask={furniture ? s.hub.howFeeling : undefined}
-        sub={dateLine(now, locale)}
-        art={furniture ? <CoupleIllustration /> : undefined}
-        figure={fromPhone ? null : (hero?.count ?? null)}
-        words={!fromPhone && hero?.count !== null && hero?.count !== undefined ? hero.words : null}
-        testId="today-hero"
-      />
-      {/* The way in when he feels unwell comes before anything ranked (red flags escalate first). */}
-      <NotWellButton />
+    <Shell tab="home" testId="today-screen" topBar={{ variant: "home" }} ask={false} bottomBar={<HomeAskBar patientName={name} />}>
+      <HomeHero v={v} patientName={name} />
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       <Held v={v} />
@@ -108,7 +103,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             {!fromPhone && (
               <Card
                 title={s.today.readingTitle}
-                lines={[readingLead(now.getHours(), s)]}
+                lines={[readingLead(v.now.getHours(), s)]}
                 testId="reading-prompt"
                 action={
                   <PillButton onClick={() => go({ name: "reading" })} testId="write-reading">
@@ -120,15 +115,13 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
             </PillButton>
-            <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
-              {s.feed.askOrSearch}
-            </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
             {!fromPhone && <FamilyNote />}
-            {/* The emergency card, one tap from Today, with no network too (W4). */}
+            {/* The emergency card, one tap from Home, with no network too (W4). */}
             <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
               {s.today.emergencyOpen}
             </PillButton>
+            {!showsBoundary && <SafetyNote boundary={page.boundary} />}
           </>
         )
       )}
@@ -136,70 +129,57 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   );
 }
 
-/** The chief's Home: "Ask about Pa" on top (the shell's); the State as its word with the
- *  drivers as chips and his blood pressures as a sparkline; what changed since she last looked,
- *  a dot in its tone on each line; the next visit and what to buy side by side; what the papers
- *  are missing; then the doses she may tap for him, and today's cards. */
+/** The chief's Home: the same orb-led hero speaking of him by name, the State's drivers and his
+ *  blood pressures as a sparkline once there is a State card to carry them, what changed since
+ *  she last looked, the next visit and what to buy side by side, what the papers are missing,
+ *  then the doses she may tap for him, and today's cards. */
 function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
-  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt, now, papers } = v;
+  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt, papers } = v;
   const bearer = token.value;
   const drivers = page?.drivers ?? [];
-  // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
-  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
   const hero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
-  const locale = LOCALE[language.value];
   const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
+  const showsBoundary = stateAt === "top" || stateAt === "forYou";
+  const patientName = papers?.display_name || "";
   return (
-    <Shell tab="home" testId="home-screen" topBar={{ variant: "home" }}>
+    <Shell tab="home" testId="home-screen" topBar={{ variant: "home" }} ask={false} bottomBar={<HomeAskBar patientName={patientName} />}>
       {page && <span data-testid="today-ready" hidden />}
-      {/* Her greeting is hers — her own name — and the question under it is about him, by name:
-          on a key that is not his, `t()` reads `hub.howFeeling` as its twin `howFeelingOther`
-          (strings/index.ts, ABOUT_HIM), so a caregiver's Home never speaks in his voice. */}
-      <Hero
-        greeting={greeting(now.getHours(), me.value?.display_name || "", s)}
-        wave={furniture}
-        ask={furniture ? s.hub.howFeeling : undefined}
-        art={furniture ? <CoupleIllustration /> : undefined}
-        label={state && hero?.word ? s.home.mostLikely : undefined}
-        figure={state ? hero?.word : undefined}
-        words={state ? hero?.line : undefined}
-        testId="home-hero"
-      >
-        {state && page && hero && (
-          <>
-            <Readings />
-            {hero.drivers && drivers.length > 0 && (
-              <ChipRow testId="drivers" label={s.home.mostLikely}>
-                {drivers.map((driver) => (
-                  <Chip key={driver.key} tone={toneOf(driver.tone)}>
-                    {driver.text}
-                  </Chip>
-                ))}
-              </ChipRow>
-            )}
-            {/* Where the State came from and when, and the boundary it is shown under: with the
-                State's word, never over a flag. */}
-            {hero.word && (
-              <>
-                <p class="hero-sub" data-testid="home-from">
-                  {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
-                </p>
-                {(page.boundary ?? []).length > 0 && (
-                  <div class="hero-boundary" data-testid="home-boundary">
-                    {(page.boundary ?? []).map((line, at) => (
-                      <p key={at}>{line}</p>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </Hero>
-      <NotWellButton />
+      <HomeHero v={v} patientName={patientName} />
+      {/* Her Home's State word (docs/design/full-experience.html): shown whenever there is a
+          current State to show (`homeHero`'s own flagged/kept rule — unchanged from before
+          cp3-home), never gated on `stateAt`, which decides only where the *State card itself*
+          lands among today's cards, not whether the word is reachable at all. Its provenance
+          line is here, as it always was; the safety/boundary sentences themselves are not —
+          those stay exactly once, on the State card when `stateAt` puts one on the page, else
+          in `SafetyNote` at the foot (below). */}
+      {state && page && hero && (
+        <div class="panel-stack" data-testid="home-state">
+          {hero.word && (
+            <p class="home-state-word">
+              <strong>{hero.word}</strong>
+              {hero.line && <span> — {hero.line}</span>}
+            </p>
+          )}
+          <Readings />
+          {hero.drivers && drivers.length > 0 && (
+            <ChipRow testId="drivers" label={s.home.mostLikely}>
+              {drivers.map((driver) => (
+                <Chip key={driver.key} tone={toneOf(driver.tone)}>
+                  {driver.text}
+                </Chip>
+              ))}
+            </ChipRow>
+          )}
+          {hero.word && (
+            <p class="hero-sub" data-testid="home-from">
+              {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), LOCALE[language.value]) })}
+            </p>
+          )}
+        </div>
+      )}
       <Notices v={v} saved={saved} />
       <Held v={v} />
       {!page && !blank && !v.error && <HomeSkeleton />}
@@ -228,7 +208,6 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {/* The chief's Home (F1, #177): what was sent to him this week, and what Nura is
                 watching for him. Her key's and his steward's; nobody else's. */}
             {!fromPhone && bearer && v.papers && (v.papers.role === "chief" || v.papers.standing === "steward") && <ChiefPanels bearer={bearer} papers={v.papers} />}
-            <AskAboutPill />
             {furniture && <CheckInCard papers={papers} />}
             <DoGrid papers={papers} />
             <AddReport papers={papers} />
@@ -243,18 +222,186 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
             </PillButton>
-            <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
-              {s.feed.askOrSearch}
-            </PillButton>
-            {/* His emergency card, one tap from Today — hers as much as his (W4). */}
+            {/* His emergency card, one tap from Home — hers as much as his (W4). */}
             <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
               {s.today.emergencyOpen}
             </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
+            {!showsBoundary && <SafetyNote boundary={page.boundary} />}
           </>
         )
       )}
     </Shell>
+  );
+}
+
+/** Home's header, hero and docked ask bar (cp3-home): the one block both densities share, and
+ *  the one place whose-voice is decided — `isSelf()` (store/session.ts), never `density()`.
+ *  Either a patient-density screen or a caregiver-density one can be open for either standing
+ *  (Me's own "Look" pills are not gated by who owns the papers), so both `DadToday` and
+ *  `ChiefHome` read this the same way rather than each assuming which voice it is. */
+function HomeHero({ v, patientName }: { v: TodayView; patientName: string }): JSX.Element {
+  const { s, page, feed, act, top, now, nextVisit, papers, dose, busy, take } = v;
+  const self = isSelf();
+  const locale = LOCALE[language.value];
+  // His own greeting names him; hers names her — the person the greeting is *from* is always
+  // whoever is signed in, never the papers' name on a caregiver's own Home.
+  const greetName = self ? patientName || me.value?.display_name || "" : me.value?.display_name || "";
+  const question = self ? s.hub.howFeeling : fill(s.hub.howFeelingOther, { patient: patientName });
+  const flagged = feed.flags.length > 0;
+  const topItem = page ? topOfDay(top, feed.forYou) : null;
+  const state = homeState({ flagged, act, topItem });
+  const dueNow = dose?.kind === "due" ? dose : null;
+  const forYouItem = feed.forYou.find((item) => item.item_id !== topItem?.item_id) ?? null;
+  return (
+    <>
+      <div class="home-head" data-testid="home-head">
+        <Avatar name={greetName} />
+        <div class="home-head-text">
+          <p class="home-head-hello" data-testid="home-head-hello">{greeting(now.getHours(), greetName, s)}</p>
+          <h1 class="home-head-question">{question}</h1>
+          <p class="home-head-date" data-testid="home-head-date">{dateLine(now, locale)}</p>
+        </div>
+        {/* The way in when he feels unwell comes before anything ranked (red flags escalate
+            first): unchanged behaviour, unchanged test id, no animation on the red path. */}
+        <NotWellButton />
+      </div>
+      {page && state === "busy" && topItem && (
+        <div data-testid={self ? "today-hero" : "home-hero"}>
+          <span class="home-kick">{s.home.todayKicker}</span>
+          <SoftText as="h2" pace="headline" className="home-headline" text={homeHeadline(topItem)} testId="home-headline" />
+          <Glass className="home-insight" testId="insight-card">
+            <h3>{self ? s.home.insightTitle : fill(s.home.insightTitleOther, { patient: patientName })}</h3>
+            <div class="home-insight-body">
+              <div class="home-date-chip" aria-hidden="true">
+                <b>{dateChip(new Date(topItem.created_at), locale).day}</b>
+                <small>{dateChip(new Date(topItem.created_at), locale).month}</small>
+              </div>
+              <div class="home-insight-lines">
+                {feedLines(topItem).lines.slice(0, 2).map((line, at) => (
+                  <p key={at}>{line}</p>
+                ))}
+              </div>
+            </div>
+            {/* Not `variant="primary"`: the daily check-in's own "Tell Nura" (`HomeParts.tsx`)
+                is already the screen's one Plum-filled button when it is on the page too, and
+                the design rule (`design.spec.ts`) is at most one. */}
+            <PillButton variant="secondary" onClick={() => go({ name: "feed" })} testId="insight-open">
+              {s.home.insightOpen}
+            </PillButton>
+          </Glass>
+          {dueNow && (
+            <button type="button" class="home-row" onClick={() => void take(dueNow.lineId, dueNow.anchor)} disabled={busy} data-testid="home-row-dose">
+              <span>{dueNow.sentence}</span>
+              <Icon name="chevron" />
+            </button>
+          )}
+          {forYouItem && (
+            <button type="button" class="home-row" onClick={() => go({ name: "feed" })} data-testid="home-row-for-you">
+              <span>{forYouItem.headline}</span>
+              <Icon name="chevron" />
+            </button>
+          )}
+        </div>
+      )}
+      {page && state === "quiet" && (
+        <div class="home-quiet" data-testid={self ? "today-hero" : "home-hero"}>
+          <Orb size="lg" testId="home-orb-lg" />
+          <SoftText as="h2" pace="headline" className="home-quiet-greeting" text={greeting(now.getHours(), greetName, s)} testId="quiet-greeting" />
+          <SoftText
+            as="p"
+            pace="body"
+            className="home-quiet-prompt"
+            text={self ? s.home.quietPrompt : fill(s.home.quietPromptOther, { patient: patientName })}
+          />
+          <div class="chip-row quiet-chips" data-testid="quiet-chips">
+            <ReportChip label={s.home.chipReport} />
+            {papers && (papers.standing === "owner" || papers.scopes.includes("medicines")) && (
+              <button type="button" class="glass-chip chip-button" onClick={() => go({ name: "record", at: { name: "medicines" } })} data-testid="chip-medicines">
+                {self ? s.home.chipMedicines : fill(s.home.chipMedicinesOther, { patient: patientName })}
+              </button>
+            )}
+            {nextVisit && (
+              <button
+                type="button"
+                class="glass-chip chip-button"
+                onClick={() => go({ name: "visit", appointmentId: nextVisit.appointment_id })}
+                data-testid="chip-visit"
+              >
+                {self ? s.home.chipVisit : fill(s.home.chipVisitOther, { patient: patientName })}
+              </button>
+            )}
+            <button type="button" class="glass-chip chip-button" onClick={() => openTab("health")} data-testid="chip-week">
+              {self ? s.home.chipWeek : fill(s.home.chipWeekOther, { patient: patientName })}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** "Read a report", the quiet day's own chip: the same picker `AddReport` (HomeParts.tsx)
+ *  opens, styled as a chip rather than a row — one file, straight to its own review card,
+ *  never sent until he says so there (reviewer #237 item 6). */
+function ReportChip({ label }: { label: string }): JSX.Element {
+  const chosen = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    batch.forget();
+    batch.pick([file]);
+    go({ name: "papers", report: true });
+  };
+  return (
+    <label class="glass-chip chip-button" data-testid="chip-report">
+      {label}
+      <input type="file" accept="application/pdf,image/*" onChange={chosen} />
+    </label>
+  );
+}
+
+/** Home's own ask bar (cp3-home), docked above the tab bar (`Shell`'s `bottomBar`): the small
+ *  living orb, "Ask Nura anything" (caregiver: "Ask about Pa" — `shell.askAbout`, the same
+ *  template the header's old ask bar used), and Speak, unchanged in behaviour from `AskField`'s
+ *  own voice button. Two buttons, never one nested in another. */
+function HomeAskBar({ patientName }: { patientName: string }): JSX.Element {
+  const s = t();
+  const self = isSelf();
+  const word = self ? s.home.askNura : fill(s.shell.askAbout, { name: patientName });
+  return (
+    <div class="home-ask" data-testid="home-ask-bar">
+      <Orb testId="home-ask-orb" />
+      <button type="button" class="home-ask-word" onClick={() => go({ name: "ask" })} data-testid="home-ask-open">
+        {word}
+      </button>
+      <button
+        type="button"
+        class="home-ask-speak"
+        onClick={() => {
+          speak({ lines: [s.shell.voiceSaid1, s.shell.voiceSaid2], language: language.value });
+          go({ name: "ask" });
+        }}
+        data-testid="home-ask-speak"
+      >
+        <Icon name="mic" />
+        <span>{s.shell.voice}</span>
+      </button>
+    </div>
+  );
+}
+
+/** The safety line, once (cp3-home): the State's own boundary — never invented here — shown at
+ *  the foot of the scroll when no State card already carries it (`showsBoundary` above). A
+ *  State card that is on the page always carries its own boundary already; this is never drawn
+ *  beside one, only in its place. */
+function SafetyNote({ boundary }: { boundary: readonly string[] }): JSX.Element | null {
+  if (boundary.length === 0) return null;
+  return (
+    <p class="home-safety-note" data-testid="home-safety-note">
+      {boundary.join(" ")}
+    </p>
   );
 }
 

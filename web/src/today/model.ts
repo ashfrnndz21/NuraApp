@@ -298,6 +298,60 @@ export function systolics(facts: readonly FactOut[]): number[] {
     .map((each) => each.top);
 }
 
+// --- the new Home's hero (P1's orb): the day's top item, and the one headline it earns -------
+
+/** The single item Home's hero speaks about: today's top-ranked card (`topThree`, less any
+ *  flag — a flag has its own card and outranks the hero entirely, `homeState` below), else the
+ *  feed's own first "for you" card. Never composed here, never re-ranked here: the backend's
+ *  order, first item, or none. */
+export function topOfDay(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]): FeedItemOut | null {
+  return top[0] ?? forYou[0] ?? null;
+}
+
+/** Whether today has something to say (`topOfDay` found a card) or is quiet — nothing ranked,
+ *  nothing new, and (checked by the caller, `homeState` below) no flag and no act posture,
+ *  both of which outrank a quiet greeting entirely. */
+export function isQuietDay(topItem: FeedItemOut | null): boolean {
+  return topItem === null;
+}
+
+export type HomeState = "safety" | "busy" | "quiet";
+
+/** Which of Home's three hero treatments draws (safety check 5's own rule, extended): a flag
+ *  or an act posture outranks everything, including the quiet-day greeting — neither a big
+ *  breathing orb nor a chip asking "what shall we look at" may sit over either, so this never
+ *  reaches `busy`/`quiet` while one holds. Only once neither holds does the day's own top item
+ *  decide busy from quiet. */
+export function homeState(on: { flagged: boolean; act: boolean; topItem: FeedItemOut | null }): HomeState {
+  if (on.flagged || on.act) return "safety";
+  return isQuietDay(on.topItem) ? "quiet" : "busy";
+}
+
+/** The one italic accent a Home headline carries (`SoftText`'s `*word*`), picked by a rule kept
+ *  the same for every card, of every type — never a free choice, never the model's: the last
+ *  word of the item's own headline (the backend's real sentence, never invented here), the way
+ *  every example in the blueprint accents its closing word ("...raise with your *doctor.*",
+ *  "...for you: a 30-second *clip.*"). A headline with no words of its own is returned as is. */
+export function homeHeadline(item: Pick<FeedItemOut, "headline">): string {
+  const words = item.headline.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return item.headline;
+  const last = words[words.length - 1]!;
+  const match = last.match(/^(.*?)([.,!?;:]*)$/);
+  const stem = match?.[1] || last;
+  const punct = match?.[2] ?? "";
+  if (!stem) return item.headline;
+  words[words.length - 1] = `*${stem}*${punct}`;
+  return words.join(" ");
+}
+
+/** "12 September" split for the insight card's date chip: the day, and the month short enough
+ *  to sit under it (the blueprint's `<div class="date"><b>12</b><small>Sep</small></div>`). */
+export function dateChip(date: Date, locale: string): { day: string; month: string } {
+  const parts = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? "";
+  return { day: part("day"), month: part("month").replace(/\.$/, "") };
+}
+
 /** The hour the way he says it (plain words, rule 5; the backend's `when_words.say_clock`):
  *  "10 in the morning", "half past 7 in the evening", "8.05 in the morning"; in Malay
  *  "pukul 8 pagi", in Chinese "上午8点半". Twelve-hour, never a colon, on the region's clock. */

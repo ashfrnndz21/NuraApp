@@ -224,7 +224,7 @@ test.describe("the caregiver density at 360 by 640", () => {
     const family = await seedFamily(request);
     await readingsFor(request, family);
     await signIn(page, family.mei, false);
-    await page.getByTestId("open-ask").click();
+    await page.getByTestId("home-ask-open").click();
     const filters = page.getByTestId("ask-filters");
     await expect(filters.locator("button")).toHaveText(["Your papers", "Online", "Doctors and clinics", "Videos"]);
     await page.getByTestId("filter-web").click();
@@ -251,7 +251,7 @@ test.describe("the caregiver density at 360 by 640", () => {
 test("his town and Ramadan on Me, on his yes; his chief reads his town and cannot set it or add Ramadan; his own ask bar is his records only", async ({ page, request }) => {
   const family = await seedFamily(request);
   await signIn(page, family.pa, true);
-  await page.getByTestId("open-ask").click();
+  await page.getByTestId("home-ask-open").click();
   await expect(page.getByTestId("ask-filters")).toHaveCount(0);
   // Me is a sheet the header's avatar opens (D1), on every screen, rather than a tab.
   await openMe(page);

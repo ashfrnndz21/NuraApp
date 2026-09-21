@@ -6,6 +6,7 @@ import { zh } from "../../src/strings/zh";
 import { fill } from "../../src/strings";
 import {
   boundaryOf,
+  dateChip,
   dateLine,
   dayKey,
   feedCards,
@@ -13,8 +14,11 @@ import {
   greeting,
   dayMonthLine,
   heroFurnitureAllowed,
+  homeHeadline,
   homeHero,
   homeHeroWords,
+  homeState,
+  isQuietDay,
   lineTitle,
   medicinesCard,
   nowCard,
@@ -24,6 +28,7 @@ import {
   timeLine,
   todayList,
   tookLine,
+  topOfDay,
   whyLine,
 } from "../../src/today/model";
 
@@ -344,5 +349,49 @@ describe("greeting without a name", () => {
       expect(line).not.toMatch(/[,，]\s*[.。]/);
       expect(line).toBe(fill(s.today.greetingMorning, { name: "" }).replace(/[,，]\s*[.。]/, s === zh ? "。" : "."));
     }
+  });
+});
+
+describe("Home's new hero (cp3-home, the living orb): the day's top item", () => {
+  const flag = item("flag", "A fall");
+  const topThree = [item("today", "Your blood pressure today")];
+  const forYou = [item("today", "Running low"), item("now", "Your tablets today")];
+
+  it("is the ranked feed's own top item, else the feed's first 'for you' card, else none", () => {
+    expect(topOfDay(topThree, forYou)).toBe(topThree[0]);
+    expect(topOfDay([], forYou)).toBe(forYou[0]);
+    expect(topOfDay([], [])).toBeNull();
+  });
+
+  it("is quiet only once there is truly no top item", () => {
+    expect(isQuietDay(topThree[0]!)).toBe(false);
+    expect(isQuietDay(null)).toBe(true);
+  });
+
+  it("a flag or an act posture outranks the quiet greeting and the busy headline both", () => {
+    expect(homeState({ flagged: true, act: false, topItem: null })).toBe("safety");
+    expect(homeState({ flagged: false, act: true, topItem: topThree[0]! })).toBe("safety");
+    expect(homeState({ flagged: true, act: true, topItem: topThree[0]! })).toBe("safety");
+  });
+
+  it("is busy once the day has a top item, quiet once it does not — neither over a flag or an act", () => {
+    expect(homeState({ flagged: false, act: false, topItem: topThree[0]! })).toBe("busy");
+    expect(homeState({ flagged: false, act: false, topItem: null })).toBe("quiet");
+  });
+
+  it("never reads a flag itself as a reason to be busy — a flag has its own card and outranks the headline", () => {
+    expect(homeState({ flagged: true, act: false, topItem: flag })).toBe("safety");
+  });
+
+  it("accents the headline's own last word, never a free choice: the backend's real sentence, marked once", () => {
+    // `*word*` with any trailing punctuation OUTSIDE the closing `*` (motion.ts's own
+    // `ACCENT_WORD_RE`, the exact shape `SoftText` reads).
+    expect(homeHeadline({ headline: "Four numbers to raise with your doctor" })).toBe("Four numbers to raise with your *doctor*");
+    expect(homeHeadline({ headline: "For you: a 30-second clip." })).toBe("For you: a 30-second *clip*.");
+    expect(homeHeadline({ headline: "" })).toBe("");
+  });
+
+  it("splits a date into the day and a short month for the insight card's own chip", () => {
+    expect(dateChip(new Date(2026, 8, 12), "en-SG")).toEqual({ day: "12", month: "Sept" });
   });
 });

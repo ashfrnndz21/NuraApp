@@ -219,6 +219,34 @@ export const en = {
     showFewer: "See fewer",
     // @patient
     bpLast: "The last blood pressure had a top number of {number}.",
+    // @patient headline
+    todayKicker: "Today",
+    // @patient headline
+    insightTitle: "Your health",
+    // @patient headline
+    insightTitleOther: "{patient}'s health",
+    // @patient phrase
+    insightOpen: "See more about this",
+    // @patient
+    quietPrompt: "What shall we look at?",
+    // @patient
+    quietPromptOther: "What shall we look at for {patient}?",
+    // @patient phrase
+    chipReport: "Read a report",
+    // @patient phrase
+    chipMedicines: "My medicines",
+    // @patient phrase
+    chipMedicinesOther: "{patient}'s medicines",
+    // @patient phrase
+    chipVisit: "My next visit",
+    // @patient phrase
+    chipVisitOther: "{patient}'s next visit",
+    // @patient phrase
+    chipWeek: "How was my week?",
+    // @patient phrase
+    chipWeekOther: "How was {patient}'s week?",
+    // @patient phrase
+    askNura: "Ask Nura anything",
   },
   activity: {
     // @patient headline

@@ -219,6 +219,34 @@ export const zh = {
     showFewer: "收起来",
     // @patient
     bpLast: "最近一次量血压，上面的数字是{number}。",
+    // @patient headline
+    todayKicker: "今天",
+    // @patient headline
+    insightTitle: "你的健康",
+    // @patient headline
+    insightTitleOther: "{patient}的健康",
+    // @patient phrase
+    insightOpen: "看更多",
+    // @patient
+    quietPrompt: "我们看看什么？",
+    // @patient
+    quietPromptOther: "我们帮{patient}看看什么？",
+    // @patient phrase
+    chipReport: "读一份报告",
+    // @patient phrase
+    chipMedicines: "我的药",
+    // @patient phrase
+    chipMedicinesOther: "{patient}的药",
+    // @patient phrase
+    chipVisit: "我的下次看诊",
+    // @patient phrase
+    chipVisitOther: "{patient}的下次看诊",
+    // @patient phrase
+    chipWeek: "我这一周过得怎样？",
+    // @patient phrase
+    chipWeekOther: "{patient}这一周过得怎样？",
+    // @patient phrase
+    askNura: "随便问 Nura",
   },
   activity: {
     // @patient headline

@@ -470,7 +470,12 @@ test("Tab goes through what can be pressed in the order the eye reads, each with
       // so where a control sits on the page is its box plus that region's scroll, not the
       // window's — the window does not scroll at all.
       const scroller = holder.closest("[data-testid=shell-scroll]") as HTMLElement | null;
-      return { top: Math.round(box.top + window.scrollY + (scroller?.scrollTop ?? 0)), name: (element.getAttribute("aria-label") || element.textContent || element.tagName).trim().slice(0, 40), ring, bar: Boolean(element.closest("nav.tabbar")) };
+      // The docked ask bar (Shell's `bottomBar`, cp3-home) is chrome of the same kind as the
+      // tab bar under it: fixed in the flow below the scrolling region, never itself scrolled,
+      // so it is excluded from the top-to-bottom check the same way — reached after every
+      // control the page's own content has, never compared against their (scroll-corrected) top.
+      const bar = Boolean(element.closest("nav.tabbar") || element.closest(".shell-bottom-bar"));
+      return { top: Math.round(box.top + window.scrollY + (scroller?.scrollTop ?? 0)), name: (element.getAttribute("aria-label") || element.textContent || element.tagName).trim().slice(0, 40), ring, bar };
     });
     if (!stop || stops.some((each) => each.name === stop.name && each.top === stop.top)) break;
     stops.push(stop);
