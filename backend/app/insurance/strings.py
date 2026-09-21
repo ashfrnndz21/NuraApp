@@ -101,6 +101,34 @@ def claim_status_word(status: str, language: str) -> str:
     return by_status.get(status) or CLAIM_STATUS_WORDS[DEFAULT_LANGUAGE][status]
 
 
+# @patient phrase
+PERIOD_STATE_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {"runs_to": "The policy says it runs to {date}", "ended": "The policy's dates have passed"},
+    "ms": {
+        "runs_to": "Polisi itu berkata ia berjalan hingga {date}",
+        "ended": "Tarikh polisi itu telah berlalu",
+    },
+    "zh": {"runs_to": "保单显示有效期至{date}", "ended": "保单上的日期已过"},
+}
+"""The passport's own quiet state chip (package 12a, E13-04) — never a claim that cover is
+currently valid (independent review, fix round, item 1): `runs_to` says only what the date on
+file says, and `ended` says only that the date has passed, never that the policy itself "is
+in force" or "has ended", a validity Nura cannot actually know (a lapse for a missed payment
+is invisible to it). `undated` (`PolicyPeriodState.UNDATED`) draws no chip at all, so it
+carries no word here. A chip label, not a sentence, so it is never run through `render`'s
+plain-words `verify` (a fragment with no full stop is exactly what a chip is)."""
+
+
+def period_state_word(state: str, language: str, *, date: str | None = None) -> str:
+    """`app.insurance.policy.PolicyPeriodState`'s own word, in his language — `date` is
+    already said in his language (`app.medicines.strings.say_date`) by the caller; this
+    function only ever fills the one slot `runs_to` carries."""
+    lang = language_of(language)
+    by_state = PERIOD_STATE_WORDS.get(lang, PERIOD_STATE_WORDS[DEFAULT_LANGUAGE])
+    template = by_state.get(state) or PERIOD_STATE_WORDS[DEFAULT_LANGUAGE][state]
+    return template.format(date=date) if date is not None else template
+
+
 class NotPlainWords(Refusal):
     """A rendered line failed docs/plain-words.md. It does not reach him; the template is
     wrong."""
@@ -282,5 +310,7 @@ __all__ = [
     "LANGUAGES",
     "NoSuchTemplate",
     "NotPlainWords",
+    "claim_status_word",
+    "period_state_word",
     "render",
 ]

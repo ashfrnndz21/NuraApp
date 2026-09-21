@@ -49,7 +49,7 @@ from app.delivery.feed.models import CardType, DeliverTo, FeedItem
 from app.delivery.feed.rank import _visible_to, sent_this_week
 from app.drafts import InsuranceClaimDraft
 from app.insurance.claim import file_a_claim
-from app.insurance.policy import PolicyStatus, PolicyType, policy_draft, set_a_policy
+from app.insurance.policy import EssentialItem, PolicyStatus, PolicyType, policy_draft, set_a_policy
 from app.keys.confirm import confirm as confirm_draft
 from app.keys.context import KeyContext, OutOfScope, resolve_key_context
 from app.keys.repository import scoped_new
@@ -583,38 +583,34 @@ async def _seed(deployment: Deployment) -> Seeded:
         # The fuller insurance record (E13-03): a policy and a claim against it, for the
         # check-up already on the spine — both money, the owner's decision, so a key without
         # `Scope.MONEY` must never see either id, wherever a route or a service names it.
-        policy_yes = await confirm_draft(
-            session,
-            owner,
-            policy_draft(
-                insurer_name="Great Eastern",
-                policy_reference="GE-4471-0932",
-                policy_type=PolicyType.HOSPITAL,
-                covered="Pa",
-                covers="Hospital stays, up to $500 a day.",
-                start_date=None,
-                renewal_date=None,
-                premium_due_date=None,
-                status=PolicyStatus.ACTIVE,
-                guarantee_letter=True,
-                supersedes_id=None,
-            ),
-        )
+        # The essentials (package 12a) are seeded with real words too (independent review, fix
+        # round, item 10): a policy with none of them seeded structurally cannot prove they
+        # never leak — the data that could leak is exactly the data that was never there.
+        policy_kwargs = {
+            "insurer_name": "Great Eastern",
+            "policy_reference": "GE-4471-0932",
+            "policy_type": PolicyType.HOSPITAL,
+            "covered": "Pa",
+            "covers": "Hospital stays, up to $500 a day.",
+            "start_date": None,
+            "renewal_date": None,
+            "premium_due_date": None,
+            "status": PolicyStatus.ACTIVE,
+            "guarantee_letter": True,
+            "supersedes_id": None,
+            "coverage_items": [EssentialItem(text="Room and board at a panel hospital", page=2)],
+            "excludes": [EssentialItem(text="No cover for cosmetic treatment", page=3)],
+            "benefits": [EssentialItem(text="Annual limit: S$150,000", page=4)],
+            "claim_steps": [EssentialItem(text="Show the policy card at admission", page=5)],
+            "waiting_period": "12 months for pre-existing conditions",
+            "claims_contact": "24-hour claims hotline: 1800 555 0199",
+        }
+        policy_yes = await confirm_draft(session, owner, policy_draft(**policy_kwargs))
         policy = await set_a_policy(
             session,
             context=owner,
-            insurer_name="Great Eastern",
-            policy_reference="GE-4471-0932",
-            policy_type=PolicyType.HOSPITAL,
-            covered="Pa",
-            covers="Hospital stays, up to $500 a day.",
-            start_date=None,
-            renewal_date=None,
-            premium_due_date=None,
-            status=PolicyStatus.ACTIVE,
-            guarantee_letter=True,
-            supersedes_id=None,
             confirmation_id=policy_yes.id,
+            **policy_kwargs,
         )
         claim_yes = await confirm_draft(
             session,
@@ -1312,6 +1308,19 @@ NOT_ON_THE_CARD = (
 episode, a visit."""
 CONDITION_WORDS = ("diabetes", "sugar sickness", "penicillin")
 MEDICINE_WORDS = ("amlodipine",)
+INSURANCE_ESSENTIAL_WORDS = (
+    "room and board at a panel hospital",
+    "no cover for cosmetic treatment",
+    "annual limit: s$150,000",
+    "show the policy card at admission",
+    "claims hotline",
+)
+"""The policy's own essentials words, seeded on `policy` above (independent review, fix round,
+item 10) — never on a caller's own screen, in ANY read response, for a holder without
+`Scope.MONEY`. Before this round the seeded policy carried none of these, so their absence
+from a response proved nothing; a genuine leak of `coverage_items`/`excludes`/`benefits`/
+`claim_steps`/`claims_contact` text (`pre-visit`'s own narrowing is the one route that reads
+across this exact boundary on purpose) is now something this matrix can actually catch."""
 _STAMP = re.compile(r"\d{4}-\d{2}-\d{2}T[0-9:.+Z-]+")
 
 
@@ -1359,6 +1368,17 @@ def _check(
                 problems.append(
                     f"{holder.name} {where}: {seeded.kinds[own]} {own} drops its {what} in silence"
                 )
+    if Scope.MONEY not in holder.scopes:
+        # The policy's own essentials words (independent review, fix round, item 10): never
+        # on ANY route's response for a holder without money, not only the card/button routes
+        # the checks below already narrow to — `pre-visit`'s own narrowing is the one route
+        # that reads across this boundary on purpose, and it must never carry these words.
+        money_text = _text(body)
+        problems.extend(
+            f"{holder.name} {where}: the system's read reached the caller: {word!r}"
+            for word in INSURANCE_ESSENTIAL_WORDS
+            if word in money_text
+        )
     if walk is not None and walk.card:
         text = _text(body)
         for value in NOT_ON_THE_CARD:

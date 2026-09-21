@@ -6,6 +6,27 @@
     { "subject": "insurance_policy", "attribute": "insurer", "value": "Great Eastern", "unit": null },
     { "subject": "insurance_policy", "attribute": "policy_number", "value": "GE-HS-12345", "unit": null },
     { "subject": "insurance_policy", "attribute": "plan", "value": "Hospital Shield", "unit": null },
-    { "subject": "insurance_policy", "attribute": "start_date", "value": "2026-01-01", "unit": null }
+    { "subject": "insurance_policy", "attribute": "start_date", "value": "2026-01-01", "unit": null },
+    { "subject": "insurance_policy", "attribute": "end_date", "value": "2026-12-31", "unit": null },
+    { "subject": "insurance_policy", "attribute": "waiting_period", "value": "12 months for pre-existing conditions", "unit": null },
+    { "subject": "insurance_policy", "attribute": "claims_contact", "value": "24-hour claims hotline: 1800 555 0199", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_1", "value": "Room and board at a panel hospital", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_2", "value": "Surgical fees for a covered operation", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_3", "value": "Intensive care unit charges", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_4", "value": "Pre-hospitalisation specialist consultation, within 60 days before admission", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_5", "value": "Post-hospitalisation treatment, within 90 days after discharge", "unit": null },
+    { "subject": "insurance_policy", "attribute": "excludes_1", "value": "Cosmetic or plastic surgery, unless medically necessary after an accident", "unit": null },
+    { "subject": "insurance_policy", "attribute": "excludes_2", "value": "Pregnancy, childbirth and related complications", "unit": null },
+    { "subject": "insurance_policy", "attribute": "excludes_3", "value": "Self-inflicted injury or attempted suicide", "unit": null },
+    { "subject": "insurance_policy", "attribute": "excludes_4", "value": "Dental treatment, unless from an accidental injury", "unit": null },
+    { "subject": "insurance_policy", "attribute": "excludes_5", "value": "Treatment received outside Singapore for a non-emergency", "unit": null },
+    { "subject": "insurance_policy", "attribute": "benefit_1", "value": "Room and board: S$400 per day", "unit": null },
+    { "subject": "insurance_policy", "attribute": "benefit_2", "value": "Annual limit: S$150,000", "unit": null },
+    { "subject": "insurance_policy", "attribute": "benefit_3", "value": "Lifetime limit: S$1,200,000", "unit": null },
+    { "subject": "insurance_policy", "attribute": "benefit_4", "value": "Outpatient cancer drug treatment: up to S$6,000 a year", "unit": null },
+    { "subject": "insurance_policy", "attribute": "claim_step_1", "value": "Call the claims hotline before a planned admission for a guarantee letter", "unit": null },
+    { "subject": "insurance_policy", "attribute": "claim_step_2", "value": "Show your policy card and identity card at admission", "unit": null },
+    { "subject": "insurance_policy", "attribute": "claim_step_3", "value": "For an emergency, pay first and keep every original receipt", "unit": null },
+    { "subject": "insurance_policy", "attribute": "claim_step_4", "value": "Send the claim form and your receipts within 30 days of discharge", "unit": null }
   ]
 }

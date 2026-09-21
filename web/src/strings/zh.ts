@@ -1140,12 +1140,81 @@ export const zh = {
     },
     // @patient
     covers: "保障范围是{value}。",
+    // @patient phrase
+    covered: "适用于{value}。",
     // @patient
     renews: "续保日期是{date}。",
     // @patient
     premiumDue: "下次缴费日期是{date}。",
     // @patient
     reference: "保单号码是{reference}。",
+    // The passport (package 12a): a clearly separate block, kept apart from the row above.
+    passport: {
+      // @patient phrase
+      coversTitle: "保障范围",
+      // @patient phrase
+      excludesTitle: "不保障范围",
+      // @patient phrase
+      benefitsTitle: "保障与限额",
+      // @patient phrase
+      claimTitle: "如何理赔",
+      // @patient
+      notFound: ["Nura在保单上没有找到这项。", "请询问保险公司。"],
+      // @patient
+      noPaperYet: ["这项还没有写下来。", "加上保单，Nura会读它。"],
+      // @patient
+      worksByGuaranteeLetter: "这份保单在医院柜台使用保险信。",
+      // @patient phrase
+      claimedThisYear: "今年已申请",
+      // @patient phrase
+      paidByInsurer: "保险公司已付",
+      // @patient phrase
+      paidByPatient: "病人已付",
+      // @patient phrase
+      claimsTitle: "理赔",
+      // @patient phrase
+      addPolicy: "添加保单",
+      // @patient headline
+      loadTitle: "添加保单",
+      // @patient headline
+      proposeTitle: "将此添加为保单",
+      // @patient
+      proposeSub: "在Nura保存到记录之前，请检查这些内容。",
+      // @patient phrase
+      policyTypeLabel: "保障类型",
+      // @patient phrase
+      proposeCta: "保存",
+      // @patient phrase
+      proposeCtaBusy: "保存中…",
+      // @patient phrase
+      proposeCtaDone: "已保存",
+      // @patient
+      notAPolicy: ["这看起来不像保单。", "Nura已将它与其他文件一起保存。"],
+      // @patient
+      savedAsPaper: "已保存到文件中。",
+      // @patient phrase
+      periodFrom: "从{date}",
+      // @patient phrase
+      periodTo: "至{date}",
+      // @patient phrase
+      pageMarker: "第{page}页",
+      // @patient phrase
+      showAllN: "显示全部{n}项",
+      // @patient phrase
+      whoToContact: "联系方式",
+      // @patient phrase
+      seePolicyItself: "查看保单原件",
+      // @patient
+      confirmSafety: ["Nura显示保单上写的内容。", "不会决定什么可以获得赔付。", "这不是财务建议。"],
+      // @patient phrase
+      fixSomething: "更正内容",
+      // @patient
+      essentialsCutNotice: ["Nura读取了这部分的前{n}行。", "保单上可能还有更多内容。"],
+      // @patient phrase
+      waitingPeriodLabel: "等待期：{text}",
+      // @patient phrase
+      typedLabel: "手动输入",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1935,6 +2004,12 @@ export const zh = {
         holder: "这份保单保障谁",
         start_date: "什么时候开始",
         end_date: "什么时候结束",
+        waiting_period: "等待期",
+        claims_contact: "理赔联系方式",
+        covers: "保障范围",
+        excludes: "不保障范围",
+        benefit: "保障或限额",
+        claim_step: "理赔步骤",
       },
       insurance_claim: {
         insurer: "保险公司",

@@ -1090,6 +1090,16 @@ CLASSES: dict[str, str] = {
     "policy.set_by_person_id": IDENTIFIER,
     "policy.confirmation_id": CONSENT,
     "policy.set_at": OPERATIONAL,
+    "policy.plan": IDENTIFIER,
+    "policy.coverage_items": IDENTIFIER,
+    "policy.excludes": IDENTIFIER,
+    "policy.benefits": IDENTIFIER,
+    "policy.claim_steps": IDENTIFIER,
+    "policy.ends_on": IDENTIFIER,
+    "policy.waiting_period": IDENTIFIER,
+    "policy.claims_contact": IDENTIFIER,
+    "policy.review_card_id": IDENTIFIER,
+    "policy.essentials_cut": OPERATIONAL,
     # A claim names a policy and a visit, both identifiers by the same rule, and carries the
     # insurer's own claim number on the same terms as a policy reference.
     "insurance_claim.id": IDENTIFIER,

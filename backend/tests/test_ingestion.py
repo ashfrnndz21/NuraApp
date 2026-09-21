@@ -43,6 +43,8 @@ from app.ingestion.review import (
     NoSuchReviewField,
     NotADecision,
     NotEveryFieldDecided,
+    _carries_advice_language,
+    _flagged_insurance_essentials,
     card_fields,
     card_from,
     confirm_review_card,
@@ -74,6 +76,7 @@ from tests.paper import (
     HANDWRITTEN_PRESCRIPTION,
     INSURANCE_CLAIM,
     INSURANCE_POLICY,
+    INSURANCE_POLICY_NO_EXCLUSIONS,
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
     LIPID_GLUCOSE_PANEL,
@@ -229,6 +232,7 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         LIPID_GLUCOSE_PANEL,
         CLINIC_LETTER_HYPERTENSION,
         INSURANCE_POLICY,
+        INSURANCE_POLICY_NO_EXCLUSIONS,
         INSURANCE_CLAIM,
         PILL_PHOTO,
         PHARMACY_RECEIPT,
@@ -748,3 +752,57 @@ async def test_the_confirm_is_on_the_trail_as_writes_to_the_card_its_fields_and_
         for e in trail
         if e.target in {ReviewCard.__tablename__, ReviewField.__tablename__, "confirmation"}
     } == {Scope.RECORDS}
+
+
+async def test_advice_language_in_a_policy_essentials_line_is_flagged_needs_confirm(
+    sg: AsyncSession, store: LocalObjectStore
+) -> None:
+    """Independent review (package 12a fix round, item 5): a covers/excludes/benefit/
+    claim_step line that reads like Nura's own advice about his cover ("you are covered up to
+    S$150,000") rather than the paper's own printed words is held below the confirmation
+    threshold — `needs_confirm` catches it, "Check this one", the same as any other field
+    Nura is unsure of. Never a refusal: a false positive is still shown, just asked for a
+    second look, and a plain printed line is untouched."""
+    owner = await _pa(sg)
+    photo = await _photo(sg, owner, store)
+    card = await card_from(
+        sg,
+        context=owner,
+        artifact=photo,
+        extraction=Extraction(
+            DocumentKind.INSURANCE_POLICY,
+            (
+                ExtractedField("insurance_policy", "covers_1", "You are covered up to S$150,000", None, 0.95),
+                ExtractedField("insurance_policy", "covers_2", "Room and board at a panel hospital", None, 0.95),
+                ExtractedField("insurance_policy", "insurer", "Great Eastern", None, 0.95),
+            ),
+        ),
+    )
+    fields = {f.attribute: f for f in await card_fields(sg, context=owner, card_id=card.id)}
+    assert fields["covers_1"].needs_confirm is True
+    assert fields["covers_2"].needs_confirm is False
+    # `insurer` is not a numbered essentials line at all — never touched by this flag, even
+    # if it happened to carry one of the same words.
+    assert fields["insurer"].needs_confirm is False
+
+
+def test_carries_advice_language_recognises_english_malay_and_chinese_tokens() -> None:
+    assert _carries_advice_language("You are covered up to S$150,000") is True
+    assert _carries_advice_language("We recommend you claim within 30 days") is True
+    assert _carries_advice_language("Anda dilindungi sehingga RM50,000") is True
+    assert _carries_advice_language("您已受保，最高可达 S$150,000") is True
+    assert _carries_advice_language("Room and board at a panel hospital") is False
+
+
+def test_flagged_insurance_essentials_only_touches_insurance_policy_numbered_fields() -> None:
+    fields = (
+        ExtractedField("insurance_policy", "covers_1", "You are covered up to S$150,000", None, 0.95),
+        ExtractedField("insurance_policy", "insurer", "You are covered", None, 0.95),
+        ExtractedField("lab_report", "cholesterol", "You should see a doctor", None, 0.95),
+    )
+    flagged = _flagged_insurance_essentials(fields, DocumentKind.INSURANCE_POLICY)
+    by_attribute = {f.attribute: f for f in flagged}
+    assert by_attribute["covers_1"].confidence < CONFIDENCE_THRESHOLD
+    assert by_attribute["insurer"].confidence == 0.95  # not a numbered essentials attribute
+    other_kind = _flagged_insurance_essentials(fields, DocumentKind.LAB_REPORT)
+    assert all(f.confidence == 0.95 for f in other_kind)  # only ever applied to a policy

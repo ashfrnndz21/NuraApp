@@ -1140,12 +1140,81 @@ export const ms = {
     },
     // @patient
     covers: "Ia melindungi {value}.",
+    // @patient phrase
+    covered: "Untuk {value}.",
     // @patient
     renews: "Ia diperbaharui pada {date}.",
     // @patient
     premiumDue: "Bayaran seterusnya perlu dibayar pada {date}.",
     // @patient
     reference: "Nombor polisinya {reference}.",
+    // The passport (package 12a): a clearly separate block, kept apart from the row above.
+    passport: {
+      // @patient phrase
+      coversTitle: "Apa yang dilindungi",
+      // @patient phrase
+      excludesTitle: "Apa yang tidak dilindungi",
+      // @patient phrase
+      benefitsTitle: "Manfaat dan had",
+      // @patient phrase
+      claimTitle: "Cara membuat tuntutan",
+      // @patient
+      notFound: ["Nura tidak menjumpai ini pada polisi itu.", "Tanya syarikat insurans itu."],
+      // @patient
+      noPaperYet: ["Ini belum ditulis lagi.", "Tambah kertas polisi itu dan Nura akan membacanya."],
+      // @patient
+      worksByGuaranteeLetter: "Polisi ini menggunakan surat insurans di kaunter hospital.",
+      // @patient phrase
+      claimedThisYear: "Dituntut tahun ini",
+      // @patient phrase
+      paidByInsurer: "Dibayar oleh syarikat insurans",
+      // @patient phrase
+      paidByPatient: "Dibayar oleh pesakit",
+      // @patient phrase
+      claimsTitle: "Tuntutan",
+      // @patient phrase
+      addPolicy: "Tambah polisi",
+      // @patient headline
+      loadTitle: "Tambah polisi",
+      // @patient headline
+      proposeTitle: "Tambah ini sebagai polisi",
+      // @patient
+      proposeSub: "Semak semula sebelum Nura menyimpannya dalam kertas-kertas.",
+      // @patient phrase
+      policyTypeLabel: "Apakah jenis perlindungan",
+      // @patient phrase
+      proposeCta: "Simpan",
+      // @patient phrase
+      proposeCtaBusy: "Menyimpan…",
+      // @patient phrase
+      proposeCtaDone: "Disimpan",
+      // @patient
+      notAPolicy: ["Itu tidak kelihatan seperti polisi.", "Nura menyimpannya bersama kertas lain."],
+      // @patient
+      savedAsPaper: "Disimpan dalam kertas-kertas.",
+      // @patient phrase
+      periodFrom: "Dari {date}",
+      // @patient phrase
+      periodTo: "hingga {date}",
+      // @patient phrase
+      pageMarker: "ms. {page}",
+      // @patient phrase
+      showAllN: "Tunjuk semua {n}",
+      // @patient phrase
+      whoToContact: "Siapa untuk dihubungi",
+      // @patient phrase
+      seePolicyItself: "Lihat polisi itu sendiri",
+      // @patient
+      confirmSafety: ["Nura menunjukkan apa yang polisi itu kata.", "Ia tidak menentukan apa yang dilindungi.", "Ini bukan nasihat kewangan."],
+      // @patient phrase
+      fixSomething: "Betulkan sesuatu",
+      // @patient
+      essentialsCutNotice: ["Nura membaca {n} baris pertama bahagian ini.", "Mungkin ada lagi pada polisi itu."],
+      // @patient phrase
+      waitingPeriodLabel: "Tempoh menunggu: {text}",
+      // @patient phrase
+      typedLabel: "Seperti yang ditaip",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1935,6 +2004,12 @@ export const ms = {
         holder: "Siapa yang dilindungi polisi ini",
         start_date: "Bila ia bermula",
         end_date: "Bila ia tamat",
+        waiting_period: "Tempoh menunggu",
+        claims_contact: "Siapa untuk dihubungi bagi tuntutan",
+        covers: "Apa yang dilindungi",
+        excludes: "Apa yang tidak dilindungi",
+        benefit: "Manfaat atau had",
+        claim_step: "Langkah untuk menuntut",
       },
       insurance_claim: {
         insurer: "Syarikat insurans",

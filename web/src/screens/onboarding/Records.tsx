@@ -7,7 +7,7 @@ import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
-import { decisionsFor, kindLine, readable, startingEdits, type FieldEdit } from "../../onboarding/review";
+import { decisionsFor, hasNumericResults, kindLine, readable, startingEdits, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { language, LOCALE, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
@@ -296,7 +296,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
       <div class="acts">
         <ThreeStateButton label={r.looksRight} busyLabel={s.onboarding.saving} doneLabel={r.saved} onAct={looksRight} testId="looks-right" />
         <Pill quiet onClick={() => setFixHint(true)} testId="fix-number">
-          {r.fixNumber}
+          {hasNumericResults(card, s, locale) ? r.fixNumber : s.insurance.passport.fixSomething}
         </Pill>
       </div>
     </main>

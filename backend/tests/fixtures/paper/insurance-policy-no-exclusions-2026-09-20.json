@@ -1,0 +1,20 @@
+{
+  "placeholder": "insurance-policy-no-exclusions-2026-09-20",
+  "sha256": "faff0bb6faa63ef2509af14f5ae180567d4a80866f2c28640fe45321429c1fbc",
+  "note": "Synthetic fixture (no real patient, no real insurer): a second, shorter policy schedule whose pages print no exclusions section at all (package 12a) — the one calm 'not found' line must show for that section only, never for the others, which do print their own essentials.",
+  "document_kind": "insurance_policy",
+  "document_date": "2026-09-20",
+  "fields": [
+    { "subject": "insurance_policy", "attribute": "insurer", "value": "AIA", "unit": null, "confidence": 0.94, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.14, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "policy_number", "value": "AIA-SP-88214", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.5, "y1": 0.2, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "plan", "value": "Simple Shield", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.22, "x1": 0.5, "y1": 0.26, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "start_date", "value": "2026-03-01", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.28, "x1": 0.5, "y1": 0.32, "page": 1 } },
+
+    { "subject": "insurance_policy", "attribute": "covers_1", "value": "Hospital room and board", "unit": null, "confidence": 0.91, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 2 } },
+    { "subject": "insurance_policy", "attribute": "covers_2", "value": "Day surgery", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.9, "y1": 0.2, "page": 2 } },
+
+    { "subject": "insurance_policy", "attribute": "benefit_1", "value": "Annual limit: S$100,000", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 3 } },
+
+    { "subject": "insurance_policy", "attribute": "claim_step_1", "value": "Call the hotline within 24 hours of admission", "unit": null, "confidence": 0.88, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 3 } }
+  ]
+}

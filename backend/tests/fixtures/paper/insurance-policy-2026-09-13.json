@@ -1,41 +1,38 @@
 {
   "placeholder": "insurance-policy-2026-09-13",
   "sha256": "3960a7abdeb5d18d3dd9cc1b729cf104f6487f275058dfa4001c0d9089332d0f",
-  "note": "Synthetic fixture (no real patient, no real insurer): a policy schedule. Written for the documents-lab-reports-and-insurance story: routes into insurance_policy-subject facts (Scope.MONEY, never RECORDS), a proposal for the person's own separate yes on the fuller policy record (`app.insurance.policy`) — the review card never writes a Policy row directly.",
+  "note": "Synthetic fixture (no real patient, no real insurer): a policy schedule, enriched (package 12a) with its own covers/excludes/benefits/how-to-claim essentials, exactly as a real schedule would print them. Written for the documents-lab-reports-and-insurance story: routes into insurance_policy-subject facts (Scope.MONEY, never RECORDS), a proposal for the person's own separate yes on the fuller policy record (`app.insurance.policy`) — the review card never writes a Policy row directly.",
   "document_kind": "insurance_policy",
   "document_date": "2026-09-13",
   "fields": [
-    {
-      "subject": "insurance_policy",
-      "attribute": "insurer",
-      "value": "Great Eastern",
-      "unit": null,
-      "confidence": 0.95,
-      "span": { "x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.14, "page": 1 }
-    },
-    {
-      "subject": "insurance_policy",
-      "attribute": "policy_number",
-      "value": "GE-HS-12345",
-      "unit": null,
-      "confidence": 0.9,
-      "span": { "x0": 0.1, "y0": 0.16, "x1": 0.5, "y1": 0.2, "page": 1 }
-    },
-    {
-      "subject": "insurance_policy",
-      "attribute": "plan",
-      "value": "Hospital Shield",
-      "unit": null,
-      "confidence": 0.92,
-      "span": { "x0": 0.1, "y0": 0.22, "x1": 0.5, "y1": 0.26, "page": 1 }
-    },
-    {
-      "subject": "insurance_policy",
-      "attribute": "start_date",
-      "value": "2026-01-01",
-      "unit": null,
-      "confidence": 0.9,
-      "span": { "x0": 0.1, "y0": 0.28, "x1": 0.5, "y1": 0.32, "page": 1 }
-    }
+    { "subject": "insurance_policy", "attribute": "insurer", "value": "Great Eastern", "unit": null, "confidence": 0.95, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.5, "y1": 0.14, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "policy_number", "value": "GE-HS-12345", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.5, "y1": 0.2, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "plan", "value": "Hospital Shield", "unit": null, "confidence": 0.92, "span": { "x0": 0.1, "y0": 0.22, "x1": 0.5, "y1": 0.26, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "start_date", "value": "2026-01-01", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.28, "x1": 0.5, "y1": 0.32, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "end_date", "value": "2026-12-31", "unit": null, "confidence": 0.88, "span": { "x0": 0.1, "y0": 0.34, "x1": 0.5, "y1": 0.38, "page": 1 } },
+    { "subject": "insurance_policy", "attribute": "waiting_period", "value": "12 months for pre-existing conditions", "unit": null, "confidence": 0.82, "span": { "x0": 0.1, "y0": 0.4, "x1": 0.5, "y1": 0.44, "page": 2 } },
+    { "subject": "insurance_policy", "attribute": "claims_contact", "value": "24-hour claims hotline: 1800 555 0199", "unit": null, "confidence": 0.86, "span": { "x0": 0.1, "y0": 0.46, "x1": 0.5, "y1": 0.5, "page": 4 } },
+
+    { "subject": "insurance_policy", "attribute": "covers_1", "value": "Room and board at a panel hospital", "unit": null, "confidence": 0.91, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 2 } },
+    { "subject": "insurance_policy", "attribute": "covers_2", "value": "Surgical fees for a covered operation", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.9, "y1": 0.2, "page": 2 } },
+    { "subject": "insurance_policy", "attribute": "covers_3", "value": "Intensive care unit charges", "unit": null, "confidence": 0.89, "span": { "x0": 0.1, "y0": 0.22, "x1": 0.9, "y1": 0.26, "page": 2 } },
+    { "subject": "insurance_policy", "attribute": "covers_4", "value": "Pre-hospitalisation specialist consultation, within 60 days before admission", "unit": null, "confidence": 0.87, "span": { "x0": 0.1, "y0": 0.28, "x1": 0.9, "y1": 0.32, "page": 2 } },
+    { "subject": "insurance_policy", "attribute": "covers_5", "value": "Post-hospitalisation treatment, within 90 days after discharge", "unit": null, "confidence": 0.85, "span": { "x0": 0.1, "y0": 0.34, "x1": 0.9, "y1": 0.38, "page": 2 } },
+
+    { "subject": "insurance_policy", "attribute": "excludes_1", "value": "Cosmetic or plastic surgery, unless medically necessary after an accident", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 3 } },
+    { "subject": "insurance_policy", "attribute": "excludes_2", "value": "Pregnancy, childbirth and related complications", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.9, "y1": 0.2, "page": 3 } },
+    { "subject": "insurance_policy", "attribute": "excludes_3", "value": "Self-inflicted injury or attempted suicide", "unit": null, "confidence": 0.88, "span": { "x0": 0.1, "y0": 0.22, "x1": 0.9, "y1": 0.26, "page": 3 } },
+    { "subject": "insurance_policy", "attribute": "excludes_4", "value": "Dental treatment, unless from an accidental injury", "unit": null, "confidence": 0.86, "span": { "x0": 0.1, "y0": 0.28, "x1": 0.9, "y1": 0.32, "page": 3 } },
+    { "subject": "insurance_policy", "attribute": "excludes_5", "value": "Treatment received outside Singapore for a non-emergency", "unit": null, "confidence": 0.85, "span": { "x0": 0.1, "y0": 0.34, "x1": 0.9, "y1": 0.38, "page": 3 } },
+
+    { "subject": "insurance_policy", "attribute": "benefit_1", "value": "Room and board: S$400 per day", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 4 } },
+    { "subject": "insurance_policy", "attribute": "benefit_2", "value": "Annual limit: S$150,000", "unit": null, "confidence": 0.92, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.9, "y1": 0.2, "page": 4 } },
+    { "subject": "insurance_policy", "attribute": "benefit_3", "value": "Lifetime limit: S$1,200,000", "unit": null, "confidence": 0.88, "span": { "x0": 0.1, "y0": 0.22, "x1": 0.9, "y1": 0.26, "page": 4 } },
+    { "subject": "insurance_policy", "attribute": "benefit_4", "value": "Outpatient cancer drug treatment: up to S$6,000 a year", "unit": null, "confidence": 0.84, "span": { "x0": 0.1, "y0": 0.28, "x1": 0.9, "y1": 0.32, "page": 4 } },
+
+    { "subject": "insurance_policy", "attribute": "claim_step_1", "value": "Call the claims hotline before a planned admission for a guarantee letter", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.1, "x1": 0.9, "y1": 0.14, "page": 4 } },
+    { "subject": "insurance_policy", "attribute": "claim_step_2", "value": "Show your policy card and identity card at admission", "unit": null, "confidence": 0.9, "span": { "x0": 0.1, "y0": 0.16, "x1": 0.9, "y1": 0.2, "page": 4 } },
+    { "subject": "insurance_policy", "attribute": "claim_step_3", "value": "For an emergency, pay first and keep every original receipt", "unit": null, "confidence": 0.87, "span": { "x0": 0.1, "y0": 0.22, "x1": 0.9, "y1": 0.26, "page": 4 } },
+    { "subject": "insurance_policy", "attribute": "claim_step_4", "value": "Send the claim form and your receipts within 30 days of discharge", "unit": null, "confidence": 0.88, "span": { "x0": 0.1, "y0": 0.28, "x1": 0.9, "y1": 0.32, "page": 4 } }
   ]
 }

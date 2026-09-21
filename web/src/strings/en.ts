@@ -1140,12 +1140,81 @@ export const en = {
     },
     // @patient
     covers: "It covers {value}.",
+    // @patient phrase
+    covered: "For {value}.",
     // @patient
     renews: "It renews on {date}.",
     // @patient
     premiumDue: "The next payment is due on {date}.",
     // @patient
     reference: "The policy number is {reference}.",
+    // The passport (package 12a): a clearly separate block, kept apart from the row above.
+    passport: {
+      // @patient phrase
+      coversTitle: "What it covers",
+      // @patient phrase
+      excludesTitle: "What it does not cover",
+      // @patient phrase
+      benefitsTitle: "Benefits and limits",
+      // @patient phrase
+      claimTitle: "How to claim",
+      // @patient
+      notFound: ["Nura did not find this on the policy.", "Ask the insurance company."],
+      // @patient
+      noPaperYet: ["This is not written down yet.", "Add the policy paper and Nura will read it."],
+      // @patient
+      worksByGuaranteeLetter: "This policy uses an insurance letter at the hospital desk.",
+      // @patient phrase
+      claimedThisYear: "Claimed this year",
+      // @patient phrase
+      paidByInsurer: "Paid by insurer",
+      // @patient phrase
+      paidByPatient: "Paid by patient",
+      // @patient phrase
+      claimsTitle: "Claims",
+      // @patient phrase
+      addPolicy: "Add a policy",
+      // @patient headline
+      loadTitle: "Add a policy",
+      // @patient headline
+      proposeTitle: "Add this as a policy",
+      // @patient
+      proposeSub: "Check these before Nura saves them to the papers.",
+      // @patient phrase
+      policyTypeLabel: "What kind of cover",
+      // @patient phrase
+      proposeCta: "Save",
+      // @patient phrase
+      proposeCtaBusy: "Saving…",
+      // @patient phrase
+      proposeCtaDone: "Saved",
+      // @patient
+      notAPolicy: ["That does not look like a policy.", "Nura kept it with the other papers."],
+      // @patient
+      savedAsPaper: "Saved to the papers.",
+      // @patient phrase
+      periodFrom: "From {date}",
+      // @patient phrase
+      periodTo: "to {date}",
+      // @patient phrase
+      pageMarker: "p. {page}",
+      // @patient phrase
+      showAllN: "Show all {n}",
+      // @patient phrase
+      whoToContact: "Who to contact",
+      // @patient phrase
+      seePolicyItself: "See the policy itself",
+      // @patient
+      confirmSafety: ["Nura shows what the policy says.", "It does not decide what is covered.", "This is not financial advice."],
+      // @patient phrase
+      fixSomething: "Fix something",
+      // @patient
+      essentialsCutNotice: ["Nura read the first {n} lines of this section.", "There may be more on the policy."],
+      // @patient phrase
+      waitingPeriodLabel: "Waiting time: {text}",
+      // @patient phrase
+      typedLabel: "As typed",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {
@@ -1937,6 +2006,12 @@ export const en = {
         holder: "Who the policy is for",
         start_date: "When it started",
         end_date: "When it ends",
+        waiting_period: "The waiting period",
+        claims_contact: "Who to contact for a claim",
+        covers: "What it covers",
+        excludes: "What it does not cover",
+        benefit: "A benefit or a limit",
+        claim_step: "A step to claim",
       },
       insurance_claim: {
         insurer: "The insurance company",

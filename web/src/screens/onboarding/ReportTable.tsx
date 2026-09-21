@@ -20,6 +20,7 @@ import {
   type FieldEdit,
   type ReportRowView,
 } from "../../onboarding/review";
+import { anyEssentialsCut, confirmedPolicyFields, ESSENTIAL_LIST_CAP } from "../../insurance/model";
 import { fill, language, LOCALE, t, type Strings } from "../../strings";
 import { Hear } from "../../ui/components";
 import { ActionSheet, Flag, Glass, Icon, RangeBar, Reveal, SoftText } from "../../ui/kit";
@@ -165,12 +166,27 @@ export function ReportTable({ card, edits, onEdit, waiting, documentDateText, da
         />
       )}
       <p class="caption" data-testid="safety-line">
-        {r.safetyRanges} {r.safetyNotAdvice}
+        {INSURANCE_KINDS.has(card.document_kind) ? s.insurance.passport.confirmSafety.join(" ") : `${r.safetyRanges} ${r.safetyNotAdvice}`}
       </p>
+      {/* The silent-truncation notice, raised here too (independent review, package 12a fix
+       *  round, item 4: "raise nothing silently on the card") — the SAME two lines the
+       *  passport shows under a cut section, shown once, before he even sees the proposal, so
+       *  a long schedule never quietly loses its tail between confirming and saving. */}
+      {INSURANCE_KINDS.has(card.document_kind) && anyEssentialsCut(confirmedPolicyFields(card.fields)) && (
+        <p class="caption" data-testid="report-essentials-cut-notice">
+          {fill(s.insurance.passport.essentialsCutNotice[0], { n: ESSENTIAL_LIST_CAP })} {s.insurance.passport.essentialsCutNotice[1]}
+        </p>
+      )}
       {readOnly && <div class="report-reopen-actions">{readOnly.actions}</div>}
     </div>
   );
 }
+
+/** An insurance kind's confirmation card shows the insurance boundary line (package 12a, item
+ *  10) instead of the lab-oriented "ranges are printed on your paper" line, which is simply
+ *  wrong for a policy or a claim letter — additive on this one shared component: every other
+ *  kind's safety line is unchanged. */
+const INSURANCE_KINDS: ReadonlySet<ReviewCardOut["document_kind"]> = new Set(["insurance_policy", "insurance_claim", "insurance_letter"]);
 
 function ReportRow({
   field,

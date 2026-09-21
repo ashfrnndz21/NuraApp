@@ -47,6 +47,7 @@ from tests.paper import (
     CLINIC_LETTER_HYPERTENSION,
     INSURANCE_CLAIM,
     INSURANCE_POLICY,
+    INSURANCE_POLICY_NO_EXCLUSIONS,
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
     METABOLIC_PANEL,
@@ -222,11 +223,35 @@ async def test_insurance_documents_route_to_money_scoped_facts_never_records(
     assert fact.subject == "insurance_policy" and fact.value == "Great Eastern"
     assert fact.event_id is None  # a fact only — never a Policy row (`app.insurance.policy`)
     held = list(await current_facts(sg, context=owner, subject="insurance_policy", at=fact.valid_from))
+    # Package 12a enriched this fixture with its own covers/excludes/benefits/how-to-claim
+    # essentials — every one of them is still just a fact here (never a Policy row) until his
+    # own separate yes on the fuller policy record.
     assert {f.attribute: f.value for f in held} == {
         "insurer": "Great Eastern",
         "policy_number": "GE-HS-12345",
         "plan": "Hospital Shield",
         "start_date": "2026-01-01",
+        "end_date": "2026-12-31",
+        "waiting_period": "12 months for pre-existing conditions",
+        "claims_contact": "24-hour claims hotline: 1800 555 0199",
+        "covers_1": "Room and board at a panel hospital",
+        "covers_2": "Surgical fees for a covered operation",
+        "covers_3": "Intensive care unit charges",
+        "covers_4": "Pre-hospitalisation specialist consultation, within 60 days before admission",
+        "covers_5": "Post-hospitalisation treatment, within 90 days after discharge",
+        "excludes_1": "Cosmetic or plastic surgery, unless medically necessary after an accident",
+        "excludes_2": "Pregnancy, childbirth and related complications",
+        "excludes_3": "Self-inflicted injury or attempted suicide",
+        "excludes_4": "Dental treatment, unless from an accidental injury",
+        "excludes_5": "Treatment received outside Singapore for a non-emergency",
+        "benefit_1": "Room and board: S$400 per day",
+        "benefit_2": "Annual limit: S$150,000",
+        "benefit_3": "Lifetime limit: S$1,200,000",
+        "benefit_4": "Outpatient cancer drug treatment: up to S$6,000 a year",
+        "claim_step_1": "Call the claims hotline before a planned admission for a guarantee letter",
+        "claim_step_2": "Show your policy card and identity card at admission",
+        "claim_step_3": "For an emergency, pay first and keep every original receipt",
+        "claim_step_4": "Send the claim form and your receipts within 30 days of discharge",
     }
 
     claim_card, claim_decided, claim_facts = await _confirm(sg, owner, store, extractor, INSURANCE_CLAIM)
@@ -235,6 +260,25 @@ async def test_insurance_documents_route_to_money_scoped_facts_never_records(
     claim_fact = next(fact for fact in claim_facts if fact.id == claim_number.fact_id)
     assert claim_fact.subject == "insurance_claim" and claim_fact.value == "CLM-98765"
     assert claim_fact.event_id is None
+
+
+async def test_a_policy_paper_printing_no_exclusions_section_yields_zero_excludes_facts(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """The fixture named for exactly this case (`insurance-policy-no-exclusions-2026-09-20`):
+    a policy paper that prints no "what it does not cover" section at all must never invent an
+    `excludes_N` fact for one — the passport's own fallback line ("Nura did not find this on
+    the policy") depends on there truly being zero such facts, not an empty-but-present one."""
+    owner = await _pa(sg)
+    card, _decided, facts = await _confirm(sg, owner, store, extractor, INSURANCE_POLICY_NO_EXCLUSIONS)
+    assert card.document_kind is DocumentKind.INSURANCE_POLICY
+    held = list(await current_facts(sg, context=owner, subject="insurance_policy", at=facts[0].valid_from))
+    excludes_attributes = [f.attribute for f in held if f.attribute.startswith("excludes_")]
+    assert excludes_attributes == []
+    # The other sections this same fixture DOES print still carry their own real facts —
+    # never a blanket "nothing found" once one section happens to be empty.
+    assert any(f.attribute.startswith("covers_") for f in held)
+    assert any(f.attribute.startswith("benefit_") for f in held)
 
 
 async def test_every_proposed_field_carries_its_artefact_and_its_page(

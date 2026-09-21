@@ -75,8 +75,15 @@ describe("onboarding's words", () => {
   it("name every line the paper fixtures can put on a review card, in every language", () => {
     expect(papers.length).toBeGreaterThan(0);
     // A pharmacy receipt's line subjects are numbered in the order printed (`item_1`,
-    // `item_2`…) and share one set of words (`fieldLabel`'s own `ITEM_SUBJECT` rule).
+    // `item_2`…) and share one set of words (`fieldLabel`'s own `ITEM_SUBJECT` rule). A
+    // policy's essentials lines are numbered the same way, but at the attribute (`fieldLabel`'s
+    // own `ESSENTIAL_ATTRIBUTE` rule): "covers_1", "excludes_3", "benefit_2", "claim_step_4".
     const subjectWords = (subject: string) => (/^item_\d+$/.test(subject) ? "item" : subject);
+    const attributeWords = (subject: string, attribute: string) => {
+      if (subject !== "insurance_policy") return attribute;
+      const essential = attribute.match(/^(covers|excludes|benefit|claim_step)_\d+$/);
+      return essential ? essential[1]! : attribute;
+    };
     for (const code of LANGUAGES) {
       for (const paper of papers) {
         for (const field of paper.fields) {
@@ -85,7 +92,7 @@ describe("onboarding's words", () => {
           // back to the paper's own `label_on_paper` for it instead, never the catalogue.
           if (field.attribute === "other") continue;
           expect(
-            stringsFor(code).onboarding.fields[subjectWords(field.subject)]?.[field.attribute],
+            stringsFor(code).onboarding.fields[subjectWords(field.subject)]?.[attributeWords(field.subject, field.attribute)],
             `${code} ${field.subject}.${field.attribute}`,
           ).toBeTruthy();
         }
