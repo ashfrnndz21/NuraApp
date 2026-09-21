@@ -52,7 +52,7 @@ from app.errors import Refusal
 from app.ingestion.models import ReviewCard
 from app.ingestion.notes import NoteView, recallable_notes
 from app.ingestion.objects import ObjectStore, sha256_of
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, OutOfScope
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
 from app.medicines.strings import PLAIN_NAME, say_date
@@ -544,12 +544,18 @@ async def waiting_papers(
     confirmed: a part this key cannot open is never read, so it can never even be named.
 
     Reads exactly one table, `ReviewCard` — never `ReviewField`, so a field's free text (an
-    extractor's read of an arbitrary page) can never reach this at all (review defect #1)."""
+    extractor's read of an arbitrary page) can never reach this at all (review defect #1).
+
+    Only a missing scope answers with silence: `OutOfScope` alone is caught, the same refusal
+    every other withheld tool read here produces. Any other `Refusal` (a region pin, a widened
+    read caught mid-flight, one not yet invented) is never swallowed — it propagates exactly as
+    it would from any other ask read, so a real defect is never mistaken for "nothing waiting"
+    (review defect #3, second pass: `except Refusal` was too wide)."""
     try:
         cards = await audited_read(
             session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
         )
-    except Refusal:
+    except OutOfScope:
         return []
     if not cards:
         return []
