@@ -45,6 +45,8 @@ from app.delivery.feed.clips import CLIP_LONGEST, CLIP_SHORTEST, caption_cues
 from app.delivery.feed.compress import Found, Searcher, changes_treatment
 from app.delivery.strings import language_for, learning_lines
 from app.delivery.timeline_strings import verified
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.narrate import _has_conclusion_language  # the one blocklist, not a second copy
 from app.safety.boundary import YOUR_DOCTOR
 
@@ -269,7 +271,11 @@ class ClaudeClipMaker:
     adapter in this codebase is (`app.llm.residency.allow_external_model`): a declared demo
     or a declared dev run, and a key, or it refuses to construct."""
 
-    MODEL = "claude-opus-5"
+    MODEL = DEFAULT_MODELS[Task.CLIP]
+    """The default when a caller does not pass `model=` (mainly a test — no `*_for` factory
+    wires this adapter to `Settings.models` yet, `NURA_CLIPMAKER` names no deployment). Haiku
+    4.5: a short rewrite of evidence already on the record plus one fetched page, not
+    open-ended reasoning."""
 
     def __init__(
         self,
@@ -280,6 +286,7 @@ class ClaudeClipMaker:
         demo_mode: bool,
         dev_run: bool = False,
         client: Any | None = None,
+        model: str = MODEL,
     ) -> None:
         from app.delivery.feed.claude_adapters import ClaudeAdapterNotAvailable, _client
         from app.llm.residency import allow_external_model
@@ -292,6 +299,7 @@ class ClaudeClipMaker:
         self._searcher = searcher
         self._domains = [d.strip().lower() for d in domains if d.strip()]
         self._client = client if client is not None else _client(api_key)
+        self._model = model
 
     def _one_page(self, terms: Sequence[str]) -> Found | None:
         for term in terms:
@@ -307,8 +315,9 @@ class ClaudeClipMaker:
         if page is None or not page.text.strip():
             return None
         try:
+            record_call(Task.CLIP, self._model)
             response = self._client.messages.create(
-                model=self.MODEL,
+                model=self._model,
                 max_tokens=2048,
                 output_config={"format": {"type": "json_schema", "schema": _LINES_SCHEMA}},
                 messages=[

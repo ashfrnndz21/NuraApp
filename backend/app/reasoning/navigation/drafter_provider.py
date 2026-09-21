@@ -13,6 +13,7 @@ family's need out of region. A name this build does not have refuses to start to
 from __future__ import annotations
 
 from app.llm.client import client_for
+from app.llm.models import Task
 from app.llm.navigation_draft import ClaudeDrafter
 from app.llm.residency import allow_external_model
 from app.reasoning.navigation.models import Drafter
@@ -42,7 +43,7 @@ def drafter_for(settings: Settings) -> Drafter:
             refusal=ClaudeDrafterOutsideDemo,
             what="NURA_DRAFTER=claude",
         )
-        return ClaudeDrafter(client_for(settings))
+        return ClaudeDrafter(client_for(settings), model=settings.models.for_task(Task.DRAFT))
     raise NoDrafter(
         f"no drafter named {settings.drafter!r}; only {RULE!r} and {CLAUDE!r} are built. "
         "Set NURA_DRAFTER=rule for a local run"

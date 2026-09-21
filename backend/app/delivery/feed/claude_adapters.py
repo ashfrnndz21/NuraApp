@@ -46,14 +46,30 @@ from app.delivery.feed.compress import (
     PortUnavailable,
     Searcher,
 )
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.residency import allow_external_model
 from app.settings import MissingSetting, Settings
 
 log = logging.getLogger("nura.delivery.feed.claude")
 
-MODEL = "claude-opus-5"
+SEARCH_MODEL = DEFAULT_MODELS[Task.SEARCH]
+"""The default `ClaudeSearcher` is built with when a caller does not pass `model=` (a test,
+mainly — `searcher_for` below always does). Sonnet 5, never Haiku: the searcher calls the
+server tools `web_search_20260209`/`web_fetch_20260209`, which Haiku 4.5 does not support. A
+real deployment's model comes from `Settings.models` (`app.llm.models`), not this constant."""
+COMPRESS_MODEL = DEFAULT_MODELS[Task.COMPRESS]
+"""The default `ClaudeCompressor` is built with when a caller does not pass `model=` — see
+`SEARCH_MODEL` above. The compressor rewrites an already-fetched page's text into plain
+words, so the cheapest model, Haiku 4.5, keeps the behaviour."""
 WEB_SEARCH_TOOL = "web_search_20260209"
 WEB_FETCH_TOOL = "web_fetch_20260209"
+SEARCH_TOOL_MAX_USES = 3
+"""`max_uses` on both server tools, per call to `_ask` (one `messages.create`): the live
+incident that prompted this module's cost work was one feed run fanning out into about 48
+Opus calls with web search — this keeps any *one* call from fanning out into many searches
+and fetches of its own, on top of the run-level cap (`app.delivery.feed.background.
+MAX_JOBS_PER_RUN`)."""
 
 _VIDEO_HOSTS = ("youtube.com", "www.youtube.com", "youtu.be", "m.youtube.com")
 
@@ -327,9 +343,11 @@ class ClaudeSearcher:
         demo_mode: bool,
         dev_run: bool = False,
         client: Any | None = None,
+        model: str = SEARCH_MODEL,
     ) -> None:
         key = _checked_key(api_key=api_key, demo_mode=demo_mode, dev_run=dev_run, what="searcher")
         self._client = client if client is not None else _client(key)
+        self._model = model
 
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
         found: list[Found] = []
@@ -359,12 +377,13 @@ class ClaudeSearcher:
             ' `media: "article"`.'
         )
         try:
+            record_call(Task.SEARCH, self._model)
             response = self._client.messages.create(
-                model=MODEL,
+                model=self._model,
                 max_tokens=8192,
                 tools=[
-                    {"type": WEB_SEARCH_TOOL, "name": "web_search"},
-                    {"type": WEB_FETCH_TOOL, "name": "web_fetch"},
+                    {"type": WEB_SEARCH_TOOL, "name": "web_search", "max_uses": SEARCH_TOOL_MAX_USES},
+                    {"type": WEB_FETCH_TOOL, "name": "web_fetch", "max_uses": SEARCH_TOOL_MAX_USES},
                 ],
                 output_config={"format": {"type": "json_schema", "schema": SEARCH_SCHEMA}},
                 messages=[{"role": "user", "content": prompt}],
@@ -435,18 +454,21 @@ class ClaudeCompressor:
         demo_mode: bool,
         dev_run: bool = False,
         client: Any | None = None,
+        model: str = COMPRESS_MODEL,
     ) -> None:
         key = _checked_key(
             api_key=api_key, demo_mode=demo_mode, dev_run=dev_run, what="compressor"
         )
         self._client = client if client is not None else _client(key)
+        self._model = model
 
     def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
         if not text.strip():
             return None
         try:
+            record_call(Task.COMPRESS, self._model)
             response = self._client.messages.create(
-                model=MODEL,
+                model=self._model,
                 max_tokens=4096,
                 output_config={"format": {"type": "json_schema", "schema": COMPRESS_SCHEMA}},
                 messages=[{"role": "user", "content": _compress_prompt(text, language, facts)}],
@@ -501,6 +523,7 @@ def searcher_for(settings: Settings) -> Searcher:
             api_key=settings.anthropic_api_key,
             demo_mode=settings.demo_mode,
             dev_run=settings.dev_code_sender,
+            model=settings.models.for_task(Task.SEARCH),
         )
     if settings.searcher == "fixture":
         if settings.feed_fixtures is None:
@@ -518,6 +541,7 @@ def compressor_for(settings: Settings) -> Compressor:
             api_key=settings.anthropic_api_key,
             demo_mode=settings.demo_mode,
             dev_run=settings.dev_code_sender,
+            model=settings.models.for_task(Task.COMPRESS),
         )
     if settings.compressor == "fixture":
         if settings.feed_fixtures is None:

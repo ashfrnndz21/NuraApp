@@ -225,9 +225,11 @@ def test_claude_searcher_returns_the_ports_found_shape() -> None:
     assert one.title == "Managing high blood pressure"
     assert one.media is None
     assert "blood pressure" in one.text.lower()
-    # The model, and every tool it was given, are named as the brief pins them.
+    # The model, and every tool it was given, are named as the brief pins them. Sonnet 5, not
+    # Opus: the searcher calls the server tools, which Haiku 4.5 does not support, but does
+    # not need the dearest model either (`app.llm.models.DEFAULT_MODELS[Task.SEARCH]`).
     call = client.messages.calls[0]
-    assert call["model"] == "claude-opus-5"
+    assert call["model"] == "claude-sonnet-5"
     tool_types = {tool["type"] for tool in call["tools"]}
     assert tool_types == {"web_search_20260209", "web_fetch_20260209"}
     assert call["output_config"]["format"]["type"] == "json_schema"
@@ -525,7 +527,9 @@ def test_claude_compressor_returns_the_ports_compressed_shape() -> None:
     assert out.why_topic == "your blood pressure"
     assert out.passage.strip() != ""
     call = client.messages.calls[0]
-    assert call["model"] == "claude-opus-5"
+    # Haiku 4.5, not Opus: rewriting an already-fetched page into plain words is a short
+    # rewrite, not open-ended reasoning (`app.llm.models.DEFAULT_MODELS[Task.COMPRESS]`).
+    assert call["model"] == "claude-haiku-4-5-20251001"
     assert call["output_config"]["format"]["type"] == "json_schema"
     assert "schema" in call["output_config"]["format"]
     assert "json_schema" not in call["output_config"]["format"]

@@ -56,6 +56,8 @@ from app.insurance.policy import POLICY_SCOPE, PolicyStatus, current_policies
 from app.insurance.strings import CURRENCY_BY_REGION, render, say_money
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.residency import allow_external_model
 from app.memory.attach import require_appointment
 from app.memory.models import Appointment
@@ -166,19 +168,24 @@ class RuleEstimator:
 
 
 ESTIMATE_SCHEMA: dict[str, Any] = {
-    "name": "cost_estimate",
-    "schema": {
-        "type": "object",
-        "properties": {
-            "low": {"type": ["integer", "null"]},
-            "high": {"type": ["integer", "null"]},
-            "currency": {"type": "string"},
-        },
-        "required": ["low", "high", "currency"],
-        "additionalProperties": False,
+    "type": "object",
+    "properties": {
+        "low": {"type": ["integer", "null"]},
+        "high": {"type": ["integer", "null"]},
+        "currency": {"type": "string"},
     },
-    "strict": True,
+    "required": ["low", "high", "currency"],
+    "additionalProperties": False,
 }
+"""The raw JSON schema `output_config.format.schema` asks for — the flat shape, never the
+`{"name", "schema", "strict"}` wrapper an OpenAI-shaped `response_format` uses. This schema
+carried that wrapper until now: the Anthropic SDK's `JSONOutputFormatParam` only reads `type`
+and `schema`, so the wrapper's actual schema was invisible to the API and this call would have
+read as `output_config.format: Unexpected key 'json_schema'` and been refused with a 400
+before the model ever ran — the same live incident `app.delivery.feed.claude_adapters.
+SEARCH_SCHEMA`'s docstring describes, caught there on 2026-09-18. This adapter had no test
+exercising the real call shape (`test_the_structured_output_schema_is_one_the_api_accepts`),
+so it went uncaught until this file was touched for the model-cost work."""
 
 
 def _numeral_in(number: int, text: str) -> bool:
@@ -200,8 +207,19 @@ class ClaudeEstimator:
     each independently, so one honest number is never discarded because the other could not be
     verified."""
 
+    MODEL = DEFAULT_MODELS[Task.ESTIMATE]
+    """The default when a caller does not pass `model=` (a test, mainly — `estimator_for`
+    below always does). Sonnet 5: one grounded fetch and a handful of typed numbers, not the
+    dearest model, but more than the short-rewrite tasks Haiku 4.5 is kept to."""
+
     def __init__(
-        self, *, api_key: str | None, demo_mode: bool, dev_run: bool = False, client: Any | None = None
+        self,
+        *,
+        api_key: str | None,
+        demo_mode: bool,
+        dev_run: bool = False,
+        client: Any | None = None,
+        model: str = MODEL,
     ) -> None:
         allow_external_model(
             demo_mode=demo_mode,
@@ -214,6 +232,7 @@ class ClaudeEstimator:
                 "the Claude cost estimator needs ANTHROPIC_API_KEY set in the environment"
             )
         self._client = client if client is not None else self._build_client(api_key)
+        self._model = model
 
     @staticmethod
     def _build_client(api_key: str) -> Any:
@@ -233,12 +252,19 @@ class ClaudeEstimator:
             log.warning("claude cost estimator: %s is not on the allowlist for %s", host, region)
             return None
         try:
+            record_call(Task.ESTIMATE, self._model)
             response = self._client.messages.create(
-                model="claude-opus-5",
+                model=self._model,
                 max_tokens=4096,
                 tools=[{"type": "web_fetch_20260209", "name": "web_fetch"}],
                 output_config={
-                    "format": {"type": "json_schema", "json_schema": ESTIMATE_SCHEMA}
+                    # `"schema"`, never the `"json_schema"` key: the Anthropic SDK's
+                    # `JSONOutputFormatParam` only reads `type` and `schema` — see
+                    # `app.delivery.feed.claude_adapters.SEARCH_SCHEMA`'s docstring for the
+                    # same bug caught live there on 2026-09-18 (a silent 400 before the model
+                    # ever ran). This call carried the pre-fix key and was never exercised
+                    # against the real shape.
+                    "format": {"type": "json_schema", "schema": ESTIMATE_SCHEMA}
                 },
                 messages=[
                     {
@@ -316,6 +342,7 @@ def estimator_for(settings: Settings) -> Estimator:
             api_key=settings.anthropic_api_key,
             demo_mode=settings.demo_mode,
             dev_run=settings.dev_code_sender,
+            model=settings.models.for_task(Task.ESTIMATE),
         )
     raise NoEstimator(f"no cost estimator named {name!r} is built; set NURA_ESTIMATOR=rule or claude")
 

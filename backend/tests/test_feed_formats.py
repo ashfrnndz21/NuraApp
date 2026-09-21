@@ -850,32 +850,39 @@ async def test_a_watch_is_for_a_hazard_or_a_season_nura_knows(deployment: Deploy
 
 
 async def test_one_food_card_a_week_for_his_conditions_with_one_choice(
-    deployment: Deployment, clock: FrozenClock
+    deployment_factory: Any, clock: FrozenClock
 ) -> None:
-    pa, profile_id = await _pa(deployment)
-    await _told(deployment, pa, profile_id, "diabetes", "cholesterol")
-    await _feed(deployment, profile_id, pa["token"])
-    [food] = await _made(deployment, profile_id, CardType.FOOD)
-    assert food.headline.startswith("This week: ")
-    choice = food.body[: food.body.index("This comes from HealthHub.")]
-    assert 1 <= len(choice) <= 2, choice
-    assert food.body[-3:-1] == BOUNDARY_EN
-    async with deployment.sessions() as session:
-        [job] = (
-            await session.scalars(
-                select(SearchJob).where(
-                    SearchJob.profile_id == uuid.UUID(profile_id), SearchJob.kind == JobKind.FOOD
+    """Two conditions queue a broker candidate, two explainers, two local hazards and a
+    seasonal watch ahead of the (lowest-priority) weekly food job — seven jobs for one fresh
+    profile, one more than `Settings.max_jobs_per_run`'s own default (6, `app.delivery.feed.
+    background`). This test is about food-card selection, not the run cap
+    (`tests/test_feed_background.py` covers that), so it raises the cap for its own
+    deployment rather than assert on which day the food card happens to land."""
+    async with deployment_factory(max_jobs_per_run=50) as deployment:
+        pa, profile_id = await _pa(deployment)
+        await _told(deployment, pa, profile_id, "diabetes", "cholesterol")
+        await _feed(deployment, profile_id, pa["token"])
+        [food] = await _made(deployment, profile_id, CardType.FOOD)
+        assert food.headline.startswith("This week: ")
+        choice = food.body[: food.body.index("This comes from HealthHub.")]
+        assert 1 <= len(choice) <= 2, choice
+        assert food.body[-3:-1] == BOUNDARY_EN
+        async with deployment.sessions() as session:
+            [job] = (
+                await session.scalars(
+                    select(SearchJob).where(
+                        SearchJob.profile_id == uuid.UUID(profile_id), SearchJob.kind == JobKind.FOOD
+                    )
                 )
-            )
-        ).all()
-    assert job.terms == ["cholesterol", "diabetes"] and job.cadence == "weekly"
-    # Again this week: nothing new. Next week: the next choice, in turn.
-    await _feed(deployment, profile_id, pa["token"])
-    assert len(await _made(deployment, profile_id, CardType.FOOD)) == 1
-    clock.step(timedelta(days=7))
-    await _feed(deployment, profile_id, pa["token"])
-    both = await _made(deployment, profile_id, CardType.FOOD)
-    assert len(both) == 2 and both[0].headline != both[1].headline
+            ).all()
+        assert job.terms == ["cholesterol", "diabetes"] and job.cadence == "weekly"
+        # Again this week: nothing new. Next week: the next choice, in turn.
+        await _feed(deployment, profile_id, pa["token"])
+        assert len(await _made(deployment, profile_id, CardType.FOOD)) == 1
+        clock.step(timedelta(days=7))
+        await _feed(deployment, profile_id, pa["token"])
+        both = await _made(deployment, profile_id, CardType.FOOD)
+        assert len(both) == 2 and both[0].headline != both[1].headline
 
 
 # --- E11-08: the phone's queue --------------------------------------------------------------
@@ -1360,20 +1367,25 @@ async def test_his_chief_s_taps_on_her_list_are_not_his(
     assert status[reading] == "sent"
 
 
-async def test_no_food_card_when_his_kidneys_are_on_his_record(deployment: Deployment) -> None:
-    pa, profile_id = await _pa(deployment)
-    await _told(deployment, pa, profile_id, "diabetes", "kidneys")
-    await _feed(deployment, profile_id, pa["token"])
-    assert await _made(deployment, profile_id, CardType.FOOD) == []
-    async with deployment.sessions() as session:
-        [job] = (
-            await session.scalars(
-                select(SearchJob).where(
-                    SearchJob.profile_id == uuid.UUID(profile_id), SearchJob.kind == JobKind.FOOD
+async def test_no_food_card_when_his_kidneys_are_on_his_record(deployment_factory: Any) -> None:
+    """Same reason as `test_one_food_card_a_week_for_his_conditions_with_one_choice` above: two
+    conditions queue enough higher-priority jobs to clear the default run cap before the food
+    job's own turn, so this raises the cap for its own deployment — the food job still has to
+    actually run for its own `rejected` reason to be read back."""
+    async with deployment_factory(max_jobs_per_run=50) as deployment:
+        pa, profile_id = await _pa(deployment)
+        await _told(deployment, pa, profile_id, "diabetes", "kidneys")
+        await _feed(deployment, profile_id, pa["token"])
+        assert await _made(deployment, profile_id, CardType.FOOD) == []
+        async with deployment.sessions() as session:
+            [job] = (
+                await session.scalars(
+                    select(SearchJob).where(
+                        SearchJob.profile_id == uuid.UUID(profile_id), SearchJob.kind == JobKind.FOOD
+                    )
                 )
-            )
-        ).all()
-    assert {r["because"] for r in job.results["rejected"]} == {"held_for_his_dietitian"}
+            ).all()
+        assert {r["because"] for r in job.results["rejected"]} == {"held_for_his_dietitian"}
 
 
 async def test_a_bulletin_is_one_card_not_one_every_day(

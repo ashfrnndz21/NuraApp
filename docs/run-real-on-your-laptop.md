@@ -22,10 +22,70 @@ data.
 | `NURA_SEARCHER=claude` | The feed's real web search, over the allowlist only | `Searcher` |
 | `NURA_COMPRESSOR=claude` | The feed's real plain-words card, grounded on the fetched page | `Compressor` |
 | `NURA_NARRATOR=claude` | The trace narrator rephrasing a step's own catalogue label | `Narrator` |
-| `NURA_ASKER` | No adapter yet — a companion PR adds one; `make dev` passes it through regardless, so unset already means whatever lands as the default | `Asker` |
+| `NURA_ASKER=claude` | The agent asker deciding for itself what to look at (`app.llm.ask_agent.ClaudeAsker`) | `Asker` |
+| `NURA_ANALYST=claude` | The Health Analyst choosing and rephrasing from the rule read (`app.reasoning.analyst.claude_adapter.ClaudeAnalyst`) | `Analyst` |
+| `NURA_DRAFTER=claude` | The navigation drafter, checked against `RuleDrafter`'s own guards (T3) | `Drafter` |
+| `NURA_ESTIMATOR=claude` | The cost estimator's one grounded fetch of a benchmark's own page (T3) | `Estimator` |
 
-Any one on its own, or all four together. Leave the rest unset — an unset switch stays
-`fixture`, today's behaviour, unchanged.
+Any of these on its own, or several together. Leave the rest unset — an unset switch stays
+`fixture` (or `rule`), today's behaviour, unchanged.
+
+## The model each task runs on
+
+`backend/CLAUDE.md` forbids hard-coding a model in a caller: `app.llm.models` is the one
+table every switch above actually reads its model from (ADR 0018), the cheapest model that
+still keeps the task's behaviour. Reading a paper and Ask stay on the dearest model — a
+mistake there reaches a family directly; the searcher stays off Haiku 4.5 because its server
+tools (`web_search_20260209`/`web_fetch_20260209`) need Sonnet 5 or above.
+
+| Task | Default model | Override |
+|---|---|---|
+| `extract` (the document reader) | `claude-opus-5` | `NURA_MODEL_EXTRACT` |
+| `ask` (Ask) | `claude-opus-5` | `NURA_MODEL_ASK` |
+| `analyst` (the Health Analyst) | `claude-sonnet-5` | `NURA_MODEL_ANALYST` |
+| `search` (the feed searcher) | `claude-sonnet-5` | `NURA_MODEL_SEARCH` |
+| `estimate` (the cost estimator) | `claude-sonnet-5` | `NURA_MODEL_ESTIMATE` |
+| `draft` (the navigation drafter) | `claude-sonnet-5` | `NURA_MODEL_DRAFT` |
+| `compress` (the feed compressor) | `claude-haiku-4-5-20251001` | `NURA_MODEL_COMPRESS` |
+| `clip` (the clip maker's script step) | `claude-haiku-4-5-20251001` | `NURA_MODEL_CLIP` |
+| `narrate` (the trace narrator) | `claude-haiku-4-5-20251001` | `NURA_MODEL_NARRATE` |
+
+An override names one of the model ids this build actually knows how to call
+(`app.llm.models.ALLOWED_MODELS`); naming anything else refuses to start rather than fail on
+the adapter's first real call. Export only the ones you want to move — everything else keeps
+its own default:
+
+```sh
+export NURA_MODEL_COMPRESS=claude-opus-5   # e.g. to try the compressor on the dearest model
+```
+
+## The run cap
+
+A background feed run only ever executes the plan's first `NURA_MAX_JOBS_PER_RUN` jobs
+(default 6), in the broker's own order; the rest are left due for a later run, ordinarily the
+next day's — the run-level half of the same cost fix (ADR 0018). The feed response's own
+`jobs.deferred` says how many were held back. Raise or lower it the same way:
+
+```sh
+export NURA_MAX_JOBS_PER_RUN=3
+```
+
+The searcher's own server-tool use is capped too (`SEARCH_TOOL_MAX_USES` on
+`web_search`/`web_fetch`, `app.delivery.feed.claude_adapters`), so one job cannot itself fan
+out into many searches the way the live incident that prompted this page did.
+
+## Watching what it costs, live
+
+`GET /dev/model-calls` (dev runs only — the same `NURA_DEV_CODE_SENDER=1` gate every other
+`/dev/*` door needs) reads back this process's own running count of external model calls, by
+task and model — counts only, never content, never a token count:
+
+```sh
+curl http://127.0.0.1:8000/dev/model-calls
+```
+
+The server log also prints a feed run's own delta once, right after it finishes: `feed: N
+external model calls this run (search/claude-sonnet-5=2, compress/claude-haiku-…=4)`.
 
 ## The exact lines to export
 

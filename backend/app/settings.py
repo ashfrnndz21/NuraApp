@@ -9,10 +9,11 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from app.clock import FrozenClockOutsideDev
+from app.llm.models import ModelTable, model_table_for
 from app.regions import Region
 
 STAFF_HANDLE = re.compile(r"^[a-z0-9_-]{1,32}$")
@@ -55,6 +56,14 @@ class Settings:
     from the platform's secrets, never the repo, never a log. Unset, the SDK's own
     ANTHROPIC_API_KEY is used if the environment has it; with neither, the extractor refuses
     to build."""
+    models: ModelTable = field(default_factory=lambda: model_table_for({}))
+    """task -> model id, resolved once from `NURA_MODEL_EXTRACT`, `NURA_MODEL_ASK`,
+    `NURA_MODEL_ANALYST`, `NURA_MODEL_SEARCH`, `NURA_MODEL_COMPRESS`, `NURA_MODEL_CLIP`,
+    `NURA_MODEL_NARRATE`, `NURA_MODEL_DRAFT` and `NURA_MODEL_ESTIMATE`
+    (`app.llm.models.model_table_for`). Every Claude-backed adapter's `*_for` factory reads
+    its own task's model from here — never a literal in the adapter itself (`CLAUDE.md`: no
+    hard-coded provider or model in a caller). An override naming a model this build does not
+    know refuses to start (`app.llm.models.UnknownModel`)."""
     narrator: str = "fixture"
     """NURA_NARRATOR: what says Ask's and Find's trace steps aloud
     (`app.search.narrator_provider.narrator_for`). `fixture` (the default) is today's
@@ -202,6 +211,15 @@ class Settings:
     """NURA_ACCOUNT_RETENTION_DAYS: how long a closed account's papers wait before they are
     deleted, while his yes can still undo the closing (#143). 30 until counsel says otherwise
     (docs/trust/account-closure.md)."""
+    max_jobs_per_run: int = 6
+    """NURA_MAX_JOBS_PER_RUN: how many of the day's self-searches one background run
+    (`app.delivery.feed.background.ensure_learning_scheduled`) actually runs, at most. The
+    plan's first N jobs in the broker's own order (`app.delivery.feed.compose.
+    plan_learning_jobs`, `RuleRanker`) run; the rest are left due, untouched, for a later run
+    — the next day's, ordinarily. One live run fanned out into about 48 Opus calls and one
+    card; this is the run-level half of that fix, alongside each task's own cheaper model
+    (`Settings.models`) and the searcher's own `max_uses` cap on its server tools
+    (`app.delivery.feed.claude_adapters.SEARCH_TOOL_MAX_USES`)."""
     review_origin: str | None = None
     """NURA_REVIEW_ORIGIN: the hostname (`review.nura.example`, no scheme, no path) the
     pharmacist's review queue is served from once a deployment holds real data (#145,
@@ -322,6 +340,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     retention = source.get("NURA_ACCOUNT_RETENTION_DAYS") or "30"
     if not retention.isdigit() or int(retention) < 1:
         raise MissingSetting("NURA_ACCOUNT_RETENTION_DAYS is a whole number of days, at least 1")
+    max_jobs_per_run = source.get("NURA_MAX_JOBS_PER_RUN") or "6"
+    if not max_jobs_per_run.isdigit() or int(max_jobs_per_run) < 1:
+        raise MissingSetting("NURA_MAX_JOBS_PER_RUN is a whole number of jobs, at least 1")
     return Settings(
         region=region,
         database_url=database_url,
@@ -331,6 +352,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         paper_fixtures=source.get("NURA_PAPER_FIXTURES") or None,
         extractor=source.get("NURA_EXTRACTOR", "fixture"),
         anthropic_api_key=source.get("NURA_ANTHROPIC_API_KEY") or source.get("ANTHROPIC_API_KEY") or None,
+        models=model_table_for(source),
         narrator=source.get("NURA_NARRATOR", "fixture"),
         analyst=source.get("NURA_ANALYST", "rule"),
         asker=source.get("NURA_ASKER", "rule"),
@@ -361,6 +383,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         vapid_private_key=vapid["PRIVATE_KEY"],
         vapid_subject=subject,
         account_retention_days=int(retention),
+        max_jobs_per_run=int(max_jobs_per_run),
         review_staff=_staff_tokens(
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),
