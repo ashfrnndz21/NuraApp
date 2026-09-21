@@ -33,6 +33,8 @@ from typing import TYPE_CHECKING, cast
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import record_share
 from app.audit.models import Channel
@@ -40,17 +42,20 @@ from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.db import utcnow
 from app.errors import Refusal
+from app.identity.models import Profile, Stewardship
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, as_the_system, resolve_key_context
 from app.keys.scopes import Scope
 from app.memory.spine import upcoming_appointments
 from app.memory.timeline import language_for
 from app.reasoning.analyst.port import Insight, Report, Section, Step
 from app.reasoning.analyst.service import latest_report, report_by_id, save_report
+from app.reasoning.visits.guard import may_change_visits
 from app.reasoning.visits.memos import current_memos, write_memo
 from app.reasoning.visits.models import MemoKind, MemoSource
 from app.reasoning.visits.questions import keep_paper_insight_questions
 from app.settings import Settings
+from app.state.service import StateView, current_state
 
 # `app.reasoning.analyst.paper`/`paper_service`/`claude_adapter`/`provider` all reach,
 # through `RuleAnalyst`'s own reads, back into `app.channels.api.deps` — this package's own
@@ -314,7 +319,9 @@ async def _paper_events(
     )
     claude_choices = None
     analyst = analyst_for(settings, registry=registry)
+    attempted_external_call = False
     if isinstance(analyst, ClaudeAnalyst) and read.questions:
+        attempted_external_call = True
         try:
             raw = await analyst._ask_claude(temp_report)
             claude_choices = None if raw is None else _parse_choices(raw)
@@ -323,6 +330,18 @@ async def _paper_events(
 
     # Phase 3: the rebuild (if any), the save and the audit line — a second, fresh session.
     async with session_scope(request) as session:
+        # The context left the region the moment the call above was made, whatever it came
+        # back with (or whether it came back at all) — the line is written once that is
+        # known, never only when the rephrase also succeeded (CLAUDE.md: no unlogged path).
+        if attempted_external_call:
+            await record_share(
+                session,
+                context=context,
+                scope=Scope.PROFILE,
+                target="insight_report",
+                channel=Channel.APP,
+                shared_with_label=EXTERNAL_MODEL_PROCESSOR,
+            )
         if claude_choices is not None:
             rebuilt = await _rebuild(
                 temp_report, claude_choices, session=session, context=context, language=language
@@ -333,14 +352,6 @@ async def _paper_events(
             if rebuilt_section is not None and rebuilt_section.insights:
                 questions = rebuilt_section.insights
                 source = "claude"
-                await record_share(
-                    session,
-                    context=context,
-                    scope=Scope.PROFILE,
-                    target="insight_report",
-                    channel=Channel.APP,
-                    shared_with_label=EXTERNAL_MODEL_PROCESSOR,
-                )
         insight = paper_analyst.build_insight(
             language=language,
             source=source,
@@ -366,6 +377,39 @@ async def paper_insight_stream(
     return StreamingResponse(_paper_events(request, context, artifact_id), media_type="text/event-stream")
 
 
+async def _system_state(session: AsyncSession, *, context: KeyContext) -> StateView:
+    """The current State, folded under this profile's own owner or steward reach — the same
+    "acting as the system" standing `app.reasoning.analyst.weekly_job._acting_context`
+    already uses for a profile's own unattended run — so a caregiver's key, which may not
+    itself hold every scope a full recompute needs (`app.state.service.RECOMPUTE_SCOPES`;
+    a caregiver preset lacks FAMILY and MONEY), can still file a standing memo without ever
+    widening what that key itself may read: this read is never handed back to the caller,
+    the same standing `app.safety.red_flags._system_read` already holds — only the memo's own
+    fixed line, and the state id it is stamped with, ever leave."""
+    profile = await session.get(Profile, context.profile_id)
+    assert profile is not None  # a resolved KeyContext always names a profile that exists
+    if profile.owner_person_id is not None:
+        acting_id = profile.owner_person_id
+    else:
+        steward = await session.scalar(
+            select(Stewardship).where(
+                Stewardship.profile_id == profile.id, Stewardship.closed_at.is_(None)
+            )
+        )
+        assert steward is not None  # a caregiver key implies an owner or an open stewardship
+        acting_id = steward.steward_person_id
+    acting = as_the_system(
+        await resolve_key_context(
+            session,
+            region=context.region,
+            person_id=acting_id,
+            profile_id=profile.id,
+            while_closing=True,
+        )
+    )
+    return await current_state(session, context=acting)
+
+
 class PaperInsightKeepOut(BaseModel):
     kept_count: int
     filed: str
@@ -380,9 +424,16 @@ async def keep_paper_insight(
     on the next upcoming visit, through the existing visit-questions write path
     (`keep_paper_insight_questions`), idempotently. With no upcoming visit, keep a standing
     memo instead (`app.reasoning.visits.memos.write_memo`), the existing "unfiled" store this
-    backend already has — also idempotent, by the same marker."""
+    backend already has — also idempotent, by the same marker.
+
+    Checked at the door, both branches alike: a viewer, a helper or a clinic key reads the
+    visits and never changes them (`app.reasoning.visits.guard.may_change_visits`) — the same
+    refusal `keep_paper_insight_questions` already raises for the "visit" branch on its own,
+    made explicit here so the "unfiled" branch, which does not call it, is never the one path
+    that door was missing from."""
     from app.reasoning.analyst.paper_service import latest_paper_insight, questions_of
 
+    may_change_visits(context)
     row = await latest_paper_insight(session, context=context, artifact_id=artifact_id)
     questions = questions_of(row)
     upcoming = await upcoming_appointments(session, context=context)
@@ -420,6 +471,7 @@ async def keep_paper_insight(
             source=MemoSource.ANALYST,
             source_id=artifact_id,
             language=marker_language,
+            state=await _system_state(session, context=context),
         )
         filed_now = True
     # `kept_count` counts what THIS call actually filed — 0 on a repeat call, the same

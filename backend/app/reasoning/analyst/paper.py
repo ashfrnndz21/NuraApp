@@ -74,10 +74,12 @@ so its own candidates must sit under an ordinary key `_rebuild` actually rebuild
 
 
 class NotAConfirmedPaper(Refusal):
-    """No confirmed paper by this id on this profile — an unconfirmed card, another
-    profile's artifact, and a key without RECORDS all refuse in these same words, the same
-    standing `NoKey` already holds to (`app.keys.context`): none of the three should be told
-    apart by what comes back."""
+    """No confirmed paper by this id on this profile — an unconfirmed card and another
+    profile's artifact both refuse in these same words (404), the same standing `NoKey`
+    already holds to (`app.keys.context`): neither should be told apart by what comes back.
+    A key without RECORDS is turned away earlier and differently: `audited_read` requires
+    the scope before it ever runs the query, so that case is `OutOfScope` (403), from
+    `app.keys.context.KeyContext.require`, never this refusal."""
 
 
 class PaperStepKey(StrEnum):

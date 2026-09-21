@@ -25,9 +25,14 @@ all — the API call fails, times out, is refused, is cut off at `max_tokens`, r
 that does not parse, or every one of its insights gets dropped or rerouted — the whole call
 falls back to the rule report, unchanged, and nobody sees a half-built page.
 
-One `EXTERNAL_MODEL_PROCESSOR` audit entry is written per run, the same line
+One `EXTERNAL_MODEL_PROCESSOR` audit entry is written per run in which the model was actually
+called — whatever its outcome, success, a refusal, a cut-off answer, a reply that does not
+parse, or the call itself raising — never only on success: the person's context left the
+region the moment the call was made, whether or not anything useful came back, so the line is
+written once that is known to be true, before the outcome is even decided, the same line
 `app.channels.api.timeline.ask_stream` writes for the agent asker's own reach outside the
 region (ADR 0017, mirroring `app.ingestion.review.review_artifact`'s line for the extractor).
+Never written when `rule_report.sections` was empty: the model is never called on nothing.
 """
 
 from __future__ import annotations
@@ -287,6 +292,13 @@ class ClaudeAnalyst:
         if not rule_report.sections:
             yield rule_report
             return
+        # Reaching here means the model is about to be called (or the call itself is about
+        # to raise) — the context is about to leave the region either way, so the share line
+        # is written once that is decided, before the outcome is: on any doubt at all
+        # (a refusal, a cut-off answer, a parse failure, the call itself raising), the
+        # report falls back to the rule's own, but the audit line still stands — there is no
+        # unlogged path (CLAUDE.md).
+        rebuilt: Report | None = None
         try:
             raw = await self._ask_claude(rule_report)
             if raw is None:
@@ -297,8 +309,6 @@ class ClaudeAnalyst:
             rebuilt = await _rebuild(rule_report, choices, session=session, context=context, language=language)
         except Exception:
             log.warning("analyst: falling back to the rule report", exc_info=True)
-            yield rule_report
-            return
         await record_share(
             session,
             context=context,
@@ -307,7 +317,7 @@ class ClaudeAnalyst:
             channel=Channel.APP,
             shared_with_label=EXTERNAL_MODEL_PROCESSOR,
         )
-        yield rebuilt
+        yield rebuilt if rebuilt is not None else rule_report
 
 
 __all__ = ["ClaudeAnalyst"]

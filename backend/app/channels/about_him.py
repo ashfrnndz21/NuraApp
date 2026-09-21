@@ -129,6 +129,16 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (analyst_words.STEP_LABEL, analyst_words.STEP_LABEL_THEIRS),
         (analyst_words.ASK_THE_DOCTOR_LINE, analyst_words.ASK_THE_DOCTOR_LINE_THEIRS),
         (analyst_words.WITHHELD_LINE, analyst_words.WITHHELD_LINE_THEIRS),
+        # Checkpoint 3's paper-scoped insight (`app.reasoning.analyst.paper`): the same
+        # second-person-by-default standing as the weekly report's own lines above.
+        (analyst_words.PAPER_HEADLINE, analyst_words.PAPER_HEADLINE_THEIRS),
+        (analyst_words.PAPER_NOTHING_LINE, analyst_words.PAPER_NOTHING_LINE_THEIRS),
+        (analyst_words.PAPER_VALUE_LINE, analyst_words.PAPER_VALUE_LINE_THEIRS),
+        (analyst_words.PAPER_VALUE_WHY, analyst_words.PAPER_VALUE_WHY_THEIRS),
+        (analyst_words.PAPER_REPEAT_LINE, analyst_words.PAPER_REPEAT_LINE_THEIRS),
+        (analyst_words.PAPER_REPEAT_WHY, analyst_words.PAPER_REPEAT_WHY_THEIRS),
+        (analyst_words.LOOKED_AT_LABEL, analyst_words.LOOKED_AT_LABEL_THEIRS),
+        (analyst_words.PAPER_STEP_LABEL, analyst_words.PAPER_STEP_LABEL_THEIRS),
     )
 
 

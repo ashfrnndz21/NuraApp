@@ -477,3 +477,214 @@ async def _http_stream_and_keep(deployment: Deployment, store: LocalObjectStore,
     assert kept.status_code == 201, kept.text
     assert kept.json()["filed"] == "unfiled"
     assert kept.json()["kept_count"] == len(report["questions"])
+
+
+# --- range edge cases: decimals, a value exactly on a bound, compound text, precedence -----
+
+
+def test_a_decimal_printed_range_parses() -> None:
+    from app.reasoning.analyst.paper import _parse_printed_range
+
+    assert _parse_printed_range("<0.1") == (None, 0.1)
+
+
+def test_a_value_exactly_on_the_bound_is_not_flagged() -> None:
+    from app.reasoning.analyst.paper import _band
+
+    assert _band(130.0, (None, 130.0)) is None  # the bound itself is still "in"
+    assert _band(129.99, (None, 130.0)) is None
+    assert _band(130.01, (None, 130.0)) == "above"
+
+
+def test_compound_or_sex_specific_range_text_says_nothing_rather_than_guess() -> None:
+    from app.reasoning.analyst.paper import _parse_printed_range
+
+    for text in ("M: 13.5-17.5, F: 12.0-15.5", "Normal", "See report", ""):
+        assert _parse_printed_range(text) is None
+
+
+def test_an_embedded_range_wins_over_a_conflicting_legacy_sibling() -> None:
+    from app.reasoning.analyst.paper import _printed_range
+
+    # The embedded shape says in-range (140 < 200); the legacy sibling, if it were read
+    # instead, would say out-of-range (140 > 130). The embedded shape must win outright —
+    # `_printed_range` never blends the two.
+    assert _printed_range({"value": 140, "range": "<200"}, "<130") == (None, 200.0)
+
+
+async def test_an_embedded_range_in_practice_beats_a_conflicting_legacy_sibling_fact(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """The same precedence, through a real read: a fact whose own `value` already carries an
+    embedded `range` (a sibling builder's shape) is compared against that range, never the
+    legacy `ldl_reference_range` sibling fact this backend still writes today, even though
+    both sit on the same paper."""
+    from app.memory.episodic import record_event
+    from app.memory.models import ConfidenceState, EventKind, SourceChannel
+    from app.memory.semantic import assert_fact
+
+    owner = await pa(sg, phone="+6591160013")
+    card = await _confirm_paper(sg, owner, store, extractor)
+    event = await record_event(
+        sg,
+        context=owner,
+        kind=EventKind.READING,
+        occurred_at=AFTER_THE_PAPER,
+        label="a lab result",
+        source_channel=SourceChannel.APP,
+    )
+    # Overwrite the legacy `ldl` fact from the confirm above with one whose own value already
+    # carries an embedded range that reads as in-range — same artifact, same subject/attribute.
+    await assert_fact(
+        sg,
+        context=owner,
+        subject="lipid_panel",
+        attribute="ldl",
+        value={"value": 140, "range": "<200"},
+        confidence=1.0,
+        confidence_state=ConfidenceState.EXTRACTED,
+        artifact_id=card.artifact_id,
+        event_id=event.id,
+        valid_from=AFTER_THE_PAPER,
+    )
+    result = await _drain(sg, owner, card.artifact_id)
+    assert not any(q.insight_id.startswith("paper_value:") for q in result.questions)
+
+
+# --- a key with RECORDS but no VISITS: no visit in "looked at"; keep refuses cleanly -------
+
+
+async def test_a_key_with_records_but_no_visits_never_names_a_visit_and_keep_refuses_cleanly(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    from app.errors import Refusal
+    from app.memory.spine import upcoming_appointments
+
+    owner = await pa(sg, phone="+6591160014")
+    card = await _confirm_paper(sg, owner, store, extractor)
+
+    # A caregiver, by role, may change the visits — but this one's own key was narrowed to
+    # RECORDS alone, never granted VISITS.
+    caregiver = await let_in(
+        sg, owner, phone="+6591160015", name="Mei", role=KeyRole.CAREGIVER, scopes={Scope.RECORDS}
+    )
+
+    result = await _drain(sg, caregiver, card.artifact_id)
+    assert not any(one.kind == "appointment" for one in result.looked_at)
+
+    # "Behaves sanely": a real, existing Refusal (OutOfScope) — never a crash, never a leak.
+    with pytest.raises(Refusal):
+        await upcoming_appointments(sg, context=caregiver)
+
+
+# --- a closing account is refused, on this story's own routes too --------------------------
+
+
+async def test_a_closing_account_is_refused_on_the_paper_insight_routes(
+    deployment: Deployment, store: LocalObjectStore, extractor
+) -> None:
+    from app.clock import current
+    from app.keys.context import resolve_key_context
+    from tests.api import bearer, own_profile, register_by_phone
+
+    clock = current()
+    before = clock.now()
+    clock.set(AFTER_THE_PAPER)
+    try:
+        session = await register_by_phone(deployment, "+6591160016", "Pa", language="en")
+        profile_id = await own_profile(deployment, session, language="en")
+        his = bearer(session["token"])
+
+        async with deployment.sessions() as raw:
+            owner = await resolve_key_context(
+                raw,
+                region=deployment.region,
+                person_id=uuid.UUID(session["person_id"]),
+                profile_id=uuid.UUID(profile_id),
+            )
+            card = await _confirm_paper(raw, owner, store, extractor)
+            await raw.commit()
+
+        yes = await deployment.client.post(
+            f"/profiles/{profile_id}/confirmations",
+            json={"subject": "close_account", "language": "en"},
+            headers=his,
+        )
+        assert yes.status_code == 201, yes.text
+        closed = await deployment.client.post(
+            f"/profiles/{profile_id}/closure",
+            json={"confirmation_id": yes.json()["confirmation_id"], "language": "en"},
+            headers=his,
+        )
+        assert closed.status_code == 201, closed.text
+
+        streamed = await deployment.client.post(
+            f"/profiles/{profile_id}/papers/{card.artifact_id}/insight/stream", headers=his
+        )
+        assert streamed.status_code == 403
+        assert streamed.json() == {"refusal": "AccountClosing"}
+
+        kept = await deployment.client.post(
+            f"/profiles/{profile_id}/papers/{card.artifact_id}/insight/keep", headers=his
+        )
+        assert kept.status_code == 403
+        assert kept.json() == {"refusal": "AccountClosing"}
+    finally:
+        clock.set(before)
+
+
+# --- a caregiver reads the insight about the patient, by name, never "you"/"your" ----------
+
+
+async def test_a_caregivers_key_reads_the_insight_about_the_patient_by_name(
+    deployment: Deployment, store: LocalObjectStore, extractor
+) -> None:
+    from app.clock import current
+    from app.keys.context import resolve_key_context
+    from tests.api import bearer, let_in, own_profile, register_by_phone
+
+    clock = current()
+    before = clock.now()
+    clock.set(AFTER_THE_PAPER)
+    try:
+        session = await register_by_phone(deployment, "+6591160017", "Pa", language="en")
+        profile_id = await own_profile(deployment, session, language="en")
+        his = bearer(session["token"])
+
+        async with deployment.sessions() as raw:
+            owner = await resolve_key_context(
+                raw,
+                region=deployment.region,
+                person_id=uuid.UUID(session["person_id"]),
+                profile_id=uuid.UUID(profile_id),
+            )
+            await add_medicine(raw, owner, label("atorvastatin", "20 mg", "1 tab OD"))
+            card = await _confirm_paper(raw, owner, store, extractor)
+            await raw.commit()
+
+        scopes = ["records", "medicines", "visits"]
+        her_session = await register_by_phone(deployment, "+6591160018", "Mei", language="en")
+        hers = bearer(her_session["token"])
+        await let_in(
+            deployment, session, profile_id, "+6591160018", scopes, role="caregiver",
+            holder_display_name="Mei",
+        )
+        granted = await deployment.client.post(
+            f"/profiles/{profile_id}/keys",
+            json={"holder_phone_e164": "+6591160018", "role": "caregiver", "scopes": scopes},
+            headers=his,
+        )
+        assert granted.status_code == 201, granted.text
+
+        streamed = await deployment.client.post(
+            f"/profiles/{profile_id}/papers/{card.artifact_id}/insight/stream", headers=hers
+        )
+        assert streamed.status_code == 200, streamed.text
+        events = _sse_events(streamed.text)
+        report = events[-1]["report"]
+        assert report["questions"], "the caregiver holds every scope this paper needs"
+        text = json.dumps(report)
+        assert "Pa" in text  # the patient by name
+        assert " your " not in text.lower() and "\"you " not in text.lower()
+    finally:
+        clock.set(before)
