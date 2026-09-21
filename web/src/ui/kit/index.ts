@@ -1,4 +1,5 @@
 /** The design system's components (docs/design-system.md §4), in one place for the screens. */
+import "./kit.css";
 export { AskBar, type AskBarProps } from "./AskBar";
 export { Avatar, initial } from "./Avatar";
 export { BrandMark } from "./BrandMark";
@@ -26,3 +27,14 @@ export { ProgressRing } from "./ProgressRing";
 export { Wordmark } from "./Wordmark";
 export { Exchange, LookedAt, MessageBubble, SkeletonCard, StepTrace, ThinkingIndicator, TraceSteps, type ExchangeStatus, type ExchangeWords, type TraceStep } from "./Conversation";
 export { PendingCard, type PendingCardProps } from "./Pending";
+// The dusk-glass conversational kit (P1 of the redesign, docs/design/experience-blueprint.html).
+export { Orb, type OrbSize } from "./Orb";
+export { StatusLine } from "./StatusLine";
+export { SoftText } from "./SoftText";
+export { Reveal, RevealGroup } from "./Reveal";
+export { ThreeStateButton, type ThreeState } from "./ThreeStateButton";
+export { ActionSheet } from "./ActionSheet";
+export { Glass } from "./Glass";
+export { RangeBar, type RangeBarProps } from "./RangeBar";
+export { Flag, type FlagState } from "./Flag";
+export { ConnectionRow } from "./ConnectionRow";
