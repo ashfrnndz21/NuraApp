@@ -1,14 +1,11 @@
-import type { InsightOut, PaperInsightKeepOut, PaperInsightOut, ReviewCardOut } from "../api/types";
-import { reportRow, type ReportRowView } from "../onboarding/review";
-import type { Strings } from "../strings";
+import type { AppointmentOut, PaperInsightKeepOut, PaperInsightOut } from "../api/types";
 
 /** Checkpoint 3, "What it means for you" (`docs/design/experience-blueprint.html` scene
  *  `insight`): pure view logic for the screen that follows a confirmed paper — no fetch, no
  *  hook — so it renders the same from a test as it does on the screen. Nothing here invents a
- *  stage, a delay or a value: every field is either the backend's own real step/report, or a
- *  row already computed off the confirmed card's own printed ranges (`reportRow`, reused
- *  unchanged from the onboarding report table — the same "Above/In range/Below" logic, never a
- *  second one). */
+ *  stage, a delay or a value: every field is either the backend's own real step/report, or the
+ *  next visit's own real fields (`AppointmentOut`), read the same way `web/src/screens/tabs.tsx`'s
+ *  own `VisitList` already reads them. */
 
 /** One real stage of the stream, as it arrived. */
 export interface PaperInsightStep {
@@ -54,46 +51,27 @@ export function paperInsightHasNothingToAsk(report: Pick<PaperInsightOut, "quest
   return report.questions.length === 0;
 }
 
-/** "What stands out on this paper": every field of the just-confirmed card whose reading falls
- *  outside the range printed on the paper itself — the same `reportRow`/`rangeStatus` the
- *  report table already draws every row through (`web/src/onboarding/review.ts`), filtered to
- *  the rows worth a second look. Ordered as the paper prints them (`position`), never
- *  re-ranked. Computed from the card the person just confirmed (already in hand — it is the
- *  same object `ReviewStep.looksRight()` just sent to the backend), never a second read of the
- *  paper-scoped insight, which carries no raw values or ranges at all. */
-export function standoutRows(card: Pick<ReviewCardOut, "fields">, s: Strings, locale: string): ReportRowView[] {
-  return [...card.fields]
-    .sort((a, b) => a.position - b.position)
-    .map((field) => reportRow(field, s, locale))
-    .filter((row) => row.status === "above" || row.status === "below");
+/** "Looked at": the backend's own real labels, in the order the stream gave them — never a
+ *  fixed list, never invented when the stream/response names nothing (`report.looked_at`
+ *  empty gives an empty list here too, and the caller draws nothing for it). */
+export function lookedAtLabels(report: Pick<PaperInsightOut, "looked_at">): string[] {
+  return report.looked_at.map((each) => each.label);
 }
 
-// --- the questions: which ones the person wants to keep ------------------------------------
+// --- the card's own title: "For {doctor} on {date}", or the generic fallback ---------------
 
-export type QuestionSelection = ReadonlySet<string>;
+export type CardVisit = { kind: "named"; doctor: string; scheduledAt: string } | { kind: "generic" };
 
-/** Every question pre-selected (the blueprint's own card: every question offered is one Nura
- *  would ask, none struck out by default). */
-export function initialQuestionSelection(questions: readonly Pick<InsightOut, "insight_id">[]): QuestionSelection {
-  return new Set(questions.map((question) => question.insight_id));
-}
-
-/** One row tapped: in the set, out of it — never a third state. */
-export function toggleQuestionSelection(selection: QuestionSelection, insightId: string): QuestionSelection {
-  const next = new Set(selection);
-  if (next.has(insightId)) next.delete(insightId);
-  else next.add(insightId);
-  return next;
-}
-
-/** Whether "Keep these questions" has anything to act on: at least one row still checked. The
- *  backend's own `POST …/insight/keep` files every question on the paper's saved insight, with
- *  no way yet to file a caller-chosen subset (confirmed against its own tests: the call sends
- *  no body, and `kept_count` always equals the whole report's question count) — so a person who
- *  has unchecked every row is stopped here, on the client, rather than being told something was
- *  kept when nothing they still wanted was singled out. */
-export function hasQuestionSelection(selection: QuestionSelection): boolean {
-  return selection.size > 0;
+/** The next visit, the same "soonest first" order `nura.appointments()` already answers in
+ *  (`web/src/screens/tabs.tsx`'s own `VisitList`) — named by its doctor and its date only when
+ *  both are real fields on it; otherwise the generic card title, never a guessed doctor or a
+ *  visit invented where none is booked. */
+export function cardVisitOf(visits: readonly Pick<AppointmentOut, "doctor" | "scheduled_at">[]): CardVisit {
+  const next = visits[0];
+  if (next && next.doctor && next.doctor.trim()) {
+    return { kind: "named", doctor: next.doctor, scheduledAt: next.scheduled_at };
+  }
+  return { kind: "generic" };
 }
 
 // --- after "Keep": where the questions went -------------------------------------------------

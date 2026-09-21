@@ -507,25 +507,24 @@ export const en = {
     noVisit: "There is no visit booked yet to take this to.",
   },
   // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
-  // `insight`): right after "Looks right", what stands out on the paper and the questions it
-  // raises for the doctor.
+  // `insight`): right after "Looks right", the questions the paper raises for the doctor.
   paperInsight: {
     // @patient headline
     screenTitle: "What it means for you",
     // @patient headline
     screenTitleOther: "What it means for {patient}",
-    // @patient headline
-    standsOutTitle: "What stands out on this paper",
-    // @patient
-    standoutSafety: "Ranges are the ones printed on your paper.",
-    // @patient
-    standoutSafetyOther: "Ranges are the ones printed on {patient}'s paper.",
-    // @patient headline
-    questionsTitle: "Questions for your doctor",
-    // @patient headline
-    questionsTitleOther: "Questions for {patient}'s doctor",
     // @patient phrase
-    keepQuestions: "Keep these questions",
+    lookedAt: "Looked at",
+    // @patient phrase
+    forDoctorOn: "For {doctor} on {date}",
+    // @patient phrase
+    forNextVisit: "For your next visit",
+    // @patient phrase
+    forNextVisitOther: "For {patient}'s next visit",
+    // @patient
+    questionsNotAnswers: "Questions to ask, never answers.",
+    // @patient phrase
+    keepForVisit: "Keep these for my visit",
     // @patient phrase
     keeping: "Keeping…",
     // @patient phrase
@@ -538,6 +537,8 @@ export const en = {
     keptUnfiled: ["Nura kept your questions.", "Nura will add them once a visit is booked."],
     // @patient
     keptUnfiledOther: ["Nura kept {patient}'s questions.", "Nura will add them once {patient}'s next visit is booked."],
+    // @patient phrase
+    notNow: "Not now",
   },
   signIn: {
     // @patient headline

@@ -1,54 +1,52 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { PaperInsightKeepOut, ReviewCardOut } from "../api/types";
+import type { AppointmentOut, PaperInsightKeepOut, ReviewCardOut } from "../api/types";
 import { openMe } from "../flow";
 import {
-  hasQuestionSelection,
+  cardVisitOf,
   initialPaperInsightState,
-  initialQuestionSelection,
+  lookedAtLabels,
   paperInsightHasNothingToAsk,
   paperInsightStatusText,
-  standoutRows,
-  toggleQuestionSelection,
   whereKept,
   withPaperInsightReport,
   withPaperInsightStep,
   type PaperInsightStreamState,
-  type QuestionSelection,
 } from "../health/paperInsight";
 import { fill, language, LOCALE, t } from "../strings";
 import { profile, token } from "../store/session";
+import { dayMonthLine } from "../today/model";
 import { focusHeading } from "../ui/focus";
 import { Notice } from "../ui/components";
-import { ConnectionRow, Flag, Glass, Icon, Orb, RevealGroup, SoftText, StatusLine, ThreeStateButton } from "../ui/kit";
+import { Chip, ChipRow, ConnectionRow, Glass, Icon, Orb, SoftText, StatusLine, ThreeStateButton } from "../ui/kit";
 import { recordNote, toRecord } from "./record/parts";
 import { Shell } from "./Shell";
 
 /** Checkpoint 3, "What it means for you" (`docs/design/experience-blueprint.html` scene
- *  `insight`, package 7): the screen right after a paper is confirmed. Reused, unchanged,
- *  between two callers — onboarding's own bare step (`screens/onboarding/Insight.tsx`) and the
- *  Record's Papers flow's top-level screen, below — so the streaming, the selection and the
- *  keep behaviour are one implementation, never two. Nothing here is invented: the status line
- *  is only ever the backend's own next real step (`paperInsightStream`'s `onStep`), the
- *  headline and the questions are only ever `PaperInsightOut`'s own fields, and "what stands
- *  out" is computed off the confirmed card's own printed ranges — the same `reportRow` the
- *  report table already draws every row through. */
+ *  `insight`, package 7): the screen right after a paper is confirmed — the blueprint's own
+ *  shape, like for like: the small orb beside the one status line while the stream works, the
+ *  same orb beside the headline once it has (Ask's own "a finished turn keeps its orb"
+ *  precedent); "Looked at" as quiet chips, only what the stream really named; one glass card,
+ *  "For {doctor} on {date}" (the next visit's own real fields) or "For your next visit", the
+ *  questions inside it as plain paragraphs; "Keep these for my visit" (three states), the
+ *  ConnectionRow line under it once kept; "Not now". Reused, unchanged, between two callers —
+ *  onboarding's own bare step (`screens/onboarding/Insight.tsx`) and the Record's Papers
+ *  flow's top-level screen, below — so the streaming and the keep behaviour are one
+ *  implementation, never two. */
 
 interface PaperInsightViewProps {
   /** The just-confirmed card — freshly returned by `confirmReviewCard`, with any correction
-   *  already merged into its fields (never the stale, pre-confirm object): "what stands out"
-   *  reads straight off it, with no second fetch. */
+   *  already merged into its fields. */
   card: ReviewCardOut;
-  /** The one way on, before and after "Keep": onboarding's own "Next" back to the step that
-   *  would have come next, or the Record's own "Back to your papers" — never invented here,
-   *  always the caller's own words and the caller's own navigation. */
-  leaveLabel: string;
+  /** The one way on, before and after "Keep": always "Not now" (the blueprint's own words) —
+   *  where it actually goes is the caller's own (the Record's Papers list, or onboarding's own
+   *  next step), never this component's concern. */
   onLeave: () => void;
   testId?: string;
 }
 
-export function PaperInsightView({ card, leaveLabel, onLeave, testId }: PaperInsightViewProps): JSX.Element {
+export function PaperInsightView({ card, onLeave, testId }: PaperInsightViewProps): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
   const p = s.paperInsight;
@@ -60,7 +58,7 @@ export function PaperInsightView({ card, leaveLabel, onLeave, testId }: PaperIns
   const [stream, setStream] = useState<PaperInsightStreamState>(initialPaperInsightState);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const [selection, setSelection] = useState<QuestionSelection>(new Set());
+  const [visits, setVisits] = useState<AppointmentOut[]>([]);
   const [keepResult, setKeepResult] = useState<PaperInsightKeepOut | null>(null);
   const [keepError, setKeepError] = useState<unknown>(null);
 
@@ -114,10 +112,17 @@ export function PaperInsightView({ card, leaveLabel, onLeave, testId }: PaperIns
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, [card.artifact_id]);
 
-  const report = stream.report;
+  // The next visit's own doctor and date, for the card's own title — the same real read
+  // `screens/tabs.tsx`'s own `VisitList` already makes (`nura.appointments`, soonest first),
+  // reused here rather than a new route: no visit booked, or one with no doctor named yet,
+  // never invents either.
   useEffect(() => {
-    if (report) setSelection(initialQuestionSelection(report.questions));
-  }, [report?.report_id]);
+    const bearer = token.value;
+    if (!bearer || !papers) return;
+    nura.appointments(bearer, papers.profile_id).then(setVisits, () => setVisits([]));
+  }, [papers?.profile_id]);
+
+  const report = stream.report;
 
   // The headline only exists once the real report has landed (never before: no invented
   // heading while Nura is still working) — so the app's own on-arrival focus (`app.tsx`'s
@@ -142,22 +147,29 @@ export function PaperInsightView({ card, leaveLabel, onLeave, testId }: PaperIns
     }
   };
 
-  const rows = standoutRows(card, s, locale);
-  const questionsTitle = self ? p.questionsTitle : fill(p.questionsTitleOther, { patient: patientName });
   const statusText = paperInsightStatusText(stream, s.feed.askThinking);
   const nothingToAsk = report ? paperInsightHasNothingToAsk(report) : false;
+  const lookedAt = report ? lookedAtLabels(report) : [];
   const kept = whereKept({ filed: keepResult?.filed ?? "unfiled" });
-  // "Kept for your next visit." (one line), or "Kept." / "Nura will add these once a visit is
-  // booked." (two: `keptUnfiled` is two ideas, `plain-words` rule 2's own "one idea per line" —
-  // ConnectionRow's own bold-name-then-small-line shape fits it exactly, so the two ideas are
-  // never rejoined into one line here).
+  // "Kept for your next visit." (one line), or "Nura kept your questions." / "Nura will add
+  // them once a visit is booked." (two ideas: `keptUnfiled` is an array so `plain-words`
+  // rule 2's "one idea per line" holds — `ConnectionRow`'s own bold-name-then-small-line shape
+  // fits it exactly, so the two ideas are never rejoined into one line here).
   const keptUnfiledLines = (self ? p.keptUnfiled : p.keptUnfiledOther).map((line) => fill(line, { patient: patientName }));
 
+  const visit = cardVisitOf(visits);
+  const cardTitle =
+    visit.kind === "named"
+      ? fill(p.forDoctorOn, { doctor: visit.doctor, date: dayMonthLine(new Date(visit.scheduledAt), locale) })
+      : self
+        ? p.forNextVisit
+        : fill(p.forNextVisitOther, { patient: patientName });
+
   return (
-    <div data-testid={testId}>
+    <div data-testid={testId} class="insight-blocks">
       <Notice error={error} />
       {!report && !error && (
-        <div class="report-row-top" data-testid="insight-thinking">
+        <div class="insight-turn" data-testid="insight-thinking">
           <Orb thinking={busy} testId="insight-orb" />
           <StatusLine text={statusText} testId="insight-status" />
         </div>
@@ -165,96 +177,66 @@ export function PaperInsightView({ card, leaveLabel, onLeave, testId }: PaperIns
       {/* The stream refused (a scope this key does not hold, a closing account) or the network
          did not answer at all: the backend's own sentence is already said above (`Notice`), and
          a way on either way — retry only really helps a network failure, but showing it beside
-         "leave" on a refusal too costs nothing and is never wrong, since a repeat refusal only
-         says the same sentence again. Never a dead end with nothing left to tap. */}
+         "Not now" on a refusal too costs nothing and is never wrong, since a repeat refusal
+         only says the same sentence again. Never a dead end with nothing left to tap. */}
       {!report && error && (
-        <div class="acts">
+        <div class="insight-actions">
           <button type="button" class="btn" onClick={load} disabled={busy} data-testid="insight-retry">
             {s.errors.tryAgain}
           </button>
           <button type="button" class="btn" onClick={onLeave} data-testid="insight-leave">
-            {leaveLabel}
+            {p.notNow}
           </button>
         </div>
       )}
       {report && (
         <>
-          <SoftText as="h2" pace="headline" className="conversation-head" text={report.headline} testId="insight-headline" />
-          {rows.length > 0 && (
-            <>
-              <p class="kick" data-testid="insight-standout-title">
-                {p.standsOutTitle}
-              </p>
-              <RevealGroup testId="insight-standout-rows">
-                {rows.map((row) => (
-                  <Glass key={row.fieldId} shape="row" testId={`insight-standout-row-${row.fieldId}`}>
-                    <div class="report-row-top">
-                      <div class="report-row-name">
-                        <b>{row.label}</b>
-                      </div>
-                      <span class="report-value-num">
-                        {row.valueText}
-                        {row.unit && <small>{row.unit}</small>}
-                      </span>
-                      {row.flagWord && <Flag state={row.tone === "ok" ? "ok" : "attention"}>{row.flagWord}</Flag>}
-                    </div>
-                  </Glass>
-                ))}
-              </RevealGroup>
-            </>
+          <div class="insight-turn" data-testid="insight-turn">
+            <Orb testId="insight-orb" />
+            <SoftText as="h2" pace="headline" className="conversation-head" text={report.headline} testId="insight-headline" />
+          </div>
+          {lookedAt.length > 0 && (
+            <ChipRow testId="insight-looked-at">
+              <span class="caption" data-testid="insight-looked-at-label">
+                {p.lookedAt}
+              </span>
+              {lookedAt.map((label) => (
+                <Chip key={label}>{label}</Chip>
+              ))}
+            </ChipRow>
           )}
           {!nothingToAsk && (
-            <>
-              <p class="kick" data-testid="insight-questions-title">
-                {questionsTitle}
-              </p>
-              <RevealGroup testId="insight-questions">
-                {report.questions.map((question) => (
-                  <Glass key={question.insight_id} shape="row" testId="insight-question-row">
-                    <label class="check">
-                      <input
-                        type="checkbox"
-                        checked={selection.has(question.insight_id)}
-                        onChange={() => setSelection((was) => toggleQuestionSelection(was, question.insight_id))}
-                        data-testid="insight-question-checkbox"
-                      />
-                      <span>{question.text}</span>
-                    </label>
-                  </Glass>
-                ))}
-              </RevealGroup>
-            </>
+            <Glass shape="card" testId="insight-card">
+              <h3>{cardTitle}</h3>
+              {report.questions.map((question) => (
+                <p key={question.insight_id} data-testid="insight-question">
+                  {question.text}
+                </p>
+              ))}
+            </Glass>
           )}
           <p class="note" data-testid="insight-safety">
-            {self ? p.standoutSafety : fill(p.standoutSafetyOther, { patient: patientName })} {r.safetyNotAdvice}
+            {p.questionsNotAnswers} {r.safetyNotAdvice}
           </p>
           {!nothingToAsk && (
-            <div class="acts">
-              <ThreeStateButton
-                label={p.keepQuestions}
-                busyLabel={p.keeping}
-                doneLabel={p.kept}
-                onAct={keep}
-                disabled={!hasQuestionSelection(selection)}
-                testId="insight-keep"
-              />
-              <button type="button" class="btn" onClick={onLeave} data-testid="insight-leave">
-                {leaveLabel}
-              </button>
+            <div class="insight-actions">
+              <ThreeStateButton label={p.keepForVisit} busyLabel={p.keeping} doneLabel={p.kept} onAct={keep} testId="insight-keep" />
+              {keepResult &&
+                (kept.kind === "visit" ? (
+                  <ConnectionRow
+                    name={self ? p.keptForVisit : fill(p.keptForVisitOther, { patient: patientName })}
+                    trailing={<Icon name="check" />}
+                    testId="insight-kept-where"
+                  />
+                ) : (
+                  <ConnectionRow name={keptUnfiledLines[0] ?? ""} line={keptUnfiledLines[1]} trailing={<Icon name="check" />} testId="insight-kept-where" />
+                ))}
+              <Notice error={keepError} />
             </div>
           )}
-          {nothingToAsk && (
-            <button type="button" class="btn light" onClick={onLeave} data-testid="insight-leave">
-              {leaveLabel}
-            </button>
-          )}
-          <Notice error={keepError} />
-          {keepResult &&
-            (kept.kind === "visit" ? (
-              <ConnectionRow name={self ? p.keptForVisit : fill(p.keptForVisitOther, { patient: patientName })} trailing={<Icon name="check" />} testId="insight-kept-where" />
-            ) : (
-              <ConnectionRow name={keptUnfiledLines[0] ?? ""} line={keptUnfiledLines[1]} trailing={<Icon name="check" />} testId="insight-kept-where" />
-            ))}
+          <button type="button" class="btn" onClick={onLeave} data-testid="insight-leave">
+            {p.notNow}
+          </button>
         </>
       )}
     </div>
@@ -300,14 +282,14 @@ export function InsightScreen({ card }: { card: ReviewCardOut }): JSX.Element {
   const self = papers?.standing === "owner";
   const patientName = papers?.display_name ?? "";
   const title = self ? s.paperInsight.screenTitle : fill(s.paperInsight.screenTitleOther, { patient: patientName });
-  const leaveLabel = self ? s.record.back : fill(s.record.backOther, { patient: patientName });
+  const backLabel = self ? s.record.back : fill(s.record.backOther, { patient: patientName });
   const leave = () => {
     recordNote.value = [s.onboarding.records.saved];
     toRecord({ name: "papers" });
   };
   return (
-    <Shell tab="health" testId="insight-screen" ask={false} header={<InsightHeader title={title} onBack={leave} backLabel={leaveLabel} meLabel={s.tabs.me} />}>
-      <PaperInsightView card={card} leaveLabel={leaveLabel} onLeave={leave} testId="insight-body" />
+    <Shell tab="health" testId="insight-screen" ask={false} header={<InsightHeader title={title} onBack={leave} backLabel={backLabel} meLabel={s.tabs.me} />}>
+      <PaperInsightView card={card} onLeave={leave} testId="insight-body" />
     </Shell>
   );
 }

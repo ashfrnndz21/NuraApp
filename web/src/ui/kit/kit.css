@@ -584,6 +584,25 @@ button.report-table-row {
   margin-top: 10px;
 }
 
+/* --- Checkpoint 3, the insight screen: generous vertical rhythm between blocks, nothing
+   touching (the orb beside a headline that may wrap to two lines, so top-aligned rather than
+   `.report-row-top`'s own centred, single-line rows) --------------------------------------- */
+.insight-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.insight-turn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.insight-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .orb i,
   .status-line,

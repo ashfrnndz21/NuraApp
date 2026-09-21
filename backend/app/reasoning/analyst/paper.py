@@ -41,6 +41,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read
+from app.channels.about_him import Reader
 from app.db import as_utc, utcnow
 from app.delivery import analyst_strings as words
 from app.drugs.registry import DrugRegistry, UnknownDrug
@@ -243,8 +244,61 @@ def _plain_name(registry: DrugRegistry | None, generic: str, language: str) -> s
     return generic
 
 
-def _analyte_label(subject: str, attribute: str) -> str:
-    return attribute.replace("_", " ") or subject.replace("_", " ")
+_DETERMINER_PREFIX: dict[str, tuple[str, ...]] = {"en": ("your ", "the "), "zh": ("您的",)}
+_DETERMINER_SUFFIX: dict[str, tuple[str, ...]] = {"ms": (" anda",)}
+
+
+def _bare_word(plain: str, language: str) -> str:
+    """`plain` with whatever determiner it already carries stripped off — a medicine's plain
+    name (`app.medicines.strings.PLAIN_NAME`, "your insulin") or a lab value's plain label
+    (`words.ANALYTE_PLAIN_LABEL`, mirrored word for word from the web's own report table
+    catalogue, "the bad cholesterol", "your body salt") — so a caller's own "my"/"{patient}'s"
+    (or the Malay/Chinese equivalent) is never doubled onto it ("my the bad cholesterol", "my
+    your insulin"). Every caller here (`PAPER_SINGLE_VALUE_*`, `PAPER_AGGREGATE_VALUE`,
+    `PAPER_MEDICINE_QUESTION`) puts its own determiner around the bare word instead."""
+    for prefix in _DETERMINER_PREFIX.get(language, ()):
+        if plain.startswith(prefix):
+            return plain[len(prefix) :]
+    for suffix in _DETERMINER_SUFFIX.get(language, ()):
+        if plain.endswith(suffix):
+            return plain[: -len(suffix)]
+    return plain
+
+
+def _analyte_label(
+    subject: str, attribute: str, *, label_on_paper: str | None, language: str
+) -> str | None:
+    """The plain word for one line of a lab paper — the same word the report table itself
+    already shows for it (`words.ANALYTE_PLAIN_LABEL`, mirrored from the web's own report
+    table catalogue), never the raw subject/attribute code, and never carrying that
+    catalogue's own determiner into a question that supplies its own (`_bare_word`). Falls
+    back to the paper's own printed label (`ReviewField.label_on_paper`) when this surface has
+    no plain word for the code yet; `None` — never a code — when neither is there, so a caller
+    can leave that one value out of a question rather than name it by its code."""
+    table = words.ANALYTE_PLAIN_LABEL.get(language, words.ANALYTE_PLAIN_LABEL["en"])
+    plain = table.get((subject, attribute))
+    if plain:
+        return _bare_word(plain, language)
+    printed = (label_on_paper or "").strip()
+    return _bare_word(printed, language) if printed else None
+
+
+def _render(
+    self_template: Mapping[str, str],
+    theirs_template: Mapping[str, str],
+    *,
+    reader: Reader,
+    language: str,
+    **slots: object,
+) -> str:
+    """One of the card's own first-person questions, in the voice this key actually reads in
+    — his own key gets `self_template` unchanged ("my", "I", "me"); anyone else's gets
+    `theirs_template` with his name in `{patient}` — chosen here, explicitly, rather than left
+    to `app.channels.about_him`'s generic pass: that pass only ever swaps a line that already
+    says "you"/"your" (`TO_HIM`), which a first-person line never does (module docstring)."""
+    if reader.his:
+        return words.fill(self_template[language], **slots)
+    return words.fill(theirs_template[language], patient=reader.name, **slots)
 
 
 async def _confirmed_paper(
@@ -296,19 +350,52 @@ def _evidence_label(paper_label: str, page: int | None) -> str:
     return f"{paper_label} (page {page})" if page is not None else paper_label
 
 
-async def _value_candidates(
+@dataclass(frozen=True, slots=True)
+class _FlaggedValue:
+    """One value on this paper found outside its own printed range — never compared with a
+    guideline table, only the range printed on this paper itself."""
+
+    fact_id: uuid.UUID
+    subject: str
+    attribute: str
+    band: str
+    """`"above"` or `"below"` — `_band`'s own two words."""
+    label: str | None
+    """The plain word for this line (`_analyte_label`), or `None` when this surface has
+    neither a plain word for the code nor a label printed on the paper for it — a value this
+    still counts toward "how many are outside range", but is never named by its raw code."""
+    page: int | None
+
+
+def _value_evidence(
+    paper_label: str, artifact_id: uuid.UUID, flagged: _FlaggedValue
+) -> tuple[Evidence, ...]:
+    return (
+        Evidence(
+            kind="fact",
+            id=str(flagged.fact_id),
+            label=flagged.label or paper_label,
+            scope=Scope.RECORDS,
+        ),
+        Evidence(
+            kind="artifact",
+            id=str(artifact_id),
+            label=_evidence_label(paper_label, flagged.page),
+            scope=Scope.RECORDS,
+        ),
+    )
+
+
+async def _flagged_values(
     session: AsyncSession,
     *,
     context: KeyContext,
-    language: str,
     card: ReviewCard,
-    paper_label: str,
-    medicines: Sequence[MedicationLine],
-    registry: DrugRegistry | None,
     moment: datetime,
-) -> list[Candidate]:
-    """One candidate for every value on this paper found outside its own printed range.
-    Never compared with a guideline table — only the range printed on this paper itself.
+    language: str,
+) -> list[_FlaggedValue]:
+    """Every value on this paper found outside its own printed range, in the order the paper
+    prints its fields.
 
     A paper can carry more than one kind of fact — a lab row under RECORDS beside a vital
     the confirm route turned into a READINGS reading (`app.ingestion.review`, the module
@@ -323,7 +410,7 @@ async def _value_candidates(
             if context.allows(scope_for_subject(field.subject))
         }
     )
-    candidates: list[Candidate] = []
+    flagged: list[_FlaggedValue] = []
     seen_facts: set[uuid.UUID] = set()
     for subject in subjects:
         facts = await current_facts(session, context=context, subject=subject, at=moment)
@@ -347,62 +434,135 @@ async def _value_candidates(
             if band is None:
                 continue
             seen_facts.add(fact.id)
-            name = _analyte_label(subject, attribute)
             page = _page_of(fields, subject=subject, attribute=attribute)
-            evidence = [Evidence(kind="fact", id=str(fact.id), label=name, scope=Scope.RECORDS)]
-            evidence.append(
-                Evidence(
-                    kind="artifact",
-                    id=str(card.artifact_id),
-                    label=_evidence_label(paper_label, page),
-                    scope=Scope.RECORDS,
+            label_on_paper = next(
+                (
+                    field.label_on_paper
+                    for field in fields
+                    if field.subject == subject and field.attribute == attribute
+                ),
+                None,
+            )
+            label = _analyte_label(subject, attribute, label_on_paper=label_on_paper, language=language)
+            flagged.append(
+                _FlaggedValue(
+                    fact_id=fact.id, subject=subject, attribute=attribute, band=band, label=label, page=page
                 )
             )
-            related_line: MedicationLine | None = None
-            for line in medicines:
-                hints = ANALYTE_DRUG_CLASS_HINTS.get(attribute, ())
-                if line.drug_class in hints or line.generic.lower() in hints:
-                    related_line = line
-                    break
-            if related_line is not None:
-                evidence.append(
-                    Evidence(
-                        kind="medication_line",
-                        id=str(related_line.id),
-                        label=_plain_name(registry, related_line.generic, language),
-                    )
-                )
-                kind = InsightKind.MEDICINE
-                ask_who = AskWho.DOCTOR
-            else:
-                kind = InsightKind.CHECK
-                ask_who = AskWho.DOCTOR
-            candidates.append(
-                Candidate(
-                    insight_id=f"paper_value:{fact.id}",
-                    kind=kind,
-                    text=words.fill(words.PAPER_VALUE_LINE[language], name=name),
-                    ask_who=ask_who,
-                    evidence=tuple(evidence),
-                    why_plain=words.PAPER_VALUE_WHY[language],
-                    confidence=Confidence.WORTH_A_LOOK,
-                )
-            )
-    return candidates
+    return flagged
 
 
-def _repeat_candidate(
-    language: str, *, artifact_id: uuid.UUID, paper_label: str, out_of_range: list[Candidate]
+def _value_candidate(
+    flagged: Sequence[_FlaggedValue],
+    *,
+    artifact_id: uuid.UUID,
+    paper_label: str,
+    reader: Reader,
+    language: str,
 ) -> Candidate | None:
-    if not out_of_range:
+    """The card's own first question: one out-of-range value asks about that value by name;
+    several ask, once, how many — never a question per value (the blueprint's own card asks
+    about "four of my numbers", not four separate lines)."""
+    if not flagged:
+        return None
+    why = _render(words.PAPER_VALUE_WHY, words.PAPER_VALUE_WHY_THEIRS, reader=reader, language=language)
+    if len(flagged) == 1:
+        only = flagged[0]
+        if only.label is None:
+            return None
+        above = only.band == "above"
+        template = words.PAPER_SINGLE_VALUE_ABOVE if above else words.PAPER_SINGLE_VALUE_BELOW
+        template_theirs = (
+            words.PAPER_SINGLE_VALUE_ABOVE_THEIRS if above else words.PAPER_SINGLE_VALUE_BELOW_THEIRS
+        )
+        text = _render(template, template_theirs, reader=reader, language=language, label=only.label)
+        evidence = _value_evidence(paper_label, artifact_id, only)
+        insight_id = f"paper_value:{only.fact_id}"
+    else:
+        text = _render(
+            words.PAPER_AGGREGATE_VALUE, words.PAPER_AGGREGATE_VALUE_THEIRS,
+            reader=reader, language=language, n=len(flagged),
+        )
+        evidence = tuple(e for one in flagged for e in _value_evidence(paper_label, artifact_id, one))
+        insight_id = f"paper_values:{artifact_id}"
+    return Candidate(
+        insight_id=insight_id,
+        kind=InsightKind.CHECK,
+        text=text,
+        ask_who=AskWho.DOCTOR,
+        evidence=evidence,
+        why_plain=why,
+        confidence=Confidence.WORTH_A_LOOK,
+    )
+
+
+def _medicine_candidate(
+    flagged: Sequence[_FlaggedValue],
+    *,
+    medicines: Sequence[MedicationLine],
+    registry: DrugRegistry | None,
+    artifact_id: uuid.UUID,
+    paper_label: str,
+    reader: Reader,
+    language: str,
+) -> Candidate | None:
+    """The card's own second question, only when the engine already has the link
+    (`ANALYTE_DRUG_CLASS_HINTS`) between one of the flagged values and a medicine he already
+    takes — the first such pairing, in the order the paper prints its fields, never one
+    question per medicine (so there is never a second one this line would need to be told
+    apart from — `PAPER_MEDICINE_QUESTION` never names when it is taken)."""
+    for value in flagged:
+        hints = ANALYTE_DRUG_CLASS_HINTS.get(value.attribute, ())
+        match = next(
+            (line for line in medicines if line.drug_class in hints or line.generic.lower() in hints),
+            None,
+        )
+        if match is None:
+            continue
+        plain = _plain_name(registry, match.generic, language)
+        bare = _bare_word(plain, language)
+        text = _render(
+            words.PAPER_MEDICINE_QUESTION, words.PAPER_MEDICINE_QUESTION_THEIRS,
+            reader=reader, language=language, medicine=bare,
+        )
+        fact_evidence = Evidence(
+            kind="fact", id=str(value.fact_id), label=value.label or paper_label, scope=Scope.RECORDS
+        )
+        artifact_evidence = Evidence(
+            kind="artifact",
+            id=str(artifact_id),
+            label=_evidence_label(paper_label, value.page),
+            scope=Scope.RECORDS,
+        )
+        medicine_evidence = Evidence(kind="medication_line", id=str(match.id), label=plain)
+        return Candidate(
+            insight_id=f"paper_medicine:{match.id}",
+            kind=InsightKind.MEDICINE,
+            text=text,
+            ask_who=AskWho.DOCTOR,
+            evidence=(fact_evidence, artifact_evidence, medicine_evidence),
+            why_plain=words.PAPER_MEDICINE_WHY[language],
+            confidence=Confidence.WORTH_A_LOOK,
+        )
+    return None
+
+
+def _retest_candidate(
+    flagged: Sequence[_FlaggedValue], *, artifact_id: uuid.UUID, paper_label: str, language: str
+) -> Candidate | None:
+    """The card's own closing question — always, once anything at all is outside range. Names
+    no person, so the same line serves either voice (`PAPER_RETEST_QUESTION` carries no
+    `_THEIRS` twin)."""
+    if not flagged:
         return None
     evidence = tuple(
-        e for candidate in out_of_range for e in candidate.evidence if e.kind == "fact"
+        Evidence(kind="fact", id=str(one.fact_id), label=one.label or paper_label, scope=Scope.RECORDS)
+        for one in flagged
     )
     return Candidate(
-        insight_id=f"paper_repeat:{artifact_id}",
+        insight_id=f"paper_retest:{artifact_id}",
         kind=InsightKind.CHECK,
-        text=words.PAPER_REPEAT_LINE[language],
+        text=words.PAPER_RETEST_QUESTION[language],
         ask_who=AskWho.DOCTOR,
         evidence=evidence,
         why_plain=words.PAPER_REPEAT_WHY[language],
@@ -416,11 +576,16 @@ async def read_phase(
     context: KeyContext,
     artifact_id: uuid.UUID,
     language: str,
+    reader: Reader,
     registry: DrugRegistry | None = None,
     now: datetime | None = None,
 ) -> Any:
     """An async generator: a `PaperStep` the instant each real read finishes, then one
-    `ReadResult`, last. Never calls a model — see the module docstring."""
+    `ReadResult`, last. Never calls a model — see the module docstring. `reader` is the same
+    one the caller already resolved (`app.channels.about_him.reader_of`) to say a step's own
+    label about him or not; the card's own first-person questions need it too, to choose
+    between "my"/"I" and his name explicitly rather than leaving it to the generic pass that
+    resolves everything else here (`_render`'s own docstring)."""
     moment = now if now is not None else utcnow()
     card = await _confirmed_paper(session, context=context, artifact_id=artifact_id)
     paper_label = words.LOOKED_AT_LABEL[language]["paper"]
@@ -457,16 +622,7 @@ async def read_phase(
     else:
         withheld.append("medicines_and_supplements")
 
-    value_candidates = await _value_candidates(
-        session,
-        context=context,
-        language=language,
-        card=card,
-        paper_label=paper_label,
-        medicines=medicines,
-        registry=registry,
-        moment=moment,
-    )
+    flagged = await _flagged_values(session, context=context, card=card, moment=moment, language=language)
     yield PaperStep(PaperStepKey.HISTORY, words.PAPER_STEP_LABEL[language]["history"])
 
     next_visit: Appointment | None = None
@@ -484,12 +640,28 @@ async def read_phase(
                 )
             )
 
-    candidates = list(value_candidates)
-    repeat = _repeat_candidate(
-        language, artifact_id=artifact_id, paper_label=paper_label, out_of_range=value_candidates
+    candidates: list[Candidate] = []
+    value_candidate = _value_candidate(
+        flagged, artifact_id=artifact_id, paper_label=paper_label, reader=reader, language=language
     )
-    if repeat is not None:
-        candidates.append(repeat)
+    if value_candidate is not None:
+        candidates.append(value_candidate)
+    medicine_candidate = _medicine_candidate(
+        flagged,
+        medicines=medicines,
+        registry=registry,
+        artifact_id=artifact_id,
+        paper_label=paper_label,
+        reader=reader,
+        language=language,
+    )
+    if medicine_candidate is not None:
+        candidates.append(medicine_candidate)
+    retest_candidate = _retest_candidate(
+        flagged, artifact_id=artifact_id, paper_label=paper_label, language=language
+    )
+    if retest_candidate is not None:
+        candidates.append(retest_candidate)
 
     async def reroute(candidate: Candidate) -> Insight | None:
         return await ask_the_doctor(session, context, language, candidate)

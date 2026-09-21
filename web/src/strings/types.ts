@@ -251,27 +251,32 @@ export interface Strings {
     noVisit: string;
   };
   /** Checkpoint 3, "What it means for you" (`docs/design/experience-blueprint.html` scene
-   *  `insight`): the screen right after a paper is confirmed — what stands out on it, the
-   *  questions it raises for the doctor, and where "Keep these questions" filed them. */
+   *  `insight`): the screen right after a paper is confirmed — the headline, what the engine
+   *  really read, one card of the questions it raises for the doctor, and where "Keep these
+   *  for my visit" filed them. */
   paperInsight: {
     screenTitle: string;
     screenTitleOther: string;
-    standsOutTitle: string;
-    /** "Ranges are the ones printed on your/{patient}'s paper." — the report table's own line
-     *  (`onboarding.records.safetyRanges`) has no `…Other` twin (it is never shown to a
-     *  caregiver reopening a paper any other way today); this screen's own caregiver walk
-     *  needs one, so it carries its own rather than saying "your" about his paper to her. */
-    standoutSafety: string;
-    standoutSafetyOther: string;
-    questionsTitle: string;
-    questionsTitleOther: string;
-    keepQuestions: string;
+    /** "Looked at" — the quiet chip label ahead of what the stream really read
+     *  (`docs/design/experience-blueprint.html`'s own `looked()`), never a person's name. */
+    lookedAt: string;
+    /** "For {doctor} on {date}" — the card's own title when the next visit names both; no
+     *  `…Other` twin (a doctor's name and a date name nobody). */
+    forDoctorOn: string;
+    forNextVisit: string;
+    forNextVisitOther: string;
+    /** "Questions to ask, never answers." — the first half of the safety note; the second is
+     *  the report table's own `onboarding.records.safetyNotAdvice`, said once, not composed
+     *  twice for the same idea (`make language`'s own phrase-consistency gate). */
+    questionsNotAnswers: string;
+    keepForVisit: string;
     keeping: string;
     kept: string;
     keptForVisit: string;
     keptForVisitOther: string;
     keptUnfiled: readonly string[];
     keptUnfiledOther: readonly string[];
+    notNow: string;
   };
   signIn: {
     title: string;

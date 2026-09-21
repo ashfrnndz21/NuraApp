@@ -293,7 +293,7 @@ async def _paper_events(
             language = await language_for(session, context, None)
             reader = await reader_of(session, context, language)
             async for event in paper_analyst.read_phase(
-                session, context=context, artifact_id=artifact_id, language=language, registry=registry
+                session, context=context, artifact_id=artifact_id, language=language, reader=reader, registry=registry
             ):
                 if isinstance(event, paper_analyst.PaperStep):
                     yield _sse({"type": "step", "key": event.key.value, "label": reader.says(event.label)})

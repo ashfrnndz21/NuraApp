@@ -507,25 +507,24 @@ export const zh = {
     noVisit: "还没有预约的看诊可以带上这个问题。",
   },
   // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
-  // `insight`): right after "Looks right", what stands out on the paper and the questions it
-  // raises for the doctor.
+  // `insight`): right after "Looks right", the questions the paper raises for the doctor.
   paperInsight: {
     // @patient headline
     screenTitle: "这对您意味着什么",
     // @patient headline
     screenTitleOther: "这对{patient}意味着什么",
-    // @patient headline
-    standsOutTitle: "这份文件上值得留意的地方",
-    // @patient
-    standoutSafety: "这些范围是您文件上印的。",
-    // @patient
-    standoutSafetyOther: "这些范围是{patient}文件上印的。",
-    // @patient headline
-    questionsTitle: "给您医生的问题",
-    // @patient headline
-    questionsTitleOther: "给{patient}医生的问题",
     // @patient phrase
-    keepQuestions: "留下这些问题",
+    lookedAt: "看过的",
+    // @patient phrase
+    forDoctorOn: "给{doctor}，{date}",
+    // @patient phrase
+    forNextVisit: "为了您的下一次门诊",
+    // @patient phrase
+    forNextVisitOther: "为了{patient}的下一次门诊",
+    // @patient
+    questionsNotAnswers: "这些是要问的问题，不是答案。",
+    // @patient phrase
+    keepForVisit: "为我的门诊留下这些",
     // @patient phrase
     keeping: "留下中…",
     // @patient phrase
@@ -538,6 +537,8 @@ export const zh = {
     keptUnfiled: ["Nura留下了您的问题。", "预约门诊后，Nura会把它们加上去。"],
     // @patient
     keptUnfiledOther: ["Nura留下了{patient}的问题。", "{patient}预约门诊后，Nura会把它们加上去。"],
+    // @patient phrase
+    notNow: "现在不用",
   },
   signIn: {
     // @patient headline

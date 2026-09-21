@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -23,10 +24,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read
+from app.channels.about_him import Reader
 from app.delivery import analyst_strings as words
 from app.drugs.fixture import FixtureRegistry
 from app.ingestion.objects import LocalObjectStore
 from app.keys.scopes import KeyRole, Scope
+from app.medicines.strings import PLAIN_NAME
 from app.reasoning.analyst.claude_adapter import ClaudeAnalyst, _rebuild
 from app.reasoning.analyst.paper import (
     CANDIDATE_SECTION_KEY,
@@ -35,13 +38,22 @@ from app.reasoning.analyst.paper import (
     build_insight,
     read_phase,
 )
+from app.reasoning.analyst.paper import _analyte_label as analyte_label
+from app.reasoning.analyst.paper import _bare_word as bare_word
+from app.reasoning.analyst.paper import _render as render_question
+from app.reasoning.analyst.pipeline import blocked
 from app.reasoning.analyst.port import AskWho, InsightKind, Report, Section
 from app.reasoning.visits.models import Memo, MemoKind, MemoSource
-from app.reasoning.visits.questions import current_questions, keep_paper_insight_questions
+from app.reasoning.visits.questions import (
+    current_questions,
+    keep_paper_insight_questions,
+    patient_card,
+)
+from app.safety.plain_words import verify
 from tests.conftest import Deployment
 from tests.medicines_support import add as add_medicine
 from tests.medicines_support import label
-from tests.paper import LAB_REPORT_VITALS, LIPID_PANEL
+from tests.paper import LAB_REPORT_VITALS, LIPID_GLUCOSE_PANEL, LIPID_PANEL
 from tests.safety_support import clinic, let_in, pa
 from tests.test_ingestion import _card, _decide, _yes
 from tests.timeline_support import book
@@ -86,13 +98,16 @@ returns a fact whose `valid_from` has arrived by `now`, so a paper-scoped read n
 of it rather than behind."""
 
 
-async def _drain(session: AsyncSession, context, artifact_id, *, language: str = "en", registry=None) -> ReadResult:
+async def _drain(
+    session: AsyncSession, context, artifact_id, *, language: str = "en", registry=None, reader: Reader | None = None
+) -> ReadResult:
     result: ReadResult | None = None
     async for event in read_phase(
         session,
         context=context,
         artifact_id=artifact_id,
         language=language,
+        reader=reader or Reader(his=True),
         registry=registry,
         now=AFTER_THE_PAPER,
     ):
@@ -105,32 +120,162 @@ async def _drain(session: AsyncSession, context, artifact_id, *, language: str =
 # --- the happy path: an out-of-range value beside a related medicine -----------------------
 
 
-async def test_an_out_of_range_value_beside_its_medicine_offers_a_question_citing_the_paper(
+async def test_an_out_of_range_value_beside_its_medicine_offers_the_cards_own_three_questions(
     sg: AsyncSession, store: LocalObjectStore, extractor
 ) -> None:
+    """`LAB_REPORT_VITALS` has exactly one out-of-range value (LDL, above), beside a statin —
+    the blueprint's card, three real questions: the value, the medicine it is linked to, and
+    the retest closer, in that order, first person, never a dose or a verdict."""
     owner = await pa(sg, phone="+6591160001")
     await add_medicine(sg, owner, label("atorvastatin", "20 mg", "1 tab OD"))
     card = await _confirm_paper(sg, owner, store, extractor)
 
     result = await _drain(sg, owner, card.artifact_id, registry=REGISTRY)
 
-    assert result.questions, "an out-of-range LDL beside a statin should offer a question"
-    offered = result.questions[0]
-    assert offered.kind is InsightKind.MEDICINE
-    assert offered.ask_who is AskWho.DOCTOR
-    # Cites the paper (artifact id) and the medicine line, never a bare claim.
-    kinds = {e.kind for e in offered.evidence}
-    assert {"fact", "artifact", "medication_line"} <= kinds
-    artifact_evidence = next(e for e in offered.evidence if e.kind == "artifact")
+    assert len(result.questions) == 3, [q.text for q in result.questions]
+    value, medicine, retest = result.questions
+
+    assert value.kind is InsightKind.CHECK
+    assert value.ask_who is AskWho.DOCTOR
+    assert value.text == "Why is my bad cholesterol above the range on this paper?"
+    value_kinds = {e.kind for e in value.evidence}
+    assert {"fact", "artifact"} <= value_kinds
+    artifact_evidence = next(e for e in value.evidence if e.kind == "artifact")
     assert artifact_evidence.id == str(card.artifact_id)
-    # No dose, no verdict — a plain statement worth asking about, never advice.
-    lowered = offered.text.lower()
-    for word in ("dose", "should", "stop", "start", "change", "high", "low", "normal"):
-        assert word not in lowered, offered.text
+
+    assert medicine.kind is InsightKind.MEDICINE
+    assert medicine.ask_who is AskWho.DOCTOR
+    assert medicine.text == "Is my cholesterol tablet still the right one for me?"
+    medicine_kinds = {e.kind for e in medicine.evidence}
+    assert {"fact", "artifact", "medication_line"} <= medicine_kinds
+
+    assert retest.kind is InsightKind.CHECK
+    assert retest.text == words.PAPER_RETEST_QUESTION["en"]
+
+    # No dose, no verdict — real questions worth asking, never advice, in any of the three.
+    for question in result.questions:
+        lowered = question.text.lower()
+        for word in ("should i", "you should", "stop", "start", "change the", "high", "low", "normal"):
+            assert word not in lowered, question.text
     # "Looked at" names the paper and the medicine actually read, never a fixed list.
     kinds_seen = {one.kind for one in result.looked_at}
     assert "artifact" in kinds_seen and "medicines" in kinds_seen
     assert not result.withheld
+
+
+async def test_two_or_more_out_of_range_values_ask_once_how_many_never_one_question_each(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """`LIPID_GLUCOSE_PANEL` carries several values outside their own printed ranges — the
+    card still asks about them once, together, never one line a value (the blueprint's own
+    card: "Four of my numbers are above the range on this paper.", not four separate lines)."""
+    owner = await pa(sg, phone="+6591160019")
+    card = await _confirm_paper(sg, owner, store, extractor, LIPID_GLUCOSE_PANEL)
+
+    result = await _drain(sg, owner, card.artifact_id)
+
+    value = result.questions[0]
+    assert value.kind is InsightKind.CHECK
+    match = re.fullmatch(r"Why are (\d+) of my numbers outside the range on this paper\?", value.text)
+    assert match, value.text
+    n = int(match.group(1))
+    assert n >= 2, "the fixture's own point: several flagged values, not just one"
+    # One retest closer, still — never one per value.
+    assert sum(1 for q in result.questions if q.text == words.PAPER_RETEST_QUESTION["en"]) == 1
+    # Every flagged value's own fact is cited, even though none is named individually.
+    fact_ids = {e.id for q in result.questions for e in q.evidence if e.kind == "fact"}
+    assert len(fact_ids) >= n
+
+
+# --- every question, every real label, every language, both voices: never a doubled ----------
+# determiner, never blocked -------------------------------------------------------------------
+
+_DOUBLED_DETERMINER_EN = ("my the", "my your", "the the", "your your", "the your", "your the")
+_THEIRS_SUFFIX_EN = ("'s the", "'s your")
+_VOICES = (Reader(his=True), Reader(his=False, name="Pa"))
+
+
+def _assert_never_doubled(text: str, language: str) -> None:
+    """`words.ANALYTE_PLAIN_LABEL` and `PLAIN_NAME` both carry the real catalogue's own
+    determiner ("the bad cholesterol", "your insulin", "ujian gula anda", "您的血糖检查") —
+    `_bare_word` (`app.reasoning.analyst.paper`) strips it before a template ever puts its own
+    "my"/"{patient}'s" around the bare word, so composing the two never reads "my the bad
+    cholesterol" or "my your insulin". This is the one, general check for that, in every
+    language: self voice never says "the"/"your" twice over ("my the", "my your", "the the",
+    "your your" and the transposed pair); caregiver voice never says "the"/"your" straight
+    after the patient's own possessive ("Pa's the", "Pa's your") — and MS/ZH never say "anda"/
+    "您的"/"你的" at all here, self or caregiver, since neither voice this module ever renders
+    ("saya"/"{patient}", "我的"/"{patient}的") is the second-person "anda"/"您的" to begin
+    with — its mere presence is itself proof a determiner from the source catalogue leaked
+    through unstripped."""
+    lowered = text.lower()
+    if language == "en":
+        for pair in _DOUBLED_DETERMINER_EN:
+            assert pair not in lowered, (pair, text)
+        for suffix in _THEIRS_SUFFIX_EN:
+            assert suffix not in lowered, (suffix, text)
+    elif language == "ms":
+        assert "anda" not in lowered, text
+    elif language == "zh":
+        assert "您的" not in text and "你的" not in text, text
+
+
+def _assert_clean(text: str, language: str) -> None:
+    _assert_never_doubled(text, language)
+    findings = [f for f in verify(text, language, "line") if f.severity != "note"]
+    assert not findings, (text, [str(f) for f in findings])
+    assert not blocked(text, language), text
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+def test_every_value_question_with_every_real_label_never_doubles_its_determiner(
+    language: str,
+) -> None:
+    """Every plain label the catalogue actually carries (`words.ANALYTE_PLAIN_LABEL`), through
+    the exact same composition `_value_candidate` uses (`_analyte_label`, `_render`), in both
+    voices, for both "above" and "below" — plain-words' own `line` profile and the conclusion-
+    and-advice blocklist, both green, and never a doubled determiner (#303's own follow-up:
+    the coordinator's own catch, "my the bad cholesterol")."""
+    for subject, attribute in words.ANALYTE_PLAIN_LABEL[language]:
+        label = analyte_label(subject, attribute, label_on_paper=None, language=language)
+        assert label is not None
+        for reader in _VOICES:
+            for above, self_t, theirs_t in (
+                (True, words.PAPER_SINGLE_VALUE_ABOVE, words.PAPER_SINGLE_VALUE_ABOVE_THEIRS),
+                (False, words.PAPER_SINGLE_VALUE_BELOW, words.PAPER_SINGLE_VALUE_BELOW_THEIRS),
+            ):
+                text = render_question(self_t, theirs_t, reader=reader, language=language, label=label)
+                _assert_clean(text, language)
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+def test_the_aggregate_and_retest_questions_are_clean_in_every_language_and_voice(
+    language: str,
+) -> None:
+    for reader in _VOICES:
+        text = render_question(
+            words.PAPER_AGGREGATE_VALUE, words.PAPER_AGGREGATE_VALUE_THEIRS,
+            reader=reader, language=language, n=3,
+        )
+        _assert_clean(text, language)
+    _assert_clean(words.PAPER_RETEST_QUESTION[language], language)
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+def test_every_medicine_question_with_every_real_medicine_name_never_doubles_its_determiner(
+    language: str,
+) -> None:
+    """Every plain medicine name the catalogue actually carries (`app.medicines.strings.
+    PLAIN_NAME`, "your insulin", "the cholesterol tablet", "ujian gula anda", "您的血压药"),
+    through the same bare-word composition `_medicine_candidate` uses, in both voices."""
+    for plain in PLAIN_NAME[language].values():
+        bare = bare_word(plain, language)
+        for reader in _VOICES:
+            text = render_question(
+                words.PAPER_MEDICINE_QUESTION, words.PAPER_MEDICINE_QUESTION_THEIRS,
+                reader=reader, language=language, medicine=bare,
+            )
+            _assert_clean(text, language)
 
 
 async def test_a_paper_with_no_printed_range_has_nothing_worth_asking(
@@ -205,7 +350,7 @@ async def test_a_treatment_changing_candidate_is_rerouted_and_its_words_never_ap
     sg: AsyncSession, store: LocalObjectStore, extractor, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     blocked = "Stop the atorvastatin now."
-    monkeypatch.setitem(words.PAPER_VALUE_LINE, "en", blocked)
+    monkeypatch.setitem(words.PAPER_MEDICINE_QUESTION, "en", blocked)
 
     owner = await pa(sg, phone="+6591160008")
     await add_medicine(sg, owner, label("atorvastatin", "20 mg", "1 tab OD"))
@@ -252,6 +397,14 @@ async def test_keep_is_idempotent_and_lands_on_the_next_visit(
         insights=result.questions,
     )
     assert second == []  # nothing new: keeping twice never duplicates
+
+    # Every kept question is verified again on the way out (`patient_card`'s own docstring),
+    # in its default `line` profile — one idea, at most fifteen words. A candidate that only
+    # passed the pipeline's own gate as two sentences would be refused here (`NotPlainEnough`);
+    # this is the real, once-round-trip proof that never happens for these.
+    card_lines = await patient_card(sg, context=owner, appointment_id=visit.id)
+    for question in result.questions:
+        assert question.text in card_lines
 
     current = await current_questions(sg, context=owner, appointment_id=visit.id)
     assert len([q for q in current if q.source_kind == "paper_insight"]) == len(result.questions)
