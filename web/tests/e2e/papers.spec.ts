@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { API, captureSpeech, fixClock, freshPhone, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, throttleCpu, todayReady} from "./helpers";
+import { API, captureSpeech, fixClock, freshPhone, paperPdf, paperPhoto, seedOwner, signInThroughTheApp, throttleCpu, throughInsight, todayReady} from "./helpers";
 
 /** E18-01 on the web (ADR 0001: the photo library cannot be scanned from a browser, so the
  *  substitute is the phone's own picker, many at once): a grid he confirms, nothing sent before
@@ -177,6 +177,7 @@ test("in the sitting: many photos at once, and each paper he checks joins the si
   await expect(page.getByTestId("nothing-kept")).toBeVisible();
   await page.getByTestId("paper-result").nth(0).getByTestId("check-paper").click();
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "batch");
   await expect(page.getByTestId("paper-result").nth(0).getByTestId("paper-checked")).toHaveText("Nura wrote it down.");
   await page.getByTestId("batch-done").click();

@@ -13,7 +13,7 @@ import { ConnectionRow, Flag } from "../../ui/kit";
 import { AddReport } from "../HomeParts";
 import { ReviewStep } from "../onboarding/Records";
 import { ReportTable } from "../onboarding/ReportTable";
-import { Paged, RecordFrame, recordNote, session, takeNote, toRecord, useDateOf, useRead } from "./parts";
+import { Paged, RecordFrame, session, takeNote, toRecord, useDateOf, useRead } from "./parts";
 
 /** "Your papers" (E02-07 library part B): every paper he has ever added, newest first — the
  *  ones still waiting for his yes exactly as before, and now the ones he has already checked
@@ -121,17 +121,17 @@ export function PapersScreen(): JSX.Element {
 /** One paper: still waiting for his yes, the review card exactly as before; already checked,
  *  reopened read-only (library part B #3). */
 export function PaperScreen({ card }: { card: ReviewCardOut }): JSX.Element {
-  const s = t();
   if (card.confirmed_at) return <ReopenedPaperScreen card={card} />;
   return (
     <ReviewStep
       key={card.card_id}
       card={card}
       onBack={() => toRecord({ name: "papers" })}
-      onDone={() => {
-        recordNote.value = [s.onboarding.records.saved];
-        toRecord({ name: "papers" });
-      }}
+      // Checkpoint 3, "What it means for you" (package 7): confirmed, `onDone` is handed the
+      // freshly confirmed card (corrections merged) — on to the insight screen next, never
+      // straight back to the list any more (`screens/Insight.tsx`'s own way back does that,
+      // once he is done there).
+      onDone={(confirmed) => go({ name: "insight", card: confirmed })}
     />
   );
 }

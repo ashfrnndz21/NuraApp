@@ -276,6 +276,38 @@ export interface Strings {
     yourPharmacist: string;
     yourPharmacistOther: string;
   };
+  /** Checkpoint 3, "What it means for you" (`docs/design/experience-blueprint.html` scene
+   *  `insight`): the screen right after a paper is confirmed — the headline, what the engine
+   *  really read, one card of the questions it raises for the doctor, and where "Keep these
+   *  for my visit" filed them. */
+  paperInsight: {
+    screenTitle: string;
+    screenTitleOther: string;
+    /** "Looked at" — the quiet chip label ahead of what the stream really read
+     *  (`docs/design/experience-blueprint.html`'s own `looked()`), never a person's name. */
+    lookedAt: string;
+    /** "For {doctor} on {date}" — the card's own title when the next visit names both; no
+     *  `…Other` twin (a doctor's name and a date name nobody). */
+    forDoctorOn: string;
+    forNextVisit: string;
+    forNextVisitOther: string;
+    /** "Questions to ask, never answers." — the first half of the safety note; the second is
+     *  the report table's own `onboarding.records.safetyNotAdvice`, said once, not composed
+     *  twice for the same idea (`make language`'s own phrase-consistency gate). */
+    questionsNotAnswers: string;
+    keepForVisit: string;
+    keepForVisitOther: string;
+    keeping: string;
+    kept: string;
+    keptForVisit: string;
+    keptForVisitOther: string;
+    /** With no upcoming visit, Nura keeps nothing (#303 review, B3, the honest fallback) —
+     *  said plainly, in place of a false "kept" claim. Two lines, one idea each, the same
+     *  `plain-words` rule 2 discipline `keptUnfiled` used to hold to. */
+    keepNoVisit: readonly string[];
+    keepNoVisitOther: readonly string[];
+    notNow: string;
+  };
   signIn: {
     title: string;
     phoneLead: string;
