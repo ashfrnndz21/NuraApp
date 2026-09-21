@@ -61,7 +61,12 @@ export function readableValueText(value: unknown, s: Strings): string {
  *  is inclusive of a lower-only one, and a two-sided range is inclusive at both ends, the way
  *  the paper prints them (matches `app.reasoning.ranges.Range.band_of`). `"unknown"` for
  *  anything that is not a plain number, no range at all, or a range with neither bound
- *  readable off its text (E02 defect #3). */
+ *  readable off its text (E02 defect #3).
+ *
+ *  Invariant this relies on: `value` and `range` are read off the same printed row, so they
+ *  are always in the same unit here — nothing here converts one. If a future change ever
+ *  lets a value and its range come from different rows, or a value gets converted to a
+ *  different unit before this is called, this comparison has to be revisited alongside it. */
 export function rangeStatus(
   value: unknown,
   range: Pick<FieldRange, "low" | "high"> | null | undefined,

@@ -149,10 +149,18 @@ LABEL_ON_PAPER_LENGTH = 120
 """The most `label_on_paper` may hold: the words printed beside one line, never a paragraph."""
 
 _RANGE_TWO_SIDED = re.compile(r"^(-?\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(-?\d+(?:\.\d+)?)")
-_RANGE_UPPER = re.compile(r"^(?:<\s*|under\s+|up to\s+|below\s+)(-?\d+(?:\.\d+)?)", re.IGNORECASE)
-_RANGE_LOWER = re.compile(
-    r"^(?:>\s*|over\s+|above\s+|at least\s+|or more\s+)(-?\d+(?:\.\d+)?)", re.IGNORECASE
+_RANGE_UPPER = re.compile(
+    r"^(?:<\s*|≤\s*|under\s+|up to\s+|below\s+)(-?\d+(?:\.\d+)?)", re.IGNORECASE
 )
+_RANGE_LOWER = re.compile(
+    r"^(?:>\s*|≥\s*|over\s+|above\s+|at least\s+|or more\s+)(-?\d+(?:\.\d+)?)", re.IGNORECASE
+)
+_RANGE_UNIT_TAIL = re.compile(r"[ \t]*[A-Za-zµμ/%.]*")
+"""What may follow a matched range and still count as the whole thing having been read: only
+whitespace and a unit with no digit, bracket, colon, comma or dash in it. A trailing "mg/dL" or
+"%" passes; a second range, a sex or age qualifier ("(M)", "F:"), a parenthetical threshold
+("(desirable)") or an x10^9-style count does not — `fullmatch` on the text after the matched
+range, so anything left over at all fails it unless it is exactly this shape."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,22 +182,34 @@ class PrintedRange:
 
 
 def parse_printed_range(text: str) -> PrintedRange:
-    """The range exactly as printed, with its bounds read off it where they are unambiguous:
-    "<150" -> high 150; "> 1.0" -> low 1.0; "3.9 - 6.0" or "3.9-6.0" -> both; "Up to 40" -> high
-    40. Anything else — "Negative", an empty string, a range with no number the pattern
-    recognises — keeps its text with both bounds `None`: a range read wrong here shows as one
-    with no bar to compare against, never a wrong bar."""
+    """The range exactly as printed, with its bounds read off it only when the *whole* string
+    is nothing but that one range and, at most, a plain unit after it: "<150" -> high 150;
+    "> 1.0" -> low 1.0; "3.9 - 6.0" or "3.9-6.0" -> both; "Up to 40" -> high 40; "3.5 - 5.2
+    mmol/L" -> both, the unit ignored. A low bound over the high one ("6.0 - 3.9", a range
+    printed backwards or misread) is refused the same as anything else that cannot be trusted.
+
+    Bounds are `None` — the text kept exactly as printed, nothing guessed — for anything this
+    cannot read with confidence: an empty string; "Negative"; a compound, sex- or age-specific
+    range ("13.0-17.0 (M) / 12.0-15.0 (F)", "M: 13-17 F: 12-15") — a wrong bound shown as a
+    right one is the failure that matters here, never an unparsed range; a multi-threshold list
+    ("5.2 (desirable) / 6.2 (high)"); a count with its unit still attached ("4.0-10.0
+    x10^9/L", where the unit itself carries digits); a thousands separator ("1,000 - 2,000")
+    or a comma decimal ("3,9 - 6,0") — neither is read as a number here, so the string simply
+    does not match rather than being misread as one further left along it."""
     raw = text.strip()
     if not raw:
         return PrintedRange(low=None, high=None, text=raw)
     two_sided = _RANGE_TWO_SIDED.match(raw)
-    if two_sided:
-        return PrintedRange(low=float(two_sided.group(1)), high=float(two_sided.group(2)), text=raw)
+    if two_sided and _RANGE_UNIT_TAIL.fullmatch(raw[two_sided.end() :]):
+        low, high = float(two_sided.group(1)), float(two_sided.group(2))
+        if low <= high:
+            return PrintedRange(low=low, high=high, text=raw)
+        return PrintedRange(low=None, high=None, text=raw)
     upper = _RANGE_UPPER.match(raw)
-    if upper:
+    if upper and _RANGE_UNIT_TAIL.fullmatch(raw[upper.end() :]):
         return PrintedRange(low=None, high=float(upper.group(1)), text=raw)
     lower = _RANGE_LOWER.match(raw)
-    if lower:
+    if lower and _RANGE_UNIT_TAIL.fullmatch(raw[lower.end() :]):
         return PrintedRange(low=float(lower.group(1)), high=None, text=raw)
     return PrintedRange(low=None, high=None, text=raw)
 
@@ -301,7 +321,12 @@ def fold_legacy_reference_ranges(fields: Sequence[ExtractedField]) -> tuple[Extr
     uses — is left alone, the legacy sibling never overwriting a range the result was given
     directly; a sibling with no result to fold onto at all, or whose value is not text, is
     left exactly as it is too. Either way nothing here silently discards a field that was
-    never actually folded: the sibling stays, still its own line, rather than vanish."""
+    never actually folded: the sibling stays, still its own line, rather than vanish.
+
+    The merged field's confidence is the lower of the two: a clearly-read number beside a
+    faintly-read range must not read as "Nura is sure" once the range is folded into it — the
+    card's `needs_confirm` is computed from confidence (`app.ingestion.models.ReviewField.
+    needs_confirm`), so this is what carries a low-confidence range to the person at all."""
     by_key = {(f.subject, f.attribute): f for f in fields}
     folded: dict[tuple[str, str], ExtractedField] = {}
     dropped: set[tuple[str, str]] = set()
@@ -318,7 +343,11 @@ def fold_legacy_reference_ranges(fields: Sequence[ExtractedField]) -> tuple[Extr
             # overwritten by the legacy sibling's text), or a value that is not text at all:
             # left exactly as it is, still its own field, rather than silently discarded.
             continue
-        folded[base_key] = replace(base, range=parse_printed_range(legacy.value))
+        folded[base_key] = replace(
+            base,
+            range=parse_printed_range(legacy.value),
+            confidence=min(base.confidence, legacy.confidence),
+        )
         dropped.add((legacy.subject, legacy.attribute))
     return tuple(
         folded.get((f.subject, f.attribute), f)

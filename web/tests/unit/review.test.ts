@@ -278,9 +278,18 @@ describe("where a number sits against the paper's own printed range (E02 defect 
 
   it("is unknown for anything that is not a plain number against a real range", () => {
     expect(rangeStatus("64", { low: 3.9, high: 6.0 })).toBe("unknown");
+    // A value that still looks like a range as text ("<0.1") is never coerced to a number.
+    expect(rangeStatus("<0.1", { low: null, high: 0.5 })).toBe("unknown");
     expect(rangeStatus(64, null)).toBe("unknown");
     expect(rangeStatus(64, undefined)).toBe("unknown");
     // An unparseable printed range ("Negative") keeps both bounds null: never a wrong bar.
     expect(rangeStatus(64, { low: null, high: null })).toBe("unknown");
+  });
+
+  it("is in exactly on a bound, for every shape of range", () => {
+    expect(rangeStatus(3.9, { low: 3.9, high: 6.0 })).toBe("in"); // two-sided, low edge
+    expect(rangeStatus(6.0, { low: 3.9, high: 6.0 })).toBe("in"); // two-sided, high edge
+    expect(rangeStatus(40, { low: 40, high: null })).toBe("in"); // lower-only, inclusive
+    expect(rangeStatus(150, { low: null, high: 150 })).toBe("above"); // upper-only, exclusive
   });
 });
