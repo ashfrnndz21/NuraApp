@@ -43,6 +43,7 @@ from app.delivery.feed.compress import (
     FixtureCompressor,
     FixtureSearcher,
     Found,
+    PortUnavailable,
     Searcher,
 )
 from app.llm.residency import allow_external_model
@@ -362,7 +363,7 @@ class ClaudeSearcher:
                 output_config={"format": {"type": "json_schema", "schema": SEARCH_SCHEMA}},
                 messages=[{"role": "user", "content": prompt}],
             )
-        except Exception as failed:  # noqa: BLE001 — a call that fails answers nothing, never a guess
+        except Exception as failed:
             # Never the query's own words past this line — only the exception's own class
             # and, for an API refusal, its status and message (never the request content),
             # so a schema the API rejects (a 400) is distinguishable in the log from a
@@ -372,7 +373,12 @@ class ClaudeSearcher:
                 type(failed).__name__,
                 f": {failed}" if isinstance(failed, APIStatusError) else "",
             )
-            return []
+            # #297 defect 2: the call itself failed — never silently "nothing for him" (an
+            # empty `[]` here reads to `search.run_job` as "searched, found nothing", which
+            # writes the job `done` and not due again today, however long the API stays
+            # down). `PortUnavailable` tells `search.search_and_compress` apart the two, so
+            # the job is retried instead.
+            raise PortUnavailable(f"claude searcher call failed: {type(failed).__name__}") from failed
         payload = _structured_json(response)
         if payload is None:
             return []
@@ -435,7 +441,7 @@ class ClaudeCompressor:
                 output_config={"format": {"type": "json_schema", "schema": COMPRESS_SCHEMA}},
                 messages=[{"role": "user", "content": _compress_prompt(text, language, facts)}],
             )
-        except Exception as failed:  # noqa: BLE001 — a call that fails compresses nothing, never a guess
+        except Exception as failed:
             # Same rule as the searcher above: the page text and the facts never reach the
             # log, only the exception's own class and, for an API refusal, its status and
             # message — so a rejected schema (a 400) reads as its own case, not a silent
@@ -445,7 +451,10 @@ class ClaudeCompressor:
                 type(failed).__name__,
                 f": {failed}" if isinstance(failed, APIStatusError) else "",
             )
-            return None
+            # #297 defect 2: see the same raise in `ClaudeSearcher._ask` above — a failed
+            # call is never a clean "nothing for him" (`None`), or the job it belongs to is
+            # written down as done and not retried while the API stays down.
+            raise PortUnavailable(f"claude compressor call failed: {type(failed).__name__}") from failed
         stop_reason = getattr(response, "stop_reason", None)
         if stop_reason == "refusal":
             # A clean refusal, the same "nothing for him" a fixture with no matching file

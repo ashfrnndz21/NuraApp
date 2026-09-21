@@ -15,6 +15,7 @@ import pytest
 
 from app.delivery.feed import background
 from app.delivery.feed.models import JobKind
+from app.delivery.feed.search import SearchOutcome
 from tests.api import own_profile, register_by_phone
 from tests.conftest import Deployment
 from tests.test_feed_api import _feed, _reading
@@ -181,3 +182,44 @@ async def test_a_slow_job_hits_its_deadline_is_logged_and_the_others_still_compl
     assert any(
         "hit its" in record.message and "deadline" in record.message for record in caplog.records
     ), "the timeout itself is logged, the same as any other failed job"
+
+
+async def test_a_failed_job_is_retried_on_a_later_feed_the_same_day_but_only_once(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#297 defect 2, at the background level: a job left `FAILED` by `write_job_results`
+    (its own search call failed, not a clean "nothing for him") is still due, and a later
+    `GET /feed` the same day starts a fresh, short replan for it (`RunRecord.worth_rechecking`,
+    `ensure_learning_scheduled`) — but two requests racing to do that still claim it once
+    between them, the same `_runs` guard that already stops two initial runs racing (see the
+    test above)."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    await _medicine(deployment, profile_id, pa)
+
+    calls = 0
+    real_search_and_compress = background.search_and_compress
+
+    async def _fail_the_safety_job_once_per_run(*args: object, **kwargs: object) -> SearchOutcome:
+        nonlocal calls
+        job = args[1] if len(args) > 1 else kwargs["job"]
+        if getattr(job, "kind", None) is JobKind.SAFETY:
+            calls += 1
+            return SearchOutcome(candidates=(), rejected=[], domains=[], reasons=[], failed_because="forced")
+        return await real_search_and_compress(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(background, "search_and_compress", _fail_the_safety_job_once_per_run)
+
+    first = await _feed(deployment, profile_id, pa["token"])
+    assert first["jobs"]["state"] == "looking"
+    await background.drain()
+    assert calls == 1, "the safety job's first attempt"
+
+    # The safety job is still `FAILED` and due: a later `GET /feed` today starts a fresh
+    # replan for it — two of them racing claim it once between them, not twice.
+    await asyncio.gather(
+        _feed(deployment, profile_id, pa["token"]),
+        _feed(deployment, profile_id, pa["token"]),
+    )
+    await background.drain()
+    assert calls == 2, "the retry ran once, not once per racing request"

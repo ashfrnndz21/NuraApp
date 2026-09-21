@@ -33,6 +33,33 @@ never shared across concurrent coroutines — the same reason `app.channels.api.
 one per request), each bounded by `JOB_DEADLINE_SECONDS`; the whole run is bounded by
 `RUN_DEADLINE_SECONDS`. A job that raises or times out is logged and counted as failed; it
 never stops the others.
+
+**#297 defect 1 (2026-09-18): the write lock held across the network wait.** On SQLite every
+transaction begins IMMEDIATE (`app.db.make_engine`) and holds the database's one write lock
+for its whole life, not just its first write. `_run_one` used to open one session for a whole
+job — search, compress, and the cards it wrote — so that lock sat open for as long as the
+search and the compression took (20-40s each, real adapters), one job after another
+(`MAX_CONCURRENT_JOBS = 1`): every other request that writes, `resolve_session` on every
+authenticated call included, answered `sqlite3.OperationalError: database is locked` for
+minutes at a time. `run_job` (`app.delivery.feed.search`) is now three phases — a short read,
+the network with no session at all, a short write — and this module's own `run_job` below
+calls them directly, each on its own short-lived session, so no transaction is ever open
+while a job waits on the network. `speak_ahead`/`record_say_ahead_failures`
+(`app.delivery.feed.compose`) get the same treatment for the voice pre-render `_run_one` does
+after a job's cards land.
+
+**#297 defect 2 (2026-09-18): a failed search recorded as "done, found nothing".** The
+Anthropic API refused every call that day; `ClaudeSearcher`/`ClaudeCompressor` logged and
+returned an empty answer, indistinguishable from a job that searched and genuinely found
+nothing, so every job that day ended `status=done`, `results=[]`, and `due` (`app.delivery.
+feed.search`) said none of them were due again once the API came back. A port's own call
+failing now raises `app.delivery.feed.compress.PortUnavailable`, which `write_job_results`
+tells apart from a clean empty answer: the job is left `FAILED`, and `due` keeps it due for a
+retry the same day, up to `FAILED_JOB_RETRY_LIMIT` attempts. `_runs`, this process's
+once-a-day cache of what already ran, would otherwise never look again after a run finished —
+`RunRecord.had_failures` and `ensure_learning_scheduled` below let a later `GET /feed` the
+same day start a fresh (short) replan when a failed job is still due, without ever running
+two at once for one profile.
 """
 
 from __future__ import annotations
@@ -55,11 +82,19 @@ from app.delivery.feed.compose import (
     LearningPlan,
     household,
     plan_learning_jobs,
-    say_ahead,
+    record_say_ahead_failures,
+    speak_ahead,
 )
 from app.delivery.feed.days import Day
 from app.delivery.feed.models import FeedItem, SearchJob
-from app.delivery.feed.search import Engine, run_job
+from app.delivery.feed.search import (
+    Around,
+    Engine,
+    failed_jobs_due,
+    prepare_job,
+    search_and_compress,
+    write_job_results,
+)
 from app.errors import Refusal
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -96,6 +131,13 @@ class RunRecord:
     state: State
     started_at: datetime | None = None
     done_at: datetime | None = None
+    worth_rechecking: bool = False
+    """True when something is still due right now — most often a job this run's last attempt
+    left `FAILED` and still inside its retry budget (#297 defect 2:
+    `search.FAILED_JOB_RETRY_LIMIT`), read back with `search.failed_jobs_due`.
+    `ensure_learning_scheduled` checks this to decide whether a later `GET /feed` the same
+    day is worth a fresh (short) replan — false once nothing is due any more, so a spent
+    retry budget stops asking again for the rest of the day."""
 
 
 _runs: dict[tuple[uuid.UUID, str], RunRecord] = {}
@@ -123,15 +165,24 @@ def ensure_learning_scheduled(
     day: Day,
     sessions: async_sessionmaker[AsyncSession],
 ) -> RunRecord | None:
-    """Called from `GET /feed` after the page is built. Starts today's catch-up at most once:
-    a record already here — "looking", "done", or "none" — means a run for today has already
-    been claimed (by this call or an earlier one) and this does nothing more. Never awaited on
-    the slow part: the task this starts runs on its own, after this function has returned."""
+    """Called from `GET /feed` after the page is built. Starts today's catch-up at most once
+    while it is actually running: a "looking" record already here means a run for today is in
+    flight (by this call or an earlier one) and this never starts a second one alongside it.
+    A "done" or "none" record with nothing left `worth_rechecking` (#297 defect 2 — the common
+    case) does nothing more either, the same as before. Only a finished run that left
+    something due again — most often a job still inside its retry budget after its own search
+    or compression failed — gets a fresh (short) replan here. Never awaited on the slow part:
+    the task this starts runs on its own, after this function has returned."""
     key = (context.profile_id, day.key)
-    if key in _runs:
-        return _runs[key]
-    _runs[key] = RunRecord(state="looking", started_at=utcnow())
-    task = asyncio.create_task(_run(key, context=context, engine=engine, day=day, sessions=sessions))
+    existing = _runs.get(key)
+    if existing is not None and (existing.state == "looking" or not existing.worth_rechecking):
+        return existing
+    _runs[key] = RunRecord(
+        state="looking", started_at=existing.started_at if existing is not None else utcnow()
+    )
+    task = asyncio.create_task(
+        _run(key, context=context, engine=engine, day=day, sessions=sessions, resuming=existing is not None)
+    )
     _tasks.add(task)
     task.add_done_callback(_log_if_failed)
     task.add_done_callback(_tasks.discard)
@@ -208,6 +259,58 @@ async def _plan(
         return None
 
 
+async def run_job(
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    context: KeyContext,
+    job: SearchJob,
+    engine: Engine,
+    language: str,
+    around: Around,
+    doctor: str | None,
+    existing: set[str],
+) -> list[FeedItem]:
+    """One job, phased so the database's write lock is never held while it waits on the
+    network (#297 defect 1): a short read (`prepare_job`, plus the state a job's compression
+    grounds on), the search and the compression with no session open at all
+    (`search_and_compress`), then a short write for the cards and the job's own
+    `status`/`last_run_at`/`results` (`write_job_results`) — three units of work, each on its
+    own short-lived session, never one held open across the network wait in between.
+
+    This is the seam `_run_one` calls once per job, and the one
+    `tests/test_feed_background.py` monkeypatches to make a job raise or hang.
+    `app.delivery.feed.search.run_job` stays the single-session version, for every caller
+    that already holds one session across a whole job (the inline `POST .../jobs/{id}/run`
+    path, and every test that calls it directly) — this function is `background`'s own
+    phased variant of it, composed from the same three phases search.py exports.
+    """
+    async with _own_session(sessions) as session:
+        # `job` was loaded (or just created) on `_plan`'s own session, already closed by the
+        # time this one opens — detached, so a plain attribute write on it is never part of
+        # this session's unit of work: `session.merge` first, so every write later phases
+        # make lands on an instance a session actually tracks.
+        job = await session.merge(job)
+        state = await current_state(session, context=context)
+        prep = await prepare_job(session, context=context, job=job)
+    outcome = await search_and_compress(
+        engine, job, prep, state=state, language=language, around=around, existing=existing
+    )
+    async with _own_session(sessions) as session:
+        job = await session.merge(job)
+        return await write_job_results(
+            session,
+            context=context,
+            job=job,
+            engine=engine,
+            state=state,
+            language=language,
+            around=around,
+            doctor=doctor,
+            existing=existing,
+            outcome=outcome,
+        )
+
+
 async def _run_one(
     sessions: async_sessionmaker[AsyncSession],
     semaphore: asyncio.Semaphore,
@@ -219,33 +322,28 @@ async def _run_one(
     keys: set[str],
     job: SearchJob,
 ) -> list[FeedItem] | None:
-    """`None` means this job failed (raised, or ran past its deadline) — told apart from a
-    job that ran cleanly and simply found nothing (`[]`), so the run's own "N cards made, M
-    failed" line counts what actually went wrong, not every job that came back empty."""
+    """`None` means this job raised or ran past its deadline — told apart from a job that ran
+    cleanly and simply found nothing (`[]`), so the run's own "N cards made, M failed" line
+    counts what actually went wrong, not every job that came back empty. A job whose own
+    search or compression failed (#297 defect 2, `app.delivery.feed.compress.
+    PortUnavailable`) does not raise here at all — `write_job_results` still writes it down,
+    `FAILED`, and returns normally; `_run`'s own end-of-run check (`jobs_looking_today`)
+    is what notices there is still something due, not this function's count."""
     async with semaphore:
         try:
-            async with _own_session(sessions) as session:
-                # `job` was loaded (or just created) on `_plan`'s own session, already closed
-                # by the time this one opens — detached, so a plain attribute write on it
-                # (`run_job` sets `status`, `last_run_at`, `results`) is never part of this
-                # session's unit of work and is silently lost at commit, however cleanly the
-                # job itself ran: `session.merge` first, so every write `run_job` makes lands
-                # on an instance this session actually tracks.
-                job = await session.merge(job)
-                items = await asyncio.wait_for(
-                    run_job(
-                        session,
-                        context=context,
-                        job=job,
-                        engine=engine,
-                        state=await current_state(session, context=context),
-                        language=house.language,
-                        around=plan.around,
-                        doctor=house.doctor,
-                        existing=set(keys),
-                    ),
-                    timeout=JOB_DEADLINE_SECONDS,
-                )
+            items = await asyncio.wait_for(
+                run_job(
+                    sessions,
+                    context=context,
+                    job=job,
+                    engine=engine,
+                    language=house.language,
+                    around=plan.around,
+                    doctor=house.doctor,
+                    existing=set(keys),
+                ),
+                timeout=JOB_DEADLINE_SECONDS,
+            )
         except TimeoutError:
             log.warning("feed: a background learning job hit its %ss deadline", JOB_DEADLINE_SECONDS)
             return None
@@ -253,8 +351,14 @@ async def _run_one(
             log.exception("feed: a background learning job failed")
             return None
         if items:
-            async with _own_session(sessions) as session:
-                await say_ahead(session, engine, context, items)
+            # Every card's spoken twin, pre-rendered (`app.delivery.feed.compose._say_ahead`'s
+            # own docstring) — the network call (`speak_ahead`) with no session open, then a
+            # short write only when one actually failed (#297 defect 1: this is the same
+            # pattern as `run_job` above, and for the same reason).
+            results = await speak_ahead(engine, context, items)
+            if any(outcome.failed is not None for outcome in results):
+                async with _own_session(sessions) as session:
+                    await record_say_ahead_failures(session, context=context, results=results)
         return items
 
 
@@ -265,12 +369,17 @@ async def _run(
     engine: Engine,
     day: Day,
     sessions: async_sessionmaker[AsyncSession],
+    resuming: bool = False,
 ) -> None:
     record = _runs[key]
     try:
         planned = await _plan(sessions, context=context, engine=engine, day=day)
         if planned is None or not planned[0].jobs:
-            record.state = "none"
+            # Nothing due right now. `resuming` tells apart the day's first check (truly
+            # nothing was ever due: "none") from a later replan that found nothing left to
+            # retry (a run already happened today: stay "done", never regress it to "none").
+            record.state = "done" if resuming else "none"
+            record.worth_rechecking = False
             record.done_at = utcnow()
             return
         plan, house, keys = planned
@@ -298,9 +407,19 @@ async def _run(
         log.info("feed: %d cards made, %d failed", made, failed)
         record.state = "done"
         record.done_at = utcnow()
+        # #297 defect 2: a job left `FAILED` by `write_job_results` (its own search or
+        # compression call failed, not a clean "nothing for him") is still due, up to its
+        # retry limit — `failed_jobs_due` checks exactly that, never a job that merely raised
+        # or is due by its ordinary cadence (see its own docstring for why the distinction
+        # matters: those were already, quietly, "due again" before this fix, and reopening a
+        # finished run for them is not what #297 asked for). `ensure_learning_scheduled`
+        # checks this flag to decide whether a later `GET /feed` today is worth another look.
+        async with _own_session(sessions) as session:
+            record.worth_rechecking = await failed_jobs_due(session, context=context, day=day)
     except Exception:
         log.exception("feed: the background learning run failed")
         record.state = "done"
+        record.worth_rechecking = True
         record.done_at = utcnow()
         raise
 

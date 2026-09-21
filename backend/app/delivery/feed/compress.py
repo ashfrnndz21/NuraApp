@@ -53,6 +53,19 @@ class Found:
     """For a seasonal page: the season it is about (`app.delivery.feed.local.SEASONS`)."""
 
 
+class PortUnavailable(Exception):
+    """The searcher's or the compressor's own call failed — an API error, a timeout, a
+    connection dropped — told apart from a clean "nothing for him" (an empty result, a
+    refusal, an uncited passage), so `search.run_job` can mark the job `FAILED` and retry it
+    the same day, instead of writing it down as looked at and done (#297 defect 2: on
+    2026-09-18 the Anthropic API refused every call and every job that day was recorded
+    `done`, `results=[]`, so nothing retried once the API came back). Fixture adapters never
+    raise this — they always answer a clean empty on purpose, the same "nothing for him"
+    every port in this package already uses. A real adapter raises it only from the one place
+    its own call to the model can fail; every other empty answer it gives (a refusal, no
+    matching page, unparseable output) stays a clean `[]`/`None`, unchanged."""
+
+
 class Searcher(Protocol):
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
         """Pages for these terms, from these domains only. Never a page from anywhere else."""
