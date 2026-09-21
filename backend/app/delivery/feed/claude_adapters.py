@@ -24,6 +24,21 @@ still passes the plain-words verifier there (`NotPlainWords`). A Claude response
 errors, or cannot be parsed as the schema it was asked for answers with nothing — `[]` from a
 search, `None` from a compression — the same clean "nothing for him" a fixture with no matching
 file already answers with; it is never treated as a card in disguise.
+
+#302 live diagnosis (2026-09-21, operator, from the test copy's own logged job results): 22 of
+30 finished live search jobs came back with nothing at all — no items and no rejections — and
+every one of those jobs' own `terms` was a bare generic drug name (`["amlodipine"]`,
+`["warfarin"]`, `["atorvastatin"]`) with no other context; the one job that found something
+searched `["cholesterol"]`, already a plain word. Two fixes live here and in
+`app.delivery.feed.search`: `ClaudeSearcher._ask` now restricts both server tools to the job's
+own usable sources with `allowed_domains` (never `blocked_domains` alongside it — the two are
+mutually exclusive on this tool), so the model is restricted at the tool itself, not only
+checked after the fact (`_on_allowlist` below stays, as defence in depth — this is additive,
+not a replacement); and `search._safe_queries` builds what is asked from the licensed catalogue
+and an intent word per job kind, never the bare generic alone. Every empty job now also carries
+`search.SearchOutcome.searched_detail` — operational counts and a closed `empty_because`
+reason, read back from `ClaudeSearcher.last_search_detail()` — so a live check can say *why* a
+job found nothing without inspecting a log line.
 """
 
 from __future__ import annotations
@@ -213,6 +228,18 @@ def _normalize_url(url: str) -> str:
     return f"{normalized}?{parsed.query}" if parsed.query else normalized
 
 
+def _tool_result_error_code(block: Any) -> str | None:
+    """A server tool's own error, when it has one: `web_search_tool_result`/
+    `web_fetch_tool_result` answer a *list* of results on success and a single error object
+    (`{"error_code": ..., ...}`, HTTP 200, never a raised exception) on failure — never string-
+    matched, always this one field."""
+    content = _block_field(block, "content")
+    if isinstance(content, Mapping):
+        return str(content.get("error_code") or "") or None
+    error_code = getattr(content, "error_code", None) if content is not None else None
+    return str(error_code) if error_code else None
+
+
 def _block_type(block: Any) -> str | None:
     if isinstance(block, Mapping):
         return block.get("type")
@@ -273,6 +300,35 @@ def _tool_results(response: Any) -> tuple[dict[str, str], dict[str, tuple[str, s
             if text:
                 fetched[key] = (url, text)
     return tool_urls, fetched
+
+
+def _call_diagnostics(response: Any) -> dict[str, Any]:
+    """Operational facts about one `messages.create` call, from the response's own blocks and
+    `stop_reason` — never a query's or a page's own words. `app.delivery.feed.search.
+    SearchOutcome.searched_detail`'s only source: how many `web_search`/`web_fetch` tool
+    results actually came back, whether either tool answered its `max_uses_exceeded` error
+    (HTTP 200, never a raised exception — see `_tool_result_error_code`), and the call's own
+    `stop_reason` (`"refusal"` most of all)."""
+    web_search_uses = 0
+    web_fetch_uses = 0
+    max_uses_reached = False
+    for block in getattr(response, "content", None) or []:
+        block_type = _block_type(block)
+        if block_type == "web_search_tool_result":
+            web_search_uses += 1
+        elif block_type == "web_fetch_tool_result":
+            web_fetch_uses += 1
+        else:
+            continue
+        if _tool_result_error_code(block) == "max_uses_exceeded":
+            max_uses_reached = True
+    return {
+        "web_search_uses": web_search_uses,
+        "web_fetch_uses": web_fetch_uses,
+        "max_uses_reached": max_uses_reached,
+        "stop_reason": getattr(response, "stop_reason", None),
+        "refused": getattr(response, "stop_reason", None) == "refusal",
+    }
 
 
 def _found_from_entry(
@@ -348,11 +404,51 @@ class ClaudeSearcher:
         key = _checked_key(api_key=api_key, demo_mode=demo_mode, dev_run=dev_run, what="searcher")
         self._client = client if client is not None else _client(key)
         self._model = model
+        self._details: dict[int, dict[str, Any]] = {}
+        """Operational diagnostics of this instance's own most recent `search()` call — see
+        `last_search_detail`. Never page text, never the query or the terms' full words past
+        120 characters each (#302: `search_and_compress` needs to know a job searched and what
+        it searched, without this ever becoming a second place record content could leak)."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
+        # #302: `queries` is the safe phrasing `app.delivery.feed.search._safe_queries` built
+        # from `terms` — asked verbatim when given. A caller that predates `queries` (chiefly a
+        # direct unit test) still gets the old `"{kind}: {term}"` phrasing, unchanged.
+        pairs = (
+            zip(terms, queries, strict=True)
+            if queries is not None
+            else ((term, f"{kind}: {term}") for term in terms)
+        )
+        detail: dict[str, Any] = {
+            # How many were asked — never the words (independent review of #308: the query is
+            # record-derived, and a job's results are served whole to the watches view).
+            "queries": 0,
+            "web_search_uses": 0,
+            "web_fetch_uses": 0,
+            "candidate_urls": 0,
+            "on_allowlist": 0,
+            "fetched_ok": 0,
+            "stop_reasons": [],
+            "refused": False,
+            "parse_failed": False,
+            "max_uses_reached": False,
+        }
+        # Keyed by the caller's own `queries` object, never one slot on this process-wide
+        # instance: two profiles' runs overlap (each on its own worker thread), and with one
+        # slot profile A read back profile B's diagnostics into A's own job row (independent
+        # review of #308, blocker 2). A call without `queries` reports nothing.
+        if queries is not None:
+            self._details[id(queries)] = detail
         found: list[Found] = []
-        for term in terms:
-            found.extend(self._ask(f"{kind}: {term}", domains))
+        for _term, query in pairs:
+            found.extend(self._ask(query, domains, detail=detail))
         return found
 
     def find(
@@ -363,7 +459,21 @@ class ClaudeSearcher:
             return results
         return [one for one in results if one.media == media]
 
-    def _ask(self, query: str, domains: Sequence[str], *, media: str | None = None) -> list[Found]:
+    def last_search_detail(self, queries: Sequence[str]) -> Mapping[str, Any] | None:
+        """The diagnostics of the `search()` call that was handed THIS `queries` object, taken
+        (so nothing accumulates) — `None` when there was none. `app.delivery.feed.search.
+        _read_search_detail` reads this with `getattr`, defensively, the same as
+        `external_processor`: this method is not part of the `Searcher` port."""
+        return self._details.pop(id(queries), None)
+
+    def _ask(
+        self,
+        query: str,
+        domains: Sequence[str],
+        *,
+        media: str | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> list[Found]:
         allowed = [domain.strip().lower() for domain in domains if domain.strip()]
         if not allowed or not query.strip():
             return []
@@ -376,14 +486,26 @@ class ClaudeSearcher:
             " A page is `media: \"video\"` only when what it shows is a video; otherwise"
             ' `media: "article"`.'
         )
+        if detail is not None:
+            detail["queries"] += 1
         try:
             record_call(Task.SEARCH, self._model)
             response = self._client.messages.create(
                 model=self._model,
                 max_tokens=8192,
                 tools=[
-                    {"type": WEB_SEARCH_TOOL, "name": "web_search", "max_uses": SEARCH_TOOL_MAX_USES},
-                    {"type": WEB_FETCH_TOOL, "name": "web_fetch", "max_uses": SEARCH_TOOL_MAX_USES},
+                    {
+                        "type": WEB_SEARCH_TOOL,
+                        "name": "web_search",
+                        "max_uses": SEARCH_TOOL_MAX_USES,
+                        "allowed_domains": sorted(set(allowed)),
+                    },
+                    {
+                        "type": WEB_FETCH_TOOL,
+                        "name": "web_fetch",
+                        "max_uses": SEARCH_TOOL_MAX_USES,
+                        "allowed_domains": sorted(set(allowed)),
+                    },
                 ],
                 output_config={"format": {"type": "json_schema", "schema": SEARCH_SCHEMA}},
                 messages=[{"role": "user", "content": prompt}],
@@ -404,10 +526,31 @@ class ClaudeSearcher:
             # down). `PortUnavailable` tells `search.search_and_compress` apart the two, so
             # the job is retried instead.
             raise PortUnavailable(f"claude searcher call failed: {type(failed).__name__}") from failed
+        diagnostics = _call_diagnostics(response)
+        if detail is not None:
+            detail["web_search_uses"] += diagnostics["web_search_uses"]
+            detail["web_fetch_uses"] += diagnostics["web_fetch_uses"]
+            detail["stop_reasons"].append(diagnostics["stop_reason"])
+            detail["refused"] = detail["refused"] or diagnostics["refused"]
+            detail["max_uses_reached"] = detail["max_uses_reached"] or diagnostics["max_uses_reached"]
         payload = _structured_json(response)
         if payload is None:
+            if detail is not None and not diagnostics["refused"]:
+                # A response that is not a clean refusal but still carries no parseable JSON
+                # payload: the search call itself succeeded, but its structured output could
+                # not be read back — distinct from "no tool result" below (#302's
+                # `parse_failed`, told apart from `no_results`).
+                detail["parse_failed"] = True
             return []
         tool_urls, fetched = _tool_results(response)
+        if detail is not None:
+            detail["candidate_urls"] += len(tool_urls)
+            for key, tool_url in tool_urls.items():
+                if _on_allowlist(tool_url, allowed) is None:
+                    continue
+                detail["on_allowlist"] += 1
+                if key in fetched:
+                    detail["fetched_ok"] += 1
         if not tool_urls:
             # No web_search_tool_result or web_fetch_tool_result blocks at all: never fall
             # back to trusting the model's own URLs.

@@ -77,7 +77,14 @@ class GatedSearcher:
         self.delegate = delegate
         self.calls = 0
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         self.calls += 1
         self.gate.wait(timeout=10)
         return self.delegate.search(kind, terms, domains)

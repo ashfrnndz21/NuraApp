@@ -44,6 +44,11 @@ export interface Call {
    *  "medicines"); the kit's `PendingCard` reads it and stands in the card's own shape until the
    *  real content is there. Omit it and a call tracks nothing, exactly as before. */
   key?: string;
+  /** For `apiStream` only: a caller's own signal — leaving a screen mid-stream (`AbortController.
+   *  abort()` on unmount) stops the connection at once, the same as the queue's own deadline
+   *  already does, rather than leaving it to read to the end unheard. Omit it and a stream is
+   *  only ever stopped by the queue itself (an urgent call, the idle deadline). */
+  signal?: AbortSignal;
 }
 
 function isRefusalBody(value: unknown): value is RefusalBody {

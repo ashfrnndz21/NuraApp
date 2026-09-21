@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { hubEntries } from "../../src/record/model";
-import { API, fixClock, openMe, seedMedicine, TAB_SET } from "./helpers";
+import { API, fixClock, openMe, seedMedicine, TAB_SET, throughInsight } from "./helpers";
 import { auth, EVERY_PART, letIn, LOOKS, lookAs, openOwn, openRecord, placeholderPng, readable, signInAs, yes } from "./record-helpers";
 
 /** Checkpoint 25, his papers (W5): E02-04 a paper forwarded on WhatsApp confirmed on the web,
@@ -118,6 +118,11 @@ for (const look of LOOKS) {
     await expect(page.locator(`main[data-card-id="${handled.review_card_id}"]`)).toBeVisible();
     await readable(page, look);
     await page.getByTestId("looks-right").click();
+    // Checkpoint 3, "What it means for you" (package 7): every "Looks right" from the Record's
+    // own Papers list opens the insight screen first — a real screen of its own, covered end to
+    // end by `cp3Insight.spec.ts`; this walk only needs to pass through it and land back here.
+    await expect(page.getByTestId("insight-screen")).toBeVisible();
+    await throughInsight(page);
     await expect(page.getByTestId("record-note")).toHaveText("Nura wrote it down.");
     // Confirmed, not gone: it is now a checked paper in the same list (library part B #2).
     await expect(page.getByTestId("waiting-paper")).toHaveCount(0);
