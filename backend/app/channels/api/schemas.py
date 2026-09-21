@@ -71,6 +71,7 @@ from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
 from app.keys.privacy import Privacy
 from app.keys.scopes import KeyRole, KeyWindow, Scope
+from app.medicines.classify import NameKind
 from app.medicines.dose import Anchor, Dose, Frequency, parse_dose_text
 from app.medicines.models import (
     ChangeKind,
@@ -86,6 +87,7 @@ from app.medicines.service import (
     FlagView,
     Label,
     LineView,
+    NameClassification,
     Plan,
     Reconciled,
     Slot,
@@ -1082,7 +1084,13 @@ class LabelIn(BaseModel):
     registration_no: str | None = Field(default=None, min_length=1, max_length=32)
     dose: DoseIn | None = None
     dose_text: str | None = Field(default=None, min_length=1, max_length=120)
-    quantity: int | None = Field(default=None, gt=0)
+    # 2000 is generously above the largest real pack in the licensed fixture (the register's
+    # products are all sold in packs of a few dozen to a few hundred): a bound here, not just
+    # a sanity check downstream, because an unbounded quantity reaches `reorder_date`
+    # (`app.medicines.dose`), whose `date + timedelta(days=...)` arithmetic raises
+    # `OverflowError` for an astronomically large day count — a single bad number must never
+    # 500 the whole list.
+    quantity: int | None = Field(default=None, gt=0, le=2000)
     prescriber: str | None = Field(default=None, min_length=1, max_length=80)
     dispensed_at: AwareDatetime | None = None
     source_kind: SourceKind = SourceKind.RETAIL
@@ -1218,6 +1226,58 @@ class MedicineDraftOut(BaseModel):
             needs_label_photo=plan.needs_label_photo,
             lead_time_days=plan.lead_time_days,
         )
+
+
+class ClassCandidateOut(BaseModel):
+    """One member of a drug class the register lists, offered as a choice when a label
+    named only the class ("STATIN") and not a specific product — the register's own word
+    for the product, never the text read off the box."""
+
+    generic: str
+    product_name: str
+
+
+class ClassifyOut(BaseModel):
+    """What the register makes of a name alone, before it is trusted to identify a
+    product: `medicine` when the register can identify it; `class` when it is not a
+    product but is a family the register files products under, with those products as
+    `candidates`; `unknown` when the register has never heard of it. `candidates` is
+    always empty outside `class` — never a guess dressed up as a choice. `resolved_generic`
+    is always null outside `medicine`; when the register knows this name only as a brand
+    (#10, "Norvasc"), it is the product's own generic — what a caller must build the next
+    `LabelIn` from, never the name it asked about, or `identify()` finds nothing."""
+
+    name_kind: NameKind
+    candidates: list[ClassCandidateOut] = []
+    resolved_generic: str | None = None
+
+    @classmethod
+    def of(cls, found: NameClassification) -> ClassifyOut:
+        return cls(
+            name_kind=found.kind,
+            candidates=[
+                ClassCandidateOut(generic=m.generic, product_name=m.product_name or m.brand)
+                for m in found.candidates
+            ],
+            resolved_generic=found.resolved_generic,
+        )
+
+
+class TypedMedicineIn(BaseModel):
+    """What he typed or said about a medicine — "I take fish oil 1000 mg every morning" —
+    kept as its own artefact before it is checked against the register (redesign package
+    11, the "type it" entry point), the way a photo already is: so a typed medicine's
+    source line says "you told Nura", never "the label", once it is added."""
+
+    text: str = Field(min_length=1, max_length=2000)
+    captured_at: AwareDatetime | None = None
+
+
+class TypedMedicineOut(BaseModel):
+    """The artefact his typed words were kept under — the `source_artifact_id` a draft and
+    an add are then built from, exactly as a label photo's artefact id already is."""
+
+    artifact_id: uuid.UUID
 
 
 class CountOut(BaseModel):

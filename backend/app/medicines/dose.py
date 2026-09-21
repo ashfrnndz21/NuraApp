@@ -142,12 +142,23 @@ def days_left(remaining: float, dose: Dose) -> int | None:
     return int(remaining // a_day)
 
 
+MAX_REORDER_HORIZON_DAYS = 3650
+"""Ten years out: past this, `today + timedelta(days=...)` risks `date.max` overflow for a
+stored count far past anything the API's own `quantity` bound (`schemas.py`'s `LabelIn.
+quantity`, `le=2000`) can produce today — a defensive ceiling for a row written before that
+bound existed, or by any other path, so a single old or malformed count never 500s the whole
+list. Clamped, not raised: the read already refuses to invent a date, this only refuses to
+compute one absurd enough to overflow the type that holds it."""
+
+
 def reorder_date(today: date, remaining: float, dose: Dose, lead_time_days: int) -> date | None:
-    """today + days left − lead time; None for a when-needed dose. Never before today."""
+    """today + days left − lead time; None for a when-needed dose. Never before today, and
+    never past a ten-year horizon a stray count could otherwise overflow `date` computing."""
     left = days_left(remaining, dose)
     if left is None:
         return None
-    due = today + timedelta(days=left - lead_time_days)
+    horizon = min(left - lead_time_days, MAX_REORDER_HORIZON_DAYS)
+    due = today + timedelta(days=horizon)
     return max(due, today)
 
 

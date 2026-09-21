@@ -14,7 +14,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import ColumnElement, and_, or_
+from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
@@ -362,6 +362,37 @@ async def require_artifact_under(
     if not found:
         raise NoSuchArtifact(f"no artefact {artifact_id} on profile {context.profile_id}")
     return _heard_only_by_the_family(context, found[0])
+
+
+async def artifact_kinds_of(
+    session: AsyncSession, *, context: KeyContext, artifact_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, ArtifactKind]:
+    """The kind of each of these artefacts on this profile — never their bytes, their text,
+    or any other column — for a caller that already knows these ids belong to rows it may
+    read some other way (BLOCKER 1, independent safety review #1's no-migration fix:
+    `app.medicines.service.source_line`, for a line a medicines-only key can already see
+    citing its own `source_artifact_id`).
+
+    Every medicine's photo or typed entry is written under `Scope.RECORDS`
+    (`Artifact.written_scope`, always, `store_artifact`/`store_photo`), so routing this
+    through `scoped_select`/`audited_read` would answer nothing for a key that does not hold
+    `Scope.RECORDS` regardless of which door's name were passed — the same reason
+    `require_artifact_under` above still filters on the row's own `written_scope`, which a
+    medicines-only key's artefacts never match. A raw, profile-scoped, id-restricted read
+    instead: `Artifact` is defined in this module, which is where a read like this belongs
+    (`tests.test_row_scope`'s own raw-read allowlist is scoped by module for exactly this
+    reason), and the caller writes its own audit line under whichever door it actually read
+    this through, since only the caller knows which one that was."""
+    if not artifact_ids:
+        return {}
+    found = (
+        await session.execute(
+            select(Artifact.id, Artifact.kind).where(
+                Artifact.id.in_(list(artifact_ids)), Artifact.profile_id == context.profile_id
+            )
+        )
+    ).all()
+    return {row.id: row.kind for row in found}
 
 
 @audited(Action.WRITE, Scope.RECORDS, Event.__tablename__)

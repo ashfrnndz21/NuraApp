@@ -1,0 +1,183 @@
+import { describe, expect, it } from "vitest";
+import type { ClassifyOut, LineOut, SlotOut } from "../../src/api/types";
+import { classQuestionFor, doseAmountLine, doseAnchorWords, nextTypedField, registryRow, slotsForLine } from "../../src/record/model";
+import { DISPLAY_TEXT_MAX, sanitizeDisplayText } from "../../src/record/sanitize";
+import { en } from "../../src/strings/en";
+
+const line = (over: Partial<LineOut> = {}): LineOut => ({
+  line_id: "line-1",
+  name: "your blood pressure tablet",
+  generic: "amlodipine",
+  brand: "Norvasc",
+  strength: "10 mg",
+  form: "tablet",
+  high_risk: false,
+  dose: { amount: 1, unit: "tablet", frequency: "daily", anchors: ["breakfast"] },
+  prescriber: "Dr Lim",
+  status: "active",
+  started_at: "2026-09-01T00:00:00Z",
+  count: { remaining: 20, unit: "tablet", dispensed: 30, taken: 10, daily_amount: 1, days_left: 20, reorder_date: null, reorder_due: false, lead_time_days: 3, basis: "taps", lines: ["About 20 days left."], reorder: [], reorder_actions: {} },
+  flags: [],
+  doctor_question: [],
+  taken_label: "Taken",
+  due_now: false,
+  missed: false,
+  source: "From the label you kept on Friday 18 September.",
+  monthly_cost_said: null,
+  duplicate_of: [],
+  ...over,
+});
+
+describe("registryRow", () => {
+  it("puts his word first and the chemical name second, small", () => {
+    const row = registryRow(line(), en);
+    expect(row.name).toBe("Your blood pressure tablet");
+    expect(row.chemical).toBe("amlodipine 10 mg");
+  });
+
+  it("composes how-many-and-when from the amount and the catalogue's own anchor words", () => {
+    const row = registryRow(line(), en);
+    expect(row.howMany).toBe("1 tablet · Breakfast");
+  });
+
+  it("never invents a field the line does not hold: absent is null, never a placeholder", () => {
+    const row = registryRow(
+      line({ form: "", source: "", monthly_cost_said: null, count: null, dose: { amount: 0, unit: "", frequency: "as_needed", anchors: [] } }),
+      en,
+    );
+    expect(row.form).toBeNull();
+    expect(row.source).toBeNull();
+    expect(row.monthlyCost).toBeNull();
+    expect(row.howMany).toBeNull();
+    expect(row.supplyLines).toEqual([]);
+  });
+
+  it("names a duplicate and a high-risk line for the caller to flag, never silently", () => {
+    const row = registryRow(line({ duplicate_of: ["line-2"], high_risk: true }), en);
+    expect(row.duplicate).toBe(true);
+    expect(row.highRisk).toBe(true);
+  });
+});
+
+describe("doseAnchorWords / doseAmountLine", () => {
+  it("reads the already-approved catalogue words, never new prose", () => {
+    expect(doseAnchorWords(line({ dose: { amount: 1, unit: "tablet", frequency: "daily", anchors: ["breakfast", "bed"] } }), en)).toEqual(["Breakfast", "Bedtime"]);
+  });
+
+  it("is null when there is no amount on file", () => {
+    expect(doseAmountLine(line({ dose: { amount: 0, unit: "tablet", frequency: "daily", anchors: [] } }))).toBeNull();
+  });
+});
+
+describe("slotsForLine", () => {
+  const slot = (over: Partial<SlotOut> = {}): SlotOut => ({
+    line_id: "line-1",
+    generic: "amlodipine",
+    anchor: "breakfast",
+    card: "Blood pressure tablet, with breakfast",
+    taken: false,
+    taken_label: "Taken",
+    due_now: true,
+    missed: false,
+    if_forgotten: [],
+    source: "From the label you kept on Friday 18 September.",
+    ...over,
+  });
+
+  it("keeps only the slots for this line", () => {
+    const slots = [slot(), slot({ line_id: "line-2" })];
+    expect(slotsForLine("line-1", slots)).toHaveLength(1);
+    expect(slotsForLine("line-3", slots)).toEqual([]);
+  });
+});
+
+describe("classQuestionFor (#302, the which-statin decision)", () => {
+  const classify = (over: Partial<ClassifyOut> = {}): ClassifyOut => ({ name_kind: "medicine", candidates: [], ...over });
+
+  it("asks only when the register itself filed the name as a class with members", () => {
+    const found = classify({ name_kind: "class", candidates: [{ generic: "atorvastatin", product_name: "Lipitor 20 mg Tablet" }, { generic: "simvastatin", product_name: "Zocor 20 mg Tablet" }] });
+    expect(classQuestionFor(found)).toEqual({ kind: "ask", candidates: found.candidates });
+  });
+
+  it("never asks for a name the register already identifies as a medicine", () => {
+    expect(classQuestionFor(classify({ name_kind: "medicine" }))).toEqual({ kind: "none" });
+  });
+
+  it("never asks for a name the register has never heard of at all", () => {
+    expect(classQuestionFor(classify({ name_kind: "unknown" }))).toEqual({ kind: "none" });
+  });
+
+  it("never asks a class with no members to offer (nothing to choose between)", () => {
+    expect(classQuestionFor(classify({ name_kind: "class", candidates: [] }))).toEqual({ kind: "none" });
+  });
+});
+
+describe("nextTypedField (the typed-entry state machine)", () => {
+  it("walks name, then strength, then form, then how-and-when, in that order", () => {
+    expect(nextTypedField({})).toBe("generic");
+    expect(nextTypedField({ generic: "fish oil" })).toBe("strength");
+    expect(nextTypedField({ generic: "fish oil", strength: "1000 mg" })).toBe("form");
+    expect(nextTypedField({ generic: "fish oil", strength: "1000 mg", form: "capsule" })).toBe("dose_text");
+    expect(nextTypedField({ generic: "fish oil", strength: "1000 mg", form: "capsule", dose_text: "every morning" })).toBeNull();
+  });
+
+  it("treats blank or whitespace-only text as not yet given", () => {
+    expect(nextTypedField({ generic: "  " })).toBe("generic");
+  });
+});
+
+// Built from numeric code points via `String.fromCodePoint`, never as literal characters
+// typed into this file's own source: a control or bidi character sitting in a `.ts` file as
+// a real byte makes git treat the whole file as binary, invisible to review from then on
+// (`record/sanitize.ts`'s own rule, and the reason this table is built this way rather than
+// with `\u` escapes in a string literal).
+const cp = (...points: number[]): string => String.fromCodePoint(...points);
+const NUL = cp(0x0000);
+const BEL = cp(0x0007);
+const RLO = cp(0x202e); // right-to-left override
+const ZWSP = cp(0x200b); // zero-width space
+const LRI = cp(0x2066); // left-to-right isolate
+const WORD_JOINER = cp(0x2060);
+const SOFT_HYPHEN = cp(0x00ad);
+const ARABIC_LETTER_MARK = cp(0x061c);
+const HANGUL_FILLER = cp(0x3164);
+const MONGOLIAN_VOWEL_SEPARATOR = cp(0x180e);
+const ELLIPSIS = cp(0x2026);
+
+describe("sanitizeDisplayText (extracted text is hostile until confirmed)", () => {
+  it("renders a script-like string as plain text, unchanged apart from whitespace", () => {
+    const hostile = "Atorvastatin\nr2: take 80mg now <img src=x onerror=alert(1)>";
+    const shown = sanitizeDisplayText(hostile);
+    expect(shown).toBe("Atorvastatin r2: take 80mg now <img src=x onerror=alert(1)>");
+    // The angle brackets survive as plain characters -- Preact renders them as text, never
+    // as markup -- this function's job is the invisible/control layer, not markup escaping.
+    expect(shown).toContain("<img");
+  });
+
+  it("strips control characters", () => {
+    expect(sanitizeDisplayText(`a${NUL}b${BEL}c`)).toBe("a b c");
+  });
+
+  it("strips bidi-override and zero-width characters that could reorder or hide text", () => {
+    expect(sanitizeDisplayText(`a${RLO}b${ZWSP}c${LRI}d`)).toBe("a b c d");
+  });
+
+  it("strips the wider invisible-character set the backend's own sanitiser holds text to", () => {
+    // Word joiner, soft hyphen, Arabic letter mark, Hangul filler, Mongolian vowel
+    // separator -- every one of them a way to hide or reorder a line without showing up as
+    // an obviously "control" character to a casual read.
+    expect(sanitizeDisplayText(`a${WORD_JOINER}b${SOFT_HYPHEN}c${ARABIC_LETTER_MARK}d${HANGUL_FILLER}e${MONGOLIAN_VOWEL_SEPARATOR}f`)).toBe("a b c d e f");
+  });
+
+  it("caps very long text with an ellipsis, never over the cap", () => {
+    const long = "x".repeat(500);
+    const shown = sanitizeDisplayText(long);
+    expect(shown.length).toBeLessThanOrEqual(DISPLAY_TEXT_MAX);
+    expect(shown.endsWith(ELLIPSIS)).toBe(true);
+  });
+
+  it("is empty, never a crash, for null or undefined", () => {
+    expect(sanitizeDisplayText(null)).toBe("");
+    expect(sanitizeDisplayText(undefined)).toBe("");
+  });
+});

@@ -141,6 +141,19 @@ def assert_registry_conforms(
     with pytest.raises(UnknownDrug):
         registry.monograph("a generic no register has ever held")
 
+    # members_of_class(): the register's own filing, never a text search (#302). Every
+    # sampled generic's own class must list that generic among its members — a class a
+    # product is filed under must always find that product back — and a class name the
+    # register does not use finds nothing, the same "nothing guessed" rule `identify` keeps.
+    for generic in sample_generics:
+        (one, *_rest) = registry.identify(LabelFields(generic=generic))
+        members = registry.members_of_class(one.drug_class)
+        assert generic in {m.generic for m in members}
+        for member in members:
+            _assert_well_formed_match(member, member.generic)
+    assert registry.members_of_class("not a real class this register has ever filed") == []
+    assert registry.members_of_class("") == []
+
 
 REGISTRY = FixtureRegistry.load()
 SAMPLE = ["amlodipine", "warfarin", "ginkgo biloba", "danshen", "paracetamol", "metformin"]

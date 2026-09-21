@@ -38,7 +38,7 @@ const ABOUT_HIM = {
   places: ["visitsOwn"],
   hub: ["howFeeling", "checkTitle", "checkLine", "doTitle", "healthLine", "medicinesLine", "connectLine", "careLine", "reportLine", "reportNote", "reportReady", "backHome"],
   connect: ["familyTitle", "noFamily", "noCall", "nearYouTitle", "noNearYou"],
-  record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes", "notSet", "setDay", "dayAsk", "ledger", "ledgerWithheld", "ledgerPatientPaidLabel"],
+  record: ["medicines", "papers", "routine", "timeline", "trends", "providers", "back", "papersNone", "storyAsk", "twice", "outcomeNew", "outcomeRefill", "flaggedNone", "added", "noteSaved", "sureYes", "notSet", "setDay", "dayAsk", "ledger", "ledgerWithheld", "ledgerPatientPaidLabel", "addedConnection", "backToMedicines", "seeInRegistry", "add"],
   reading: ["title"],
   visit: ["open"],
   me: ["whatNuraUsesLead"],

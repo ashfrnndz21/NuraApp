@@ -98,6 +98,11 @@ PHARMACY_RECEIPT_RED_FLAG = "pharmacy-receipt-red-flag-2026-08-26"
 """A pharmacy receipt whose item name names a red-flag word, 26 August 2026
 (#pill-receipt)."""
 
+STATIN_BOX = "statin-box-2026-09-19"
+"""A cholesterol-tablet box printing only its drug family — STATIN 20 mg, 28 tablets — with
+no brand and no generic anywhere on it, 19 September 2026 (#302, the owner's own case: 'a box
+that says only STATIN 20 mg, 28 tablets ... asks which statin it is'). Synthetic."""
+
 PDF_HEADER = b"%PDF-1.4\n"
 
 

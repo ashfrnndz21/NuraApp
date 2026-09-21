@@ -179,7 +179,13 @@ describe("his medicines", () => {
         ],
       }),
     );
-    expect(label).toEqual({ generic: "warfarin", strength: "3 mg", dose_text: "1 biji sekali sehari waktu malam", quantity: 28 });
+    expect(label).toEqual({
+      generic: "warfarin",
+      strength: "3 mg",
+      dose_text: "1 biji sekali sehari waktu malam",
+      quantity: 28,
+      confidence: 0.9,
+    });
   });
 
   it("asks nothing of the backend until there is a name and how to take it", () => {
@@ -187,6 +193,7 @@ describe("his medicines", () => {
     expect(tidyLabel({ generic: " Aspirin", strength: "100 mg", dose_text: "1 tab OD", quantity: 30 })).toEqual({
       generic: "aspirin",
       strength: "100 mg",
+      form: null,
       dose_text: "1 tab OD",
       quantity: 30,
       prescriber: null,

@@ -2099,6 +2099,8 @@ export const zh = {
     aboutIt: "关于这个药",
     // @patient phrase
     add: "加一个药",
+    // @patient phrase
+    addOther: "为{patient}加一个药",
     // @patient headline
     storyPurpose: "这个药是做什么的",
     // @patient headline
@@ -2139,6 +2141,76 @@ export const zh = {
     doctorLabel: "医生的名字",
     // @patient phrase
     checkIt: "检查一下",
+    // @patient phrase
+    formLabel: "剂型（药片、胶囊、吸入器……）",
+    // @patient phrase
+    addTypeIt: "自己输入",
+    // @patient
+    addTypeLead: "告诉 Nura 名字、有多强、怎么吃。",
+    // @patient phrase
+    addLooksRight: "没错",
+    // @patient phrase
+    addFix: "改一下",
+    // @patient
+    addWhichLead: "“{name}”是一类药，不是一种药。",
+    // @patient
+    addWhichQuestion: "是哪一种？",
+    // @patient
+    addWhichHint: "名字通常小小地印在盒子上。",
+    // @patient phrase
+    addNotSure: "我不确定",
+    // @patient
+    addNotSureNote: ["Nura 已经保存了您发来的内容。", "在您说清楚是哪一种之前，不会添加任何药。"],
+    // @patient
+    addedConnection: "已加入您的清单。",
+    // @patient
+    addedConnectionOther: "已加入{patient}的清单。",
+    // @patient phrase
+    seeInRegistry: "在您的清单里看看",
+    // @patient phrase
+    seeInRegistryOther: "在{patient}的清单里看看",
+    // @patient
+    addDuplicateQuestion: ["您已经有这个药了。", "这是同一种药的新盒子吗？"],
+    // @patient
+    addDuplicateQuestionOther: ["{patient}已经有这个药了。", "这是同一种药的新盒子吗？"],
+    // @patient phrase
+    addDuplicateYes: "是的，我说说有多少",
+    // @patient phrase
+    addDuplicateNo: "不是，只是看看",
+    // @patient
+    addAlreadySaved: ["这已经在您的清单里了。", "没有新的东西可以添加。"],
+    // @patient
+    addAlreadySavedOther: ["这已经在{patient}的清单里了。", "没有新的东西可以添加。"],
+    // @patient phrase
+    todayKick: "今天",
+    // @patient phrase
+    leftChip: "还剩{n}",
+    // @patient phrase
+    backToMedicines: "回到您的清单",
+    // @patient phrase
+    backToMedicinesOther: "回到{patient}的清单",
+    // @patient
+    addEntryTurn: "拍一张标签的照片，或者自己输入。",
+    // @patient
+    addConfirmTurn: "这是 Nura 从*标签*上读到的。",
+    // @patient
+    addConfirmHint: "保存之前先看看对不对。",
+    // @patient
+    addPillConfirmTurn: "这是 Nura 从照片*猜*的。",
+    // @patient
+    addPillCaution: ["这可能是{name}。", "Nura 无法从一张药片的照片确定。", "请查看药盒，或问问药剂师。"],
+    // @patient phrase
+    addPillCheckEach: "逐一核对",
+    // @patient
+    addBoundary: ["这只是您告诉 Nura 的内容。", "吃之前，先问医生或药剂师。"],
+    // @patient phrase
+    sheetForm: "剂型",
+    // @patient phrase
+    sheetHowMany: "怎么吃",
+    // @patient phrase
+    sheetLeft: "还剩",
+    // @patient phrase
+    sheetFrom: "从哪里来的",
     // @patient
     outcomeNew: "这是您清单上的新药。",
     // @patient

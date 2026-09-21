@@ -2101,6 +2101,8 @@ export const en = {
     aboutIt: "About this medicine",
     // @patient phrase
     add: "Add a medicine",
+    // @patient phrase
+    addOther: "Add a medicine for {patient}",
     // @patient headline
     storyPurpose: "What it is for",
     // @patient headline
@@ -2141,6 +2143,85 @@ export const en = {
     doctorLabel: "The doctor's name",
     // @patient phrase
     checkIt: "Check it",
+    // @patient phrase
+    formLabel: "The form (tablet, capsule, inhaler…)",
+    // @patient phrase
+    addTypeIt: "Type it in",
+    // @patient
+    addTypeLead: "Tell Nura the name, then how strong and how to take it.",
+    // @patient phrase
+    addLooksRight: "Looks right",
+    // @patient phrase
+    addFix: "Fix",
+    // @patient
+    addWhichLead: "“{name}” is a family of medicines, not one medicine.",
+    // @patient
+    addWhichQuestion: "Which one is it?",
+    // @patient
+    addWhichHint: "The name is usually printed small on the box.",
+    // @patient phrase
+    addNotSure: "I'm not sure",
+    // @patient
+    addNotSureNote: ["Nura has kept what you sent.", "Nothing is added until you say which one it is."],
+    // @patient
+    addedConnection: "Added to your tablets.",
+    // @patient
+    addedConnectionOther: "Added to {patient}'s tablets.",
+    // @patient phrase
+    seeInRegistry: "See it in your tablets",
+    // @patient phrase
+    seeInRegistryOther: "See it in {patient}'s tablets",
+    // @patient
+    addDuplicateQuestion: ["You already have this.", "Is this a new box of the same one?"],
+    // @patient
+    addDuplicateQuestionOther: ["{patient} already has this.", "Is this a new box of the same one?"],
+    // @patient phrase
+    addDuplicateYes: "Yes, say how many",
+    // @patient phrase
+    addDuplicateNo: "No, just checking",
+    // #11: the same photo or entry already added this medicine once — there is no missing
+    // amount to ask for, so this never offers "Yes, say how many" (which, sent back through
+    // the same photo, would only find the same nothing-new every time).
+    // @patient
+    addAlreadySaved: ["This is already on your list.", "There is nothing new to add from this."],
+    // @patient
+    addAlreadySavedOther: ["This is already on {patient}'s list.", "There is nothing new to add from this."],
+    // @patient phrase
+    todayKick: "Today",
+    // @patient phrase
+    leftChip: "{n} left",
+    // @patient phrase
+    backToMedicines: "Back to your medicines",
+    // @patient phrase
+    backToMedicinesOther: "Back to {patient}'s medicines",
+    // @patient
+    addEntryTurn: "Take a photo of the label, or type it in.",
+    // @patient
+    addConfirmTurn: "Here is what Nura read from the *label*.",
+    // @patient
+    addConfirmHint: "Check it before it is saved.",
+    // #2b, independent safety review: a photo of a loose tablet is a guess, never a read —
+    // no one-tap "Looks right" for it, and this says so before he sees the guess at all.
+    // @patient
+    addPillConfirmTurn: "Here is what Nura *guessed* from the photo.",
+    // @patient
+    addPillCaution: [
+      "This might be {name}.",
+      "Nura cannot be sure from a photo of a tablet.",
+      "Check the box, or ask the pharmacist.",
+    ],
+    // @patient phrase
+    addPillCheckEach: "Check each one",
+    // @patient
+    addBoundary: ["This is only what you have told Nura.", "Ask your doctor or pharmacist before you take this."],
+    // @patient phrase
+    sheetForm: "Form",
+    // @patient phrase
+    sheetHowMany: "How you take it",
+    // @patient phrase
+    sheetLeft: "Left",
+    // @patient phrase
+    sheetFrom: "Where this came from",
     // @patient
     outcomeNew: "This is a new medicine for your list.",
     // @patient

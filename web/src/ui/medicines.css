@@ -1,0 +1,114 @@
+/* "Your tablets" — the registry, and Add a medicine (redesign package 11).
+
+   Almost everything here already exists in `ui/kit/kit.css` and `ui/design.css` (`.glass-chip`,
+   `.report-row-top`, `.report-value-num`, `.flag-chip`, `.chip-row`, `.tile`, `.pill`): this file
+   holds only the handful of selectors genuinely new to this screen — a tappable row header that
+   opens a medicine's sheet, and a real `<button>` styled as a chip for the which-one question,
+   since `Chip` (`ui/kit/Chip.tsx`) is deliberately decorative and not a control. */
+
+.medicine-line-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.medicine-line-open:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.medicine-line-open .title {
+  margin: 0;
+}
+.medicine-line-open .caption {
+  margin: 0;
+}
+
+.chip-tap {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  cursor: pointer;
+  font: inherit;
+}
+.chip-tap:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.chip-tap:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Today's dose rows (`TodayDoses`) put a long real sentence beside a short "Taken" button in
+   a `.report-row-top` flex row: without this, the button shrinks below its own label's width
+   and the word wraps mid-letter ("Tak/en"). A button never shrinks below its label, here or
+   anywhere else `.report-row-top` holds one. */
+.report-row-top > .pill {
+  flex-shrink: 0;
+}
+
+/* Today, compact (redesign package 11, owner's review): one line a dose where the sentence
+   fits, a 44px button — never a big pill — beside it, so three doses and three medicines
+   both sit above the fold at 390x844 together with the registry below. */
+.today-row .report-row-top {
+  min-height: 0;
+  gap: 8px;
+}
+.today-row .report-row-name b {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+.today-row .pill {
+  min-height: 44px;
+  height: 44px;
+  padding: 0 var(--space-2);
+  font-size: 13.5px;
+}
+
+/* A registry row's head: his word for it, the chemical name small under it, and the "N
+   left" chip on the same line, at the far end — never a fourth stacked line. */
+.medicine-line-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.medicine-line-head .flag-chip {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* The medicine detail sheet's own quiet rows (the kit's `ActionSheet` styling): a small
+   label, the value under it, hairline-separated like the report table's own rows. */
+.sheet-rows {
+  display: flex;
+  flex-direction: column;
+}
+.sheet-row {
+  padding: 9px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.sheet-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.sheet-row small {
+  display: block;
+  font-size: 12.5px;
+  opacity: 0.74;
+  margin-bottom: 2px;
+}
+.sheet-row p {
+  margin: 0;
+  font-size: 15px;
+}

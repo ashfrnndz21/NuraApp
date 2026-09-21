@@ -169,8 +169,10 @@ for (const [label, viewport] of [
       // "Ask about Pa" stays on her other screens, and asks.
       await page.getByTestId("tab-health").click();
       await page.getByTestId("health-record-hub").click();
-      await page.getByTestId("record-medicines").click();
-      await expect(page.getByTestId("medicine-line").first()).toBeVisible();
+      // Not Medicines: since package 11 its docked bar is "Add a medicine" (the blueprint's
+      // registry), so the ask bar is proved on a record screen that still carries it.
+      await page.getByTestId("record-timeline").click();
+      await expect(page.locator(".shell-ask").getByTestId("ask-input")).toBeVisible();
       await page.locator(".shell-ask").getByTestId("ask-input").fill("When is his next visit?");
       await page.locator(".shell-ask").getByTestId("ask-input").press("Enter");
       await expect(page.getByTestId("ask-screen")).toBeVisible();

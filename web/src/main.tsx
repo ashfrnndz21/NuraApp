@@ -3,6 +3,7 @@ import type { JSX } from "preact";
 import "./ui/base.css";
 import "./ui/design.css";
 import "./ui/warm.css";
+import "./ui/medicines.css";
 import "./ui/onboarding.css";
 import { App } from "./app";
 import { screen } from "./flow";

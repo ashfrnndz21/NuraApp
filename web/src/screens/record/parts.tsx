@@ -31,7 +31,11 @@ export function session(): { bearer: string; profileId: string } {
  *  read counts from the screen's first render — before it starts — so no frame says "ready"
  *  with the lines still to come. `reading` only makes the frame render again when it changes. */
 const inFlight = new Set<object>();
-const reading = signal(0);
+/** Exported read-only for a screen that builds its own compact header directly on `Shell`
+ *  (bypassing `RecordFrame`) and still wants the same `aria-busy` behaviour every other
+ *  Record screen already has, from the same shared read-count every `useRead` call here
+ *  already keeps. */
+export const reading = signal(0);
 
 function waiting(read: object, on: boolean): void {
   if (on) inFlight.add(read);

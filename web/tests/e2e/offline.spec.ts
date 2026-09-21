@@ -17,7 +17,6 @@ import {
   keptKeys,
   seedOwner,
   waitForWorker, expectProud} from "./helpers";
-import { unknownPng } from "./record-helpers";
 
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
@@ -111,16 +110,18 @@ test("adding a medicine refreshes the kept emergency card the same day, before t
   await expect(page.getByTestId("health-medicines")).toBeVisible();
   await page.getByTestId("health-medicines").click();
   await page.getByTestId("add-medicine").click();
-  await expect(page.getByTestId("add-photo")).toBeVisible();
-  await page.getByTestId("photo-input").setInputFiles({ name: "metformin.png", mimeType: "image/png", buffer: unknownPng() });
+  // Package 11's add screen: typed in (the photo path needs a label the fixture reader knows).
+  await expect(page.getByTestId("add-entry")).toBeVisible();
+  await page.getByTestId("add-type-it").click();
   await expect(page.getByTestId("add-label")).toBeVisible();
   await page.getByLabel("The name on the label").fill("metformin");
   await page.getByLabel("How strong it is").fill("500 mg");
   await page.getByLabel("How to take it").fill("1 tab OD");
   await page.getByLabel("How many are in the box").fill("20");
   await page.getByTestId("check-medicine").click();
+  await expect(page.getByTestId("add-check")).toBeVisible();
   await page.getByTestId("add-it").click();
-  await expect(page.getByTestId("record-note")).toHaveText("Nura added it to your list.");
+  await expect(page.getByTestId("add-done")).toBeVisible();
 
   // The card the backend would render now already names the new medicine — used below as the
   // line the kept, offline copy must carry too, not the wording this test invents.

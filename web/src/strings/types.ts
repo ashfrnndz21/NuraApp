@@ -1005,7 +1005,7 @@ export interface Strings {
     matchByNameOnly: string[];
     twice: string; twiceOther: string;
     aboutIt: string;
-    add: string;
+    add: string; addOther: string;
     storyPurpose: string;
     storyHow: string;
     storyWatch: string;
@@ -1023,6 +1023,65 @@ export interface Strings {
     countLabel: string;
     doctorLabel: string;
     checkIt: string;
+    // --- redesign package 11: "Your tablets" (the registry) and Add a medicine -----------
+    /** The form field of the short typed form ("tablet", "capsule", "inhaler…") — the one
+     *  field a photo never fills (the extractor names no "form" attribute), typed-only. */
+    formLabel: string;
+    /** "Type it in.": the third way into Add a medicine, beside a photo and a file. */
+    addTypeIt: string;
+    /** The typed form's own lead line — never "check what Nura read" when nothing was. */
+    addTypeLead: string;
+    /** The confirmation card's two actions once a photo or a file has been read. */
+    addLooksRight: string;
+    addFix: string;
+    /** The which-one question (#302): "STATIN" is a family, not one medicine. */
+    addWhichLead: string;
+    addWhichQuestion: string;
+    addWhichHint: string;
+    /** The chip beside the register's own choices, when he does not know which one it is. */
+    addNotSure: string;
+    addNotSureNote: string[];
+    /** The confirm card's own turn when the source was a photo of a loose tablet (#2b,
+     *  independent safety review): never the ordinary "read from the label" turn, and never
+     *  a one-tap "Looks right" beside it — a pill photo is a guess, not a read. */
+    addPillConfirmTurn: string;
+    /** "This might be {name}." plus why Nura cannot be sure and what to do about it — shown
+     *  before he ever sees a one-tap accept, because for a pill photo there is none. */
+    addPillCaution: string[];
+    /** The pill photo's own way forward: the field-by-field form, never a single tap. */
+    addPillCheckEach: string;
+    /** After his yes: where it went, and the way back to see it (a `ConnectionRow`). */
+    addedConnection: string; addedConnectionOther: string;
+    seeInRegistry: string; seeInRegistryOther: string;
+    /** A label that adds nothing new (`Outcome.DUPLICATE`): the existing engine's own
+     *  answer, put as a question rather than left as a bare refusal. */
+    addDuplicateQuestion: string[]; addDuplicateQuestionOther: string[];
+    addDuplicateYes: string;
+    addDuplicateNo: string;
+    /** The same photo or entry already wrote this medicine once (`matched_line_id` null on
+     *  a `DUPLICATE` outcome, #11): nothing to ask a quantity for, so no "yes" — only the
+     *  way back. */
+    addAlreadySaved: string[]; addAlreadySavedOther: string[];
+    /** The registry's own "Today" section, above the list (redesign package 11). */
+    todayKick: string;
+    /** "12 left" — a registry row's own small chip, only when the count knows a number. */
+    leftChip: string;
+    /** The Add screen's back link into the registry it actually goes back to — never the
+     *  generic "Back to your papers" every other Record screen's frame says. */
+    backToMedicines: string; backToMedicinesOther: string;
+    /** The turn framing's own lines (redesign package 11, the owner's rejection of the old
+     *  Record frame): a headline and a hint for each step, said as Nura, never a bare title. */
+    addEntryTurn: string;
+    addConfirmTurn: string;
+    addConfirmHint: string;
+    /** The boundary on the add flow (never the lab-ranges line): the same rule the
+     *  medicine's own story already carries, said once here before his yes. */
+    addBoundary: string[];
+    /** The medicine detail sheet's own quiet row labels (redesign package 11). */
+    sheetForm: string;
+    sheetHowMany: string;
+    sheetLeft: string;
+    sheetFrom: string;
     outcomeNew: string; outcomeNewOther: string;
     outcomeRefill: string; outcomeRefillOther: string;
     outcomeChange: string;

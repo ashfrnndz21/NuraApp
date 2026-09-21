@@ -88,6 +88,7 @@ from tests.paper import (
     PHARMACY_RECEIPT_RED_FLAG,
     PILL_PHOTO,
     RECEIPT,
+    STATIN_BOX,
     WARFARIN_LABEL,
     fixture,
     papers,
@@ -210,7 +211,9 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     pill-and-receipt story (#pill-receipt): a loose pill's guess, a pharmacy receipt with a
     matched and an unmatched line, and a second receipt whose item name carries a red-flag
     word; and the lipid and glucose panel the report table's range bars are drawn from
-    (redesign checkpoint 2), also synthetic. The labelled answers beside them (`*.expected.json`) are the accuracy harness's and
+    (redesign checkpoint 2), also synthetic. One more, also synthetic: a cholesterol-tablet
+    box printing only its drug family (STATIN 20 mg, 28 tablets, no brand or generic anywhere
+    on it), for `app.medicines.classify` (#302). The labelled answers beside them (`*.expected.json`) are the accuracy harness's and
     name no digest."""
     labels = papers()
     assert set(labels) == {
@@ -234,6 +237,7 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         PILL_PHOTO,
         PHARMACY_RECEIPT,
         PHARMACY_RECEIPT_RED_FLAG,
+        STATIN_BOX,
     }
     for label in labels:
         paper = fixture(label)

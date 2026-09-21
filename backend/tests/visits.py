@@ -182,6 +182,9 @@ class Unknown:
             raise UnknownDrug(f"no monograph for {generic}")
         return REGISTRY.monograph(generic)
 
+    def members_of_class(self, drug_class: str) -> Sequence[DrugMatch]:
+        return REGISTRY.members_of_class(drug_class)
+
 
 def a_week() -> timedelta:
     return timedelta(days=7)

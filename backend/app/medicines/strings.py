@@ -811,19 +811,44 @@ DOSE_CARD: Mapping[str, str] = {
 SOURCE: Mapping[str, Mapping[str, str]] = {
     "en": {
         "label": "This comes from the label you kept on {date}.",
+        # The neutral fallback (BLOCKER 1, independent safety review #1's no-migration fix):
+        # who typed it could not be told apart (`_typed_voice_for`) — never a guess.
         "typed": "Someone typed this in on {date}.",
+        # The reader is the one who typed it — true whichever profile this is.
+        "typed_self": "You typed this in on {date}.",
+        # Someone else did, named by `_typed_voice_for`'s own lookup.
+        "typed_named": "{name} typed this in on {date}.",
+        # #2c: a loose tablet's own photo is not a label he kept — never said as one.
+        "pill": "This comes from a photo of a tablet, on {date}.",
+        # BLOCKER 1: the kind itself could not be read (a deleted artefact, or some future
+        # failure this has not seen yet) — claims nothing about where it came from, never
+        # "the label you kept" from the mere fact that a `source_artifact_id` is on file.
+        "unreadable": "Nura has this written down since {date}.",
     },
     "ms": {
         "label": "Ini daripada label yang anda simpan pada {date}.",
         "typed": "Seseorang menaip ini pada {date}.",
+        "typed_self": "Anda menaip ini pada {date}.",
+        "typed_named": "{name} menaip ini pada {date}.",
+        "pill": "Ini daripada gambar sebiji ubat, pada {date}.",
+        "unreadable": "Nura ada catatan ini sejak {date}.",
     },
     "zh": {
         "label": "这来自您在{date}保存的标签。",
         "typed": "这是{date}有人输入的。",
+        "typed_self": "这是您在{date}输入的。",
+        "typed_named": "这是{name}在{date}输入的。",
+        "pill": "这来自{date}拍摄的一张药片照片。",
+        "unreadable": "Nura 从{date}起就记下了这个。",
     },
 }
 """Where a medicine line came from, and on which day: the source line under every card that
-shows it — the label he kept (a photo is behind the line) or what was typed in."""
+shows it — the label he kept (a photo is behind the line), a photo of a loose tablet, never
+said as a label (`is_pill_photo`, review defect #2c), what was typed in and by whom
+(`_typed_voice_for`), or — only when the kind genuinely could not be read — a neutral
+sentence that claims nothing (BLOCKER 1, independent safety review #1's no-migration fix:
+this used to be guessed from the mere presence of a `source_artifact_id`, wrongly, for every
+typed entry a medicines-only key ever read)."""
 
 # @patient phrase
 YOUR_DOCTOR: Mapping[str, str] = {"en": "your doctor", "ms": "doktor anda", "zh": "您的医生"}
@@ -1006,12 +1031,29 @@ SOURCE_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "label": "This comes from the label {patient} kept on {date}.",
         "typed": "This comes from what was typed in on {date}.",
+        # `_typed_voice_for`'s "You"/"{name}" name who actually typed it, never whose record
+        # this is — the same text either way this table is read from.
+        "typed_self": "You typed this in on {date}.",
+        "typed_named": "{name} typed this in on {date}.",
+        "pill": "This comes from a photo of a tablet {patient} took on {date}.",
+        "unreadable": "Nura has this written down since {date}.",
     },
     "ms": {
         "label": "Ini daripada label yang {patient} simpan pada {date}.",
         "typed": "Ini daripada apa yang ditaip pada {date}.",
+        "typed_self": "Anda menaip ini pada {date}.",
+        "typed_named": "{name} menaip ini pada {date}.",
+        "pill": "Ini daripada gambar sebiji ubat yang {patient} ambil pada {date}.",
+        "unreadable": "Nura ada catatan ini sejak {date}.",
     },
-    "zh": {"label": "这来自{patient}在{date}保存的标签。", "typed": "这来自{date}输入的内容。"},
+    "zh": {
+        "label": "这来自{patient}在{date}保存的标签。",
+        "typed": "这来自{date}输入的内容。",
+        "typed_self": "这是您在{date}输入的。",
+        "typed_named": "这是{name}在{date}输入的。",
+        "pill": "这来自{patient}在{date}拍摄的一张药片照片。",
+        "unreadable": "Nura 从{date}起就记下了这个。",
+    },
 }
 
 # @patient

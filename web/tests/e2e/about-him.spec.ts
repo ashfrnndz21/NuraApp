@@ -174,6 +174,11 @@ test("no caregiver-density screen says a second-person line about his record", a
   await page.getByTestId("health-record-hub").click();
   await page.getByTestId("record-medicines").click();
   await check("medicines");
+  // Add a medicine, on her key too (redesign package 11): "Add a medicine for Pa", never
+  // "Add a medicine" alone — the entry turn's own line is about him by name.
+  await page.getByTestId("add-medicine-empty").or(page.getByTestId("add-medicine")).click();
+  await expect(page.getByTestId("add-entry")).toBeVisible();
+  await check("medicines-add");
   // "Things to do", real now (board-fidelity-round-2): his steps, water and meals, said
   // about him, never to him, on her key too.
   await tab("tab-home");

@@ -672,6 +672,43 @@ img.avatar {
   display: flex;
   justify-content: center;
 }
+/* `.board-top-bar`'s own compact header (`Ask.tsx`'s `AskHeader`, `Medicines.tsx`'s
+   `MedicinesHead`): the same three-column `.shell-head` grid as the wordmark bar above, but
+   the middle column carries a page's own h1 instead of a fixed-width mark — "Ask" never
+   showed it, but "Your medicines" and "Add a medicine" do (independent safety review,
+   BLOCKER 1's a11y sweep at 200% zoom: the back button under the title lost its hit area
+   entirely). `grid-template-columns` here is the actual fix: `.shell-head`'s own middle
+   track is bare `auto`, sized to the title's full content width regardless of `min-width` on
+   the item inside it (`min-width: 0` on a grid item does not shrink an `auto` track — only
+   the track's own sizing keyword does), which grew past what the side tracks'
+   `minmax(0, 1fr)` could give up. `minmax(0, auto)` alone does not fix it either — a
+   non-flexible track still claims its full max-content width before any `fr` track gets a
+   share of what is left, so an `auto` cap only stops it if the browser happens to be wide
+   enough that "auto" and "as much as it wants" are already the same number, which 200% zoom
+   on a 360px phone guarantees they are not. `2fr` here is a real, load-bearing limit — the
+   middle track competes for space on exactly the same footing as the two `1fr` sides,
+   capped at twice their share, so the title can never take more than that regardless of how
+   long it is; its own `overflow:hidden`/ellipsis (below) does the rest within that cap.
+   Scoped to `.board-top-bar` alone so the wordmark bar above keeps its own untouched `auto`
+   sizing (its mark is a fixed, known-small size and has never needed this). */
+.board-top-bar {
+  /* The sides take what their buttons need and no more; the title takes the rest. A fixed
+     1:2:1 share clipped "Add a medicine" to "Add a medici…" at 390px with room to spare. The
+     title still cannot push a button out at 200% zoom: its column's minimum is 0. */
+  grid-template-columns: minmax(44px, auto) minmax(0, 1fr) minmax(44px, auto);
+}
+.board-top-bar .head-mid {
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.board-top-bar .top-bar-title {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .head-end {
   display: flex;
   align-items: center;
