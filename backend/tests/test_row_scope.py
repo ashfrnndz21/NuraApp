@@ -852,6 +852,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/state"),
     Walk("GET", f"{P}/review-cards"),
     Walk("GET", f"{P}/review-cards/{{card_id}}"),
+    Walk("GET", f"{P}/review-cards/{{card_id}}/artifact"),
     Walk(
         "GET",
         f"{P}/facts",
@@ -1381,10 +1382,11 @@ async def _walk(
                         _check(where, holder, events, seeded, seen, problems, walk)
                         continue
                     # Audio names nothing: a spoken twin answers for the card it speaks, a clip
-                    # (E03-05) for the recording it is cut from.
+                    # (E03-05) for the recording it is cut from. The paper itself (a photo or a
+                    # PDF, E02-07 library) answers for the card it is kept behind.
                     body = (
                         {"spoken": list(combo.values())}
-                        if kind.startswith(("audio/", "image/"))
+                        if kind.startswith(("audio/", "image/", "application/pdf"))
                         else response.text
                         if kind.startswith("text/html")
                         else response.json()

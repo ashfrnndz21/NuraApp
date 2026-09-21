@@ -76,6 +76,7 @@ from tests.paper import (
     INSURANCE_POLICY,
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
+    LIPID_GLUCOSE_PANEL,
     LIPID_PANEL,
     LIPID_PANEL_2025,
     METABOLIC_PANEL,
@@ -205,7 +206,8 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     from a real paper, since none ever was one), and three more, also synthetic, for the
     pill-and-receipt story (#pill-receipt): a loose pill's guess, a pharmacy receipt with a
     matched and an unmatched line, and a second receipt whose item name carries a red-flag
-    word. The labelled answers beside them (`*.expected.json`) are the accuracy harness's and
+    word; and the lipid and glucose panel the report table's range bars are drawn from
+    (redesign checkpoint 2), also synthetic. The labelled answers beside them (`*.expected.json`) are the accuracy harness's and
     name no digest."""
     labels = papers()
     assert set(labels) == {
@@ -221,6 +223,7 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         LAB_REPORT_VITALS,
         LAB_REPORT_RED_FLAG,
         METABOLIC_PANEL,
+        LIPID_GLUCOSE_PANEL,
         CLINIC_LETTER_HYPERTENSION,
         INSURANCE_POLICY,
         INSURANCE_CLAIM,
