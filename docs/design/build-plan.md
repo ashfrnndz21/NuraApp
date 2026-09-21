@@ -16,7 +16,7 @@ Everything lands on the `redesign` branch. `main` takes it at checkpoint 8.
 ## Progress: the fixed list every update counts against
 
 A work package counts as **done** only when it is merged on `redesign` and, where it has a screen, the operator has
-checked its screen captures against the blueprint. Percent complete = done packages / 23. Packages are not equal in
+checked its screen captures against the blueprint. Percent complete = done packages / 24 (a 24th package, country packs, was added on 2026-09-22 at the owner's request). Packages are not equal in
 size, so the percent is a count, not a forecast.
 
 | # | Work package | Checkpoint | State |
@@ -44,6 +44,7 @@ size, so the percent is a count, not a forecast.
 | 21 | Medicine registry and Add a medicine | 7c | Not started: needs the country decision |
 | 22 | Connections and content in context | 7d | Not started |
 | 23 | Merge to main, full checks, live pass as Pa and Mei | 8 | Not started |
+| 24 | **ASEAN-ready country packs**: one country setting (MY, SG first; TH and others by adding a pack) that tailors the emergency number, the licensed drug register, currency, the trusted publishers, ID format, privacy wording and the region the data lives in | 7 | Not started |
 
 ## How every piece is tested before the owner sees it
 1. Unit tests for the component or rule.
@@ -135,7 +136,7 @@ Independent safety reviews of matching, medicines, and policy and money come bef
 25 scenes. **You decide:** deploy or not.
 
 ## Owner decisions, and the checkpoint each one blocks
-1. Which country first — blocks 7a, 7b, 7c.
+1. Country: DECIDED 2026-09-22 — the app is ASEAN-ready by configuration (package 24). Malaysia and Singapore packs are filled and tested first; Thailand and others are added as packs. A Thai pack also needs Thai as a fourth language.
 2. Real papers with names removed — blocks 7a, 7b, 7c.
 3. Real video in the app or link out — blocks 6.
 4. Drawn atmosphere or licensed photography — blocks nothing; can change later.

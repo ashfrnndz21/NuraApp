@@ -884,3 +884,15 @@ impossible dates (before birth, in the future). Outcomes: `match` (file), `likel
 (ask: yours / someone you care for / set aside; move only to a profile the caller holds a key for, with the usual scopes and
 audit), `cannot_tell` (no identifying line on the paper: file, say so once). Deterministic rules only; the model never decides
 identity. Test papers must carry a consistent made-up name and ID, plus deliberate mismatches. Needs an independent safety review.
+
+## Owner decision 2026-09-22: ASEAN-ready by configuration (country packs)
+
+Today `backend/app/regions.py` has `Region` = SG | MY with a time zone per region, one database and one set of keys per region, and
+the feed's allow-listed publishers are Singapore bodies. Generalise this into a **country pack** selected by one setting: emergency
+number(s); the licensed drug register and its brand-to-generic table; currency and money formatting; allow-listed health publishers
+for the feed and for Ask's online search; national ID format and the name conventions used by the whose-paper-is-it check;
+privacy-law wording for consent and the data map; time zone; default languages; and the deployment region the person's data is stored
+in. A person chooses their country at sign-up, which also decides the regional deployment that holds their record (residency is not
+a toggle that moves data later). Adding a country = adding a pack plus its tests, never editing callers. First packs: MY and SG,
+filled and tested; TH needs Thai strings, a Thai plain-words rule set and a Thai register. Every pack value that can harm a person if
+wrong (emergency number, register) is covered by a test that fails when the pack is incomplete.
