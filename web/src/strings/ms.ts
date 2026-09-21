@@ -827,6 +827,18 @@ export const ms = {
     // @patient
     askLead: "Taip, atau tekan mikrofon pada papan kekunci.",
     // @patient
+    askSample1: "Apakah tekanan darah saya?",
+    // @patient
+    askSample1Theirs: "Apakah tekanan darah {name}?",
+    // @patient
+    askSample2: "Bila lawatan saya yang seterusnya?",
+    // @patient
+    askSample2Theirs: "Bila lawatan {name} yang seterusnya?",
+    // @patient
+    askSample3: "Untuk apa ubat-ubatan saya?",
+    // @patient
+    askSample3Theirs: "Untuk apa ubat-ubatan {name}?",
+    // @patient
     sourcePapers: "Ini datang dari surat-surat anda.",
     // @patient
     sourceMedicines: "Ini datang dari senarai ubat anda.",

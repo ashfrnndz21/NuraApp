@@ -827,6 +827,18 @@ export const en = {
     // @patient
     askLead: "Type it, or tap the microphone on the keyboard.",
     // @patient
+    askSample1: "What was my blood pressure?",
+    // @patient
+    askSample1Theirs: "What was {name}'s blood pressure?",
+    // @patient
+    askSample2: "When is my next visit?",
+    // @patient
+    askSample2Theirs: "When is {name}'s next visit?",
+    // @patient
+    askSample3: "What are my medicines for?",
+    // @patient
+    askSample3Theirs: "What are {name}'s medicines for?",
+    // @patient
     sourcePapers: "This comes from your papers.",
     // @patient
     sourceMedicines: "This comes from your medicines list.",

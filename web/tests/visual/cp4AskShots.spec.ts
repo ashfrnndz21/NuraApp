@@ -93,6 +93,12 @@ test.describe("cp4 Ask: mid-thinking, mid-stream, the finished answer, a two-tur
     await tryItAsPa(page);
     await openAsk(page);
 
+    // The empty state (layout fix, P1 checkpoint 4): the orb, one invitation, 3 sample
+    // questions that only ever fill the composer — never sent by themselves.
+    await expect(page.getByTestId("ask-empty")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator("#phone-frame").screenshot({ path: `${OUT}/wide-empty.png`, animations: "disabled" });
+
     await askAndCapture(page, "What was my blood pressure, and how long ago was that?", "wide-turn1", OUT);
     await page.evaluate(() => document.fonts.ready);
     await page.locator("#phone-frame").screenshot({ path: `${OUT}/wide-turn1-finished.png`, animations: "disabled" });
@@ -110,6 +116,12 @@ test.describe("cp4 Ask at 390x844", () => {
   test("390x844, full-bleed", async ({ page }) => {
     await tryItAsPa(page);
     await openAsk(page);
+
+    // The empty state (layout fix, P1 checkpoint 4): the orb, one invitation, 3 sample
+    // questions that only ever fill the composer — never sent by themselves.
+    await expect(page.getByTestId("ask-empty")).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: `${OUT}/phone-empty.png`, animations: "disabled" });
 
     await askAndCapture(page, "What was my blood pressure, and how long ago was that?", "phone-turn1", OUT);
     await page.evaluate(() => document.fonts.ready);
