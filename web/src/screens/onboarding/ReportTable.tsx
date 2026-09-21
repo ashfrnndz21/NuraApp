@@ -222,7 +222,8 @@ function ReportRow({
   const spokenRow = spokenLine(field, s).join(", ");
   const rowLabel = `${spokenRow}${!readOnly && row.correctable ? `. ${r.changeLabel}` : ""}`;
 
-  const attentionChip: JSX.Element | false = row.needsAttention ? (
+  // A reopened paper is one the person already checked: never ask them to check it again.
+  const attentionChip: JSX.Element | false = row.needsAttention && !readOnly ? (
     <span class="flag-chip question" data-testid="check-this-one" aria-hidden="true">
       {r.checkThisOne}
     </span>

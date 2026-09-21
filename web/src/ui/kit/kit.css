@@ -550,6 +550,8 @@ button.report-table-row {
    act on (E02-07 library part A #4) --------------------------------------------------------- */
 .report-about-toggle {
   display: flex;
+  /* The row base stacks its children; this one is a single line, words left, chevron right. */
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -557,10 +559,13 @@ button.report-table-row {
   font-weight: 500;
 }
 .report-about-toggle svg {
+  flex: none;
+  /* The kit chevron points right: closed it points down, open it points up. */
+  transform: rotate(90deg);
   transition: transform 0.2s ease;
 }
 .report-about-toggle[aria-expanded="true"] svg {
-  transform: rotate(180deg);
+  transform: rotate(-90deg);
 }
 
 /* --- A reopened, confirmed paper: read-only rows, never a button, never tappable ----------- */
