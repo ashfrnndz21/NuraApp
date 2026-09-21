@@ -29,6 +29,21 @@
   display: none;
 }
 
+/* The day's self-searches, still to run (blueprint `feed` scene): a small orb beside the one
+   real status line — never a fake delay, never a checklist. */
+.feed-looking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.feed-looking .orb {
+  flex: none;
+}
+.feed-looking .status-line-live {
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+
 .feed-pager {
   position: relative; /* the cards' offsetParent: where each one starts */
   flex: 1;
@@ -85,12 +100,17 @@
 }
 
 /* The lines. When they are taller than the space above the buttons they scroll here, inside
-   the card, and a soft shadow at the edge says there is more. The shadow is this region's own
-   background — painted behind the text, never over it (the "scrolling shadows" technique:
-   covers that move with the content hide it at either end). A scroll that reaches the end
-   carries on to the pager, so a swipe still moves to the next card. */
+   the card, and a soft shadow at the edge says there is more — the shadow alone, never a
+   painted-over "cover" (screens reviewed 2026-09-22: the old technique used `--white`/
+   `#fbf6f0` — cream TEXT colour, retokened for the dusk-glass ground — as an opaque
+   background fill, which painted a solid cream bar over the kicker and the why-link on
+   every card. The glass and paper tiles here are translucent washes over a moving gradient
+   ground, not a flat light page, so there is no single opaque colour a "cover" could fade to
+   that would actually match what sits behind it. The plum-tinted radial glow alone is the
+   affordance: on-brand, already translucent enough to read through, never a wall over a
+   line.) A scroll that reaches the end carries on to the pager, so a swipe still moves to
+   the next card. */
 .feed-body {
-  --cover: var(--white);
   flex: 1 1 auto;
   min-height: 0;
   overflow-x: hidden;
@@ -101,13 +121,8 @@
   gap: var(--space-1);
   outline: none;
   background:
-    linear-gradient(var(--cover) 30%, rgba(255, 255, 255, 0)) center top / 100% 28px no-repeat local,
-    linear-gradient(rgba(255, 255, 255, 0), var(--cover) 70%) center bottom / 100% 28px no-repeat local,
-    radial-gradient(farthest-side at 50% 0, rgba(78, 58, 120, 0.2), rgba(78, 58, 120, 0)) center top / 100% 12px no-repeat scroll,
-    radial-gradient(farthest-side at 50% 100%, rgba(78, 58, 120, 0.28), rgba(78, 58, 120, 0)) center bottom / 100% 14px no-repeat scroll;
-}
-.tile.glass .feed-body {
-  --cover: rgba(255, 255, 255, 0.8);
+    radial-gradient(farthest-side at 50% 0, rgba(78, 58, 120, 0.22), rgba(78, 58, 120, 0)) center top / 100% 14px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(78, 58, 120, 0.3), rgba(78, 58, 120, 0)) center bottom / 100% 16px no-repeat scroll;
 }
 .feed-body:focus-visible {
   outline: 3px solid var(--plum);
@@ -125,6 +140,36 @@
 .feed-section {
   font-size: var(--text-caption);
   color: var(--ink-soft);
+}
+/* Feeds of the day: the first card of the pager speaks in the redesign's own conversation
+   head (docs/design/README.md: 25px / 1.17 / 300 — light, as Home's and Ask's own headlines
+   are); every other card keeps the plain, compact `.title` it already had. Never bold. */
+.feed-title-first {
+  font-weight: 300;
+  font-size: 25px;
+  line-height: 1.17;
+}
+/* Why this card is here, in his terms (RE-08): the backend's own `why.plain`, never invented
+   here — only its treatment changes, so it reads as reasoning, not another line of content.
+   The mark is decorative only (`aria-hidden` by not being read: `::before` content is never
+   announced by a screen reader), so the line's own text — what `data-testid="why"` still
+   equals exactly — is unchanged. */
+.feed-why {
+  margin: 0;
+  color: var(--plum);
+  font-size: var(--text-caption);
+  font-style: italic;
+}
+.feed-why::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  margin-bottom: 1px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
 }
 .feed-card .lines p + p {
   margin-top: 4px;
@@ -167,37 +212,49 @@
   vertical-align: middle;
 }
 
-/* The four side actions: always visible, each a word beside its icon, each a full target
-   (56px in the patient's density — on a short phone the lines scroll, the buttons never
-   shrink). The pager ends above the tab bar, so the tab bar never covers them. */
+/* The four side actions (layout fix: these used to read as four equal, boxed pill buttons —
+   the same weight as the card's own primary action above them, competing with it rather than
+   stepping back for it). Still always visible, still each a word beside its icon, still each a
+   full target (56px in the patient's density — on a short phone the lines scroll, the buttons
+   never shrink) — every `data-testid`, every label, every size `feed.spec.ts` and `formats.
+   spec.ts` already assert is unchanged, only quieter: one row of four, no pill outline or
+   fill, a muted icon and a small label rather than a boxed button, so a card's one primary
+   action (Keep going, See your tablets, Ask the family to order, …) is what the eye lands on
+   first. The pager ends above the tab bar, so the tab bar never covers them. */
 .feed-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-1);
+  padding-top: var(--space-1);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 .feed-actions.one {
   grid-template-columns: 1fr;
 }
 .feed-actions button {
   font: inherit;
-  font-size: var(--text-button);
+  font-size: var(--text-caption);
   font-weight: var(--weight-button);
-  color: var(--plum);
+  color: var(--ink-soft);
   min-height: var(--target);
   min-width: var(--target);
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(78, 58, 120, 0.35);
-  background: var(--paper-bg);
+  padding: 4px 2px;
+  border-radius: var(--radius-chip);
+  border: none;
+  background: none;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  line-height: 1.15;
+  line-height: 1.1;
   text-align: center;
+}
+.feed-actions button:hover {
+  color: var(--plum);
 }
 .feed-actions button:focus-visible {
   outline: 3px solid var(--plum);
@@ -213,6 +270,73 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* The one primary action, where a card has one: solid and full width, the thing the eye lands
+   on first — the same `.pill.plum` every other primary action in the app already uses, kept
+   here only to say so is deliberate, not something this file changes the look of. */
+.feed-controls > .pill:first-child {
+  margin-bottom: 2px;
+}
+
+/* The clip card's own still (layout fix: the still used to sit at its natural size, Play next
+   to it in plain flow rather than over it, so on a short phone it read as squashed against the
+   action row below). A proper 16:9 frame, the still or excerpt filling it (never distorted —
+   `object-fit: cover`), Play centred over it and always fully visible, radius matched to the
+   tile it sits in. `.feed-card` scopes every rule here to the feed's own clip card, never
+   `tabs.tsx`'s unrelated `clip-player` (the thread's own clip, a different screen, sharing only
+   the base `.clip`/`.scene` classes from `ui/base.css`). */
+.feed-card .clip {
+  gap: var(--space-2);
+}
+.feed-card .clip-media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: var(--radius-chip);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.feed-card .clip-media img,
+.feed-card .clip-media video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.feed-card .clip-media .pill.clip-play {
+  position: relative;
+  z-index: 1;
+  width: auto;
+  min-width: var(--target);
+  padding: 0 var(--space-2);
+  box-shadow: var(--glass-highlight), 0 4px 18px rgba(15, 10, 25, 0.45);
+}
+.feed-card .clip-media .clip-caption-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 6px var(--space-2);
+  background: linear-gradient(rgba(21, 16, 31, 0), rgba(21, 16, 31, 0.72));
+  color: var(--white);
+  font-size: var(--text-caption);
+  text-align: center;
+}
+.feed-card .clip-byline {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--ink-soft);
+}
+.feed-card .scene {
+  margin-top: 0;
+}
+/* A Nura-made clip has no still to frame — its own warm scene keeps the plain `.scene` sizing
+   from `ui/base.css`; only a fetched publisher still gets the 16:9 treatment above. */
 
 /* A demo deployment's banner (ADR 0008) sits above every screen. The feed is the one screen
    that is exactly the height of the phone, so when it is up the app is a column the height of
