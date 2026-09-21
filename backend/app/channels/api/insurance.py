@@ -30,6 +30,7 @@ from app.channels.api.insurance_schemas import (
     ClaimOut,
     ClaimPaperOut,
     ClaimStatusIn,
+    EssentialItemOut,
     LedgerLineOut,
     LedgerOut,
     PolicyIn,
@@ -47,6 +48,7 @@ from app.insurance.claim import (
 )
 from app.insurance.ledger import insurance_ledger
 from app.insurance.policy import (
+    EssentialItem,
     PolicyPeriodState,
     current_policies,
     policy_period_state,
@@ -67,6 +69,13 @@ def _period_state_said(state: PolicyPeriodState, renewal_date, language: str) ->
         assert renewal_date is not None
         return period_state_word(state.value, language, date=say_date(renewal_date, language))
     return period_state_word(state.value, language)
+
+
+def _items_out(raw: list[dict] | None) -> list[EssentialItemOut]:  # type: ignore[type-arg]
+    if not raw:
+        return []
+    found = [EssentialItem.from_json(one) for one in raw]
+    return [EssentialItemOut(text=item.text, page=item.page) for item in found if item is not None]
 
 
 def _policy_out(row, *, context: Context, language: str | None = None) -> PolicyOut:  # type: ignore[no-untyped-def]
@@ -90,6 +99,15 @@ def _policy_out(row, *, context: Context, language: str | None = None) -> Policy
         set_at=row.set_at,
         period_state=state,
         period_state_said=_period_state_said(state, row.renewal_date, lang),
+        plan=row.plan,
+        coverage_items=_items_out(row.coverage_items),
+        excludes=_items_out(row.excludes),
+        benefits=_items_out(row.benefits),
+        claim_steps=_items_out(row.claim_steps),
+        ends_on=row.ends_on,
+        waiting_period=row.waiting_period,
+        claims_contact=row.claims_contact,
+        review_card_id=row.review_card_id,
     )
 
 
@@ -131,6 +149,15 @@ async def write_policy(
         guarantee_letter=body.guarantee_letter,
         supersedes_id=body.supersedes_id,
         confirmation_id=body.confirmation_id,
+        plan=body.plan,
+        coverage_items=[EssentialItem(text=one.text, page=one.page) for one in body.coverage_items],
+        excludes=[EssentialItem(text=one.text, page=one.page) for one in body.excludes],
+        benefits=[EssentialItem(text=one.text, page=one.page) for one in body.benefits],
+        claim_steps=[EssentialItem(text=one.text, page=one.page) for one in body.claim_steps],
+        ends_on=body.ends_on,
+        waiting_period=body.waiting_period,
+        claims_contact=body.claims_contact,
+        review_card_id=body.review_card_id,
     )
     return _policy_out(row, context=context, language=language)
 

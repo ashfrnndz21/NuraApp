@@ -562,6 +562,24 @@ export interface Strings {
       proposeCtaDone: string;
       notAPolicy: readonly [string, string];
       savedAsPaper: string;
+      /** "From {date}" / "to {date}" — the passport card's own period line, built from the
+       *  confirmed start/end dates, never a free-text guess. */
+      periodFrom: string;
+      periodTo: string;
+      /** "p. {page}" — the quiet page marker after an essentials line. */
+      pageMarker: string;
+      /** "Show all {n}" — the disclosure under the first five lines of a longer section. */
+      showAllN: string;
+      whoToContact: string;
+      seePolicyItself: string;
+      /** The insurance-specific safety line (item 10): two short lines, replacing the report
+       *  table's lab-oriented "ranges are printed" line for an insurance kind only. Written
+       *  impersonally (never "your"/"his") so the same line is correct read to him or about
+       *  him, the same register `app.insurance.strings`' own lines already keep. */
+      confirmSafety: readonly [string, string, string];
+      /** "Fix something" — the report table's fix-hint pill, for a card with no numeric
+       *  result rows at all (a policy, a letter), in place of "Fix a number". */
+      fixSomething: string;
     };
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The

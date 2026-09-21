@@ -165,12 +165,18 @@ export function ReportTable({ card, edits, onEdit, waiting, documentDateText, da
         />
       )}
       <p class="caption" data-testid="safety-line">
-        {r.safetyRanges} {r.safetyNotAdvice}
+        {INSURANCE_KINDS.has(card.document_kind) ? s.insurance.passport.confirmSafety.join(" ") : `${r.safetyRanges} ${r.safetyNotAdvice}`}
       </p>
       {readOnly && <div class="report-reopen-actions">{readOnly.actions}</div>}
     </div>
   );
 }
+
+/** An insurance kind's confirmation card shows the insurance boundary line (package 12a, item
+ *  10) instead of the lab-oriented "ranges are printed on your paper" line, which is simply
+ *  wrong for a policy or a claim letter — additive on this one shared component: every other
+ *  kind's safety line is unchanged. */
+const INSURANCE_KINDS: ReadonlySet<ReviewCardOut["document_kind"]> = new Set(["insurance_policy", "insurance_claim", "insurance_letter"]);
 
 function ReportRow({
   field,

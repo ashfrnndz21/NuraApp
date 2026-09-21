@@ -165,6 +165,10 @@ export function decisionsFor(card: ReviewCardOut, edits: Record<string, FieldEdi
 /** A pharmacy receipt's line subjects are numbered in the order printed (`item_1`,
  *  `item_2`…) — every one of them shares one set of words (`s.onboarding.fields.item`). */
 const ITEM_SUBJECT = /^item_\d+$/;
+/** A policy essentials line (package 12a, `app/llm/prompts/extract_document.txt`): "covers_1",
+ *  "excludes_3", "benefit_2", "claim_step_4" — numbered in the order printed, the same way
+ *  `item_N` already collapses to one shared label ("item") rather than one label per number. */
+const ESSENTIAL_ATTRIBUTE = /^(covers|excludes|benefit|claim_step)_\d+$/;
 
 /** His words for the line: the canonical label for the backend's subject and attribute codes
  *  when Nura knows one; failing that, the paper's own words for the line (`label_on_paper` —
@@ -175,7 +179,9 @@ export function fieldLabel(
   s: Strings,
 ): string {
   const subject = ITEM_SUBJECT.test(field.subject) ? "item" : field.subject;
-  const known = s.onboarding.fields[subject]?.[field.attribute];
+  const essential = field.subject === "insurance_policy" ? field.attribute.match(ESSENTIAL_ATTRIBUTE) : null;
+  const attribute = essential ? essential[1]! : field.attribute;
+  const known = s.onboarding.fields[subject]?.[attribute];
   if (known) return known;
   const printed = field.label_on_paper?.trim();
   return printed && printed.length > 0 ? printed : s.onboarding.records.otherLine;
@@ -435,6 +441,14 @@ export function reportRow(field: ReviewFieldOut, s: Strings, locale = "en-SG"): 
  *  subject: the same test rows `readingTally` already counts as "parsable". */
 export function isResultRow(row: Pick<ReportRowView, "unit" | "geometry" | "rangeText">): boolean {
   return row.unit != null || row.geometry != null || row.rangeText != null;
+}
+
+/** Whether a card has even one numeric result row at all (a unit, a range) — the report
+ *  table's own fix-button reads "Fix a number" only when there is one to fix; a card of pure
+ *  words (a policy, a letter, a prescription) instead says "Fix something" (package 12a, item
+ *  10), the same distinction `reportSections`'s own folding already keys off. */
+export function hasNumericResults(card: Pick<ReviewCardOut, "fields">, s: Strings, locale = "en-SG"): boolean {
+  return card.fields.some((field) => isResultRow(reportRow(field, s, locale)));
 }
 
 /** The kinds of paper that are a table of results, where the rest is only about the paper. */

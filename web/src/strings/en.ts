@@ -1150,6 +1150,22 @@ export const en = {
       notAPolicy: ["That does not look like a policy.", "Nura kept it with the other papers."],
       // @patient
       savedAsPaper: "Saved to the papers.",
+      // @patient phrase
+      periodFrom: "From {date}",
+      // @patient phrase
+      periodTo: "to {date}",
+      // @patient phrase
+      pageMarker: "p. {page}",
+      // @patient phrase
+      showAllN: "Show all {n}",
+      // @patient phrase
+      whoToContact: "Who to contact",
+      // @patient phrase
+      seePolicyItself: "See the policy itself",
+      // @patient
+      confirmSafety: ["Nura shows what the policy says.", "It does not decide what is covered.", "This is not financial advice."],
+      // @patient phrase
+      fixSomething: "Fix something",
     },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
@@ -1942,6 +1958,12 @@ export const en = {
         holder: "Who the policy is for",
         start_date: "When it started",
         end_date: "When it ends",
+        waiting_period: "The waiting period",
+        claims_contact: "Who to contact for a claim",
+        covers: "What it covers",
+        excludes: "What it does not cover",
+        benefit: "A benefit or a limit",
+        claim_step: "A step to claim",
       },
       insurance_claim: {
         insurer: "The insurance company",

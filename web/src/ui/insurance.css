@@ -173,3 +173,62 @@
   color: var(--ink-on-light, #2b2140);
   border-color: var(--ink);
 }
+
+/* The essentials (package 12a): what covers/excludes/how-to-claim print, each line its own
+ * item — plain text, the page it came from named quietly beside it, never a link. */
+.insurance-essentials-list {
+  margin: 0;
+  padding: 0 0 0 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.insurance-essentials-list li {
+  font-size: var(--text-body);
+  line-height: 1.4;
+}
+.insurance-page {
+  margin-left: 6px;
+  font-size: 11.5px;
+  opacity: 0.68;
+  white-space: nowrap;
+}
+.insurance-essentials-more {
+  margin-top: 8px;
+}
+.insurance-essentials-more summary {
+  cursor: pointer;
+  font-size: var(--text-caption);
+  color: var(--plum, var(--ink));
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+}
+.insurance-essentials-more .insurance-essentials-list {
+  margin-top: 8px;
+}
+
+/* Benefits and limits: the item's own words left, its amount as printed right, tabular so a
+ * column of numbers lines up — never a total, never a sum across rows. */
+.insurance-benefits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.insurance-benefit-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.insurance-benefit-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+}
+.insurance-benefit-amount {
+  font-size: var(--text-body);
+  font-weight: 500;
+  font-variant-numeric: var(--numeric);
+  white-space: nowrap;
+}

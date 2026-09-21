@@ -13,6 +13,16 @@ from app.insurance.claim import ClaimStatus
 from app.insurance.policy import PolicyPeriodState, PolicyStatus, PolicyType
 
 
+class EssentialItemOut(BaseModel):
+    """One line of what a policy covers, does not cover, a benefit, or a step to claim —
+    exactly as its pages print it, with the page it was read on. Extractor-written text,
+    still his once confirmed: rendered as a plain string everywhere it is shown, never markup,
+    never a link (`web/src/insurance/model.ts` `sanitizeDisplayText`)."""
+
+    text: str
+    page: int | None = None
+
+
 class PolicyIn(BaseModel):
     """A policy as typed, on a yes minted for exactly these fields
     (`POST /profiles/{id}/confirmations`, subject `policy`)."""
@@ -29,6 +39,15 @@ class PolicyIn(BaseModel):
     guarantee_letter: bool = False
     supersedes_id: uuid.UUID | None = None
     confirmation_id: uuid.UUID
+    plan: str | None = None
+    coverage_items: list[EssentialItemOut] = []
+    excludes: list[EssentialItemOut] = []
+    benefits: list[EssentialItemOut] = []
+    claim_steps: list[EssentialItemOut] = []
+    ends_on: date | None = None
+    waiting_period: str | None = None
+    claims_contact: str | None = None
+    review_card_id: uuid.UUID | None = None
 
 
 class PolicyOut(BaseModel):
@@ -52,6 +71,18 @@ class PolicyOut(BaseModel):
     infer from a free-text field or the device's own clock."""
     period_state_said: str
     """`period_state`, already in his language — 'In force', 'Ends on {date}', 'Ended'."""
+    plan: str | None
+    coverage_items: list[EssentialItemOut]
+    excludes: list[EssentialItemOut]
+    benefits: list[EssentialItemOut]
+    claim_steps: list[EssentialItemOut]
+    ends_on: date | None
+    waiting_period: str | None
+    claims_contact: str | None
+    review_card_id: uuid.UUID | None
+    """The confirmed review card the essentials were read from, when there is one — "See the
+    policy itself" reads it through the existing `GET .../review-cards/{card_id}/artifact`
+    route, under that route's own scope, not a new one."""
 
 
 class ClaimIn(BaseModel):

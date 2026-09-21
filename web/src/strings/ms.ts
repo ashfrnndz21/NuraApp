@@ -1150,6 +1150,22 @@ export const ms = {
       notAPolicy: ["Itu tidak kelihatan seperti polisi.", "Nura menyimpannya bersama kertas lain."],
       // @patient
       savedAsPaper: "Disimpan dalam kertas-kertas.",
+      // @patient phrase
+      periodFrom: "Dari {date}",
+      // @patient phrase
+      periodTo: "hingga {date}",
+      // @patient phrase
+      pageMarker: "ms. {page}",
+      // @patient phrase
+      showAllN: "Tunjuk semua {n}",
+      // @patient phrase
+      whoToContact: "Siapa untuk dihubungi",
+      // @patient phrase
+      seePolicyItself: "Lihat polisi itu sendiri",
+      // @patient
+      confirmSafety: ["Nura menunjukkan apa yang polisi itu kata.", "Ia tidak menentukan apa yang dilindungi.", "Ini bukan nasihat kewangan."],
+      // @patient phrase
+      fixSomething: "Betulkan sesuatu",
     },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
@@ -1940,6 +1956,12 @@ export const ms = {
         holder: "Siapa yang dilindungi polisi ini",
         start_date: "Bila ia bermula",
         end_date: "Bila ia tamat",
+        waiting_period: "Tempoh menunggu",
+        claims_contact: "Siapa untuk dihubungi bagi tuntutan",
+        covers: "Apa yang dilindungi",
+        excludes: "Apa yang tidak dilindungi",
+        benefit: "Manfaat atau had",
+        claim_step: "Langkah untuk menuntut",
       },
       insurance_claim: {
         insurer: "Syarikat insurans",

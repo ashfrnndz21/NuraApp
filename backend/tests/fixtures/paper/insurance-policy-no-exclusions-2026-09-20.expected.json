@@ -1,0 +1,15 @@
+{
+  "placeholder": "insurance-policy-no-exclusions-2026-09-20",
+  "note": "What the synthetic paper says, matching the fixture exactly.",
+  "document_kind": "insurance_policy",
+  "fields": [
+    { "subject": "insurance_policy", "attribute": "insurer", "value": "AIA", "unit": null },
+    { "subject": "insurance_policy", "attribute": "policy_number", "value": "AIA-SP-88214", "unit": null },
+    { "subject": "insurance_policy", "attribute": "plan", "value": "Simple Shield", "unit": null },
+    { "subject": "insurance_policy", "attribute": "start_date", "value": "2026-03-01", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_1", "value": "Hospital room and board", "unit": null },
+    { "subject": "insurance_policy", "attribute": "covers_2", "value": "Day surgery", "unit": null },
+    { "subject": "insurance_policy", "attribute": "benefit_1", "value": "Annual limit: S$100,000", "unit": null },
+    { "subject": "insurance_policy", "attribute": "claim_step_1", "value": "Call the hotline within 24 hours of admission", "unit": null }
+  ]
+}

@@ -1150,6 +1150,22 @@ export const zh = {
       notAPolicy: ["这看起来不像保单。", "Nura已将它与其他文件一起保存。"],
       // @patient
       savedAsPaper: "已保存到文件中。",
+      // @patient phrase
+      periodFrom: "从{date}",
+      // @patient phrase
+      periodTo: "至{date}",
+      // @patient phrase
+      pageMarker: "第{page}页",
+      // @patient phrase
+      showAllN: "显示全部{n}项",
+      // @patient phrase
+      whoToContact: "联系方式",
+      // @patient phrase
+      seePolicyItself: "查看保单原件",
+      // @patient
+      confirmSafety: ["Nura显示保单上写的内容。", "不会决定什么可以获得赔付。", "这不是财务建议。"],
+      // @patient phrase
+      fixSomething: "更正内容",
     },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
@@ -1940,6 +1956,12 @@ export const zh = {
         holder: "这份保单保障谁",
         start_date: "什么时候开始",
         end_date: "什么时候结束",
+        waiting_period: "等待期",
+        claims_contact: "理赔联系方式",
+        covers: "保障范围",
+        excludes: "不保障范围",
+        benefit: "保障或限额",
+        claim_step: "理赔步骤",
       },
       insurance_claim: {
         insurer: "保险公司",

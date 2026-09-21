@@ -586,6 +586,15 @@ export type PolicyStatus = "active" | "lapsed" | "cancelled";
  *  here from `renewal_date` and the device's own clock. */
 export type PolicyPeriodState = "in_force" | "ends_on" | "ended";
 
+/** One line of what a policy covers, does not cover, a benefit, or a step to claim — exactly
+ *  as its own pages print it, with the page it was read on (package 12a). Extractor-written
+ *  text: every caller renders `text` as a plain string only (`sanitizeDisplayText`), never
+ *  markup, never a link — true before confirmation and still true once it is his record. */
+export interface EssentialItemOut {
+  text: string;
+  page: number | null;
+}
+
 /** One policy on his profile (E13-03, `GET /profiles/{id}/insurance/policies`), the newest of
  *  its lineage — never edited, only ever superseded (`app.insurance.policy`). */
 export interface PolicyOut {
@@ -605,6 +614,23 @@ export interface PolicyOut {
   set_at: string;
   period_state: PolicyPeriodState;
   period_state_said: string;
+  /** The plan's own name, exactly as printed ("Hospital Shield") — its own field, never
+   *  folded into `covers`. */
+  plan: string | null;
+  /** The essentials (package 12a), as the policy's own pages print them — never invented,
+   *  never computed: an empty list means the pages given did not carry that section, shown as
+   *  the one calm line, never a placeholder. */
+  coverage_items: EssentialItemOut[];
+  excludes: EssentialItemOut[];
+  benefits: EssentialItemOut[];
+  claim_steps: EssentialItemOut[];
+  ends_on: string | null;
+  waiting_period: string | null;
+  claims_contact: string | null;
+  /** The confirmed review card the essentials were read from, when there is one — "See the
+   *  policy itself" reads it through the existing `reviewCardArtifact` call, under that
+   *  route's own scope, not a new one. */
+  review_card_id: string | null;
 }
 
 /** A policy as typed, on a yes minted for exactly these fields (subject `"policy"`,
@@ -623,6 +649,15 @@ export interface PolicyDraftFields {
   status: PolicyStatus;
   guarantee_letter: boolean;
   supersedes_id?: string | null;
+  plan?: string | null;
+  coverage_items?: EssentialItemOut[];
+  excludes?: EssentialItemOut[];
+  benefits?: EssentialItemOut[];
+  claim_steps?: EssentialItemOut[];
+  ends_on?: string | null;
+  waiting_period?: string | null;
+  claims_contact?: string | null;
+  review_card_id?: string | null;
 }
 
 /** A typical fee range's own source (T3): who published it, the page, and the day it was

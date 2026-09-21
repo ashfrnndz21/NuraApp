@@ -44,10 +44,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
+from typing import Any
 
-from sqlalchemy import Boolean, Date, ForeignKey, String
+from sqlalchemy import JSON, Boolean, Date, ForeignKey, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -70,6 +72,44 @@ INSURER_NAME_LENGTH = 120
 REFERENCE_LENGTH = 40
 COVERED_LENGTH = 120
 COVERS_LENGTH = 400
+WAITING_PERIOD_LENGTH = 200
+CLAIMS_CONTACT_LENGTH = 200
+PLAN_LENGTH = 120
+
+ESSENTIAL_ITEM_TEXT_LENGTH = 200
+"""The same cap the extractor's own field value already carries
+(`app.ingestion.extract.VALUE_LENGTH`) — an essentials line is one extracted field, never
+longer once it is his record either."""
+ESSENTIAL_LIST_CAP = 12
+"""How many lines a covers/excludes/benefits/how-to-claim section may hold — the same ceiling
+the extraction prompt is given (`app/llm/prompts/extract_document.txt`), enforced again here
+so a hostile or runaway answer can never write more than a policy's own pages plausibly
+carry."""
+
+
+@dataclass(frozen=True, slots=True)
+class EssentialItem:
+    """One line of what a policy covers, does not cover, a benefit, or a step to claim —
+    exactly as printed, with the page it came from. Extractor-written text: shown to him as a
+    plain string only, never markup, never a link (`web/src/insurance/model.ts`
+    `sanitizeDisplayText`); this module keeps it as text too, never parses an amount out of a
+    `benefit` line into a number Nura could compute with."""
+
+    text: str
+    page: int | None = None
+
+    def as_json(self) -> dict[str, Any]:
+        return {"text": self.text, "page": self.page}
+
+    @staticmethod
+    def from_json(raw: Any) -> EssentialItem | None:
+        if not isinstance(raw, dict):
+            return None
+        text = raw.get("text")
+        if not isinstance(text, str) or not text.strip():
+            return None
+        page = raw.get("page")
+        return EssentialItem(text=text, page=page if isinstance(page, int) else None)
 
 
 class PolicyType(StrEnum):
@@ -159,6 +199,46 @@ class Policy(ProfileScoped, Base):
     confirmation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("confirmation.id"))
     set_at: Mapped[datetime] = mapped_column(default=utcnow, index=True)
 
+    plan: Mapped[str | None] = mapped_column(String(PLAN_LENGTH), default=None)
+    """The plan's own name, exactly as printed ("Hospital Shield") — its own column, never
+    folded into `covers` (what it covers, in words), the mistake the passport's first pass
+    made."""
+
+    # The essentials (package 12a): what a policy document itself prints, each line its own
+    # extracted field before it ever reaches here, kept as a JSON list of `EssentialItem`
+    # (`{"text", "page"}`) — never a number Nura parses out and computes with, never longer
+    # than `ESSENTIAL_LIST_CAP` items of `ESSENTIAL_ITEM_TEXT_LENGTH` characters each
+    # (`policy_draft`, below, is the one door these ever pass through, the same as every other
+    # field here).
+    coverage_items: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON(), default=None)
+    """What the policy's own pages say it covers, one line per printed item."""
+    excludes: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON(), default=None)
+    """What the policy's own pages say it does not cover, one line per printed item."""
+    benefits: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON(), default=None)
+    """A benefit or a limit, the item's own words together with its amount exactly as
+    printed, including its currency — kept as one text line, never split into a number this
+    module or anything downstream could compute with."""
+    claim_steps: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON(), default=None)
+    """How to claim, in the policy's own order — the list order is the claim order; no
+    separate index is kept."""
+    ends_on: Mapped[date | None] = mapped_column(Date(), default=None)
+    """The policy's own fixed end date, when its pages print one (distinct from
+    `renewal_date`, which is when it next comes up for renewal, not necessarily printed)."""
+    waiting_period: Mapped[str | None] = mapped_column(String(WAITING_PERIOD_LENGTH), default=None)
+    """A waiting period before cover starts for a condition, exactly as printed."""
+    claims_contact: Mapped[str | None] = mapped_column(String(CLAIMS_CONTACT_LENGTH), default=None)
+    """A phone number, hotline or claims-department name exactly as printed — display-only
+    text everywhere it is shown (`web/src/insurance/model.ts` `sanitizeDisplayText`): never
+    turned into a `tel:`/`http` link, since nothing here has reviewed it the way
+    `app.insurance.insurer`'s catalogue-style data would be."""
+    review_card_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("review_card.id"), default=None
+    )
+    """The confirmed review card this policy's essentials were read from, when it was loaded
+    from a paper rather than typed — "See the policy itself" reads the same audited artifact
+    route a reopened paper already uses (`GET .../review-cards/{card_id}/artifact`), under
+    that route's own `Scope.RECORDS` gate, not a new one."""
+
 
 # Supersession is the one change a written policy takes.
 frozen(Policy, except_for=frozenset({"superseded_at"}))
@@ -200,6 +280,26 @@ def _not_an_identity_card(*values: str | None) -> None:
         raise NotAPolicyReference("that holds an identity-card number")
 
 
+def _clean_essentials(items: Sequence[EssentialItem] | None) -> tuple[dict[str, Any], ...]:
+    """A covers/excludes/benefits/claim_steps list, capped and cleaned — never more than
+    `ESSENTIAL_LIST_CAP` items, never an item over `ESSENTIAL_ITEM_TEXT_LENGTH` characters, a
+    blank line dropped rather than kept as an empty one. Stored as plain JSON-ready dicts
+    (`EssentialItem.as_json`); order is the list's own order, the claim order or the printed
+    order, kept exactly as given."""
+    if not items:
+        return ()
+    cleaned: list[dict[str, Any]] = []
+    for item in items[:ESSENTIAL_LIST_CAP]:
+        text = _clean(item.text)
+        if text is None:
+            continue
+        if len(text) > ESSENTIAL_ITEM_TEXT_LENGTH:
+            raise NotAPolicy(f"a policy essential line is at most {ESSENTIAL_ITEM_TEXT_LENGTH} characters")
+        _not_an_identity_card(text)
+        cleaned.append(EssentialItem(text=text, page=item.page).as_json())
+    return tuple(cleaned)
+
+
 def policy_draft(
     *,
     insurer_name: str,
@@ -213,12 +313,24 @@ def policy_draft(
     status: PolicyStatus,
     guarantee_letter: bool,
     supersedes_id: uuid.UUID | None,
+    plan: str | None = None,
+    coverage_items: Sequence[EssentialItem] | None = None,
+    excludes: Sequence[EssentialItem] | None = None,
+    benefits: Sequence[EssentialItem] | None = None,
+    claim_steps: Sequence[EssentialItem] | None = None,
+    ends_on: date | None = None,
+    waiting_period: str | None = None,
+    claims_contact: str | None = None,
+    review_card_id: uuid.UUID | None = None,
 ) -> PolicyDraft:
     """A policy as it will be kept, or a refusal naming what is wrong with it."""
     named = _clean(insurer_name)
     reference = _clean(policy_reference)
     who = _clean(covered)
     what = _clean(covers)
+    plan_named = _clean(plan)
+    waiting = _clean(waiting_period)
+    contact = _clean(claims_contact)
     if named is None:
         raise NotAPolicy("a policy names an insurer")
     if len(named) > INSURER_NAME_LENGTH:
@@ -229,9 +341,17 @@ def policy_draft(
         raise NotAPolicy(f"who is covered is at most {COVERED_LENGTH} characters")
     if what is not None and len(what) > COVERS_LENGTH:
         raise NotAPolicy(f"what it covers is at most {COVERS_LENGTH} characters")
+    if plan_named is not None and len(plan_named) > PLAN_LENGTH:
+        raise NotAPolicy(f"a plan name is at most {PLAN_LENGTH} characters")
+    if waiting is not None and len(waiting) > WAITING_PERIOD_LENGTH:
+        raise NotAPolicy(f"a waiting period is at most {WAITING_PERIOD_LENGTH} characters")
+    if contact is not None and len(contact) > CLAIMS_CONTACT_LENGTH:
+        raise NotAPolicy(f"a claims contact is at most {CLAIMS_CONTACT_LENGTH} characters")
     if start_date is not None and renewal_date is not None and renewal_date < start_date:
         raise NotAPolicy("a renewal date is not before the start date")
-    _not_an_identity_card(named, reference, who, what)
+    if start_date is not None and ends_on is not None and ends_on < start_date:
+        raise NotAPolicy("an end date is not before the start date")
+    _not_an_identity_card(named, reference, who, what, plan_named, waiting, contact)
     return PolicyDraft(
         insurer_name=named,
         policy_reference=reference,
@@ -244,6 +364,15 @@ def policy_draft(
         status=status,
         guarantee_letter=guarantee_letter,
         supersedes_id=supersedes_id,
+        plan=plan_named,
+        coverage_items=_clean_essentials(coverage_items),
+        excludes=_clean_essentials(excludes),
+        benefits=_clean_essentials(benefits),
+        claim_steps=_clean_essentials(claim_steps),
+        ends_on=ends_on,
+        waiting_period=waiting,
+        claims_contact=contact,
+        review_card_id=review_card_id,
     )
 
 
@@ -300,6 +429,15 @@ async def set_a_policy(
     guarantee_letter: bool,
     supersedes_id: uuid.UUID | None,
     confirmation_id: uuid.UUID,
+    plan: str | None = None,
+    coverage_items: Sequence[EssentialItem] | None = None,
+    excludes: Sequence[EssentialItem] | None = None,
+    benefits: Sequence[EssentialItem] | None = None,
+    claim_steps: Sequence[EssentialItem] | None = None,
+    ends_on: date | None = None,
+    waiting_period: str | None = None,
+    claims_contact: str | None = None,
+    review_card_id: uuid.UUID | None = None,
 ) -> Policy:
     """Write a policy down — new, or a correction of one already held — on the typer's own
     yes for exactly these words.
@@ -321,6 +459,15 @@ async def set_a_policy(
         status=status,
         guarantee_letter=guarantee_letter,
         supersedes_id=supersedes_id,
+        plan=plan,
+        coverage_items=coverage_items,
+        excludes=excludes,
+        benefits=benefits,
+        claim_steps=claim_steps,
+        ends_on=ends_on,
+        waiting_period=waiting_period,
+        claims_contact=claims_contact,
+        review_card_id=review_card_id,
     )
     if draft.supersedes_id is not None:
         found = await audited_read(
@@ -351,6 +498,15 @@ async def set_a_policy(
         status=draft.status,
         guarantee_letter=draft.guarantee_letter,
         supersedes_id=draft.supersedes_id,
+        plan=draft.plan,
+        coverage_items=list(draft.coverage_items) or None,
+        excludes=list(draft.excludes) or None,
+        benefits=list(draft.benefits) or None,
+        claim_steps=list(draft.claim_steps) or None,
+        ends_on=draft.ends_on,
+        waiting_period=draft.waiting_period,
+        claims_contact=draft.claims_contact,
+        review_card_id=draft.review_card_id,
         set_by_person_id=yes.person_id,
         confirmation_id=yes.id,
         set_at=moment,
@@ -371,11 +527,16 @@ async def set_a_policy(
 
 
 __all__ = [
+    "CLAIMS_CONTACT_LENGTH",
     "COVERED_LENGTH",
     "COVERS_LENGTH",
+    "ESSENTIAL_ITEM_TEXT_LENGTH",
+    "ESSENTIAL_LIST_CAP",
     "INSURER_NAME_LENGTH",
     "POLICY_SCOPE",
     "REFERENCE_LENGTH",
+    "WAITING_PERIOD_LENGTH",
+    "EssentialItem",
     "NoSuchPolicy",
     "NotAPolicy",
     "NotAPolicyReference",
