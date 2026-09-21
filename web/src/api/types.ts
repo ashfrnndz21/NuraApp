@@ -569,6 +569,10 @@ export interface ChangesOut {
 
 export type PolicyType = "hospital" | "outpatient" | "critical_illness" | "government_scheme";
 export type PolicyStatus = "active" | "lapsed" | "cancelled";
+/** The passport's own quiet state chip (package 12a, E13-04): computed server-side on the
+ *  profile's own wall-clock day (`app.insurance.policy.policy_period_state`) — never inferred
+ *  here from `renewal_date` and the device's own clock. */
+export type PolicyPeriodState = "in_force" | "ends_on" | "ended";
 
 /** One policy on his profile (E13-03, `GET /profiles/{id}/insurance/policies`), the newest of
  *  its lineage — never edited, only ever superseded (`app.insurance.policy`). */
@@ -587,6 +591,26 @@ export interface PolicyOut {
   supersedes_id: string | null;
   set_by_person_id: string;
   set_at: string;
+  period_state: PolicyPeriodState;
+  period_state_said: string;
+}
+
+/** A policy as typed, on a yes minted for exactly these fields (subject `"policy"`,
+ *  `POST /profiles/{id}/confirmations`, then `POST /profiles/{id}/insurance/policies` with the
+ *  `confirmation_id` it returns) — the same field set both calls carry, so the yes always binds
+ *  to exactly what is about to be written (`app.insurance.policy.policy_draft`). */
+export interface PolicyDraftFields {
+  insurer_name: string;
+  policy_reference: string | null;
+  policy_type: PolicyType;
+  covered: string | null;
+  covers: string | null;
+  start_date: string | null;
+  renewal_date: string | null;
+  premium_due_date: string | null;
+  status: PolicyStatus;
+  guarantee_letter: boolean;
+  supersedes_id?: string | null;
 }
 
 /** A typical fee range's own source (T3): who published it, the page, and the day it was

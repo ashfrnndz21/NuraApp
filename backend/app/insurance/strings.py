@@ -101,6 +101,27 @@ def claim_status_word(status: str, language: str) -> str:
     return by_status.get(status) or CLAIM_STATUS_WORDS[DEFAULT_LANGUAGE][status]
 
 
+# @patient phrase
+PERIOD_STATE_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {"in_force": "In force", "ends_on": "Ends on {date}", "ended": "Ended"},
+    "ms": {"in_force": "Sedang berkuat kuasa", "ends_on": "Tamat pada {date}", "ended": "Telah tamat"},
+    "zh": {"in_force": "生效中", "ends_on": "{date}到期", "ended": "已结束"},
+}
+"""The passport's own quiet state chip (package 12a, E13-04): a short word, the same standing
+as `CLAIM_STATUS_WORDS` above — a chip label, not a sentence, so it is never run through
+`render`'s plain-words `verify` (a fragment with no full stop is exactly what a chip is)."""
+
+
+def period_state_word(state: str, language: str, *, date: str | None = None) -> str:
+    """`app.insurance.policy.PolicyPeriodState`'s own word, in his language — `date` is
+    already said in his language (`app.medicines.strings.say_date`) by the caller; this
+    function only ever fills the one slot `ends_on` carries."""
+    lang = language_of(language)
+    by_state = PERIOD_STATE_WORDS.get(lang, PERIOD_STATE_WORDS[DEFAULT_LANGUAGE])
+    template = by_state.get(state) or PERIOD_STATE_WORDS[DEFAULT_LANGUAGE][state]
+    return template.format(date=date) if date is not None else template
+
+
 class NotPlainWords(Refusal):
     """A rendered line failed docs/plain-words.md. It does not reach him; the template is
     wrong."""
@@ -282,5 +303,7 @@ __all__ = [
     "LANGUAGES",
     "NoSuchTemplate",
     "NotPlainWords",
+    "claim_status_word",
+    "period_state_word",
     "render",
 ]

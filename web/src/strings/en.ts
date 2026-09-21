@@ -1068,6 +1068,49 @@ export const en = {
     premiumDue: "The next payment is due on {date}.",
     // @patient
     reference: "The policy number is {reference}.",
+    // The passport (package 12a): a clearly separate block, kept apart from the row above.
+    passport: {
+      // @patient phrase
+      coversTitle: "What it covers",
+      // @patient phrase
+      excludesTitle: "What it does not cover",
+      // @patient phrase
+      benefitsTitle: "Your benefits and limits",
+      // @patient phrase
+      claimTitle: "How to claim",
+      // @patient
+      notFound: ["Nura did not find this on the policy.", "Ask the insurance company."],
+      // @patient
+      worksByGuaranteeLetter: "This policy uses an insurance letter at the hospital desk.",
+      // @patient phrase
+      claimedThisYear: "Claimed this year",
+      // @patient phrase
+      paidByInsurer: "Paid by insurer",
+      // @patient phrase
+      paidByPatient: "Paid by patient",
+      // @patient phrase
+      claimsTitle: "Claims",
+      // @patient phrase
+      addPolicy: "Add a policy",
+      // @patient headline
+      loadTitle: "Add a policy",
+      // @patient headline
+      proposeTitle: "Add this as a policy",
+      // @patient
+      proposeSub: "Check these before Nura saves them to the papers.",
+      // @patient phrase
+      policyTypeLabel: "What kind of cover",
+      // @patient phrase
+      proposeCta: "Save",
+      // @patient phrase
+      proposeCtaBusy: "Saving…",
+      // @patient phrase
+      proposeCtaDone: "Saved",
+      // @patient
+      notAPolicy: ["That does not look like a policy.", "Nura kept it with the other papers."],
+      // @patient
+      savedAsPaper: "Saved to the papers.",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

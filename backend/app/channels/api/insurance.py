@@ -38,6 +38,7 @@ from app.channels.api.insurance_schemas import (
     PolicyTotalOut,
     PreVisitInsuranceOut,
 )
+from app.db import utcnow
 from app.insurance.claim import (
     change_claim_status,
     claims_for_appointment,
@@ -45,15 +46,33 @@ from app.insurance.claim import (
     papers_for_claim,
 )
 from app.insurance.ledger import insurance_ledger
-from app.insurance.policy import current_policies, set_a_policy
+from app.insurance.policy import (
+    PolicyPeriodState,
+    current_policies,
+    policy_period_state,
+    set_a_policy,
+)
 from app.insurance.relevance import pre_visit_relevance
+from app.insurance.strings import period_state_word
+from app.medicines.strings import say_date
+from app.regions import REGION_TZ
 
 router = APIRouter(prefix="/profiles", tags=["insurance"])
 
 Language = Query(default=None, min_length=2, max_length=16)
 
 
-def _policy_out(row) -> PolicyOut:  # type: ignore[no-untyped-def]
+def _period_state_said(state: PolicyPeriodState, renewal_date, language: str) -> str:  # type: ignore[no-untyped-def]
+    if state is PolicyPeriodState.ENDS_ON:
+        assert renewal_date is not None
+        return period_state_word(state.value, language, date=say_date(renewal_date, language))
+    return period_state_word(state.value, language)
+
+
+def _policy_out(row, *, context: Context, language: str | None = None) -> PolicyOut:  # type: ignore[no-untyped-def]
+    today = utcnow().astimezone(REGION_TZ[context.region]).date()
+    state = policy_period_state(status=row.status, renewal_date=row.renewal_date, today=today)
+    lang = language or "en"
     return PolicyOut(
         policy_id=row.id,
         insurer_name=row.insurer_name,
@@ -69,6 +88,8 @@ def _policy_out(row) -> PolicyOut:  # type: ignore[no-untyped-def]
         supersedes_id=row.supersedes_id,
         set_by_person_id=row.set_by_person_id,
         set_at=row.set_at,
+        period_state=state,
+        period_state_said=_period_state_said(state, row.renewal_date, lang),
     )
 
 
@@ -90,7 +111,9 @@ def _claim_out(row) -> ClaimOut:  # type: ignore[no-untyped-def]
 
 
 @router.post("/{profile_id}/insurance/policies", status_code=status.HTTP_201_CREATED)
-async def write_policy(body: PolicyIn, context: Context, session: Db) -> PolicyOut:
+async def write_policy(
+    body: PolicyIn, context: Context, session: Db, language: str | None = Language
+) -> PolicyOut:
     """A policy, new or a correction of one already held, on the typer's own yes for exactly
     these fields; his, the steward's or his chief's (`NotTheirsToSetAPolicy`, 403)."""
     row = await set_a_policy(
@@ -109,14 +132,16 @@ async def write_policy(body: PolicyIn, context: Context, session: Db) -> PolicyO
         supersedes_id=body.supersedes_id,
         confirmation_id=body.confirmation_id,
     )
-    return _policy_out(row)
+    return _policy_out(row, context=context, language=language)
 
 
 @router.get("/{profile_id}/insurance/policies")
-async def policies(context: Context, session: Db) -> list[PolicyOut]:
+async def policies(
+    context: Context, session: Db, language: str | None = Language
+) -> list[PolicyOut]:
     """Every policy in force: money, so only the owner, a steward or a chief reach this."""
     found = await current_policies(session, context=context)
-    return [_policy_out(row) for row in found]
+    return [_policy_out(row, context=context, language=language) for row in found]
 
 
 @router.post("/{profile_id}/insurance/claims", status_code=status.HTTP_201_CREATED)

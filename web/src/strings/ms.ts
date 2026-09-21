@@ -1068,6 +1068,49 @@ export const ms = {
     premiumDue: "Bayaran seterusnya perlu dibayar pada {date}.",
     // @patient
     reference: "Nombor polisinya {reference}.",
+    // The passport (package 12a): a clearly separate block, kept apart from the row above.
+    passport: {
+      // @patient phrase
+      coversTitle: "Apa yang dilindungi",
+      // @patient phrase
+      excludesTitle: "Apa yang tidak dilindungi",
+      // @patient phrase
+      benefitsTitle: "Manfaat dan had anda",
+      // @patient phrase
+      claimTitle: "Cara membuat tuntutan",
+      // @patient
+      notFound: ["Nura tidak menjumpai ini pada polisi itu.", "Tanya syarikat insurans itu."],
+      // @patient
+      worksByGuaranteeLetter: "Polisi ini menggunakan surat insurans di kaunter hospital.",
+      // @patient phrase
+      claimedThisYear: "Dituntut tahun ini",
+      // @patient phrase
+      paidByInsurer: "Dibayar oleh syarikat insurans",
+      // @patient phrase
+      paidByPatient: "Dibayar oleh pesakit",
+      // @patient phrase
+      claimsTitle: "Tuntutan",
+      // @patient phrase
+      addPolicy: "Tambah polisi",
+      // @patient headline
+      loadTitle: "Tambah polisi",
+      // @patient headline
+      proposeTitle: "Tambah ini sebagai polisi",
+      // @patient
+      proposeSub: "Semak semula sebelum Nura menyimpannya dalam kertas-kertas.",
+      // @patient phrase
+      policyTypeLabel: "Apakah jenis perlindungan",
+      // @patient phrase
+      proposeCta: "Simpan",
+      // @patient phrase
+      proposeCtaBusy: "Menyimpan…",
+      // @patient phrase
+      proposeCtaDone: "Disimpan",
+      // @patient
+      notAPolicy: ["Itu tidak kelihatan seperti polisi.", "Nura menyimpannya bersama kertas lain."],
+      // @patient
+      savedAsPaper: "Disimpan dalam kertas-kertas.",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

@@ -1,49 +1,107 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { PolicyOut } from "../api/types";
+import type { LedgerOut, PolicyOut, ReviewCardOut } from "../api/types";
 import { go } from "../flow";
+import { LoadPolicyFlow } from "../insurance/LoadPolicy";
+import { PolicyPassport } from "../insurance/PolicyPassport";
+import { ProposePolicySheet } from "../insurance/ProposePolicy";
+import { confirmedPolicyFields } from "../insurance/model";
 import { profile, token } from "../store/session";
-import { fill, LOCALE, language, t } from "../strings";
-import { dateLine } from "../today/model";
+import { fill, language, t } from "../strings";
+import "../ui/insurance.css";
 import { Header, Notice, Tile } from "../ui/components";
-import { Icon, PaperTile } from "../ui/kit";
+import { focusHeading } from "../ui/focus";
+import { Icon, Orb, PaperTile, PillButton, SoftText } from "../ui/kit";
 import { Shell } from "./Shell";
 
-/** Profile's Insurance row (E13-03, `GET /profiles/{id}/insurance/policies`): every policy on
- *  his profile, newest of each lineage, in plain words, and the way to the Ledger (#260,
- *  claim amounts — `screens/record/Ledger.tsx`'s existing `LedgerScreen`, not rebuilt here).
- *  Reached only by a key that opens `Scope.MONEY` (`ProfileNav`'s own gate, same door
- *  "Insurance letters" and the Ledger already use). */
+type Mode = { name: "passport" } | { name: "load" };
+
+/** Profile's Insurance row (package 12a — E13-03 plus the passport built on top of it):
+ *  every policy on his profile, its own passport — what it covers, what it does not, benefits
+ *  and limits, how to claim, all from what the record and the reviewed data really say — the
+ *  claims filed against it, and the way to load a new policy paper. Reached only by a key that
+ *  opens `Scope.MONEY` (`ProfileNav`'s own gate); a narrower key is refused (`OutOfScope`, 403)
+ *  before a row is read, shown here exactly as any other refusal (`Notice`). */
 export function InsuranceScreen(): JSX.Element {
   const s = t();
+  const p = s.insurance.passport;
   const papers = profile.value;
   const owner = papers?.standing === "owner";
   const name = papers?.display_name ?? "";
-  const locale = LOCALE[language.value];
   const [policies, setPolicies] = useState<PolicyOut[] | null>(null);
+  const [ledger, setLedger] = useState<LedgerOut | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [mode, setMode] = useState<Mode>({ name: "passport" });
+  const [proposing, setProposing] = useState<ReviewCardOut | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refresh = (): void => {
     const bearer = token.value;
     const at = profile.value;
     if (!bearer || !at) return;
-    nura.policies(bearer, at.profile_id).then(setPolicies, (failure: unknown) => {
+    nura.policies(bearer, at.profile_id, language.value).then(setPolicies, (failure: unknown) => {
       setPolicies([]);
       setError(failure);
     });
-  }, [papers?.profile_id]);
+    nura.insuranceLedger(bearer, at.profile_id, language.value).then(setLedger, () => setLedger(null));
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(refresh, [papers?.profile_id]);
+  useEffect(() => focusHeading(), [mode.name]);
+
+  if (mode.name === "load") {
+    return (
+      <LoadPolicyFlow
+        onCancel={() => setMode({ name: "passport" })}
+        onDone={(card) => {
+          setMode({ name: "passport" });
+          if (card.document_kind === "insurance_policy") {
+            setProposing(card);
+          } else {
+            setNote(p.savedAsPaper);
+            refresh();
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <Shell tab="profile" testId="insurance-screen">
       <Header title={owner ? s.insurance.title : fill(s.insurance.titleOther, { patient: name })} onBack={() => go({ name: "profile" })} />
       <Notice error={error} />
-      {policies && policies.length === 0 && !error && (
-        <Tile paper testId="insurance-none">
-          <p>{owner ? s.insurance.none : fill(s.insurance.noneOther, { patient: name })}</p>
+      {note && (
+        <Tile paper role="status" testId="insurance-note">
+          <p>{note}</p>
         </Tile>
       )}
-      {policies?.map((policy) => <PolicyTile key={policy.policy_id} policy={policy} locale={locale} />)}
+
+      {policies && policies.length === 0 && !error && (
+        <div class="insurance-empty" data-testid="insurance-none">
+          <Orb testId="insurance-empty-orb" />
+          <SoftText as="p" text={owner ? s.insurance.none : fill(s.insurance.noneOther, { patient: name })} />
+          <PillButton variant="primary" onClick={() => setMode({ name: "load" })} testId="add-policy">
+            {p.addPolicy}
+          </PillButton>
+        </div>
+      )}
+
+      {policies && policies.length > 0 && (
+        <div class="insurance-policies" data-testid="insurance-policies">
+          {policies.map((policy) => (
+            <PolicyPassport key={policy.policy_id} policy={policy} ledger={ledger} testId="policy-passport" />
+          ))}
+        </div>
+      )}
+
+      {policies && policies.length > 0 && (
+        <PillButton variant="secondary" onClick={() => setMode({ name: "load" })} testId="add-another-policy">
+          {p.addPolicy}
+        </PillButton>
+      )}
+
       <PaperTile testId="insurance-ledger-link">
         <nav class="place-rows" aria-label={s.record.ledger}>
           <button type="button" class="place-row" onClick={() => go({ name: "record", at: { name: "ledger" } })} data-testid="open-ledger">
@@ -53,21 +111,16 @@ export function InsuranceScreen(): JSX.Element {
           </button>
         </nav>
       </PaperTile>
-    </Shell>
-  );
-}
 
-function PolicyTile({ policy, locale }: { policy: PolicyOut; locale: string }): JSX.Element {
-  const s = t();
-  return (
-    <Tile paper testId="policy">
-      <h2 class="title">{policy.insurer_name}</h2>
-      <p class="caption">{s.insurance.type[policy.policy_type]}</p>
-      <p>{s.insurance.status[policy.status]}</p>
-      {policy.covers && <p>{fill(s.insurance.covers, { value: policy.covers })}</p>}
-      {policy.renewal_date && <p>{fill(s.insurance.renews, { date: dateLine(new Date(policy.renewal_date), locale) })}</p>}
-      {policy.premium_due_date && <p>{fill(s.insurance.premiumDue, { date: dateLine(new Date(policy.premium_due_date), locale) })}</p>}
-      {policy.policy_reference && <p class="source-line">{fill(s.insurance.reference, { reference: policy.policy_reference })}</p>}
-    </Tile>
+      <ProposePolicySheet
+        open={proposing !== null}
+        suggested={proposing ? confirmedPolicyFields(proposing.fields) : { insurer: null, policyNumber: null, plan: null, startDate: null }}
+        onClose={() => setProposing(null)}
+        onSaved={() => {
+          setProposing(null);
+          refresh();
+        }}
+      />
+    </Shell>
   );
 }

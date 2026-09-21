@@ -10,7 +10,7 @@ from datetime import date, datetime
 from pydantic import BaseModel
 
 from app.insurance.claim import ClaimStatus
-from app.insurance.policy import PolicyStatus, PolicyType
+from app.insurance.policy import PolicyPeriodState, PolicyStatus, PolicyType
 
 
 class PolicyIn(BaseModel):
@@ -46,6 +46,12 @@ class PolicyOut(BaseModel):
     supersedes_id: uuid.UUID | None
     set_by_person_id: uuid.UUID
     set_at: datetime
+    period_state: PolicyPeriodState
+    """The passport's own quiet state chip (E13-04), computed here on the profile's own
+    wall-clock day (`app.insurance.policy.policy_period_state`) — never left for the client to
+    infer from a free-text field or the device's own clock."""
+    period_state_said: str
+    """`period_state`, already in his language — 'In force', 'Ends on {date}', 'Ended'."""
 
 
 class ClaimIn(BaseModel):

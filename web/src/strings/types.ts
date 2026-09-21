@@ -502,6 +502,33 @@ export interface Strings {
     renews: string;
     premiumDue: string;
     reference: string;
+    /** The passport (package 12a): loading a policy paper, the four sections built from what
+     *  is really on the record, and the claims filed against it — a clearly separate block so
+     *  this package's strings never collide with another builder's edit to the block above. */
+    passport: {
+      coversTitle: string;
+      excludesTitle: string;
+      benefitsTitle: string;
+      claimTitle: string;
+      /** Two short lines, never one two-idea sentence (plain-words rule 2) — the calm line
+       *  every section shows when nothing is on file for it. */
+      notFound: readonly [string, string];
+      worksByGuaranteeLetter: string;
+      claimedThisYear: string;
+      paidByInsurer: string;
+      paidByPatient: string;
+      claimsTitle: string;
+      addPolicy: string;
+      loadTitle: string;
+      proposeTitle: string;
+      proposeSub: string;
+      policyTypeLabel: string;
+      proposeCta: string;
+      proposeCtaBusy: string;
+      proposeCtaDone: string;
+      notAPolicy: readonly [string, string];
+      savedAsPaper: string;
+    };
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */

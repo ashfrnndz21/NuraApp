@@ -1068,6 +1068,49 @@ export const zh = {
     premiumDue: "下次缴费日期是{date}。",
     // @patient
     reference: "保单号码是{reference}。",
+    // The passport (package 12a): a clearly separate block, kept apart from the row above.
+    passport: {
+      // @patient phrase
+      coversTitle: "保障范围",
+      // @patient phrase
+      excludesTitle: "不保障范围",
+      // @patient phrase
+      benefitsTitle: "保障与限额",
+      // @patient phrase
+      claimTitle: "如何理赔",
+      // @patient
+      notFound: ["Nura在保单上没有找到这项。", "请询问保险公司。"],
+      // @patient
+      worksByGuaranteeLetter: "这份保单在医院柜台使用保险信。",
+      // @patient phrase
+      claimedThisYear: "今年已申请",
+      // @patient phrase
+      paidByInsurer: "保险公司已付",
+      // @patient phrase
+      paidByPatient: "病人已付",
+      // @patient phrase
+      claimsTitle: "理赔",
+      // @patient phrase
+      addPolicy: "添加保单",
+      // @patient headline
+      loadTitle: "添加保单",
+      // @patient headline
+      proposeTitle: "将此添加为保单",
+      // @patient
+      proposeSub: "在Nura保存到记录之前，请检查这些内容。",
+      // @patient phrase
+      policyTypeLabel: "保障类型",
+      // @patient phrase
+      proposeCta: "保存",
+      // @patient phrase
+      proposeCtaBusy: "保存中…",
+      // @patient phrase
+      proposeCtaDone: "已保存",
+      // @patient
+      notAPolicy: ["这看起来不像保单。", "Nura已将它与其他文件一起保存。"],
+      // @patient
+      savedAsPaper: "已保存到文件中。",
+    },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.
   visit: {

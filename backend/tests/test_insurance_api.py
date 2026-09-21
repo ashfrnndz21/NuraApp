@@ -116,6 +116,11 @@ async def test_a_policy_is_written_and_read_back_over_http(deployment: Deploymen
     assert held.status_code == 200, held.text
     assert [row["policy_id"] for row in held.json()] == [policy_id]
     assert held.json()[0]["insurer_name"] == "Great Eastern"
+    # No renewal date on file: the passport's quiet state chip (package 12a) reads "in force",
+    # computed server-side, never left for the client to guess from a free-text field.
+    assert held.json()[0]["period_state"] == "in_force"
+    assert held.json()[0]["period_state_said"] == "In force"
+    assert written.json()["period_state"] == "in_force"
 
 
 async def test_a_narrower_key_is_refused_the_policy_routes_over_http(

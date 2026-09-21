@@ -90,6 +90,39 @@ class PolicyStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class PolicyPeriodState(StrEnum):
+    """The passport's own quiet state chip: never inferred on the client from a free-text
+    field, always this one pure function, fed the profile's own wall-clock day
+    (`app.regions.REGION_TZ`, the same clock `app.insurance.ledger._this_year` already reads
+    off `app.clock.utcnow`) — so a frozen-clock test and a real deployment agree."""
+
+    IN_FORCE = "in_force"
+    """Active, and either no renewal date is on file or it has not yet passed."""
+    ENDS_ON = "ends_on"
+    """Active, with a renewal date on file that has not yet passed — the same fact as
+    `IN_FORCE`, said with the date, once there is one to say."""
+    ENDED = "ended"
+    """Lapsed or cancelled by a person's own word, or a renewal date already passed with
+    nothing on file to say it was renewed — a policy this old is never shown as current."""
+
+
+def policy_period_state(
+    *, status: PolicyStatus, renewal_date: date | None, today: date
+) -> PolicyPeriodState:
+    """The chip, from what is actually on file: `status` is the person's own word and always
+    wins when it says the cover has lapsed or was cancelled. Otherwise an active policy with a
+    renewal date already behind `today` is treated as ended too — nobody re-types "lapsed" the
+    day a card quietly stops being current — and an active policy with a renewal date still
+    ahead (or none on file at all) is in force."""
+    if status is not PolicyStatus.ACTIVE:
+        return PolicyPeriodState.ENDED
+    if renewal_date is not None and renewal_date < today:
+        return PolicyPeriodState.ENDED
+    if renewal_date is not None:
+        return PolicyPeriodState.ENDS_ON
+    return PolicyPeriodState.IN_FORCE
+
+
 class Policy(ProfileScoped, Base):
     """One policy, as typed on a yes. A correction is a new row; the newest of each lineage
     is in force (`current_policies`)."""
@@ -348,10 +381,12 @@ __all__ = [
     "NotAPolicyReference",
     "NotTheirsToSetAPolicy",
     "Policy",
+    "PolicyPeriodState",
     "PolicyStatus",
     "PolicyType",
     "current_policies",
     "may_set_a_policy",
     "policy_draft",
+    "policy_period_state",
     "set_a_policy",
 ]
