@@ -126,7 +126,10 @@ def test_the_pick_is_deterministic_for_the_same_profile_on_the_same_day() -> Non
 
 
 def test_the_pick_may_move_the_next_day() -> None:
-    profile_id = uuid.uuid4()
+    # A FIXED profile, not `uuid.uuid4()`: with a random one this test asked a two-way daily
+    # hash to land on both topics within ten days, which fails for about 1 profile in 512 —
+    # and did, in CI on 2026-09-22 ("assert 1 > 1"), on a PR that touched no backend code.
+    profile_id = uuid.UUID("6f1c2f0e-8a57-4c1b-9d2e-3b7a5c9e1f40")
     picks = {
         did_you_know(_inputs(**POOL_INPUTS, profile_id=profile_id, now=NOW + timedelta(days=day)))[
             0

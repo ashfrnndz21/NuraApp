@@ -10,6 +10,22 @@ export const BASE_URL = process.env.WEB_BASE_URL ?? "http://127.0.0.1:8000/app/"
 /** The API the tests seed through and the app calls (`make dev`). */
 export const API_URL = process.env.NURA_BASE_URL ?? "http://127.0.0.1:8000";
 
+/** On a developer's machine, port 8000 is where a person runs the app they are testing BY HAND
+ *  (`make dev`), and `reuseExistingServer` would attach this suite to it: seeding accounts and
+ *  asking for login codes on their server, in their database. It happened (2026-09-22: a run
+ *  that forgot its port attached to the owner's own test server). So a local run must name a
+ *  private port — `WEB_BASE_URL=http://127.0.0.1:8013/app/ NURA_BASE_URL=http://127.0.0.1:8013`
+ *  — and the suite starts its own backend there. CI has no such server and keeps 8000.
+ *  `NURA_E2E_ALLOW_PORT_8000=1` says "this really is a throwaway server on 8000". */
+const portOf = (url: string): string => new URL(url).port || "80";
+if (!process.env.CI && process.env.NURA_E2E_ALLOW_PORT_8000 !== "1" && [BASE_URL, API_URL].some((url) => portOf(url) === "8000")) {
+  throw new Error(
+    "e2e refuses to run against port 8000 on this machine: that is someone's own test server. " +
+      "Set WEB_BASE_URL=http://127.0.0.1:<port>/app/ and NURA_BASE_URL=http://127.0.0.1:<port> to a private port " +
+      "(8011-8019), or NURA_E2E_ALLOW_PORT_8000=1 if 8000 really is a throwaway server.",
+  );
+}
+
 /** The instant the backend's clock stands at for the whole run: 10 in the morning in
  *  Singapore on Monday 14 September, the same moment the phone's clock is fixed to
  *  (`fixClock`). The backend reads its own clock for the dose windows, the quiet hours and
