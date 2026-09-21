@@ -220,7 +220,7 @@ export const ms = {
     // @patient
     bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
     // @patient headline
-    todayKicker: "Hari ini",
+    todayKicker: "Hari Ini",
     // @patient headline
     insightTitle: "Kesihatan anda",
     // @patient headline
@@ -1215,7 +1215,9 @@ export const ms = {
     topThree: "3 perkara untuk hari ini",
     // @patient phrase
     notWell: "Saya rasa tidak sihat",
+    // @patient phrase
     notWellShort: "Tidak sihat?",
+    // @patient phrase
     notWellShortOther: "Tidak sihat?",
     // @patient headline
     notWellTitle: "Beritahu Nura apa yang anda rasa",

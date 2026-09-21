@@ -222,7 +222,7 @@ export const zh = {
     // @patient headline
     todayKicker: "今天",
     // @patient headline
-    insightTitle: "你的健康",
+    insightTitle: "您的健康",
     // @patient headline
     insightTitleOther: "{patient}的健康",
     // @patient phrase
@@ -1215,7 +1215,9 @@ export const zh = {
     topThree: "今天的3件事",
     // @patient phrase
     notWell: "我觉得不舒服",
+    // @patient phrase
     notWellShort: "不舒服？",
+    // @patient phrase
     notWellShortOther: "不舒服？",
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
