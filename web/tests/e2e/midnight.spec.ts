@@ -15,14 +15,14 @@ test("crossing midnight in Singapore: Today reads the new day and still says no 
 
   // Just before midnight.
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
-  await expect(page.getByTestId("today-hero").locator(".hero-sub")).toHaveText("Monday 14 September");
-  await expect(page.getByTestId("today-hero").locator(".hero-greeting")).toHaveText("Good evening, Pa.");
+  await expect(page.getByTestId("home-head-date")).toHaveText("Monday 14 September");
+  await expect(page.getByTestId("home-head-hello")).toHaveText("Good evening, Pa.");
   await expect.poll(() => keptExpiry(page)).toBe("2026-09-14T16:00:00.000Z");
 
   // Just after it: no reload by hand.
   await page.clock.fastForward("01:30");
-  await expect(page.getByTestId("today-hero").locator(".hero-sub")).toHaveText("Tuesday 15 September");
-  await expect(page.getByTestId("today-hero").locator(".hero-greeting")).toHaveText("Good morning, Pa.");
+  await expect(page.getByTestId("home-head-date")).toHaveText("Tuesday 15 September");
+  await expect(page.getByTestId("home-head-hello")).toHaveText("Good morning, Pa.");
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await todayReady(page);
   await expect(page.locator("nav.tabbar")).toBeVisible();

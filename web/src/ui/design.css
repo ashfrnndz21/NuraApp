@@ -180,6 +180,13 @@
   flex: none;
   padding: 0 var(--gutter) var(--space-1);
 }
+/* Home's own ask bar (a screen's `bottomBar`): docked above the tab bar, in the flex column's
+   own flow like the tab bar itself — never `position:fixed` over content, never scrolled past
+   with the page (`.shell-scroll` is the only region that scrolls). */
+.shell-bottom-bar {
+  flex: none;
+  padding: 0 var(--gutter);
+}
 /* The page itself: the old `.screen` column, now the region that scrolls. */
 .shell > .shell-scroll {
   flex: 1 1 auto;
@@ -1176,4 +1183,367 @@ html.shot-full .shell > .shell-scroll {
   100% {
     background-position: -200% 0;
   }
+}
+
+/* --- Home's new hero (P1's living orb, cp3-home): the header, the busy day's headline and
+   insight card, the quiet day's large orb, and the docked ask bar. Sits on the ground like the
+   old Hero did (no tile of its own); every surface under it is `Glass`/`glass-chip`. ---------- */
+/* Home's own merged header (fix #5, owner review): one row — the avatar/switcher, the
+   greeting, the bell and "Not well?" — where there used to be the global menu+wordmark+bell
+   row over a second switcher row, drawing his initial twice. */
+/* `.shell-head.home-top-bar` (both classes, so its specificity beats `.shell-head` alone
+   regardless of warm.css loading after design.css): `.shell-head`'s own `display: grid` with a
+   3-column template was built for the old 3-item row (menu, wordmark, bell) — this row has four
+   items (menu, switcher, greeting, end group), so grid auto-placement scattered them across two
+   broken rows instead of flowing as one wrapping row. A plain `.home-top-bar` rule setting only
+   `flex-wrap` was a silent no-op against a grid container; this overrides `display` outright. */
+.shell-head.home-top-bar {
+  display: flex;
+  /* One row, and only one, at 390px (owner review round 2): the date line moved out of the
+     header entirely (it sits under "Today" in the hero below, `.home-kick-date`), the menu
+     moved from its own leading slot into the end group, and the row's own padding/gap are
+     tighter than the rest of the app's chrome — this header has five real controls to fit
+     across one phone width, more than any other screen's. `flex-wrap: wrap` stays as the
+     large-text fallback (the `.switcher`'s own reasoning, a11y.spec.ts's `sideways` check at
+     200%): the row still wraps rather than running off the edge of the phone when nothing
+     smaller fits it, and a home-head assertion at the default text size is what tests the one
+     row itself. */
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  row-gap: var(--space-1);
+  padding: 6px 14px;
+}
+.home-head-text {
+  flex: 1 1 64px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.home-head-hello {
+  font-size: 11px;
+  line-height: 1.15;
+  opacity: 0.85;
+}
+.home-head-question {
+  font-size: 14px;
+  font-weight: var(--weight-title);
+  line-height: 1.15;
+}
+/* The date, moved here from the header (owner review round 2, fix #1: the header row had no
+   room left for a third line) — under "Today" in the busy-day hero, `HomeHero` (Today.tsx).
+   Same test id it always had (`home-head-date`): moved, never renamed. */
+.home-kick-date {
+  display: block;
+  opacity: 0.6;
+  font-size: var(--text-caption);
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+.home-head-end {
+  display: flex;
+  /* `flex-start`, not `center`: the bell (`.head-button`, 56px) and the coral "Not well?" pill
+     (`.pill.coral`'s own `min-height: calc(var(--target) + 4px)`, 60px) are not the same height,
+     and centering them within their shared row put the taller pill's top a couple of px above
+     the bell's — tab order visits the bell first (it is first in the DOM), so the eye-order
+     check (a11y.spec.ts) read that as the next stop going backwards. Both starting flush at the
+     row's own top keeps their tops equal regardless of which one is a few px taller. */
+  align-items: flex-start;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
+}
+/* The menu (`open-me`), trailing in the end group now rather than its own leading slot (owner
+   review round 2, fix #1) — the icon inside its own 56px target reads smaller so the short
+   "Not well?" pill beside it still has room; the target itself is unchanged (a11y.spec.ts/
+   design.spec.ts's own 56px check reads the button, not the icon). */
+.home-head-end .head-button-small svg {
+  width: 20px;
+  height: 20px;
+}
+/* The compact "Not well?" pill's own text (owner review round 2): `.pill`'s base font-size is
+   `--text-button`, 20px in the patient density (tokens.css) — sized for the one full-width pill
+   a screen carries, not a short label beside three other controls in a single row. This header's
+   own pill reads at a caption size instead; its box still clears the touch target in both
+   dimensions (`.pill.coral`'s own `min-height`, and `min-width` here), never smaller, only
+   denser — the same reasoning `.switcher-compact` already used for the avatar beside it. */
+.home-head-end .pill.compact {
+  font-size: 13px;
+  padding: 0 10px;
+  min-width: 0;
+  /* 56px, not `.pill.coral`'s own 60px (design.css) — level with the bell and the menu beside
+     it (both `.head-button`'s own 56px) rather than 4px taller, so the row's own height is the
+     one true 56px shared band, not 60. */
+  min-height: var(--target);
+  white-space: nowrap;
+}
+/* The switcher, sized to sit in the header row (fix #5): the avatar is what shows; the name
+   and the chevron are still real DOM (`whose-name` keeps working exactly as before — existing
+   safety checks watch that text, e.g. today.spec.ts's "a refused session on reopening" — this
+   only takes them out of the row's own layout, the standard visually-hidden pattern, not out
+   of the accessible name (`aria-label` already carries that) or out of the DOM a test reads). */
+/* `.shell-head .switcher.switcher-compact`: specificity high enough to beat both `.switcher`'s
+   own `min-width: 0` AND `.shell-head .switcher`'s own `min-width: 0; min-height: 40px` (a
+   pre-existing board-top-bar rule of equal specificity to a plain `.switcher.switcher-compact`,
+   so it was winning on source order — design.spec.ts's 56px touch-target check caught the real
+   result, 40px wide). */
+.shell-head .switcher.switcher-compact {
+  padding: 0;
+  gap: 0;
+  /* The button's own hit area still meets the target in both dimensions (a11y.spec.ts/
+     design.spec.ts's own 56px check): the avatar alone only fills it visually. */
+  min-width: var(--target);
+  min-height: var(--target);
+  justify-content: center;
+  border: none;
+  background: none;
+  box-shadow: none;
+}
+/* `.shell-head .switcher .avatar`/`.icon` (warm.css) are the same specificity as a plain
+   `.switcher-compact .avatar` — matched here too, so these need the same `.shell-head` prefix
+   to be the ones that actually apply. */
+.shell-head .switcher-compact .avatar {
+  width: 40px;
+  height: 40px;
+}
+.shell-head .switcher-compact .whose-name,
+.shell-head .switcher-compact .icon {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home-state-word {
+  font-size: var(--text-body);
+  opacity: 0.9;
+  margin: 0;
+}
+.home-state-word strong {
+  font-weight: var(--weight-title);
+}
+
+.home-kick {
+  display: block;
+  opacity: 0.75;
+  font-size: var(--text-caption);
+  margin-bottom: 4px;
+}
+.home-headline {
+  font-size: 33px;
+  line-height: 1.08;
+  font-weight: 300;
+  margin: 0 0 var(--space-2);
+}
+.home-insight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.home-insight h3 {
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+  margin: 0 0 var(--space-1);
+}
+.home-insight-body {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.home-date-chip {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-chip);
+  background: var(--chip-bg);
+  border: var(--chip-border);
+}
+.home-date-chip b {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.home-date-chip small {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+.home-insight-lines {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.home-insight-lines p {
+  margin: 0 0 4px;
+}
+.home-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  /* 60px (the blueprint's own row height, owner review): never smaller than the touch target
+     `--target` already guarantees (56, or 48 in the caregiver density on a smaller screen). */
+  min-height: max(var(--target), 60px);
+  padding: 12px var(--space-2);
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-row);
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: start;
+}
+.home-row:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+
+.home-quiet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-4) 0 var(--space-3);
+}
+.home-quiet .orb.lg {
+  margin-bottom: var(--space-1);
+}
+.home-quiet-greeting {
+  font-size: 33px;
+  line-height: 1.08;
+  font-weight: 300;
+  margin: 0;
+}
+.home-quiet-prompt {
+  font-size: var(--text-body);
+  opacity: 0.85;
+  margin: 0;
+}
+.quiet-chips {
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+.chip-button {
+  position: relative;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  font: inherit;
+}
+.chip-button:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+/* "Read a report", the quiet day's own chip: the file input is the whole tappable chip, the
+   same trick `.action-row input[type=file]` (above) uses for the full-size version. */
+.chip-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.home-safety-note {
+  opacity: 0.75;
+  font-size: var(--text-caption);
+  text-align: center;
+  padding: var(--space-2) 0;
+}
+
+/* Home's docked ask bar (Shell's `bottomBar`): the small orb, the wording, the Speak pill —
+   two real buttons side by side (never one button nested inside another). */
+.home-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 8px 8px 8px 14px;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-highlight);
+}
+.home-ask-word {
+  /* Fix #1 (owner review): "Ask Nura anyth…" clipped was a bug. The label takes whatever
+     width the orb and the compact Speak pill leave it, wrapping onto a second line rather than
+     ellipsizing — a whole word is always readable, never cut mid-word, in every language and
+     for the longer caregiver "Ask about {patient}". */
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.15;
+  text-align: start;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: 0.95;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-ask-word:focus-visible,
+.home-ask-speak:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.home-ask-speak {
+  /* The blueprint's own small pill (`.line .k`): a 12.5px/600 label, tight padding, a small
+     mic — never the full-size button `.home-ask-word` is. `min-height` still meets the target
+     (design.spec.ts's own 56px check on the patient density): the pill *looks* small inside a
+     tap area that is not, the same way a small icon button elsewhere in the kit does. */
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: var(--target);
+  padding: 8px 13px;
+  border-radius: var(--radius-pill);
+  background: var(--chip-bg);
+  border: var(--chip-border);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-ask-speak svg {
+  width: 14px;
+  height: 14px;
+}
+.home-ask-speak:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
 }

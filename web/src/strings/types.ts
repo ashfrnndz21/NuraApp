@@ -80,7 +80,56 @@ export interface Strings {
     backHome: string; backHomeOther: string;
   };
   /** The chief's Home (D1): the hero's label and the tiles' headings. Every line in them is the backend's. */
-  home: { mostLikely: string; whatChanged: string; nextVisit: string; atTime: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string };
+  home: {
+    mostLikely: string; whatChanged: string; nextVisit: string; atTime: string; buyMore: string; missing: string; missingSub: string; missingSubDay: string; bpLabel: string; fromName: string; showAll: string; showFewer: string; bpLast: string;
+    /** The new Home hero (P1, the living orb): the "Today" kicker over a busy day's headline,
+     *  the insight card's own title, and its button to the item it is about. */
+    todayKicker: string;
+    insightTitle: string;
+    insightTitleOther: string;
+    insightOpen: string;
+    /** The question under a quiet day's large orb, and the caregiver's twin of it. */
+    quietPrompt: string;
+    quietPromptOther: string;
+    /** A quiet day's four suggestion chips: each goes somewhere real (see Home.tsx). */
+    chipReport: string;
+    chipMedicines: string;
+    chipMedicinesOther: string;
+    chipVisit: string;
+    chipVisitOther: string;
+    chipWeek: string;
+    chipWeekOther: string;
+    /** Home's own ask bar, docked above the tab bar with the small orb beside it — its own
+     *  wording, kept apart from `shell.askNura` ("Ask Nura a question"), which every other
+     *  screen's ask bar still uses. */
+    askNura: string;
+    /** The busy day's one headline, a whole sentence per `HomeTopItem` kind (`today/model.ts`'s
+     *  `homeHeadlineFor`), filled only from that kind's own real facts. */
+    headlineDoseDue: string;
+    headlineDoseDueOther: string;
+    headlineAllTaken: string;
+    headlineAllTakenOther: string;
+    headlineReading: string;
+    headlineReadingOther: string;
+    headlineVisit: string;
+    headlineVisitOther: string;
+    headlineVisitNoDoctor: string;
+    headlineVisitNoDoctorOther: string;
+    headlineReorder: string;
+    headlineReorderOther: string;
+    /** The insight card's own extra fact (owner review round 2): a real thing the headline did
+     *  not already say, per `HomeTopItem` kind — never the headline's own sentence again. Where
+     *  there is no such fact yet (`today/model.ts`'s `insightExtra`), the card itself does not
+     *  render; the rows it would have carried sit directly under the headline instead. */
+    tookCount: string;
+    tookCountOther: string;
+    trendHigher: string;
+    trendHigherOther: string;
+    trendLower: string;
+    trendLowerOther: string;
+    trendSame: string;
+    trendSameOther: string;
+  };
   /** Home's "Things to do" tile (docs/design/nura-concept-board.html): his day's activity —
    *  today's steps, water and meals, each a real write through PR #235's lifestyle logs
    *  (`/metrics/{kind}`, `/food`), with the same week ring the Health tab shows. */
@@ -516,6 +565,11 @@ export interface Strings {
   day: {
     topThree: string;
     notWell: string;
+    /** The header's own compact pill (cp3-home, owner review round 2): two words, never the
+     *  whole phrase — `notWell(Other)` is still what a screen reader says (the pill's own
+     *  `aria-label`). */
+    notWellShort: string;
+    notWellShortOther: string;
     notWellTitle: string;
     notWellTitleOther: string;
     notWellLead: string;

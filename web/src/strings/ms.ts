@@ -219,6 +219,74 @@ export const ms = {
     showFewer: "Tunjuk kurang",
     // @patient
     bpLast: "Kali terakhir ukur tekanan darah, nombor atasnya {number}.",
+    // @patient headline
+    todayKicker: "Hari ini",
+    // @patient headline
+    insightTitle: "Kesihatan anda",
+    // @patient headline
+    insightTitleOther: "Kesihatan {patient}",
+    // @patient phrase
+    insightOpen: "Lihat lebih lanjut",
+    // @patient
+    quietPrompt: "Apa yang kita nak lihat?",
+    // @patient
+    quietPromptOther: "Apa yang kita nak lihat untuk {patient}?",
+    // @patient phrase
+    chipReport: "Baca satu surat",
+    // @patient phrase
+    chipMedicines: "Ubat saya",
+    // @patient phrase
+    chipMedicinesOther: "Ubat {patient}",
+    // @patient phrase
+    chipVisit: "Lawatan seterusnya saya",
+    // @patient phrase
+    chipVisitOther: "Lawatan seterusnya {patient}",
+    // @patient phrase
+    chipWeek: "Macam mana minggu saya?",
+    // @patient phrase
+    chipWeekOther: "Macam mana minggu {patient}?",
+    // @patient phrase
+    askNura: "Tanya Nura apa-apa saja",
+    // @patient headline
+    headlineDoseDue: "{title} perlu diambil pada {when}.",
+    // @patient headline
+    headlineDoseDueOther: "{title} {patient} perlu diambil pada {when}.",
+    // @patient headline
+    headlineAllTaken: "Semua ubat untuk hari ini sudah diambil.",
+    // @patient headline
+    headlineAllTakenOther: "Semua ubat {patient} untuk hari ini sudah diambil.",
+    // @patient headline
+    headlineReading: "Tekanan darah anda hari ini ialah {systolic} per {diastolic}.",
+    // @patient headline
+    headlineReadingOther: "Tekanan darah {patient} hari ini ialah {systolic} per {diastolic}.",
+    // @patient headline
+    headlineVisit: "Anda jumpa {doctor} pada {weekday}.",
+    // @patient headline
+    headlineVisitOther: "{patient} jumpa {doctor} pada {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctor: "Anda ada lawatan pada {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctorOther: "{patient} ada lawatan pada {weekday}.",
+    // @patient headline
+    headlineReorder: "Baki {title} tinggal kira-kira {days} hari.",
+    // @patient headline
+    headlineReorderOther: "Baki {title} {patient} tinggal kira-kira {days} hari.",
+    // @patient headline
+    tookCount: "Anda mengambil {done} daripada {total} hari ini.",
+    // @patient headline
+    tookCountOther: "{patient} mengambil {done} daripada {total} hari ini.",
+    // @patient headline
+    trendHigher: "Itu lebih tinggi daripada tekanan darah anda kali terakhir.",
+    // @patient headline
+    trendHigherOther: "Itu lebih tinggi daripada tekanan darah {patient} kali terakhir.",
+    // @patient headline
+    trendLower: "Itu lebih rendah daripada tekanan darah anda kali terakhir.",
+    // @patient headline
+    trendLowerOther: "Itu lebih rendah daripada tekanan darah {patient} kali terakhir.",
+    // @patient headline
+    trendSame: "Itu hampir sama dengan tekanan darah anda kali terakhir.",
+    // @patient headline
+    trendSameOther: "Itu hampir sama dengan tekanan darah {patient} kali terakhir.",
   },
   activity: {
     // @patient headline
@@ -1131,6 +1199,8 @@ export const ms = {
     topThree: "3 perkara untuk hari ini",
     // @patient phrase
     notWell: "Saya rasa tidak sihat",
+    notWellShort: "Tidak sihat?",
+    notWellShortOther: "Tidak sihat?",
     // @patient headline
     notWellTitle: "Beritahu Nura apa yang anda rasa",
     // @patient headline

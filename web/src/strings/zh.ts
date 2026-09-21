@@ -219,6 +219,74 @@ export const zh = {
     showFewer: "收起来",
     // @patient
     bpLast: "最近一次量血压，上面的数字是{number}。",
+    // @patient headline
+    todayKicker: "今天",
+    // @patient headline
+    insightTitle: "你的健康",
+    // @patient headline
+    insightTitleOther: "{patient}的健康",
+    // @patient phrase
+    insightOpen: "看更多",
+    // @patient
+    quietPrompt: "我们看看什么？",
+    // @patient
+    quietPromptOther: "我们帮{patient}看看什么？",
+    // @patient phrase
+    chipReport: "读一份报告",
+    // @patient phrase
+    chipMedicines: "我的药",
+    // @patient phrase
+    chipMedicinesOther: "{patient}的药",
+    // @patient phrase
+    chipVisit: "我的下次看诊",
+    // @patient phrase
+    chipVisitOther: "{patient}的下次看诊",
+    // @patient phrase
+    chipWeek: "我这一周过得怎样？",
+    // @patient phrase
+    chipWeekOther: "{patient}这一周过得怎样？",
+    // @patient phrase
+    askNura: "随便问 Nura",
+    // @patient headline
+    headlineDoseDue: "{title}要在{when}吃。",
+    // @patient headline
+    headlineDoseDueOther: "{patient}的{title}要在{when}吃。",
+    // @patient headline
+    headlineAllTaken: "今天的药都吃了。",
+    // @patient headline
+    headlineAllTakenOther: "{patient}今天的药都吃了。",
+    // @patient headline
+    headlineReading: "你今天的血压是{systolic}over{diastolic}。",
+    // @patient headline
+    headlineReadingOther: "{patient}今天的血压是{systolic}over{diastolic}。",
+    // @patient headline
+    headlineVisit: "你{weekday}看{doctor}。",
+    // @patient headline
+    headlineVisitOther: "{patient}{weekday}看{doctor}。",
+    // @patient headline
+    headlineVisitNoDoctor: "你{weekday}有一个看诊。",
+    // @patient headline
+    headlineVisitNoDoctorOther: "{patient}{weekday}有一个看诊。",
+    // @patient headline
+    headlineReorder: "{title}大概还剩{days}天。",
+    // @patient headline
+    headlineReorderOther: "{patient}的{title}大概还剩{days}天。",
+    // @patient headline
+    tookCount: "您今天已经吃了{total}次中的{done}次。",
+    // @patient headline
+    tookCountOther: "{patient}今天已经吃了{total}次中的{done}次。",
+    // @patient headline
+    trendHigher: "这比您上次的血压高。",
+    // @patient headline
+    trendHigherOther: "这比{patient}上次的血压高。",
+    // @patient headline
+    trendLower: "这比您上次的血压低。",
+    // @patient headline
+    trendLowerOther: "这比{patient}上次的血压低。",
+    // @patient headline
+    trendSame: "这和您上次的血压差不多。",
+    // @patient headline
+    trendSameOther: "这和{patient}上次的血压差不多。",
   },
   activity: {
     // @patient headline
@@ -1131,6 +1199,8 @@ export const zh = {
     topThree: "今天的3件事",
     // @patient phrase
     notWell: "我觉得不舒服",
+    notWellShort: "不舒服？",
+    notWellShortOther: "不舒服？",
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
     // @patient headline

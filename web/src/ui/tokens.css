@@ -181,6 +181,12 @@
   --radius-badge: 18px;
   --radius-chip: 999px;
   --radius-pill: 999px;
+  /* `--radius-row` (owner review, cp3-home): the blueprint's own row radius, above — never
+     defined, so `.home-row` (design.css)'s own `border-radius: var(--radius-row)` fell back to
+     an invalid custom property (square corners), the "no glass" the review screenshot read off
+     the for-you row under Home's insight card ("Your tablets today"). The row already carries
+     `--glass-bg`/`--glass-border`/`--glass-blur`; only the corner was ever missing. */
+  --radius-row: 18px;
 
   /* Spacing: an 8px grid */
   --space-1: 8px;

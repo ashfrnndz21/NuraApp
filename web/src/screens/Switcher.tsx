@@ -1,9 +1,9 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import type { ProfileOut } from "../api/types";
 import { openProfile } from "../flow";
 import { known, looking, refreshKnown, unreached } from "../store/profiles";
-import { profile } from "../store/session";
+import { profile, token } from "../store/session";
 import { fill, t } from "../strings";
 import { Avatar, Icon, PaperTile, Sheet } from "../ui/kit";
 
@@ -24,11 +24,21 @@ export function roleLine(each: ProfileOut): string {
  *  so someone acting on his record is never in doubt about whose it is.
  *
  *  Opening the sheet reads the doors again, so a key granted a moment ago is in the list
- *  without signing out and back in. */
-export function ProfileSwitcher(): JSX.Element | null {
+ *  without signing out and back in.
+ *
+ *  `compact` (cp3-home's merged header): the same button, sized to sit beside the greeting in
+ *  one header row rather than its own — the avatar, the name and the chevron are all still
+ *  there and still say `whose-name` (existing safety checks watch that name never paints ahead
+ *  of a session's own refusal, e.g. `today.spec.ts`'s "a refused session on reopening"; a
+ *  control that sometimes has no name-bearing element at all would leave that watch nothing to
+ *  watch), just in the smaller type the header row's own line-height gives them. */
+export function ProfileSwitcher({ compact }: { compact?: boolean } = {}): JSX.Element | null {
   const s = t();
   const papers = profile.value;
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (compact && known.value === null && token.value) void refreshKnown().catch(() => undefined);
+  }, [compact, token.value]);
   if (!papers) return null;
   const own = papers.standing === "owner";
   const list = known.value ?? [];
@@ -37,7 +47,7 @@ export function ProfileSwitcher(): JSX.Element | null {
     <>
       <button
         type="button"
-        class="switcher"
+        class={["switcher", compact && "switcher-compact"].filter(Boolean).join(" ")}
         aria-haspopup="dialog"
         aria-label={own ? s.switcher.openOwn : fill(s.switcher.openOther, { name: papers.display_name })}
         onClick={() => {

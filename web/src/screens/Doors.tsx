@@ -94,10 +94,19 @@ export function ConsentScreen(): JSX.Element {
     setBusy(true);
     setError(null);
     try {
+      // His name may already be known (typed at sign-in, `SignIn.tsx`) even though `/me` had
+      // not yet answered when this screen first drew: the field then hides (the line below),
+      // but `name`'s own state was seeded from `me.value?.display_name` at that same early
+      // moment and never learns of a later answer — a plain `useState` does not re-read a
+      // signal that changes after mount. Reading `me.value` again here, at the moment he taps
+      // "I agree" rather than at the moment this screen first drew, is what the bug was:
+      // sent as `null`, a self-registered profile's name came back blank, and every greeting
+      // after it — "Good morning." with no name at all — was this one skipped answer.
+      const known = me.value?.display_name?.trim() || "";
       const opened = await nura.openOwnProfile(bearer, {
         version: words.version,
         language: words.language,
-        display_name: name.trim() || null,
+        display_name: (known || name.trim()) || null,
       });
       await startOnboarding(opened);
     } catch (failure) {
