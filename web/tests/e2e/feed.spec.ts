@@ -421,7 +421,9 @@ test("Family sends a reading to the family thread by reference; a card it cannot
   // Every sentence arrives as its own flowing paragraph — never a per-sentence "This comes
   // from your papers." caption (P1): "Looked at", above, says the source once.
   await expect(shown.getByTestId("answer-line")).toHaveCount(reply.lines.length);
-  await expect(shown.getByTestId("answer-line-text")).toHaveText(reply.lines.map((line) => line.text));
+  // SoftText keeps the whole line as real text in its `.sr-only` span; the word spans beside it
+  // are the drawn copy, so the line is read there, once.
+  await expect(shown.getByTestId("answer-line-text").locator(".sr-only")).toHaveText(reply.lines.map((line) => line.text));
   expect(await shown.locator(".provenance").count()).toBe(0);
   // The safety line, once, as one line rather than stacked captions.
   await expect(shown.getByTestId("boundary")).toHaveText(reply.boundary.join(" "));

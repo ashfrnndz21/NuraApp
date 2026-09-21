@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.objects import LocalObjectStore
 from app.regions import Region
-from app.search.ask import Answer, AskStep, Mode
+from app.search.ask import Answer, Mode
 from app.search.asker import AnswerDelta, RuleBasedAsker
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import REGISTRY

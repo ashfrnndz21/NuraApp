@@ -466,7 +466,7 @@ async def _stream_turn(
                 )
             )
         elif isinstance(event, AnswerDelta):
-            sentence = {
+            sentence: dict[str, object] = {
                 "type": "answer_sentence",
                 "text": event.text,
                 "cites": [
