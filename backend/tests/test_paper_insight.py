@@ -23,27 +23,26 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.audit.access import audited_read
 from app.channels.about_him import Reader
 from app.delivery import analyst_strings as words
 from app.drugs.fixture import FixtureRegistry
 from app.ingestion.objects import LocalObjectStore
 from app.keys.scopes import KeyRole, Scope
-from app.medicines.strings import PLAIN_NAME
-from app.reasoning.analyst.claude_adapter import ClaudeAnalyst, _rebuild
+from app.reasoning.analyst.claude_adapter import ClaudeAnalyst
 from app.reasoning.analyst.paper import (
     CANDIDATE_SECTION_KEY,
     NotAConfirmedPaper,
     ReadResult,
+    _FlaggedValue,
     build_insight,
     read_phase,
 )
 from app.reasoning.analyst.paper import _analyte_label as analyte_label
-from app.reasoning.analyst.paper import _bare_word as bare_word
 from app.reasoning.analyst.paper import _render as render_question
+from app.reasoning.analyst.paper import _value_candidate as value_candidate
 from app.reasoning.analyst.pipeline import blocked
 from app.reasoning.analyst.port import AskWho, InsightKind, Report, Section
-from app.reasoning.visits.models import Memo, MemoKind, MemoSource
+from app.reasoning.visits.memos import current_memos
 from app.reasoning.visits.questions import (
     current_questions,
     keep_paper_insight_questions,
@@ -120,20 +119,23 @@ async def _drain(
 # --- the happy path: an out-of-range value beside a related medicine -----------------------
 
 
-async def test_an_out_of_range_value_beside_its_medicine_offers_the_cards_own_three_questions(
+async def test_an_out_of_range_value_offers_the_cards_own_two_questions(
     sg: AsyncSession, store: LocalObjectStore, extractor
 ) -> None:
-    """`LAB_REPORT_VITALS` has exactly one out-of-range value (LDL, above), beside a statin —
-    the blueprint's card, three real questions: the value, the medicine it is linked to, and
-    the retest closer, in that order, first person, never a dose or a verdict."""
+    """`LAB_REPORT_VITALS` has exactly one out-of-range value (LDL, above) — the blueprint's
+    card, two real questions: the value and the retest closer, in that order, first person,
+    never a dose or a verdict. No medicine-linked question this release (#303 review, B2):
+    `add_medicine` below is still seeded to prove the card never mentions it — medicines are
+    not read for this card at all, so the analyst.rule the medicine used to be linked through
+    can never fire a third question, dormant or otherwise."""
     owner = await pa(sg, phone="+6591160001")
     await add_medicine(sg, owner, label("atorvastatin", "20 mg", "1 tab OD"))
     card = await _confirm_paper(sg, owner, store, extractor)
 
     result = await _drain(sg, owner, card.artifact_id, registry=REGISTRY)
 
-    assert len(result.questions) == 3, [q.text for q in result.questions]
-    value, medicine, retest = result.questions
+    assert len(result.questions) == 2, [q.text for q in result.questions]
+    value, retest = result.questions
 
     assert value.kind is InsightKind.CHECK
     assert value.ask_who is AskWho.DOCTOR
@@ -143,23 +145,19 @@ async def test_an_out_of_range_value_beside_its_medicine_offers_the_cards_own_th
     artifact_evidence = next(e for e in value.evidence if e.kind == "artifact")
     assert artifact_evidence.id == str(card.artifact_id)
 
-    assert medicine.kind is InsightKind.MEDICINE
-    assert medicine.ask_who is AskWho.DOCTOR
-    assert medicine.text == "Is my cholesterol tablet still the right one for me?"
-    medicine_kinds = {e.kind for e in medicine.evidence}
-    assert {"fact", "artifact", "medication_line"} <= medicine_kinds
-
     assert retest.kind is InsightKind.CHECK
     assert retest.text == words.PAPER_RETEST_QUESTION["en"]
 
-    # No dose, no verdict — real questions worth asking, never advice, in any of the three.
+    # No dose, no verdict, no medicine named — real questions worth asking, never advice.
     for question in result.questions:
         lowered = question.text.lower()
-        for word in ("should i", "you should", "stop", "start", "change the", "high", "low", "normal"):
+        for word in ("should i", "you should", "stop", "start", "change the", "high", "low", "normal", "atorvastatin", "tablet", "medicine"):
             assert word not in lowered, question.text
-    # "Looked at" names the paper and the medicine actually read, never a fixed list.
+    # "Looked at" names only the paper and the visit — never the medicines this card no
+    # longer reads at all (a real read, never claimed just because it happened elsewhere).
     kinds_seen = {one.kind for one in result.looked_at}
-    assert "artifact" in kinds_seen and "medicines" in kinds_seen
+    assert "artifact" in kinds_seen
+    assert "medicines" not in kinds_seen
     assert not result.withheld
 
 
@@ -237,7 +235,7 @@ def test_every_value_question_with_every_real_label_never_doubles_its_determiner
     and-advice blocklist, both green, and never a doubled determiner (#303's own follow-up:
     the coordinator's own catch, "my the bad cholesterol")."""
     for subject, attribute in words.ANALYTE_PLAIN_LABEL[language]:
-        label = analyte_label(subject, attribute, label_on_paper=None, language=language)
+        label = analyte_label(subject, attribute, language=language)
         assert label is not None
         for reader in _VOICES:
             for above, self_t, theirs_t in (
@@ -261,21 +259,44 @@ def test_the_aggregate_and_retest_questions_are_clean_in_every_language_and_voic
     _assert_clean(words.PAPER_RETEST_QUESTION[language], language)
 
 
-@pytest.mark.parametrize("language", ["en", "ms", "zh"])
-def test_every_medicine_question_with_every_real_medicine_name_never_doubles_its_determiner(
-    language: str,
-) -> None:
-    """Every plain medicine name the catalogue actually carries (`app.medicines.strings.
-    PLAIN_NAME`, "your insulin", "the cholesterol tablet", "ujian gula anda", "您的血压药"),
-    through the same bare-word composition `_medicine_candidate` uses, in both voices."""
-    for plain in PLAIN_NAME[language].values():
-        bare = bare_word(plain, language)
-        for reader in _VOICES:
-            text = render_question(
-                words.PAPER_MEDICINE_QUESTION, words.PAPER_MEDICINE_QUESTION_THEIRS,
-                reader=reader, language=language, medicine=bare,
-            )
-            _assert_clean(text, language)
+def test_analyte_label_is_closed_table_only_never_the_papers_own_printed_text() -> None:
+    """A planted `label_on_paper` — the extractor's own free text, exactly the "Apo-B ratio"
+    the #303 review named — must never surface as a question's own plain word: an attribute
+    with no entry in `words.ANALYTE_PLAIN_LABEL` is `None`, whatever the paper happens to
+    print beside it (S1). `_analyte_label`'s own signature no longer even takes a
+    `label_on_paper` — there is nothing left for a caller to plant it into."""
+    for language in ("en", "ms", "zh"):
+        assert analyte_label("lipid_panel", "other", language=language) is None
+        assert analyte_label("liver_panel", "made_up_code", language=language) is None
+
+
+def test_a_flagged_value_with_no_plain_label_is_left_out_of_the_single_question_but_still_counts_toward_the_aggregate() -> None:
+    """A value outside its own printed range whose code carries no plain word (a planted
+    `label_on_paper` of "Apo-B", never surfaced) is dropped from the single-value question —
+    `_value_candidate` returns `None` for it alone — but still counts toward the aggregate
+    "N of my numbers…" question, which names no label at all, once a second, plain-labelled
+    value joins it."""
+    unlabelled = _FlaggedValue(
+        fact_id=uuid.uuid4(), subject="lipid_panel", attribute="other", band="above", label=None, page=1
+    )
+    labelled = _FlaggedValue(
+        fact_id=uuid.uuid4(), subject="lipid_panel", attribute="ldl", band="above", label="bad cholesterol", page=1
+    )
+    artifact_id = uuid.uuid4()
+    reader = Reader(his=True)
+
+    alone = value_candidate([unlabelled], artifact_id=artifact_id, paper_label="this paper", reader=reader, language="en")
+    assert alone is None
+
+    together = value_candidate(
+        [unlabelled, labelled], artifact_id=artifact_id, paper_label="this paper", reader=reader, language="en"
+    )
+    assert together is not None
+    assert together.text == "Why are 2 of my numbers outside the range on this paper?"
+    assert "apo" not in together.text.lower()
+    # Both facts are still cited, even though only one is named.
+    fact_ids = {e.id for e in together.evidence if e.kind == "fact"}
+    assert fact_ids == {str(unlabelled.fact_id), str(labelled.fact_id)}
 
 
 async def test_a_paper_with_no_printed_range_has_nothing_worth_asking(
@@ -295,8 +316,50 @@ async def test_a_paper_with_no_printed_range_has_nothing_worth_asking(
         looked_at=result.looked_at,
         withheld=result.withheld,
         now=datetime(2026, 9, 21, tzinfo=UTC),
+        reader=Reader(his=True),
     )
     assert insight.headline == words.PAPER_NOTHING_LINE["en"]
+
+
+async def test_build_insight_says_the_headline_in_the_readers_own_voice(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """#303 review, S4ii: `build_insight` used to take no `reader` at all, so
+    `PAPER_HEADLINE_THEIRS`/`PAPER_NOTHING_LINE_THEIRS` were dead code and a caregiver's own
+    headline always read "Here is what I would ask." — his own first-person voice, never
+    naming the patient. `reader` now chooses explicitly, the same way `_render` already does
+    for every question on the card."""
+    owner = await pa(sg, phone="+6591160022")
+    card = await _confirm_paper(sg, owner, store, extractor)
+    result = await _drain(sg, owner, card.artifact_id, registry=REGISTRY)
+    assert result.questions
+
+    self_voiced = build_insight(
+        language="en", source="rule", questions=result.questions, looked_at=result.looked_at,
+        withheld=result.withheld, now=datetime(2026, 9, 21, tzinfo=UTC), reader=Reader(his=True),
+    )
+    assert self_voiced.headline == words.PAPER_HEADLINE["en"]
+
+    caregiver_voiced = build_insight(
+        language="en", source="rule", questions=result.questions, looked_at=result.looked_at,
+        withheld=result.withheld, now=datetime(2026, 9, 21, tzinfo=UTC),
+        reader=Reader(his=False, name="Pa"),
+    )
+    assert caregiver_voiced.headline == "Here is what I would ask about Pa's *paper.*"
+    assert caregiver_voiced.headline != self_voiced.headline
+
+    # And the "nothing to ask" headline, in both voices too.
+    empty_self = build_insight(
+        language="en", source="rule", questions=(), looked_at=result.looked_at,
+        withheld=result.withheld, now=datetime(2026, 9, 21, tzinfo=UTC), reader=Reader(his=True),
+    )
+    assert empty_self.headline == words.PAPER_NOTHING_LINE["en"]
+    empty_theirs = build_insight(
+        language="en", source="rule", questions=(), looked_at=result.looked_at,
+        withheld=result.withheld, now=datetime(2026, 9, 21, tzinfo=UTC),
+        reader=Reader(his=False, name="Pa"),
+    )
+    assert empty_theirs.headline == words.PAPER_NOTHING_LINE_THEIRS["en"].format(patient="Pa")
 
 
 # --- refusals: an unconfirmed card, another profile's artifact -----------------------------
@@ -319,10 +382,11 @@ async def test_another_profiles_artifact_is_refused(sg: AsyncSession, store: Loc
         await _drain(sg, stranger, card.artifact_id)
 
 
-# --- a key without MEDICINES: withheld, named, never a dropped insight ---------------------
+# --- a key without MEDICINES: no different from one with it — medicines are not read at all,
+# for any key, now that no question is ever linked to one (#303 review, B2) --------------------
 
 
-async def test_a_key_without_medicines_gets_the_insight_with_medicines_withheld_named(
+async def test_a_key_without_medicines_still_gets_the_full_insight_since_medicines_are_never_read(
     sg: AsyncSession, store: LocalObjectStore, extractor
 ) -> None:
     owner = await pa(sg, phone="+6591160006")
@@ -335,40 +399,13 @@ async def test_a_key_without_medicines_gets_the_insight_with_medicines_withheld_
     )
 
     result = await _drain(sg, viewer, card.artifact_id, registry=REGISTRY)
-    assert "medicines_and_supplements" in result.withheld
-    # The insight is not dropped: the out-of-range value is still worth asking about, just
-    # never linked to a medicine this key cannot see.
+    # Medicines are not read for this card at all any more, so a key without that scope is
+    # never told anything was withheld — there is nothing this card ever reads there to deny.
+    assert "medicines_and_supplements" not in result.withheld
     assert result.questions
     assert all(q.kind is not InsightKind.MEDICINE for q in result.questions)
     assert not any(e.kind == "medication_line" for q in result.questions for e in q.evidence)
-
-
-# --- the reroute: a candidate that would change treatment is never printed -----------------
-
-
-async def test_a_treatment_changing_candidate_is_rerouted_and_its_words_never_appear(
-    sg: AsyncSession, store: LocalObjectStore, extractor, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    blocked = "Stop the atorvastatin now."
-    monkeypatch.setitem(words.PAPER_MEDICINE_QUESTION, "en", blocked)
-
-    owner = await pa(sg, phone="+6591160008")
-    await add_medicine(sg, owner, label("atorvastatin", "20 mg", "1 tab OD"))
-    card = await _confirm_paper(sg, owner, store, extractor)
-
-    result = await _drain(sg, owner, card.artifact_id, registry=REGISTRY)
-
-    assert result.questions
-    for question in result.questions:
-        assert blocked not in question.text
-        assert "atorvastatin" not in question.text.lower()
-        assert "stop" not in question.text.lower()
-    assert any(q.text == words.ASK_THE_DOCTOR_LINE["en"] for q in result.questions)
-
-    memos = await audited_read(sg, Memo, owner, Scope.VISITS)
-    filed = [m for m in memos if m.source is MemoSource.ANALYST]
-    assert len(filed) == 1
-    assert filed[0].kind is MemoKind.ASK
+    assert not any(one.kind == "medicines" for one in result.looked_at)
 
 
 # --- keep: idempotent, on the next visit ----------------------------------------------------
@@ -450,18 +487,28 @@ def _temp_report(result: ReadResult, *, language: str = "en") -> Report:
     )
 
 
-async def test_the_claude_path_rephrases_and_a_thinking_block_before_the_answer_is_tolerated(
+async def test_the_claude_path_only_chooses_and_orders_never_rewrites_the_papers_own_words(
     sg: AsyncSession, store: LocalObjectStore, extractor
 ) -> None:
+    """#303 review, B1b: unlike the weekly report's own `claude_adapter._rebuild`, which
+    rephrases a candidate's `text`/`why_plain`, the paper path's own `choose_from_templates`
+    never reads either off a model's choice at all — only its `insight_id`, and their order.
+    A fake client returning poisonous words for an otherwise valid id still puts only the
+    closed-template `Insight` `read_phase` already built and verified onto the wire; this is
+    the replacement for the test that used to assert the model's own rephrase won (#303
+    review — the very shape the reviewer's proof exploited)."""
+    from app.reasoning.analyst.claude_adapter import _parse_choices
+    from app.reasoning.analyst.paper import choose_from_templates
+
     owner = await pa(sg, phone="+6591160010")
-    await add_medicine(sg, owner, label("atorvastatin", "20 mg", "1 tab OD"))
     card = await _confirm_paper(sg, owner, store, extractor)
     result = await _drain(sg, owner, card.artifact_id, registry=REGISTRY)
     assert result.questions
     report = _temp_report(result)
     offered = result.questions[0]
 
-    safe_text = "This paper's cholesterol number is outside the range printed on it."
+    poison_text = "Stop taking your statin today."
+    poison_why = "Ask the doctor to double the dose today."
     client = FakeClient(
         [
             FakeMessage(
@@ -470,11 +517,7 @@ async def test_the_claude_path_rephrases_and_a_thinking_block_before_the_answer_
                     _text_block(
                         {
                             "insights": [
-                                {
-                                    "insight_id": offered.insight_id,
-                                    "text": safe_text,
-                                    "why_plain": offered.why_plain,
-                                }
+                                {"insight_id": offered.insight_id, "text": poison_text, "why_plain": poison_why}
                             ]
                         }
                     ),
@@ -485,15 +528,19 @@ async def test_the_claude_path_rephrases_and_a_thinking_block_before_the_answer_
     analyst = ClaudeAnalyst(client=client, registry=REGISTRY)
     raw = await analyst._ask_claude(report)
     assert raw is not None
-    choices = json.loads(raw)
-    from app.reasoning.analyst.claude_adapter import _parse_choices
-
-    parsed = _parse_choices(json.dumps(choices))
+    parsed = _parse_choices(raw)
     assert parsed is not None
-    rebuilt = await _rebuild(report, parsed, session=sg, context=owner, language="en")
-    section = next(s for s in rebuilt.sections if s.key == CANDIDATE_SECTION_KEY)
-    assert section.insights[0].text == safe_text
-    assert section.insights[0].insight_id == offered.insight_id
+    assert parsed[0].text == poison_text  # the model really did say it — proves the test means something
+
+    selected = choose_from_templates(result.questions, parsed)
+    assert selected[0].insight_id == offered.insight_id
+    assert selected[0].text == offered.text  # the template's own words, byte for byte, untouched
+    assert selected[0].why_plain == offered.why_plain
+    for insight in selected:
+        assert poison_text not in insight.text
+        assert poison_why not in insight.why_plain
+        assert "stop" not in insight.text.lower()
+        assert "double the dose" not in insight.why_plain.lower()
 
 
 async def test_the_claude_path_falls_back_to_rule_questions_on_a_refusal(
@@ -509,6 +556,49 @@ async def test_the_claude_path_falls_back_to_rule_questions_on_a_refusal(
     analyst = ClaudeAnalyst(client=client, registry=REGISTRY)
     raw = await analyst._ask_claude(report)
     assert raw is None  # the route's own fallback: keep the rule questions unchanged
+
+
+async def test_the_model_call_never_carries_the_patients_name_a_value_a_date_or_a_label(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """#303 review, S3: a caregiver run renders every question in the patient's own name
+    before the model is ever asked anything (`_render` bakes `reader.name` in at candidate-
+    build time) — the model must never see that rendered text at all. `sanitized_for_model`
+    replaces `text`/`why_plain` with a closed kind code first; this checks the actual
+    serialised request body the fake `anthropic` client really received — never the Python
+    `Insight` objects, which could pass while the JSON string still leaked something."""
+    from app.reasoning.analyst.paper import sanitized_for_model
+
+    owner = await pa(sg, phone="+6591160020")
+    await add_medicine(sg, owner, label("atorvastatin", "20 mg", "1 tab OD"))
+    mei = await let_in(
+        sg, owner, phone="+6591160021", name="Mei", role=KeyRole.CAREGIVER,
+        scopes={Scope.RECORDS, Scope.VISITS, Scope.MEDICINES},
+    )
+    card = await _confirm_paper(sg, owner, store, extractor)
+
+    caregiver_reader = Reader(his=False, name="Pa")
+    result = await _drain(sg, mei, card.artifact_id, registry=REGISTRY, reader=caregiver_reader)
+    assert result.questions
+    # Prove the test means something: the real, unsanitised text really does carry his name
+    # and his plain-language label — exactly what must never reach the model.
+    assert any("Pa" in q.text for q in result.questions)
+    assert any("cholesterol" in q.text.lower() for q in result.questions)
+
+    sanitized = tuple(sanitized_for_model(q) for q in result.questions)
+    report = _temp_report(ReadResult(paper_label="this paper", questions=sanitized, looked_at=(), withheld=()))
+    client = FakeClient([FakeMessage(content=[_text_block({"insights": []})])])
+    analyst = ClaudeAnalyst(client=client, registry=REGISTRY)
+    await analyst._ask_claude(report)
+
+    assert len(client.messages.calls) == 1
+    content = client.messages.calls[0]["messages"][0]["content"]
+    assert "Pa" not in content
+    for leaked in ("cholesterol", "statin", "atorvastatin", "tablet", "bad ", "range"):
+        assert leaked not in content.lower(), (leaked, content)
+    # Not vacuous: the closed kind codes really are what went instead.
+    assert "value" in content or "aggregate" in content
+    assert "retest" in content
 
 
 # --- no transaction open while a model call is in flight (structural) ----------------------
@@ -577,7 +667,7 @@ def _sse_events(text: str) -> list[dict[str, Any]]:
     ]
 
 
-async def test_the_route_streams_steps_then_a_report_and_keep_files_a_standing_memo_with_no_visit(
+async def test_the_route_streams_steps_then_a_report_and_keep_with_no_visit_keeps_nothing(
     deployment: Deployment, store: LocalObjectStore, extractor
 ) -> None:
     from app.clock import current
@@ -628,8 +718,21 @@ async def _http_stream_and_keep(deployment: Deployment, store: LocalObjectStore,
         f"/profiles/{profile_id}/papers/{card.artifact_id}/insight/keep", headers=his
     )
     assert kept.status_code == 201, kept.text
-    assert kept.json()["filed"] == "unfiled"
-    assert kept.json()["kept_count"] == len(report["questions"])
+    # #303 review, B3, the honest fallback: with no visit booked, Nura keeps nothing rather
+    # than a vague standing memo that named none of the real questions while claiming to
+    # have kept all of them. `kept_count` is really 0, never `len(report["questions"])`.
+    assert kept.json() == {"kept_count": 0, "filed": "unfiled", "appointment_id": None}
+
+    # No standing memo, vague or otherwise, was filed for this paper.
+    async with deployment.sessions() as raw:
+        owner = await resolve_key_context(
+            raw,
+            region=deployment.region,
+            person_id=uuid.UUID(session["person_id"]),
+            profile_id=uuid.UUID(profile_id),
+        )
+        memos = await current_memos(raw, context=owner)
+    assert not any(m.source_id == card.artifact_id for m in memos)
 
 
 # --- range edge cases: decimals, a value exactly on a bound, compound text, precedence -----
@@ -654,6 +757,33 @@ def test_compound_or_sex_specific_range_text_says_nothing_rather_than_guess() ->
 
     for text in ("M: 13.5-17.5, F: 12.0-15.5", "Normal", "See report", ""):
         assert _parse_printed_range(text) is None
+
+
+def test_a_reversed_printed_range_is_refused_not_read_backwards() -> None:
+    """#303 review, S2: the module's own earlier parser read "5.5 - 3.5" as `(5.5, 3.5)` and
+    let a value of 4.0 come out "below" a range whose low bound was really the printed high.
+    Delegating to `app.ingestion.extract.parse_printed_range` (which already refuses low >
+    high) fixes this at the source, never a second parser to drift from it."""
+    from app.reasoning.analyst.paper import _band, _parse_printed_range, _printed_range
+
+    assert _parse_printed_range("5.5 - 3.5") is None
+    assert _printed_range(4.0, "5.5 - 3.5") is None
+    # The same fixture text, the right way round, still reads normally.
+    assert _parse_printed_range("3.5 - 5.5") == (3.5, 5.5)
+    assert _band(4.0, (3.5, 5.5)) is None
+
+
+def test_field_range_with_boolean_bounds_is_never_read_as_one_point_zero() -> None:
+    """#303 review, S2: `field_range={"low": true}` must not become `1.0` — a boolean is an
+    `int` subclass in Python, so a bare `isinstance(x, int | float)` reads `True` as `1`.
+    `_printed_range` now reuses `_number` (already bool-safe: `isinstance(x, bool)` is
+    checked first and refused) instead of that bare check."""
+    from app.reasoning.analyst.paper import _printed_range
+
+    assert _printed_range(4.0, None, field_range={"low": True, "high": None, "text": None}) is None
+    assert _printed_range(4.0, None, field_range={"low": False, "high": True, "text": None}) is None
+    # A real number beside a boolean still reads the real number.
+    assert _printed_range(4.0, None, field_range={"low": True, "high": 5.5, "text": None}) == (None, 5.5)
 
 
 def test_an_embedded_range_wins_over_a_conflicting_legacy_sibling() -> None:

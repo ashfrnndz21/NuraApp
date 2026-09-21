@@ -550,6 +550,8 @@ export const zh = {
     // @patient phrase
     keepForVisit: "为我的门诊留下这些",
     // @patient phrase
+    keepForVisitOther: "为{patient}的门诊留下这些",
+    // @patient phrase
     keeping: "留下中…",
     // @patient phrase
     kept: "已留下",
@@ -558,9 +560,9 @@ export const zh = {
     // @patient
     keptForVisitOther: "已留给{patient}的下一次门诊。",
     // @patient
-    keptUnfiled: ["Nura留下了您的问题。", "预约门诊后，Nura会把它们加上去。"],
+    keepNoVisit: ["还没有预约门诊，所以Nura还没有留下这些问题。", "预约门诊后，再打开这份文件。"],
     // @patient
-    keptUnfiledOther: ["Nura留下了{patient}的问题。", "{patient}预约门诊后，Nura会把它们加上去。"],
+    keepNoVisitOther: ["还没有预约门诊，所以Nura还没有留下{patient}的这些问题。", "预约门诊后，再打开这份文件。"],
     // @patient phrase
     notNow: "现在不用",
   },

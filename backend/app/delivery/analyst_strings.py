@@ -510,19 +510,11 @@ PAPER_AGGREGATE_VALUE_THEIRS: Mapping[str, str] = {
     "zh": "为什么{patient}这份文件上有{n}个数字超出了范围？",
 }
 
-# @patient
-PAPER_MEDICINE_QUESTION: Mapping[str, str] = {
-    "en": "Is my {medicine} still the right one for me?",
-    "ms": "Adakah {medicine} saya masih yang betul untuk saya?",
-    "zh": "我的{medicine}还适合我吗？",
-}
-
-# @patient
-PAPER_MEDICINE_QUESTION_THEIRS: Mapping[str, str] = {
-    "en": "Is {patient}'s {medicine} still the right one for {patient}?",
-    "ms": "Adakah {medicine} {patient} masih yang betul untuk {patient}?",
-    "zh": "{patient}的{medicine}还适合{patient}吗？",
-}
+# No medicine-linked question this release (#303 review, B2): `ANALYTE_DRUG_CLASS_HINTS`
+# (`app.reasoning.analyst.paper`, removed) fired for a value's own band without regard to
+# which way the medicine actually pushes it, and its analyte-to-drug-class mapping was never
+# pharmacist-reviewed. `PAPER_MEDICINE_QUESTION`/`_THEIRS`/`PAPER_MEDICINE_WHY` are deleted,
+# not left dormant — they return only once a pharmacist-reviewed mapping exists.
 
 # @patient
 PAPER_RETEST_QUESTION: Mapping[str, str] = {
@@ -595,13 +587,6 @@ PAPER_VALUE_WHY_THEIRS: Mapping[str, str] = {
 }
 
 # @patient
-PAPER_MEDICINE_WHY: Mapping[str, str] = {
-    "en": "This kind of medicine is often used with this kind of test.",
-    "ms": "Jenis ubat ini selalu digunakan dengan jenis ujian ini.",
-    "zh": "这类药物常用于这类检查。",
-}
-
-# @patient
 PAPER_REPEAT_WHY: Mapping[str, str] = {
     "en": "This is only what this one paper shows, once.",
     "ms": "Ini hanya apa yang ditunjukkan oleh surat ini, sekali sahaja.",
@@ -612,38 +597,34 @@ PAPER_REPEAT_WHY: Mapping[str, str] = {
 LOOKED_AT_LABEL: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "this paper",
-        "medicines": "{count} of your medicines",
         "visit": "your next visit",
     },
     "ms": {
         "paper": "surat ini",
-        "medicines": "{count} daripada ubat anda",
         "visit": "lawatan anda seterusnya",
     },
     "zh": {
         "paper": "这份文件",
-        "medicines": "您的{count}种药",
         "visit": "您的下一次门诊",
     },
 }
 """What `looked_at` names on the paper-scoped insight (checkpoint 3): the plain label for
-each real read that actually happened, never a fixed list (`app.reasoning.analyst.paper`)."""
+each real read that actually happened, never a fixed list (`app.reasoning.analyst.paper`).
+No `"medicines"` entry this release (#303 review, B2): medicines are not read for this card
+at all while it offers no medicine-linked question."""
 
 # @patient phrase
 LOOKED_AT_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "this paper",
-        "medicines": "{count} of {patient}'s medicines",
         "visit": "{patient}'s next visit",
     },
     "ms": {
         "paper": "surat ini",
-        "medicines": "{count} daripada ubat {patient}",
         "visit": "lawatan {patient} seterusnya",
     },
     "zh": {
         "paper": "这份文件",
-        "medicines": "{patient}的{count}种药",
         "visit": "{patient}的下一次门诊",
     },
 }
@@ -652,43 +633,38 @@ LOOKED_AT_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
 PAPER_STEP_LABEL: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "Looking at this paper.",
-        "medicines": "Looking at your medicines.",
         "history": "Looking at what this paper's numbers were before.",
         "visit": "Looking at your next visit.",
     },
     "ms": {
         "paper": "Melihat surat ini.",
-        "medicines": "Melihat ubat anda.",
         "history": "Melihat apa nombor dalam surat ini sebelum ini.",
         "visit": "Melihat lawatan anda seterusnya.",
     },
     "zh": {
         "paper": "正在查看这份文件。",
-        "medicines": "查看您的药物。",
         "history": "查看这份文件上的数字以前是怎样的。",
         "visit": "查看您的下一次门诊。",
     },
 }
 """One label per `app.reasoning.analyst.paper.PaperStepKey`, said the moment that real read
-finishes — the same "real work already happened" discipline `STEP_LABEL` above holds to."""
+finishes — the same "real work already happened" discipline `STEP_LABEL` above holds to. No
+`"medicines"` entry this release, for the same reason `LOOKED_AT_LABEL` has none."""
 
 # @patient
 PAPER_STEP_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "paper": "Looking at this paper.",
-        "medicines": "Looking at {patient}'s medicines.",
         "history": "Looking at what this paper's numbers were before.",
         "visit": "Looking at {patient}'s next visit.",
     },
     "ms": {
         "paper": "Melihat surat ini.",
-        "medicines": "Melihat ubat {patient}.",
         "history": "Melihat apa nombor dalam surat ini sebelum ini.",
         "visit": "Melihat lawatan {patient} seterusnya.",
     },
     "zh": {
         "paper": "正在查看这份文件。",
-        "medicines": "查看{patient}的药物。",
         "history": "查看这份文件上的数字以前是怎样的。",
         "visit": "查看{patient}的下一次门诊。",
     },
@@ -748,9 +724,6 @@ __all__ = [
     "PAPER_AGGREGATE_VALUE_THEIRS",
     "PAPER_HEADLINE",
     "PAPER_HEADLINE_THEIRS",
-    "PAPER_MEDICINE_QUESTION",
-    "PAPER_MEDICINE_QUESTION_THEIRS",
-    "PAPER_MEDICINE_WHY",
     "PAPER_NOTHING_LINE",
     "PAPER_NOTHING_LINE_THEIRS",
     "PAPER_REPEAT_WHY",

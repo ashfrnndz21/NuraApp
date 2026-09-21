@@ -296,12 +296,16 @@ export interface Strings {
      *  twice for the same idea (`make language`'s own phrase-consistency gate). */
     questionsNotAnswers: string;
     keepForVisit: string;
+    keepForVisitOther: string;
     keeping: string;
     kept: string;
     keptForVisit: string;
     keptForVisitOther: string;
-    keptUnfiled: readonly string[];
-    keptUnfiledOther: readonly string[];
+    /** With no upcoming visit, Nura keeps nothing (#303 review, B3, the honest fallback) —
+     *  said plainly, in place of a false "kept" claim. Two lines, one idea each, the same
+     *  `plain-words` rule 2 discipline `keptUnfiled` used to hold to. */
+    keepNoVisit: readonly string[];
+    keepNoVisitOther: readonly string[];
     notNow: string;
   };
   signIn: {

@@ -68,8 +68,6 @@ from app.reasoning.analyst.service import (
     save_report,
 )
 from app.reasoning.visits.guard import may_change_visits
-from app.reasoning.visits.memos import current_memos, write_memo
-from app.reasoning.visits.models import MemoKind, MemoSource
 from app.reasoning.visits.questions import keep_paper_insight_questions
 from app.settings import Settings
 from app.state.service import StateView, current_state
@@ -333,7 +331,7 @@ async def _paper_events(
     # provider`: these reach back into this package's own `__init__`, still mid-import the
     # first time this module loads as one of its routers.
     from app.reasoning.analyst import paper as paper_analyst
-    from app.reasoning.analyst.claude_adapter import ClaudeAnalyst, _parse_choices, _rebuild
+    from app.reasoning.analyst.claude_adapter import ClaudeAnalyst, _parse_choices
     from app.reasoning.analyst.paper_service import save_paper_insight
     from app.reasoning.analyst.provider import analyst_for
 
@@ -364,6 +362,13 @@ async def _paper_events(
     source = "rule"
     questions: Sequence[Insight] = read.questions
     moment = utcnow()
+    # Sanitised for the model (#303 review, S3): `read.questions` are already rendered in
+    # his own voice — a caregiver run's own text carries the patient's real name
+    # (`_render` bakes `reader.name` in at candidate-build time). The model is only ever
+    # asked to choose which of these to keep and in what order (B1b, `choose_from_templates`
+    # below reads its own answer against `read.questions`, never against this report), so it
+    # is never shown the rendered words at all — only a closed kind code per id. Evidence
+    # carries only ids to `_ask_claude`'s own prompt already (never `.label`).
     temp_report = Report(
         report_id=str(uuid.uuid4()),
         generated_at=moment,
@@ -371,7 +376,13 @@ async def _paper_events(
         language=language,
         source="rule",
         boundary=(),
-        sections=(Section(paper_analyst.CANDIDATE_SECTION_KEY, "", tuple(read.questions)),),
+        sections=(
+            Section(
+                paper_analyst.CANDIDATE_SECTION_KEY,
+                "",
+                tuple(paper_analyst.sanitized_for_model(insight) for insight in read.questions),
+            ),
+        ),
     )
     claude_choices = None
     analyst = analyst_for(settings, registry=registry)
@@ -386,6 +397,10 @@ async def _paper_events(
 
     # Phase 3: the rebuild (if any), the save and the audit line — a second, fresh session.
     async with session_scope(request) as session:
+        # Resolved fresh in this session (phase 1's own `reader` does not survive its own
+        # session closing) — needed before `build_insight` below, not only at the end, so
+        # the headline itself is said in his own voice (#303 review, S4ii).
+        reader = await reader_of(session, context, language)
         # The context left the region the moment the call above was made, whatever it came
         # back with (or whether it came back at all) — the line is written once that is
         # known, never only when the rephrase also succeeded (CLAUDE.md: no unlogged path).
@@ -399,14 +414,16 @@ async def _paper_events(
                 shared_with_label=EXTERNAL_MODEL_PROCESSOR,
             )
         if claude_choices is not None:
-            rebuilt = await _rebuild(
-                temp_report, claude_choices, session=session, context=context, language=language
-            )
-            rebuilt_section = next(
-                (s for s in rebuilt.sections if s.key == paper_analyst.CANDIDATE_SECTION_KEY), None
-            )
-            if rebuilt_section is not None and rebuilt_section.insights:
-                questions = rebuilt_section.insights
+            # The paper path never lets the model's own `text`/`why_plain` reach the wire
+            # (#303 review, B1b — unlike the weekly report's own `claude_adapter._rebuild`,
+            # which rephrases): the model may only choose which of `read.questions`' own
+            # closed-template questions to keep, and their order. `choose_from_templates`
+            # reads `choice.insight_id` alone and returns the untouched `Insight`s
+            # `read_phase` already built and verified; empty or all-unknown ids fall back to
+            # every question `read_phase` found, in its own order.
+            selected = paper_analyst.choose_from_templates(read.questions, claude_choices)
+            if selected:
+                questions = selected
                 source = "claude"
         insight = paper_analyst.build_insight(
             language=language,
@@ -415,9 +432,9 @@ async def _paper_events(
             looked_at=list(read.looked_at),
             withheld=list(read.withheld),
             now=utcnow(),
+            reader=reader,
         )
         await save_paper_insight(session, context=context, artifact_id=artifact_id, insight=insight)
-        reader = await reader_of(session, context, language)
         out = reader.model(PaperInsightOut.of_insight(insight))
         yield _sse({"type": "report", "report": out.model_dump(mode="json")})
 
@@ -478,15 +495,22 @@ async def keep_paper_insight(
 ) -> PaperInsightKeepOut:
     """"Keep these for my visit": file the offered questions from the paper's saved insight
     on the next upcoming visit, through the existing visit-questions write path
-    (`keep_paper_insight_questions`), idempotently. With no upcoming visit, keep a standing
-    memo instead (`app.reasoning.visits.memos.write_memo`), the existing "unfiled" store this
-    backend already has — also idempotent, by the same marker.
+    (`keep_paper_insight_questions`), idempotently.
 
-    Checked at the door, both branches alike: a viewer, a helper or a clinic key reads the
-    visits and never changes them (`app.reasoning.visits.guard.may_change_visits`) — the same
-    refusal `keep_paper_insight_questions` already raises for the "visit" branch on its own,
-    made explicit here so the "unfiled" branch, which does not call it, is never the one path
-    that door was missing from."""
+    With no upcoming visit, Nura keeps nothing (#303 review, B3, the honest fallback — the
+    proper fix, moving the actual questions onto whichever visit is booked next, needs its
+    own storage in `app.reasoning.visits` and did not land safely in this pass): the old
+    behaviour here filed one fixed, generic standing memo ("Ask {doctor} about the numbers on
+    your saved paper.") that named none of the real questions, and still reported
+    `kept_count` as if every one of them had been kept — both false, on the wire and on the
+    screen. `kept_count=0`, `filed="unfiled"`, nothing written at all; the screen says so
+    plainly and points at what to do (book a visit, then open this paper again).
+
+    Checked at the door: a viewer, a helper or a clinic key reads the visits and never
+    changes them (`app.reasoning.visits.guard.may_change_visits`) — the same refusal
+    `keep_paper_insight_questions` already raises for the "visit" branch on its own, made
+    explicit here so the no-visit branch, which does not call it, is never the one path that
+    door was missing from."""
     from app.reasoning.analyst.paper_service import latest_paper_insight, questions_of
 
     may_change_visits(context)
@@ -506,33 +530,7 @@ async def keep_paper_insight(
         return PaperInsightKeepOut(
             kept_count=len(kept), filed="visit", appointment_id=str(visit.id)
         )
-    marker_language = row.language
-    standing = [
-        memo
-        for memo in await current_memos(session, context=context)
-        if memo.key == "ask_from_paper" and memo.source_id == artifact_id
-    ]
-    filed_now = False
-    if not standing and questions:
-        from app.delivery.strings import YOUR_DOCTOR
-        from app.reasoning.trends import doctor_to_ask
-
-        doctor = await doctor_to_ask(session, context)
-        await write_memo(
-            session,
-            context=context,
-            kind=MemoKind.ASK,
-            key="ask_from_paper",
-            slots={"doctor": doctor or YOUR_DOCTOR[marker_language]},
-            source=MemoSource.ANALYST,
-            source_id=artifact_id,
-            language=marker_language,
-            state=await _system_state(session, context=context),
-        )
-        filed_now = True
-    # `kept_count` counts what THIS call actually filed — 0 on a repeat call, the same
-    # idempotency promise the "visit" branch above keeps.
-    return PaperInsightKeepOut(kept_count=len(questions) if filed_now else 0, filed="unfiled")
+    return PaperInsightKeepOut(kept_count=0, filed="unfiled")
 
 
 __all__ = ["router"]

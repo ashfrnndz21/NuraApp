@@ -550,6 +550,8 @@ export const ms = {
     // @patient phrase
     keepForVisit: "Simpan untuk lawatan saya",
     // @patient phrase
+    keepForVisitOther: "Simpan untuk lawatan {patient}",
+    // @patient phrase
     keeping: "Menyimpan…",
     // @patient phrase
     kept: "Disimpan",
@@ -558,9 +560,9 @@ export const ms = {
     // @patient
     keptForVisitOther: "Disimpan untuk lawatan {patient} seterusnya.",
     // @patient
-    keptUnfiled: ["Nura menyimpan soalan anda.", "Nura akan menambahnya sebaik sahaja lawatan ditempah."],
+    keepNoVisit: ["Belum ada lawatan ditempah, jadi Nura belum simpan soalan-soalan ini.", "Tempah lawatan, kemudian buka surat ini semula."],
     // @patient
-    keptUnfiledOther: ["Nura menyimpan soalan {patient}.", "Nura akan menambahnya sebaik sahaja lawatan {patient} seterusnya ditempah."],
+    keepNoVisitOther: ["Belum ada lawatan ditempah, jadi Nura belum simpan soalan-soalan {patient}.", "Tempah lawatan, kemudian buka surat ini semula."],
     // @patient phrase
     notNow: "Bukan sekarang",
   },

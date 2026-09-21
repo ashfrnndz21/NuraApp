@@ -3,10 +3,10 @@ import type { AppointmentOut, InsightOut, PaperInsightOut } from "../../src/api/
 import {
   cardVisitOf,
   initialPaperInsightState,
+  keptOnAVisit,
   lookedAtLabels,
   paperInsightHasNothingToAsk,
   paperInsightStatusText,
-  whereKept,
   withPaperInsightReport,
   withPaperInsightStep,
 } from "../../src/health/paperInsight";
@@ -109,9 +109,9 @@ describe("paperInsight: the card's own title", () => {
   });
 });
 
-describe("paperInsight: where 'Keep these for my visit' filed them", () => {
-  it("reads `filed` straight off the response — never a guess, and never a visit named the response itself did not name", () => {
-    expect(whereKept({ filed: "visit" })).toEqual({ kind: "visit" });
-    expect(whereKept({ filed: "unfiled" })).toEqual({ kind: "unfiled" });
+describe("paperInsight: did 'Keep these for my visit' really land on a visit?", () => {
+  it("reads `filed` straight off the response — with no upcoming visit (#303 review, B3), the honest fallback keeps nothing at all", () => {
+    expect(keptOnAVisit({ filed: "visit" })).toBe(true);
+    expect(keptOnAVisit({ filed: "unfiled" })).toBe(false);
   });
 });

@@ -9,9 +9,11 @@ safety check every candidate here goes through too, and a candidate that would t
 medicine and fails it is rerouted through `app.reasoning.analyst.rule.ask_the_doctor` — the
 same reroute the weekly report uses, never a second safety path. The Claude path (`app.
 channels.api.analyst`) reuses `app.reasoning.analyst.claude_adapter.ClaudeAnalyst`'s own
-`_ask_claude`/`_rebuild` unchanged: this module only builds a `Report`-shaped pool of
-already rule-finalised candidates for that adapter to choose and rephrase from, so the cite
-check and the `EXTERNAL_MODEL_PROCESSOR` audit line stay the analyst's own.
+`_ask_claude` unchanged to make the one call, but never its `_rebuild`: unlike the weekly
+report, which lets the model rephrase, this module's own `choose_from_templates` (#303
+review, B1b) reads only which candidate ids the model chose, and their order — never its
+`text`/`why_plain` — so a model's own words can never reach this card at all, poisonous or
+not. The cite check and the `EXTERNAL_MODEL_PROCESSOR` audit line stay the analyst's own.
 
 Values are compared only with the range printed on the paper itself (`_printed_range`),
 never a guideline table: a fact's own embedded `range` where a sibling builder's shape has
@@ -30,13 +32,12 @@ takes).
 
 from __future__ import annotations
 
-import re
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,14 +45,13 @@ from app.audit.access import audited_read
 from app.channels.about_him import Reader
 from app.db import as_utc, utcnow
 from app.delivery import analyst_strings as words
-from app.drugs.registry import DrugRegistry, UnknownDrug
+from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.ingestion.extract import parse_printed_range as extract_printed_range
 from app.ingestion.models import ReviewCard, ReviewField
 from app.ingestion.review import card_fields
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
-from app.medicines.models import LineStatus, MedicationLine
-from app.medicines.strings import PLAIN_NAME
 from app.memory.models import Appointment
 from app.memory.semantic import current_facts
 from app.memory.spine import upcoming_appointments
@@ -84,10 +84,12 @@ class NotAConfirmedPaper(Refusal):
 
 
 class PaperStepKey(StrEnum):
-    """One real read behind a paper-scoped insight, in the order it happens."""
+    """One real read behind a paper-scoped insight, in the order it happens. No `MEDICINES`
+    step this release (#303 review, B2): medicines are not read for this card at all while
+    it offers no medicine-linked question — never claim to have looked at something that was
+    not actually used."""
 
     PAPER = "paper"
-    MEDICINES = "medicines"
     HISTORY = "history"
     VISIT = "visit"
 
@@ -136,28 +138,20 @@ class PaperInsight:
     withheld: tuple[str, ...]
 
 
-_RANGE_RE = re.compile(
-    r"^\s*(?:"
-    r"(?P<le><=|<)\s*(?P<hi1>-?\d+(?:\.\d+)?)"
-    r"|(?P<ge>>=|>)\s*(?P<lo1>-?\d+(?:\.\d+)?)"
-    r"|(?P<lo2>-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(?P<hi2>-?\d+(?:\.\d+)?)"
-    r")\s*$"
-)
-"""A printed lab range, as a lab prints it: "<130", ">=40", "3.5-5.5", "3.5 to 5.5". Whatever
-does not match this small, literal set is read as no range at all — never guessed at."""
-
-
 def _parse_printed_range(text: str) -> tuple[float | None, float | None] | None:
-    match = _RANGE_RE.match(text)
-    if match is None:
+    """Delegates to the ingestion extractor's own parser (`app.ingestion.extract.
+    parse_printed_range`, #303 review, S2) — never a second parser of the same literal shapes
+    that could drift from it or trust what that one already refuses: a low bound over the
+    high one ("5.5 - 3.5", printed backwards or misread — this module's own earlier parser
+    read that as `(5.5, 3.5)` and called 4.0 "below" it) and a compound or sex-specific range
+    both come back with no bounds there, never guessed at here either. `None` — never a tuple
+    of `None`s — exactly when neither bound parsed, so `_printed_range`'s own fallback order
+    below still tries the next shape; `_printed_range`'s caller already treats a tuple of two
+    `None`s the same as this bare `None` either way."""
+    parsed = extract_printed_range(text)
+    if parsed.low is None and parsed.high is None:
         return None
-    if match.group("hi1") is not None:
-        return (None, float(match.group("hi1")))
-    if match.group("lo1") is not None:
-        return (float(match.group("lo1")), None)
-    if match.group("lo2") is not None and match.group("hi2") is not None:
-        return (float(match.group("lo2")), float(match.group("hi2")))
-    return None
+    return (parsed.low, parsed.high)
 
 
 def _number(value: Any) -> float | None:
@@ -189,12 +183,9 @@ def _printed_range(
     None of the three needs to have landed for the others to work.
     """
     if field_range is not None:
-        low, high = field_range.get("low"), field_range.get("high")
-        if isinstance(low, int | float) or isinstance(high, int | float):
-            return (
-                float(low) if isinstance(low, int | float) else None,
-                float(high) if isinstance(high, int | float) else None,
-            )
+        low, high = _number(field_range.get("low")), _number(field_range.get("high"))
+        if low is not None or high is not None:
+            return (low, high)
         text = field_range.get("text")
         if isinstance(text, str):
             parsed = _parse_printed_range(text)
@@ -219,43 +210,19 @@ def _band(value: float, bounds: tuple[float | None, float | None]) -> str | None
     return None
 
 
-ANALYTE_DRUG_CLASS_HINTS: dict[str, tuple[str, ...]] = {
-    "ldl": ("statin",),
-    "cholesterol": ("statin",),
-    "hdl": ("statin",),
-    "triglycerides": ("statin", "fibrate"),
-    "hba1c": ("biguanide", "sulfonylurea", "insulin"),
-    "glucose": ("biguanide", "sulfonylurea", "insulin"),
-    "potassium": ("ace_inhibitor", "arb", "diuretic"),
-    "tsh": ("thyroid",),
-}
-"""A small heuristic, not a clinical claim, the same standing `app.reasoning.analyst.rule.
-SUPPLEMENT_INDICATIONS` already holds: which drug classes are commonly relevant to a lab
-analyte, used only to decide whether a value worth asking about is also worth citing a
-medicine beside — never to say the medicine is right or wrong."""
-
-
-def _plain_name(registry: DrugRegistry | None, generic: str, language: str) -> str:
-    if registry is not None:
-        try:
-            return PLAIN_NAME[language][registry.monograph(generic).plain_name_id]
-        except (UnknownDrug, KeyError):
-            pass
-    return generic
-
-
 _DETERMINER_PREFIX: dict[str, tuple[str, ...]] = {"en": ("your ", "the "), "zh": ("您的",)}
 _DETERMINER_SUFFIX: dict[str, tuple[str, ...]] = {"ms": (" anda",)}
 
 
 def _bare_word(plain: str, language: str) -> str:
-    """`plain` with whatever determiner it already carries stripped off — a medicine's plain
-    name (`app.medicines.strings.PLAIN_NAME`, "your insulin") or a lab value's plain label
-    (`words.ANALYTE_PLAIN_LABEL`, mirrored word for word from the web's own report table
-    catalogue, "the bad cholesterol", "your body salt") — so a caller's own "my"/"{patient}'s"
-    (or the Malay/Chinese equivalent) is never doubled onto it ("my the bad cholesterol", "my
-    your insulin"). Every caller here (`PAPER_SINGLE_VALUE_*`, `PAPER_AGGREGATE_VALUE`,
-    `PAPER_MEDICINE_QUESTION`) puts its own determiner around the bare word instead."""
+    """`plain` with whatever determiner it already carries stripped off — a lab value's plain
+    label (`words.ANALYTE_PLAIN_LABEL`, mirrored word for word from the web's own report
+    table catalogue, "the bad cholesterol", "your body salt") — so a caller's own "my"/
+    "{patient}'s" (or the Malay/Chinese equivalent) is never doubled onto it ("my the bad
+    cholesterol"). `PAPER_SINGLE_VALUE_*`/`PAPER_AGGREGATE_VALUE` put their own determiner
+    around the bare word instead. (No medicine-linked question this release — #303 review,
+    B2 — so this no longer also bares a medicine's own plain name; the determiner tables
+    above still carry `PLAIN_NAME`'s own shapes too, ready for when one returns.)"""
     for prefix in _DETERMINER_PREFIX.get(language, ()):
         if plain.startswith(prefix):
             return plain[len(prefix) :]
@@ -265,22 +232,20 @@ def _bare_word(plain: str, language: str) -> str:
     return plain
 
 
-def _analyte_label(
-    subject: str, attribute: str, *, label_on_paper: str | None, language: str
-) -> str | None:
+def _analyte_label(subject: str, attribute: str, *, language: str) -> str | None:
     """The plain word for one line of a lab paper — the same word the report table itself
     already shows for it (`words.ANALYTE_PLAIN_LABEL`, mirrored from the web's own report
     table catalogue), never the raw subject/attribute code, and never carrying that
-    catalogue's own determiner into a question that supplies its own (`_bare_word`). Falls
-    back to the paper's own printed label (`ReviewField.label_on_paper`) when this surface has
-    no plain word for the code yet; `None` — never a code — when neither is there, so a caller
-    can leave that one value out of a question rather than name it by its code."""
+    catalogue's own determiner into a question that supplies its own (`_bare_word`). A code
+    with no entry in the closed table is `None` — never the paper's own printed
+    `ReviewField.label_on_paper` (#303 review, S1: extractor-written free text, hostile or
+    jargon until a person has read it — "Apo-B ratio" printed verbatim would have gone
+    straight onto the card and the visit card). A value with no plain word still counts
+    toward the aggregate "{n} of my numbers…" question, which names no label at all — only
+    the single-value question about that one value is left out."""
     table = words.ANALYTE_PLAIN_LABEL.get(language, words.ANALYTE_PLAIN_LABEL["en"])
     plain = table.get((subject, attribute))
-    if plain:
-        return _bare_word(plain, language)
-    printed = (label_on_paper or "").strip()
-    return _bare_word(printed, language) if printed else None
+    return _bare_word(plain, language) if plain else None
 
 
 def _render(
@@ -435,15 +400,7 @@ async def _flagged_values(
                 continue
             seen_facts.add(fact.id)
             page = _page_of(fields, subject=subject, attribute=attribute)
-            label_on_paper = next(
-                (
-                    field.label_on_paper
-                    for field in fields
-                    if field.subject == subject and field.attribute == attribute
-                ),
-                None,
-            )
-            label = _analyte_label(subject, attribute, label_on_paper=label_on_paper, language=language)
+            label = _analyte_label(subject, attribute, language=language)
             flagged.append(
                 _FlaggedValue(
                     fact_id=fact.id, subject=subject, attribute=attribute, band=band, label=label, page=page
@@ -496,57 +453,6 @@ def _value_candidate(
     )
 
 
-def _medicine_candidate(
-    flagged: Sequence[_FlaggedValue],
-    *,
-    medicines: Sequence[MedicationLine],
-    registry: DrugRegistry | None,
-    artifact_id: uuid.UUID,
-    paper_label: str,
-    reader: Reader,
-    language: str,
-) -> Candidate | None:
-    """The card's own second question, only when the engine already has the link
-    (`ANALYTE_DRUG_CLASS_HINTS`) between one of the flagged values and a medicine he already
-    takes — the first such pairing, in the order the paper prints its fields, never one
-    question per medicine (so there is never a second one this line would need to be told
-    apart from — `PAPER_MEDICINE_QUESTION` never names when it is taken)."""
-    for value in flagged:
-        hints = ANALYTE_DRUG_CLASS_HINTS.get(value.attribute, ())
-        match = next(
-            (line for line in medicines if line.drug_class in hints or line.generic.lower() in hints),
-            None,
-        )
-        if match is None:
-            continue
-        plain = _plain_name(registry, match.generic, language)
-        bare = _bare_word(plain, language)
-        text = _render(
-            words.PAPER_MEDICINE_QUESTION, words.PAPER_MEDICINE_QUESTION_THEIRS,
-            reader=reader, language=language, medicine=bare,
-        )
-        fact_evidence = Evidence(
-            kind="fact", id=str(value.fact_id), label=value.label or paper_label, scope=Scope.RECORDS
-        )
-        artifact_evidence = Evidence(
-            kind="artifact",
-            id=str(artifact_id),
-            label=_evidence_label(paper_label, value.page),
-            scope=Scope.RECORDS,
-        )
-        medicine_evidence = Evidence(kind="medication_line", id=str(match.id), label=plain)
-        return Candidate(
-            insight_id=f"paper_medicine:{match.id}",
-            kind=InsightKind.MEDICINE,
-            text=text,
-            ask_who=AskWho.DOCTOR,
-            evidence=(fact_evidence, artifact_evidence, medicine_evidence),
-            why_plain=words.PAPER_MEDICINE_WHY[language],
-            confidence=Confidence.WORTH_A_LOOK,
-        )
-    return None
-
-
 def _retest_candidate(
     flagged: Sequence[_FlaggedValue], *, artifact_id: uuid.UUID, paper_label: str, language: str
 ) -> Candidate | None:
@@ -594,34 +500,6 @@ async def read_phase(
     looked_at = [LookedAt(kind="artifact", id=str(artifact_id), label=paper_label)]
     withheld: list[str] = []
 
-    medicines: list[MedicationLine] = []
-    if context.allows(Scope.MEDICINES):
-        medicines = list(
-            await audited_read(
-                session,
-                MedicationLine,
-                context,
-                Scope.MEDICINES,
-                where=(
-                    MedicationLine.superseded_at.is_(None),
-                    MedicationLine.status == LineStatus.ACTIVE,
-                ),
-            )
-        )
-        yield PaperStep(PaperStepKey.MEDICINES, words.PAPER_STEP_LABEL[language]["medicines"])
-        if medicines:
-            looked_at.append(
-                LookedAt(
-                    kind="medicines",
-                    id=",".join(str(line.id) for line in medicines),
-                    label=words.fill(
-                        words.LOOKED_AT_LABEL[language]["medicines"], count=len(medicines)
-                    ),
-                )
-            )
-    else:
-        withheld.append("medicines_and_supplements")
-
     flagged = await _flagged_values(session, context=context, card=card, moment=moment, language=language)
     yield PaperStep(PaperStepKey.HISTORY, words.PAPER_STEP_LABEL[language]["history"])
 
@@ -646,17 +524,12 @@ async def read_phase(
     )
     if value_candidate is not None:
         candidates.append(value_candidate)
-    medicine_candidate = _medicine_candidate(
-        flagged,
-        medicines=medicines,
-        registry=registry,
-        artifact_id=artifact_id,
-        paper_label=paper_label,
-        reader=reader,
-        language=language,
-    )
-    if medicine_candidate is not None:
-        candidates.append(medicine_candidate)
+    # No medicine-linked question this release (#303 review, B2): `ANALYTE_DRUG_CLASS_HINTS`
+    # is this module's own heuristic, never a pharmacist-reviewed mapping, and it fired for a
+    # value's own band without regard to which way the medicine actually pushes it — a
+    # potassium reading BELOW range beside an antihypertensive read as "is your blood
+    # pressure tablet still right", which a person could act on by skipping a dose. Returns
+    # only when a pharmacist-reviewed analyte-to-medicine mapping exists.
     retest_candidate = _retest_candidate(
         flagged, artifact_id=artifact_id, paper_label=paper_label, language=language
     )
@@ -680,6 +553,74 @@ async def read_phase(
     )
 
 
+class _ModelChosenId(Protocol):
+    """What a model's own choice needs to carry for `choose_from_templates` to use it — its
+    `insight_id` alone (`app.reasoning.analyst.claude_adapter._ModelChoice` satisfies this
+    without either module importing the other at load time; `choose_from_templates` never
+    reads `.text`/`.why_plain` off it, on purpose — see its own docstring). A read-only
+    `@property`, not a plain attribute: a plain annotation asks a frozen dataclass like
+    `_ModelChoice` for a setter it deliberately does not have."""
+
+    @property
+    def insight_id(self) -> str: ...
+
+
+def choose_from_templates(
+    original: Sequence[Insight], choices: Sequence[_ModelChosenId]
+) -> list[Insight]:
+    """The model may CHOOSE which of the card's own, already-verified, closed-template
+    questions to keep, and their order — never rewrite one. Unlike the weekly report's own
+    `claude_adapter._rebuild`, a choice's `text`/`why_plain` are never read here at all: every
+    returned `Insight` is one `read_phase` itself already built and ran through `finalize`,
+    untouched (#303 review — a model that could put its own words into a paper's own
+    questions could put a dose change into one; this is the fix, not tighter wording).
+
+    A duplicated id keeps only its first appearance; an id `original` never offered is
+    dropped; with fewer than one id left after that, the rule-based selection — every
+    question `read_phase` found, in its own order — is kept instead of an empty card."""
+    by_id = {insight.insight_id: insight for insight in original}
+    seen: set[str] = set()
+    selected: list[Insight] = []
+    for choice in choices:
+        if choice.insight_id in seen or choice.insight_id not in by_id:
+            continue
+        seen.add(choice.insight_id)
+        selected.append(by_id[choice.insight_id])
+    return selected if selected else list(original)
+
+
+_KIND_CODE_BY_PREFIX: dict[str, str] = {
+    "paper_value": "value",
+    "paper_values": "aggregate",
+    "paper_retest": "retest",
+}
+"""The closed vocabulary `sanitized_for_model` reads an insight's own id prefix into — every
+prefix `_value_candidate`/`_retest_candidate` actually mint (`f"paper_value:{fact_id}"`,
+`f"paper_values:{artifact_id}"`, `f"paper_retest:{artifact_id}"`)."""
+
+
+def sanitized_for_model(insight: Insight) -> Insight:
+    """The same insight, `text`/`why_plain` replaced by a closed kind code — never the
+    rendered sentence, which could carry the patient's real name (caregiver voice, `_render`
+    bakes it in at candidate-build time), a value, a date or a plain-language label (#303
+    review, S3). The model is asked only to choose which of these to keep and in what order
+    (`choose_from_templates`); it never needs the words themselves to do that, so it is never
+    shown them. `insight_id`/`kind`/`evidence`/`ask_who`/`confidence` are unchanged — the
+    prompt `app.reasoning.analyst.claude_adapter.ClaudeAnalyst._ask_claude` builds from an
+    `Insight` already sends only `evidence.id`, never `evidence.label`, so those are safe as
+    they are."""
+    code = _KIND_CODE_BY_PREFIX.get(insight.insight_id.split(":", 1)[0], "question")
+    return Insight(
+        insight_id=insight.insight_id,
+        kind=insight.kind,
+        text=code,
+        ask_who=insight.ask_who,
+        evidence=insight.evidence,
+        why_plain=code,
+        confidence=insight.confidence,
+    )
+
+
 def build_insight(
     *,
     language: str,
@@ -688,9 +629,16 @@ def build_insight(
     looked_at: Sequence[LookedAt],
     withheld: Sequence[str],
     now: datetime,
+    reader: Reader,
 ) -> PaperInsight:
+    """`reader` is the same one `read_phase` already resolved (#303 review, S4ii — its own
+    absence here was the bug: `PAPER_HEADLINE_THEIRS`/`PAPER_NOTHING_LINE_THEIRS` existed and
+    were never reachable, so a caregiver's own headline read "Here is what I would ask." —
+    his own first-person voice — never naming the patient at all)."""
     headline = (
-        words.PAPER_HEADLINE[language] if questions else words.PAPER_NOTHING_LINE[language]
+        _render(words.PAPER_HEADLINE, words.PAPER_HEADLINE_THEIRS, reader=reader, language=language)
+        if questions
+        else _render(words.PAPER_NOTHING_LINE, words.PAPER_NOTHING_LINE_THEIRS, reader=reader, language=language)
     )
     return PaperInsight(
         report_id=str(uuid.uuid4()),
@@ -706,7 +654,6 @@ def build_insight(
 
 
 __all__ = [
-    "ANALYTE_DRUG_CLASS_HINTS",
     "CANDIDATE_SECTION_KEY",
     "REPORT_KEY",
     "LookedAt",
@@ -717,5 +664,7 @@ __all__ = [
     "PaperStepKey",
     "ReadResult",
     "build_insight",
+    "choose_from_templates",
     "read_phase",
+    "sanitized_for_model",
 ]

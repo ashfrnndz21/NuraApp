@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, fixClock, freshPhone, seedMedicine, signInThroughTheApp } from "./helpers";
+import { API, fixClock, freshPhone, signInThroughTheApp } from "./helpers";
 import { addProvider, auth, book, daysFromNow, EVERY_PART, letIn, openOwn, openRecord, placeholderPng, signInAs } from "./record-helpers";
 
 /** Checkpoint 3, "What it means for you" (package 7, `docs/design/experience-blueprint.html`
@@ -23,7 +23,7 @@ async function postWaitingPaper(request: import("@playwright/test").APIRequestCo
   expect(posted.status(), await posted.text()).toBe(201);
 }
 
-test("the Record flow: a lab paper with an out-of-range value, its medicine, real stages, the headline, the card's own questions, Keep, and the question lands on the visit", async ({
+test("the Record flow: a lab paper with an out-of-range value, real stages, the headline, the card's own questions, Keep, and the question lands on the visit", async ({
   page,
   request,
 }) => {
@@ -36,18 +36,8 @@ test("the Record flow: a lab paper with an out-of-range value, its medicine, rea
   await signInAs(page, pa, "Pa");
   await openRecord(page);
   await page.getByTestId("record-papers").click();
-  // The one waiting paper, still unambiguous — `seedMedicine` below is added only after it is
-  // open, through the API, never through the page: its own unconfirmed label photo would
-  // otherwise wait beside this one in the same list (the fixture extractor never reads it as a
-  // paper) and race this click against which of the two rendered first.
   await page.getByTestId("waiting-paper").click();
   await expect(page.getByTestId("review-card")).toContainText("Blood test");
-
-  // A statin on the record beside the paper's own out-of-range LDL — the same pairing
-  // `test_paper_insight.py`'s own happy path uses, so a real question is really offered. Added
-  // now, through the API: read only when "Looks right" starts the real stream, below.
-  await seedMedicine(request, pa.token, pa.profileId, { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab OD", quantity: 30 });
-
   await page.getByTestId("looks-right").click();
 
   // The insight screen, a real screen of its own — the tab bar's own record.
@@ -124,11 +114,20 @@ test("no visit booked: the card falls back to the generic title, never a guessed
   await page.getByTestId("record-papers").click();
   await page.getByTestId("waiting-paper").click();
   await expect(page.getByTestId("review-card")).toContainText("Blood test");
-  await seedMedicine(request, pa.token, pa.profileId, { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab OD", quantity: 30 });
   await page.getByTestId("looks-right").click();
 
   await expect(page.getByTestId("insight-headline")).toBeVisible();
   await expect(page.getByTestId("insight-card").locator("h3")).toHaveText("For your next visit");
+
+  // Keep, with no visit booked: the honest fallback (#303 review, B3) — nothing is kept, the
+  // button never claims "Kept", and the screen says plainly why.
+  const keep = page.getByTestId("insight-keep");
+  await keep.click();
+  await expect(page.getByTestId("insight-keep-no-visit")).toHaveText(
+    "There is no visit booked yet, so Nura has not kept these. Book a visit, then open this paper again.",
+  );
+  await expect(keep).toHaveAttribute("data-state", "idle");
+  await expect(keep).toHaveText("Keep these for my visit");
 });
 
 test("nothing to ask: a paper with no printed range says so plainly, with a way on — never an empty screen", async ({ page, request }) => {
@@ -196,7 +195,10 @@ test("onboarding: 'Looks right' opens the insight screen first, and its own 'Not
   await expect(page.getByTestId("saved")).toHaveText("Nura wrote it down.");
 });
 
-test("a caregiver (Mei): the insight screen speaks of Pa's paper and his medicine by name, never to him or as her own", async ({ page, request }) => {
+test("a caregiver (Mei): the insight screen speaks of Pa's paper by name, never to him or as her own — headline and Keep button exactly", async ({
+  page,
+  request,
+}) => {
   const pa = await openOwn(request);
   const mei = await letIn(request, pa, "Mei", "chief", EVERY_PART);
   await postWaitingPaper(request, pa.token, pa.profileId, "lab-report-vitals-2026-09-10");
@@ -206,25 +208,32 @@ test("a caregiver (Mei): the insight screen speaks of Pa's paper and his medicin
   await page.getByTestId("record-papers").click();
   await page.getByTestId("waiting-paper").click();
   await expect(page.getByTestId("review-card")).toContainText("Blood test");
-  // His statin, added now through the API (never the page): read once "Looks right" starts the
-  // real stream below, so its own question is really offered, in his own name, caregiver voice.
-  await seedMedicine(request, pa.token, pa.profileId, { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab OD", quantity: 30 });
   await page.getByTestId("looks-right").click();
 
   await expect(page.locator("h1")).toHaveText("What it means for Pa");
-  await expect(page.getByTestId("insight-headline")).toBeVisible();
-  // "your"/"you"/"I"/"my" about his record is what #210's own sweep catches; this screen's own
-  // words never carry them in caregiver voice — the headline, the looked-at chips and every
-  // question are rendered about him, by name, never in the first or second person. The Keep
-  // button's own fixed action label ("Keep these for my visit", whoever is tapping it, kept
-  // for their own visit) is never part of this sweep: it is not rendered about him at all.
+  // The headline itself, exactly — never the self-voiced "Here is what I would ask." a
+  // caregiver run used to read when `build_insight` had no `reader` of its own (#303
+  // review, S4ii). A bare `toContain("pa")` here would have passed against "paper" too
+  // (S4iii) — this checks the real, whole sentence instead.
+  await expect(page.getByTestId("insight-headline").locator(".sr-only")).toHaveText(
+    "Here is what I would ask about Pa's paper.",
+  );
+  // The Keep button's own caregiver twin, exactly (S4i) — never the self-voiced "Keep these
+  // for my visit" a caregiver would otherwise see.
+  await expect(page.getByTestId("insight-keep")).toHaveText("Keep these for Pa's visit");
+
+  // "your"/"you"/"I"/"my" about his record is what #210's own sweep catches; this screen's
+  // own words never carry them in caregiver voice — the headline, the looked-at chips, the
+  // card's own questions AND the Keep button (S4iii: included in this sweep, not carved out)
+  // are all rendered about him, by name, never in the first or second person.
   const turn = await page.getByTestId("insight-turn").innerText();
   const lookedAt = await page.getByTestId("insight-looked-at").innerText();
   const card = await page.getByTestId("insight-card").innerText();
   const safety = await page.getByTestId("insight-safety").innerText();
-  const spoken = [turn, lookedAt, card, safety].join("\n").toLowerCase();
+  const keepButton = await page.getByTestId("insight-keep").innerText();
+  const spoken = [turn, lookedAt, card, safety, keepButton].join("\n").toLowerCase();
   expect(spoken).not.toMatch(/\byour\b|\byou\b|\bmy\b|\bi take\b|\bfor me\b/);
-  expect(spoken).toContain("pa");
+  expect(spoken).toMatch(/\bpa\b/); // the patient by name, a whole word — never "paper"'s own "pa"
 });
 
 for (const viewport of [

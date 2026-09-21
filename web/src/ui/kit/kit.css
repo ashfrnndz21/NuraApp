@@ -110,6 +110,12 @@
   display: inline-block;
   margin-right: 0.27em;
 }
+/* A CJK unit (motion.ts `textUnits`, #303 review S6): Chinese has no spaces between words at
+   all, so its own per-character/segmenter-word stagger steps sit flush against each other —
+   never the Latin/Malay `margin-right` above, which stands in for an actual space. */
+.soft-word.soft-word-tight {
+  margin-right: 0;
+}
 /* Only a word that is genuinely new since the last render gets this — an old word keeps plain
    `.soft-word` and never carries `animation-delay`, so it can never replay (SoftText.tsx). */
 .soft-word-enter {
@@ -121,6 +127,13 @@
   font-style: italic;
   font-size: 1.12em;
   letter-spacing: 0;
+}
+/* CJK has no italic convention of its own, and a browser's synthetic oblique for a Chinese
+   glyph this font stack falls back to can draw a stray mark through it (#303 review, S6 —
+   found live: "问" rendered as "/问" under `font-style: italic`, confirmed by removing it
+   alone). The accent still reads: the font and the slightly larger size carry it. */
+.soft-word.accent.soft-word-tight {
+  font-style: normal;
 }
 @keyframes soft-word-in {
   from {

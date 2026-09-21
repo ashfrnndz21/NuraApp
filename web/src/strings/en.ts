@@ -550,6 +550,8 @@ export const en = {
     // @patient phrase
     keepForVisit: "Keep these for my visit",
     // @patient phrase
+    keepForVisitOther: "Keep these for {patient}'s visit",
+    // @patient phrase
     keeping: "Keeping…",
     // @patient phrase
     kept: "Kept",
@@ -558,9 +560,9 @@ export const en = {
     // @patient
     keptForVisitOther: "Kept for {patient}'s next visit.",
     // @patient
-    keptUnfiled: ["Nura kept your questions.", "Nura will add them once a visit is booked."],
+    keepNoVisit: ["There is no visit booked yet, so Nura has not kept these.", "Book a visit, then open this paper again."],
     // @patient
-    keptUnfiledOther: ["Nura kept {patient}'s questions.", "Nura will add them once {patient}'s next visit is booked."],
+    keepNoVisitOther: ["There is no visit booked yet, so Nura has not kept these for {patient}.", "Book a visit, then open this paper again."],
     // @patient phrase
     notNow: "Not now",
   },

@@ -74,13 +74,12 @@ export function cardVisitOf(visits: readonly Pick<AppointmentOut, "doctor" | "sc
   return { kind: "generic" };
 }
 
-// --- after "Keep": where the questions went -------------------------------------------------
+// --- after "Keep": did it really land on a visit? ------------------------------------------
 
-export type KeptWhere = { kind: "visit" } | { kind: "unfiled" };
-
-/** Read straight off `PaperInsightKeepOut.filed` — never a guess, and never a visit named that
- *  the response itself did not name (the response carries an id, not a doctor or a date; saying
- *  more than that would be inventing a visit the way checkpoint 3's own rules forbid). */
-export function whereKept(result: Pick<PaperInsightKeepOut, "filed">): KeptWhere {
-  return result.filed === "visit" ? { kind: "visit" } : { kind: "unfiled" };
+/** With no upcoming visit, the backend keeps nothing at all (#303 review, B3, the honest
+ *  fallback) — `filed` is `"unfiled"` and `kept_count` is `0`, never a claim that anything
+ *  was kept. This is the one read of it a caller needs: whether the three-state button's own
+ *  "Kept" is true, or the screen should say plainly that nothing was. */
+export function keptOnAVisit(result: Pick<PaperInsightKeepOut, "filed">): boolean {
+  return result.filed === "visit";
 }

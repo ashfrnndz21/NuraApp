@@ -1,15 +1,15 @@
 import { mkdirSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
-import { API, fixClock, seedMedicine, signInThroughTheApp } from "../e2e/helpers";
+import { API, fixClock, signInThroughTheApp } from "../e2e/helpers";
 import { addProvider, auth, book, daysFromNow, EVERY_PART, letIn, openOwn, openRecord, placeholderPng, signInAs, type Papers, type Person } from "../e2e/record-helpers";
 
 /** Checkpoint 3, "What it means for you" (package 7, `docs/design/experience-blueprint.html`
  *  scene `insight`): screen captures of the real app against a real seeded account — the
- *  medicine, the visit and the paper are all written through the real API the same way the
- *  end-to-end suite writes them (`cp3Insight.spec.ts`), and the screen itself is reached
- *  through the real confirm flow ("Looks right"), never a synthetic Playwright fixture of the
- *  screen's own content. The stream's steps, its headline and its card's own questions are the
- *  real backend's, read back exactly as they arrive; only the refusal capture holds a network
+ *  visit and the paper are all written through the real API the same way the end-to-end
+ *  suite writes them (`cp3Insight.spec.ts`), and the screen itself is reached through the
+ *  real confirm flow ("Looks right"), never a synthetic Playwright fixture of the screen's
+ *  own content. The stream's steps, its headline and its card's own questions are the real
+ *  backend's, read back exactly as they arrive; only the refusal capture holds a network
  *  response (the exact shape `test_a_closing_account_is_refused_on_the_paper_insight_routes`
  *  already proves the backend sends for a closing account — see `holdAsRefusal` below), the
  *  same "test tooling only, nothing faked in the app" allowance `cp4AskShots.spec.ts` already
@@ -35,13 +35,21 @@ async function postWaitingPaper(request: APIRequestContext, pa: Pick<Papers, "to
   expect(posted.status(), await posted.text()).toBe(201);
 }
 
-async function openWaitingPaperReview(page: Page, phone: string, displayAs: string, caregiver = false): Promise<void> {
+/** The profile's own stored language (`app.onboarding.settings.save_settings`: "the language
+ *  becomes the profile's own") — the one the backend renders every stream/report in for this
+ *  key, read fresh by the app the next time it asks. Set through the real settings write, the
+ *  same one the Settings screen itself uses, never a fixture of the web's own. */
+async function setLanguage(request: APIRequestContext, pa: Pick<Papers, "token" | "profileId">, language: string): Promise<void> {
+  const res = await request.put(`${API}/profiles/${pa.profileId}/settings`, { ...auth(pa.token), data: { language } });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+async function openWaitingPaperReview(page: Page, phone: string, displayAs: string): Promise<void> {
   await signInThroughTheApp(page, phone, displayAs);
   await openRecord(page);
   await page.getByTestId("record-papers").click();
   await page.getByTestId("waiting-paper").click();
   await expect(page.getByTestId("review-card")).toBeVisible();
-  void caregiver;
 }
 
 /** Holds the insight stream just long enough for "mid-thinking" to be a reliable, unforced
@@ -99,11 +107,6 @@ for (const viewport of [
       await book(request, pa, drTan, await daysFromNow(request, 7), "check-up");
       await postWaitingPaper(request, pa, "lab-report-vitals-2026-09-10");
       await openWaitingPaperReview(page, pa.phone, "Pa");
-      // His statin, added now (through the API, never the page): read once "Looks right"
-      // starts the real stream below, so the card's own second question is really offered —
-      // added after the card is open so it is never a second, ambiguous "waiting-paper" beside
-      // the one already on screen (`seedMedicine`'s own leftover, unconfirmed label photo).
-      await seedMedicine(request, pa.token, pa.profileId, { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab OD", quantity: 30 });
 
       await delayInsightStream(page, 900);
       const clicked = page.getByTestId("looks-right").click();
@@ -146,15 +149,20 @@ for (const viewport of [
       await shot(page, "nothing-to-ask");
     });
 
-    test(`${viewport.prefix}: no visit booked — the card's own generic title, never a guessed doctor`, async ({ page, request }) => {
+    test(`${viewport.prefix}: no visit booked — the card's own generic title, and Keep's honest "nothing kept" line`, async ({ page, request }) => {
       const pa = await openOwn(request);
       await postWaitingPaper(request, pa, "lab-report-vitals-2026-09-10");
       await openWaitingPaperReview(page, pa.phone, "Pa");
-      await seedMedicine(request, pa.token, pa.profileId, { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab OD", quantity: 30 });
       await page.getByTestId("looks-right").click();
       await expect(page.getByTestId("insight-headline")).toBeVisible({ timeout: 15_000 });
       await expect(page.getByTestId("insight-card").locator("h3")).toHaveText("For your next visit");
       await shot(page, "no-visit");
+
+      // #303 review, B3, the honest fallback: Keep with no visit booked keeps nothing at all —
+      // captured too, since the old (false) "kept" claim was exactly what the review caught.
+      await page.getByTestId("insight-keep").click();
+      await expect(page.getByTestId("insight-keep-no-visit")).toBeVisible();
+      await shot(page, "no-visit-kept-nothing");
     });
 
     test(`${viewport.prefix}: a caregiver (Mei) — his paper, by name, never to him`, async ({ page, request }) => {
@@ -168,11 +176,53 @@ for (const viewport of [
       await page.getByTestId("record-papers").click();
       await page.getByTestId("waiting-paper").click();
       await expect(page.getByTestId("review-card")).toBeVisible();
-      await seedMedicine(request, pa.token, pa.profileId, { generic: "atorvastatin", strength: "20 mg", dose_text: "1 tab OD", quantity: 30 });
       await page.getByTestId("looks-right").click();
       await expect(page.getByTestId("insight-headline")).toBeVisible({ timeout: 15_000 });
       await expect(page.locator("h1")).toHaveText("What it means for Pa");
       await shot(page, "caregiver-mei");
+    });
+
+    test(`${viewport.prefix}: zh — the *问* accent with no spaces at all (#303 review, S6)`, async ({ page, request }) => {
+      const pa = await openOwn(request);
+      await setLanguage(request, pa, "zh");
+      const drTan = await addProvider(request, pa, "Dr Tan");
+      await book(request, pa, drTan, await daysFromNow(request, 7), "check-up");
+      await postWaitingPaper(request, pa, "lab-report-vitals-2026-09-10");
+      await openWaitingPaperReview(page, pa.phone, "Pa");
+      await page.getByTestId("looks-right").click();
+      await expect(page.getByTestId("insight-headline")).toBeVisible({ timeout: 15_000 });
+      // The accent span itself, real: never a literal asterisk on screen (S6's own bug).
+      await expect(page.getByTestId("insight-headline")).not.toContainText("*");
+      await shot(page, "zh");
+    });
+
+    test(`${viewport.prefix}: a two-word PATIENT name (Ah Kong) — the *{patient}.* accent never leaks an asterisk (#303 review, S6)`, async ({
+      page,
+      request,
+    }) => {
+      // Malay's own headline THEIRS twin wraps the PATIENT's own name inside the accent
+      // ("Ini yang saya akan tanya tentang surat *{patient}.*", `{patient}` filled from
+      // `reader.name` — the person whose paper this is, never the caregiver looking at it) —
+      // a two-word name here is exactly the multi-word accent span the old per-space-split
+      // match (`ACCENT_WORD_RE`) used to miss. The paper's insight is said in the PATIENT's
+      // own stored language (`setLanguage` below), which is what this capture needs to be
+      // Malay; the caregiver herself ("Wei") reads it about him.
+      const pa = await openOwn(request, "Ah Kong");
+      await setLanguage(request, pa, "ms");
+      const wei: Person = await letIn(request, pa, "Wei", "chief", EVERY_PART);
+      const drTan = await addProvider(request, pa, "Dr Tan");
+      await book(request, pa, drTan, await daysFromNow(request, 7), "check-up");
+      await postWaitingPaper(request, pa, "lab-report-vitals-2026-09-10");
+      await signInAs(page, wei, "Wei", true);
+      await openRecord(page);
+      await page.getByTestId("record-papers").click();
+      await page.getByTestId("waiting-paper").click();
+      await expect(page.getByTestId("review-card")).toBeVisible();
+      await page.getByTestId("looks-right").click();
+      await expect(page.getByTestId("insight-headline")).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByTestId("insight-headline")).toContainText("Ah Kong");
+      await expect(page.getByTestId("insight-headline")).not.toContainText("*");
+      await shot(page, "two-word-patient-name-ms");
     });
 
     test(`${viewport.prefix}: refusal`, async ({ page, request }) => {

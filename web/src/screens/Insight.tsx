@@ -9,7 +9,6 @@ import {
   lookedAtLabels,
   paperInsightHasNothingToAsk,
   paperInsightStatusText,
-  whereKept,
   withPaperInsightReport,
   withPaperInsightStep,
   type PaperInsightStreamState,
@@ -61,6 +60,10 @@ export function PaperInsightView({ card, onLeave, testId }: PaperInsightViewProp
   const [visits, setVisits] = useState<AppointmentOut[]>([]);
   const [keepResult, setKeepResult] = useState<PaperInsightKeepOut | null>(null);
   const [keepError, setKeepError] = useState<unknown>(null);
+  // With no upcoming visit, the backend keeps nothing at all (#303 review, B3, the honest
+  // fallback: `filed` is `"unfiled"`, `kept_count` is `0`) — never `keepResult`, so the
+  // three-state button is never shown as "Kept" for a keep that did not really happen.
+  const [keepNoVisit, setKeepNoVisit] = useState(false);
 
   const mountedRef = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
@@ -135,27 +138,33 @@ export function PaperInsightView({ card, onLeave, testId }: PaperInsightViewProp
   const keep = async () => {
     const bearer = token.value;
     if (!bearer || !papers) throw new Error("no session");
+    let result: PaperInsightKeepOut;
     try {
-      const result = await nura.keepPaperInsight(bearer, papers.profile_id, card.artifact_id);
-      if (mountedRef.current) {
-        setKeepResult(result);
-        setKeepError(null);
-      }
+      result = await nura.keepPaperInsight(bearer, papers.profile_id, card.artifact_id);
     } catch (failure) {
       if (mountedRef.current) setKeepError(failure);
       throw failure;
     }
+    if (!mountedRef.current) return;
+    if (result.filed !== "visit") {
+      // No upcoming visit: the honest fallback (#303 review, B3) — nothing was kept at all,
+      // so the three-state button is told this failed (reverts to idle, never "Kept") and
+      // the screen says plainly why, instead.
+      setKeepNoVisit(true);
+      setKeepError(null);
+      throw new Error("no visit booked");
+    }
+    setKeepResult(result);
+    setKeepError(null);
+    setKeepNoVisit(false);
   };
 
   const statusText = paperInsightStatusText(stream, s.feed.askThinking);
   const nothingToAsk = report ? paperInsightHasNothingToAsk(report) : false;
   const lookedAt = report ? lookedAtLabels(report) : [];
-  const kept = whereKept({ filed: keepResult?.filed ?? "unfiled" });
-  // "Kept for your next visit." (one line), or "Nura kept your questions." / "Nura will add
-  // them once a visit is booked." (two ideas: `keptUnfiled` is an array so `plain-words`
-  // rule 2's "one idea per line" holds — `ConnectionRow`'s own bold-name-then-small-line shape
-  // fits it exactly, so the two ideas are never rejoined into one line here).
-  const keptUnfiledLines = (self ? p.keptUnfiled : p.keptUnfiledOther).map((line) => fill(line, { patient: patientName }));
+  // "Nothing kept" is two lines, one idea each — `plain-words` rule 2, "one idea per line".
+  const keepNoVisitLines = (self ? p.keepNoVisit : p.keepNoVisitOther).map((line) => fill(line, { patient: patientName }));
+  const keepLabel = self ? p.keepForVisit : fill(p.keepForVisitOther, { patient: patientName });
 
   const visit = cardVisitOf(visits);
   const cardTitle =
@@ -220,17 +229,19 @@ export function PaperInsightView({ card, onLeave, testId }: PaperInsightViewProp
           </p>
           {!nothingToAsk && (
             <div class="insight-actions">
-              <ThreeStateButton label={p.keepForVisit} busyLabel={p.keeping} doneLabel={p.kept} onAct={keep} testId="insight-keep" />
-              {keepResult &&
-                (kept.kind === "visit" ? (
-                  <ConnectionRow
-                    name={self ? p.keptForVisit : fill(p.keptForVisitOther, { patient: patientName })}
-                    trailing={<Icon name="check" />}
-                    testId="insight-kept-where"
-                  />
-                ) : (
-                  <ConnectionRow name={keptUnfiledLines[0] ?? ""} line={keptUnfiledLines[1]} trailing={<Icon name="check" />} testId="insight-kept-where" />
-                ))}
+              <ThreeStateButton label={keepLabel} busyLabel={p.keeping} doneLabel={p.kept} onAct={keep} testId="insight-keep" />
+              {keepResult && (
+                <ConnectionRow
+                  name={self ? p.keptForVisit : fill(p.keptForVisitOther, { patient: patientName })}
+                  trailing={<Icon name="check" />}
+                  testId="insight-kept-where"
+                />
+              )}
+              {keepNoVisit && (
+                <p class="note" data-testid="insight-keep-no-visit">
+                  {keepNoVisitLines[0]} {keepNoVisitLines[1]}
+                </p>
+              )}
               <Notice error={keepError} />
             </div>
           )}
