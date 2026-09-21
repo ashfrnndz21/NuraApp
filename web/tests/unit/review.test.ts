@@ -1,7 +1,33 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewCardOut, ReviewFieldOut } from "../../src/api/types";
-import { canCorrect, confidenceLine, decide, decisionsFor, fieldLabel, kindLine, parseNumber, pillProposalLine, rangeStatus, readable, readableValueText, spokenLine, startingEdits, valueText } from "../../src/onboarding/review";
+import {
+  canCorrect,
+  confidenceLine,
+  decide,
+  decisionsFor,
+  facilityField,
+  fieldLabel,
+  flagTone,
+  flagWord,
+  kindLine,
+  kindTitle,
+  parseNumber,
+  pillProposalLine,
+  rangeBarGeometry,
+  rangeStatus,
+  readable,
+  readingChips,
+  readingHeadline,
+  readingTally,
+  reportRow,
+  sharedProvenance,
+  spokenLine,
+  startingEdits,
+  valueText,
+  readableValueText,
+} from "../../src/onboarding/review";
 import { en } from "../../src/strings/en";
+import { ms } from "../../src/strings/ms";
 
 const field = (field_id: string, attribute: string, value: unknown, needs_confirm = false, position = 0): ReviewFieldOut => ({
   field_id,
@@ -291,5 +317,158 @@ describe("where a number sits against the paper's own printed range (E02 defect 
     expect(rangeStatus(6.0, { low: 3.9, high: 6.0 })).toBe("in"); // two-sided, high edge
     expect(rangeStatus(40, { low: 40, high: null })).toBe("in"); // lower-only, inclusive
     expect(rangeStatus(150, { low: null, high: 150 })).toBe("above"); // upper-only, exclusive
+  });
+});
+
+describe("the range bar's own geometry (the report table)", () => {
+  it("draws nothing for a status that is unknown", () => {
+    expect(rangeBarGeometry("64", { low: 3.9, high: 6.0 })).toBeNull();
+    expect(rangeBarGeometry(64, null)).toBeNull();
+    expect(rangeBarGeometry(64, { low: null, high: null })).toBeNull();
+  });
+
+  it("keeps the band and the marker inside the bar, whichever side the reading falls", () => {
+    const range = { low: 3.9, high: 6.0 };
+    for (const value of [2, 3.9, 5, 6.0, 8]) {
+      const g = rangeBarGeometry(value, range)!;
+      expect(g.bandStart).toBeGreaterThanOrEqual(0);
+      expect(g.bandStart + g.bandWidth).toBeLessThanOrEqual(100);
+      expect(g.markerAt).toBeGreaterThanOrEqual(0);
+      expect(g.markerAt).toBeLessThanOrEqual(100);
+    }
+    // A reading further past the band sits further along the bar (monotonic, never clipped
+    // silently to the same spot).
+    const near = rangeBarGeometry(6.1, range)!;
+    const far = rangeBarGeometry(9, range)!;
+    expect(far.markerAt).toBeGreaterThan(near.markerAt);
+  });
+
+  it("opens a one-sided band toward the edge the paper never bounded", () => {
+    const below = rangeBarGeometry(6.1, { low: null, high: 5.2 })!;
+    expect(below.bandStart).toBe(0); // "below 5.2": in-range from the bar's own open edge
+    const orMore = rangeBarGeometry(1.1, { low: 1.0, high: null })!;
+    expect(orMore.bandStart + orMore.bandWidth).toBe(100); // "1.0 or more": open to the far edge
+  });
+});
+
+describe("the flag and its tone", () => {
+  it("is sage inside the paper's own range, amber outside, neither when unknown", () => {
+    expect(flagTone("in")).toBe("ok");
+    expect(flagTone("above")).toBe("attention");
+    expect(flagTone("below")).toBe("attention");
+    expect(flagTone("unknown")).toBeNull();
+  });
+
+  it("says the backend's own word, never a judgement invented here", () => {
+    expect(flagWord("above", en)).toBe("Above");
+    expect(flagWord("below", en)).toBe("Below");
+    expect(flagWord("in", en)).toBe("In range");
+    expect(flagWord("unknown", en)).toBeNull();
+  });
+});
+
+describe("the reading screen's headline, chosen from the card he really read", () => {
+  const ranged = (id: string, value: number, low: number | null, high: number | null, needs = false) => ({
+    ...field(id, "x", value, needs),
+    range: { low, high, text: "" },
+  });
+
+  it("counts what is outside the paper's own range, out of what is parsable", () => {
+    const c = card([ranged("a", 6.1, null, 5.2), ranged("b", 1.1, 1.0, null), ranged("c", 64, null, null)]);
+    expect(readingTally(c)).toEqual({ outside: 1, inRange: 1, parsable: 2, totalFields: 3, check: 0 });
+    expect(readingHeadline(c, en)).toBe("1 of 2 are outside the range on the *paper.*");
+  });
+
+  it("says every one is inside rather than \"0 of {m}\"", () => {
+    const c = card([ranged("a", 1.1, 1.0, null), ranged("b", 5.0, null, 5.2)]);
+    expect(readingHeadline(c, en)).toBe("All 2 are inside the range on the *paper.*");
+  });
+
+  it("falls back to a plain count of lines when nothing on the card is parsable", () => {
+    expect(readingHeadline(card([tg, tc, name]), en)).toBe("Nura read 3 lines from your *paper.*");
+    expect(readingHeadline(card([], "medicine_label"), en)).toBe("Nura read 0 lines from your *paper.*");
+  });
+
+  it("assembles only the chips that have something in them", () => {
+    const c = card([ranged("a", 6.1, null, 5.2), ranged("b", 1.1, 1.0, null, true)]);
+    expect(readingChips(c, en)).toEqual([
+      { key: "outside", label: "Outside range 1" },
+      { key: "inRange", label: "In range 1" },
+      { key: "check", label: "Check 1" },
+    ]);
+    expect(readingChips(card([tc]), en)).toEqual([]);
+  });
+
+  it("streams the same words in another language", () => {
+    const c = card([ranged("a", 6.1, null, 5.2)]);
+    expect(readingHeadline(c, ms)).toContain("julat");
+  });
+});
+
+describe("one row of the report table, computed once", () => {
+  it("is never blank: a row with nothing readable still has Nura's own words", () => {
+    const blank = field("f-blank", "other", {}, false);
+    const row = reportRow(blank, en);
+    expect(row.valueText.length).toBeGreaterThan(0);
+  });
+
+  it("draws a bar and a flag only when the range is parsable, the range text either way", () => {
+    const withRange = { ...tg, range: { low: null, high: 1.7, text: "below 1.7" } };
+    const row = reportRow(withRange, en);
+    expect(row.geometry).not.toBeNull();
+    expect(row.flagWord).toBe("Above"); // 64 against "below 1.7"
+    expect(row.rangeText).toBe("below 1.7");
+
+    const unparsable = { ...tg, range: { low: null, high: null, text: "Negative" } };
+    const row2 = reportRow(unparsable, en);
+    expect(row2.geometry).toBeNull();
+    expect(row2.flagWord).toBeNull();
+    expect(row2.rangeText).toBe("Negative");
+  });
+
+  it("asks for him — needsAttention — only on needs_confirm or unreadable, never a sure row", () => {
+    expect(reportRow(tc, en).needsAttention).toBe(false); // sure
+    expect(reportRow(tg, en).needsAttention).toBe(true); // needs_confirm
+    const unreadable: ReviewFieldOut = { ...field("f-u", "x", null, true), unreadable: true };
+    expect(reportRow(unreadable, en).needsAttention).toBe(true);
+  });
+
+  it("shows the paper's own printed label only when it says more than his plain word", () => {
+    expect(reportRow({ ...tg, label_on_paper: "Trigs" }, en).printedLabel).toBe("Trigs");
+    expect(reportRow({ ...tg, label_on_paper: "The blood fats" }, en).printedLabel).toBeNull();
+    expect(reportRow(tg, en).printedLabel).toBeNull();
+  });
+});
+
+describe("the once-only provenance line under the table", () => {
+  it("names the page when every field came from the same one", () => {
+    const c = card([{ ...tg, page: 2 }, { ...tc, page: 2 }]);
+    expect(sharedProvenance(c, "14 September 2026", en)).toBe("Nura read this from page 2, added on 14 September 2026.");
+  });
+
+  it("drops the page when the paper had none (a single photo)", () => {
+    const c = card([tg, tc]);
+    expect(sharedProvenance(c, "14 September 2026", en)).toBe("Nura read this from the paper you added on 14 September 2026.");
+  });
+
+  it("says nothing at all when the fields came from different pages — the caller falls back to a per-row line", () => {
+    const c = card([{ ...tg, page: 1 }, { ...tc, page: 2 }]);
+    expect(sharedProvenance(c, "14 September 2026", en)).toBeNull();
+  });
+});
+
+describe("the report table's own short title and header facility (checkpoint 2)", () => {
+  it("names the kind, not the sentence kindLine reads out loud", () => {
+    expect(kindTitle("lab_report", en)).toBe("Blood test");
+    expect(kindTitle("medicine_label", en)).toBe("Medicine label");
+    expect(kindTitle("lab_report", en)).not.toBe(kindLine("lab_report", en));
+  });
+
+  it("finds the lab_report.facility (or .lab) field to show in the header, once, never as an ordinary row", () => {
+    const facility = { ...field("f-fac", "facility", "Sunrise Medical Laboratory", false), subject: "lab_report" };
+    expect(facilityField(card([tg, facility]))?.field_id).toBe("f-fac");
+    expect(facilityField(card([tg, tc]))).toBeNull();
+    const lab = { ...field("f-lab", "lab", "Bukit Lab", false), subject: "lab_report" };
+    expect(facilityField(card([lab]))?.field_id).toBe("f-lab");
   });
 });

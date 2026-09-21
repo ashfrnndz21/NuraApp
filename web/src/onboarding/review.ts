@@ -201,6 +201,223 @@ export function kindLine(kind: ReviewCardOut["document_kind"], s: Strings): stri
   }
 }
 
+/** The report table's own short title for the kind of paper (blueprint `report`'s `head('Blood
+ *  test', ...)`): a name, not the sentence `kindLine` reads out loud ("This is a blood
+ *  test."). */
+export function kindTitle(kind: ReviewCardOut["document_kind"], s: Strings): string {
+  const r = s.onboarding.records;
+  switch (kind) {
+    case "lab_report":
+      return r.titleLabReport;
+    case "medicine_label":
+      return r.titleMedicineLabel;
+    case "discharge_letter":
+      return r.titleDischargeLetter;
+    case "clinic_slip":
+      return r.titleClinicSlip;
+    case "handwritten_prescription":
+      return r.titleHandwritten;
+    case "insurance_letter":
+      return r.titleInsuranceLetter;
+    case "insurance_policy":
+      return r.titleInsurancePolicy;
+    case "insurance_claim":
+      return r.titleInsuranceClaim;
+    case "device_screen":
+      return r.titleDeviceScreen;
+    case "pill_photo":
+      return r.titlePillPhoto;
+    case "pharmacy_receipt":
+      return r.titlePharmacyReceipt;
+    case "other":
+      return r.titleOtherKind;
+    case "not_health":
+    case "unknown":
+    case "unsupported_file_type":
+      return r.titleUnknown;
+  }
+}
+
+/** The header field a lab-style report's facility line is on, when the card has one — kept out
+ *  of the ordinary rows once it is shown in the report's own header (blueprint `report`'s
+ *  "12 September 2026 · Sunrise Medical Laboratory"), never shown twice. */
+export function facilityField(card: ReviewCardOut): ReviewFieldOut | null {
+  return card.fields.find((field) => field.subject === "lab_report" && (field.attribute === "facility" || field.attribute === "lab")) ?? null;
+}
+
+export interface RangeBarGeometry {
+  bandStart: number;
+  bandWidth: number;
+  markerAt: number;
+}
+
+/** Where the paper's own printed range sits on a 0-100 bar, and where the reading's own
+ *  marker falls on it (`RangeBar`'s props) — `null` whenever `rangeStatus` itself would be
+ *  `"unknown"` (not a plain number, no range at all, or neither bound readable off it): a bar
+ *  is never drawn for a line that has nothing to draw it against. A two-sided range is padded
+ *  a third of its own width either side so the marker is never flush with the bar's edge; a
+ *  one-sided range opens toward 0 (an upper-only "below X") or toward the far edge (a
+ *  lower-only "X or more") — "a one-sided segment", never a second bound this row's paper
+ *  never printed. */
+export function rangeBarGeometry(value: unknown, range: Pick<FieldRange, "low" | "high"> | null | undefined): RangeBarGeometry | null {
+  if (rangeStatus(value, range) === "unknown" || typeof value !== "number" || !range) return null;
+  const { low, high } = range;
+  const at = (n: number, min: number, max: number) => Math.max(0, Math.min(100, ((n - min) / (max - min)) * 100));
+  if (low != null && high != null) {
+    const pad = Math.max((high - low) * 0.4, (high - low || 1) * 0.4, 0.0001);
+    const min = Math.min(low, value) - pad;
+    const max = Math.max(high, value) + pad;
+    return { bandStart: at(low, min, max), bandWidth: at(high, min, max) - at(low, min, max), markerAt: at(value, min, max) };
+  }
+  if (high != null) {
+    // Upper-only ("below 5.2"): the in-range band runs from the bar's own open edge to `high`.
+    const max = Math.max(high, value) * 1.15 || 1;
+    return { bandStart: 0, bandWidth: at(high, 0, max), markerAt: at(value, 0, max) };
+  }
+  // Lower-only ("1.0 or more"): the band runs from `low` to the bar's own far edge.
+  const max = Math.max((low ?? 0) * 2, value) * 1.15 || 1;
+  const start = at(low!, 0, max);
+  return { bandStart: start, bandWidth: 100 - start, markerAt: at(value, 0, max) };
+}
+
+/** The reading's own tone for the bar and the flag — sage when it is inside the paper's own
+ *  range, amber when it is outside, and neither when there is nothing to compare it against. */
+export function flagTone(status: ReturnType<typeof rangeStatus>): "ok" | "attention" | null {
+  if (status === "in") return "ok";
+  if (status === "above" || status === "below") return "attention";
+  return null;
+}
+
+/** The backend's own word for where a reading sits, never invented here: "Above", "Below",
+ *  "In range" — `null` where `rangeStatus` is `"unknown"` (no flag at all, E02 defect #3: a
+ *  line with a range nobody can parse gets neither a bar nor a judgement). */
+export function flagWord(status: ReturnType<typeof rangeStatus>, s: Strings): string | null {
+  const r = s.onboarding.records;
+  if (status === "above") return r.flagAbove;
+  if (status === "below") return r.flagBelow;
+  if (status === "in") return r.flagInRange;
+  return null;
+}
+
+export interface ReadingTally {
+  /** Rows whose reading falls outside the paper's own printed range ("above"/"below"). */
+  outside: number;
+  /** Rows whose reading falls inside it. */
+  inRange: number;
+  /** `outside + inRange` — rows with a range Nura could actually compare against (`m`). */
+  parsable: number;
+  /** Every field on the card, parsable range or not. */
+  totalFields: number;
+  /** Rows still waiting on him: `needs_confirm` or `unreadable`. */
+  check: number;
+}
+
+export function readingTally(card: ReviewCardOut): ReadingTally {
+  let outside = 0;
+  let inRange = 0;
+  let check = 0;
+  for (const field of card.fields) {
+    const status = rangeStatus(field.value, field.range);
+    if (status === "above" || status === "below") outside++;
+    else if (status === "in") inRange++;
+    if (field.needs_confirm || field.unreadable) check++;
+  }
+  return { outside, inRange, parsable: outside + inRange, totalFields: card.fields.length, check };
+}
+
+/** The one headline the reading screen streams in, chosen from the card Nura really read
+ *  (never invented, never a fixed sentence): a lab report with printed ranges says how many of
+ *  them are outside; every one inside gets its own sentence rather than "0 of {m}"; a paper
+ *  with nothing parsable — another kind of document, or a lab report with no printed ranges at
+ *  all — falls back to a plain count of lines. */
+export function readingHeadline(card: ReviewCardOut, s: Strings): string {
+  const r = s.onboarding.records;
+  const { outside, parsable, totalFields } = readingTally(card);
+  if (parsable === 0) return fill(r.readingLinesRead, { m: totalFields });
+  if (outside === 0) return fill(r.readingAllInRange, { m: parsable });
+  return fill(r.readingSomeOutside, { n: outside, m: parsable });
+}
+
+export interface ReadingChip {
+  key: "outside" | "inRange" | "check";
+  label: string;
+}
+
+/** The filter chips the reading screen assembles one by one, under the headline — only the
+ *  ones with something in them (E02: never "Check 0"). */
+export function readingChips(card: ReviewCardOut, s: Strings): ReadingChip[] {
+  const r = s.onboarding.records;
+  const { outside, inRange, check } = readingTally(card);
+  const chips: ReadingChip[] = [];
+  if (outside > 0) chips.push({ key: "outside", label: fill(r.chipOutside, { n: outside }) });
+  if (inRange > 0) chips.push({ key: "inRange", label: fill(r.chipInRange, { n: inRange }) });
+  if (check > 0) chips.push({ key: "check", label: fill(r.chipCheck, { n: check }) });
+  return chips;
+}
+
+export interface ReportRowView {
+  fieldId: string;
+  /** His own plain word for the line (`fieldLabel`). */
+  label: string;
+  /** The paper's own printed word for it, shown small under `label` — only when it says
+   *  something `label` does not already say. */
+  printedLabel: string | null;
+  /** Never blank (`readableValueText`): a field the table shows always has something to read. */
+  valueText: string;
+  unit: string | null;
+  status: ReturnType<typeof rangeStatus>;
+  /** The bar's own geometry, or nothing to draw one against. */
+  geometry: RangeBarGeometry | null;
+  /** "Above" / "Below" / "In range", or no flag at all for an unparsable range. */
+  flagWord: string | null;
+  /** The bar and flag's shared tone — sage or amber, never guessed independently by a caller. */
+  tone: "ok" | "attention" | null;
+  /** The range exactly as the paper prints it, shown whether or not a bar could be drawn. */
+  rangeText: string | null;
+  /** Whether this line asks for him: `needs_confirm` or `unreadable` — the only rows that show
+   *  "Check this one" and open the correction sheet on their own. */
+  needsAttention: boolean;
+  /** Whether a tap on the value can retype it at all (`canCorrect`). */
+  correctable: boolean;
+  unreadable: boolean;
+}
+
+/** One row of the report table, in full — everything a `ReportRow` needs to draw, computed
+ *  once so the component itself only ever renders what this says (E02: "no row ever blank",
+ *  "Check this one" only on `needs_confirm`/`unreadable`). */
+export function reportRow(field: ReviewFieldOut, s: Strings): ReportRowView {
+  const label = fieldLabel(field, s);
+  const printed = field.label_on_paper?.trim() || null;
+  const status = rangeStatus(field.value, field.range);
+  return {
+    fieldId: field.field_id,
+    label,
+    printedLabel: printed && printed !== label ? printed : null,
+    valueText: readableValueText(field.value, s),
+    unit: field.unit,
+    status,
+    geometry: rangeBarGeometry(field.value, field.range),
+    flagWord: flagWord(status, s),
+    tone: flagTone(status),
+    rangeText: field.range?.text ?? null,
+    needsAttention: field.needs_confirm || field.unreadable,
+    correctable: canCorrect(field),
+    unreadable: field.unreadable,
+  };
+}
+
+/** The provenance line the table shows once, under every row, when every field came from the
+ *  same page (or the paper had no pages at all — a single photo): `null` when the fields on
+ *  this card came from different pages, so the caller falls back to `provenanceLine` per row
+ *  instead (E02: "shown once ... or per row only when pages differ"). */
+export function sharedProvenance(card: ReviewCardOut, dateText: string, s: Strings): string | null {
+  const r = s.onboarding.records;
+  const pages = new Set(card.fields.map((field) => field.page));
+  if (pages.size > 1) return null;
+  const page = card.fields[0]?.page ?? null;
+  return page == null ? fill(r.fromPaperOn, { date: dateText }) : fill(r.fromPageAndDate, { page, date: dateText });
+}
+
 /** A pill photo's proposal, from the drug it was matched against at read time: "This looks
  *  like paracetamol 500 mg — check with the pharmacist." Never higher than a proposal — the
  *  backend holds the field's own confidence below the confirmation threshold either way

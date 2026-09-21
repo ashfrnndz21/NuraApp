@@ -7,17 +7,20 @@ interface GlassProps {
   as?: "div" | "section" | "article";
   testId?: string;
   className?: string;
+  /** Any other attribute a caller needs on the surface itself — a `data-*` flag a spec reads
+   *  (`data-needs-confirm`), never a full escape hatch for behaviour. */
+  attrs?: Record<string, string | boolean | undefined>;
 }
 
 /** The one shared translucent surface (docs/design/experience-blueprint.html `.glass`): fill
  *  `rgba(255,255,255,.10)`, a 1px `rgba(255,255,255,.22)` border, 18px backdrop blur — every
  *  card, row and chip in the kit is this, or close to it (tokens.css `--glass-*`). A plain box
  *  with no behaviour of its own: layout and padding are the caller's. */
-export function Glass({ children, shape = "card", as = "div", testId, className }: GlassProps): JSX.Element {
+export function Glass({ children, shape = "card", as = "div", testId, className, attrs }: GlassProps): JSX.Element {
   const Tag = as;
   const cls = ["glass-surface", shape === "card" ? "glass-card" : "glass-row", className].filter(Boolean).join(" ");
   return (
-    <Tag class={cls} data-testid={testId}>
+    <Tag class={cls} data-testid={testId} {...attrs}>
       {children}
     </Tag>
   );

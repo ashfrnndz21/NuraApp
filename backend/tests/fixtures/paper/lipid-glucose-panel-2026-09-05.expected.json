@@ -1,0 +1,15 @@
+{
+  "placeholder": "lipid-glucose-panel-2026-09-05",
+  "note": "What the synthetic paper says, matching the fixture exactly: nothing here is a deliberate misread.",
+  "document_kind": "lab_report",
+  "fields": [
+    { "subject": "lab_report", "attribute": "facility", "value": "Sunrise Medical Laboratory", "unit": null },
+    { "subject": "lipid_panel", "attribute": "total_cholesterol", "value": 6.1, "unit": "mmol/L" },
+    { "subject": "lipid_panel", "attribute": "ldl", "value": 4.0, "unit": "mmol/L" },
+    { "subject": "lipid_panel", "attribute": "hdl", "value": 0.9, "unit": "mmol/L" },
+    { "subject": "lipid_panel", "attribute": "triglycerides", "value": 2.2, "unit": "mmol/L" },
+    { "subject": "blood_sugar", "attribute": "glucose", "value": 6.4, "unit": "mmol/L" },
+    { "subject": "kidney_panel", "attribute": "potassium", "value": 4.2, "unit": "mmol/L" },
+    { "subject": "blood_test", "attribute": "haemoglobin", "value": 14.2, "unit": "g/dL" }
+  ]
+}

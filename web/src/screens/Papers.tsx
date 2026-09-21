@@ -3,9 +3,12 @@ import type { JSX } from "preact";
 import type { ReviewCardOut } from "../api/types";
 import { batch } from "../capture/session";
 import { go } from "../flow";
+import { readable } from "../onboarding/review";
 import { t } from "../strings";
 import { Header, Pill } from "../ui/components";
 import { focusHeading } from "../ui/focus";
+import { PillButton } from "../ui/kit";
+import { PaperBubble, ReadingProgress, ReadingResult } from "./onboarding/PaperReading";
 import { ReviewStep } from "./onboarding/Records";
 import { PaperBatchView } from "./PaperBatch";
 import { Shell } from "./Shell";
@@ -16,6 +19,11 @@ import { Shell } from "./Shell";
 export function PapersScreen({ report = false }: { report?: boolean }): JSX.Element {
   const s = t();
   const [reviewing, setReviewing] = useState<ReviewCardOut | null>(null);
+  // The reading screen (E02, checkpoint 2): what Nura found the moment a single report reads,
+  // before he ever sees the full table — the same component the sitting's own papers step
+  // shows. Only for a card there is something to read at all: a refusal already happened has
+  // nothing to show a reading screen over (`Records.tsx`'s own `RecordsStep`).
+  const [reading, setReading] = useState<ReviewCardOut | null>(null);
   useEffect(() => () => batch.forget(), []);
   // One report from Home's "Add a health report" (docs/design-direction.md): choosing the file
   // there only picked it — it does not go until he says so here, on its own confirm card naming
@@ -26,16 +34,58 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
   const [opened, setOpened] = useState(false);
   const items = batch.items.value;
   const reportPicked = report && batch.stage.value === "choosing" && items.length === 1 ? items[0]! : null;
+  // While the one real upload is in flight: the same paper bubble the sitting's own reading
+  // screen shows, so a screen capture (and a person) can see it genuinely mid-read rather than
+  // jumping straight from "Send it" to the finished card.
+  const sendingSingle = report && batch.stage.value === "sending" && items.length === 1 ? items[0]! : null;
   const done = batch.stage.value === "done";
   useEffect(() => {
     if (!report || opened || !done) return;
     const only = items.length === 1 ? items[0]!.outcome : null;
     if (only?.kind === "card" && !only.checked) {
       setOpened(true);
-      setReviewing(only.card);
+      if (readable(only.card)) setReading(only.card);
+      else setReviewing(only.card);
     }
   }, [report, opened, done]);
-  useEffect(() => focusHeading(), [reviewing?.card_id ?? ""]);
+  useEffect(() => focusHeading(), [reviewing?.card_id ?? reading?.card_id ?? ""]);
+  if (reading) {
+    const picked = items[0]!;
+    return (
+      <Shell tab={null} testId="papers-screen" attrs={{ "data-stage": "reading" }}>
+        {/* The reading screen has just the back control and the paper bubble (blueprint
+            `reading`): no screen title sitting over a single paper's own bubble. */}
+        <header class="screen-head reading-head">
+          <PillButton variant="quiet" compact icon="back" onClick={() => go({ name: "today" })} testId="reading-back">
+            {s.onboarding.back}
+          </PillButton>
+        </header>
+        <PaperBubble name={picked.name} thumb={picked.thumb} testId="paper-bubble" />
+        <ReadingResult
+          card={reading}
+          onContinue={() => {
+            setReviewing(reading);
+            setReading(null);
+          }}
+          testId="reading-result"
+        />
+      </Shell>
+    );
+  }
+  if (sendingSingle) {
+    const latest = batch.trace.value;
+    return (
+      <Shell tab={null} testId="papers-screen" attrs={{ "data-stage": "reading" }}>
+        <header class="screen-head reading-head">
+          <PillButton variant="quiet" compact icon="back" onClick={() => go({ name: "today" })} testId="reading-back">
+            {s.onboarding.back}
+          </PillButton>
+        </header>
+        <PaperBubble name={sendingSingle.name} thumb={sendingSingle.thumb} testId="paper-bubble" />
+        <ReadingProgress status={latest.length > 0 ? latest[latest.length - 1]!.text : s.papers.working} testId="papers-trace" />
+      </Shell>
+    );
+  }
   if (reviewing) {
     return (
       <ReviewStep

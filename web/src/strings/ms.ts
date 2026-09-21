@@ -1505,6 +1505,78 @@ export const ms = {
       otherLine: "Satu lagi baris pada surat",
       // @patient
       valueUnreadable: "Nura tidak dapat membaca baris ini.",
+      // @patient headline
+      readingSomeOutside: "{n} daripada {m} di luar julat pada *surat.*",
+      // @patient headline
+      readingAllInRange: "Semua {m} berada dalam julat pada *surat.*",
+      // @patient headline
+      readingLinesRead: "Nura membaca {m} baris daripada *surat* anda.",
+      // @patient phrase
+      chipOutside: "Luar julat {n}",
+      // @patient phrase
+      chipInRange: "Dalam julat {n}",
+      // @patient phrase
+      chipCheck: "Semak {n}",
+      // @patient phrase
+      flagAbove: "Melebihi",
+      // @patient phrase
+      flagBelow: "Kurang",
+      // @patient phrase
+      flagInRange: "Dalam julat",
+      // @patient phrase
+      checkThisOne: "Semak yang ini",
+      // @patient phrase
+      seeFullTable: "Lihat jadual penuh",
+      // @patient
+      fixHint: "Sentuh mana-mana nilai untuk menukarnya.",
+      // @patient phrase
+      fixNumber: "Betulkan satu angka",
+      // @patient
+      nuraRead: "Nura membaca {value} daripada surat itu.",
+      // @patient headline
+      checkSheetTitle: "Adakah ini betul?",
+      // @patient phrase
+      checkSheetConfirm: "Ya, ini betul",
+      // @patient phrase
+      checkSheetConfirming: "Menyimpan…",
+      // @patient phrase
+      checkSheetConfirmed: "Disimpan",
+      // @patient
+      safetyRanges: "Julat ini adalah yang tertulis pada surat anda.",
+      // @patient
+      safetyNotAdvice: "Ini bukan nasihat doktor.",
+      // @patient
+      fromPageAndDate: "Nura membaca ini daripada muka surat {page}, ditambah pada {date}.",
+      // @patient
+      fromPaperOn: "Nura membaca ini daripada surat yang anda tambah pada {date}.",
+      // @patient phrase
+      dateAndFacility: "{date} · {facility}",
+      // @patient phrase
+      titleLabReport: "Ujian darah",
+      // @patient phrase
+      titleMedicineLabel: "Label ubat",
+      // @patient phrase
+      titleDischargeLetter: "Surat hospital",
+      // @patient phrase
+      titleClinicSlip: "Kad temu janji",
+      // @patient phrase
+      titleHandwritten: "Nota doktor",
+      // @patient phrase
+      titleInsuranceLetter: "Surat insurans",
+      // @patient phrase
+      titleInsurancePolicy: "Polisi insurans",
+      // @patient phrase
+      titleInsuranceClaim: "Tuntutan insurans",
+      // @patient phrase
+      titleDeviceScreen: "Skrin mesin",
+      // @patient phrase
+      titleOtherKind: "Surat kesihatan",
+      // @patient phrase
+      titlePillPhoto: "Gambar pil",
+      // @patient phrase
+      titlePharmacyReceipt: "Resit farmasi",
+      // @patient phrase
+      titleUnknown: "Halaman",
     },
     questions: {
       // @patient headline
