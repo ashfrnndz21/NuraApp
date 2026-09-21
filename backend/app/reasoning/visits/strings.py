@@ -540,6 +540,15 @@ LINE_TEMPLATES: Mapping[str, Mapping[str, str]] = {
         "ms": "Tanya {doctor} tentang perubahan pada ubat anda.",
         "zh": "问一问{doctor}，您的药有什么变化。",
     },
+    # A paper-scoped insight kept with no upcoming visit yet (checkpoint 3, `app.reasoning.
+    # analyst.paper`): a standing memo, the same fixed-line discipline `ask_safety_notice`
+    # already holds to — never the insight's own words, only that a paper is worth asking
+    # about at whichever visit comes next.
+    "ask_from_paper": {
+        "en": "Ask {doctor} about the numbers on your saved paper.",
+        "ms": "Tanya {doctor} tentang nombor pada surat yang disimpan.",
+        "zh": "问一问{doctor}，关于您保存的那份文件上的数字。",
+    },
     # The questions card for him.
     "no_need_to_remember": {
         "en": "Nura keeps these questions for you.",

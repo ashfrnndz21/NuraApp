@@ -31,7 +31,14 @@ def test_no_twin_speaks_to_him_and_every_twin_names_only_its_own_slots(language:
 
 @pytest.mark.parametrize("language", LANGUAGES)
 def test_the_boundary_twins_are_the_boundary_as_it_is_said(language: str) -> None:
-    said = boundary_line(Surface.STATE_POSTURE, language).split("\n")
+    """Every twin in `BOUNDARY_THEIRS` must be a line some surface actually says — never a
+    stale entry nothing shows any more. `STATE_POSTURE`'s own composite carries "posture"
+    and "ask"; `INSIGHT`'s own line carries "insight" (checkpoint 3,
+    `app.reasoning.analyst.paper` reuses this surface for the paper-scoped insight too)."""
+    said = {
+        *boundary_line(Surface.STATE_POSTURE, language).split("\n"),
+        *boundary_line(Surface.INSIGHT, language).split("\n"),
+    }
     for original, _twin in BOUNDARY_THEIRS[language].values():
         assert original in said
 

@@ -362,6 +362,181 @@ ASK_THE_DOCTOR_WHY: Mapping[str, str] = {
     "zh": "这个部分被保留下来，没有照原文显示。",
 }
 
+# --- the paper-scoped insight (checkpoint 3, "What it means for you") -----------------------
+# One paper, just confirmed, beside his medicines and his next visit. Every line below is
+# checked the same way the weekly report's own lines are (`app.reasoning.analyst.pipeline.
+# finalize`): plain words, the conclusion-or-advice blocklist, a cite or it is not shown.
+
+# @patient
+PAPER_HEADLINE: Mapping[str, str] = {
+    "en": "Here is what is worth asking about this paper.",
+    "ms": "Ini yang patut ditanya tentang surat ini.",
+    "zh": "这是关于这份文件，值得问的事。",
+}
+
+# @patient
+PAPER_HEADLINE_THEIRS: Mapping[str, str] = {
+    "en": "Here is what is worth asking about {patient}'s paper.",
+    "ms": "Ini yang patut ditanya tentang surat {patient}.",
+    "zh": "这是关于{patient}的文件，值得问的事。",
+}
+
+# @patient
+PAPER_NOTHING_LINE: Mapping[str, str] = {
+    "en": "Nothing on this paper looks worth a question right now.",
+    "ms": "Tiada apa-apa dalam surat ini yang perlu ditanya buat masa ini.",
+    "zh": "这份文件目前没有什么需要问的。",
+}
+
+# @patient
+PAPER_NOTHING_LINE_THEIRS: Mapping[str, str] = {
+    "en": "Nothing on {patient}'s paper looks worth a question right now.",
+    "ms": "Tiada apa-apa dalam surat {patient} yang perlu ditanya buat masa ini.",
+    "zh": "{patient}的文件目前没有什么需要问的。",
+}
+
+# @patient
+PAPER_VALUE_LINE: Mapping[str, str] = {
+    "en": "{name} on this paper is outside the range printed on it.",
+    "ms": "{name} dalam surat ini berada di luar julat yang tertulis padanya.",
+    "zh": "这份文件上的{name}超出了文件上印的范围。",
+}
+
+# @patient
+PAPER_VALUE_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{name} on {patient}'s paper is outside the range printed on it.",
+    "ms": "{name} dalam surat {patient} berada di luar julat yang tertulis padanya.",
+    "zh": "{patient}这份文件上的{name}超出了文件上印的范围。",
+}
+
+# @patient
+PAPER_VALUE_WHY: Mapping[str, str] = {
+    "en": "This is compared only with the range printed on this paper.",
+    "ms": "Ini dibandingkan hanya dengan julat yang tertulis pada surat ini.",
+    "zh": "这只是与这份文件上印的范围做比较。",
+}
+
+# @patient
+PAPER_VALUE_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This is compared only with the range printed on {patient}'s paper.",
+    "ms": "Ini dibandingkan hanya dengan julat yang tertulis pada surat {patient}.",
+    "zh": "这只是与{patient}这份文件上印的范围做比较。",
+}
+
+# @patient
+PAPER_REPEAT_LINE: Mapping[str, str] = {
+    "en": "This paper has a number outside its own printed range.",
+    "ms": "Surat ini mempunyai nombor di luar julat yang tertulis padanya.",
+    "zh": "这份文件上有一个数字超出了它自己印的范围。",
+}
+
+# @patient
+PAPER_REPEAT_LINE_THEIRS: Mapping[str, str] = {
+    "en": "{patient}'s paper has a number outside its own printed range.",
+    "ms": "Surat {patient} mempunyai nombor di luar julat yang tertulis padanya.",
+    "zh": "{patient}的这份文件上有一个数字超出了它自己印的范围。",
+}
+
+# @patient
+PAPER_REPEAT_WHY: Mapping[str, str] = {
+    "en": "This is only what this one paper shows, once.",
+    "ms": "Ini hanya apa yang ditunjukkan oleh surat ini, sekali sahaja.",
+    "zh": "这只是这一份文件一次的结果。",
+}
+
+# @patient
+PAPER_REPEAT_WHY_THEIRS: Mapping[str, str] = {
+    "en": "This is only what {patient}'s one paper shows, once.",
+    "ms": "Ini hanya apa yang ditunjukkan oleh surat {patient}, sekali sahaja.",
+    "zh": "这只是{patient}这一份文件一次的结果。",
+}
+
+# @patient phrase
+LOOKED_AT_LABEL: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "paper": "this paper",
+        "medicines": "{count} of your medicines",
+        "visit": "your next visit",
+    },
+    "ms": {
+        "paper": "surat ini",
+        "medicines": "{count} daripada ubat anda",
+        "visit": "lawatan anda seterusnya",
+    },
+    "zh": {
+        "paper": "这份文件",
+        "medicines": "您的{count}种药",
+        "visit": "您的下一次门诊",
+    },
+}
+"""What `looked_at` names on the paper-scoped insight (checkpoint 3): the plain label for
+each real read that actually happened, never a fixed list (`app.reasoning.analyst.paper`)."""
+
+# @patient phrase
+LOOKED_AT_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "paper": "this paper",
+        "medicines": "{count} of {patient}'s medicines",
+        "visit": "{patient}'s next visit",
+    },
+    "ms": {
+        "paper": "surat ini",
+        "medicines": "{count} daripada ubat {patient}",
+        "visit": "lawatan {patient} seterusnya",
+    },
+    "zh": {
+        "paper": "这份文件",
+        "medicines": "{patient}的{count}种药",
+        "visit": "{patient}的下一次门诊",
+    },
+}
+
+# @patient
+PAPER_STEP_LABEL: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "paper": "Looking at this paper.",
+        "medicines": "Looking at your medicines.",
+        "history": "Looking at what this paper's numbers were before.",
+        "visit": "Looking at your next visit.",
+    },
+    "ms": {
+        "paper": "Melihat surat ini.",
+        "medicines": "Melihat ubat anda.",
+        "history": "Melihat apa nombor dalam surat ini sebelum ini.",
+        "visit": "Melihat lawatan anda seterusnya.",
+    },
+    "zh": {
+        "paper": "正在查看这份文件。",
+        "medicines": "查看您的药物。",
+        "history": "查看这份文件上的数字以前是怎样的。",
+        "visit": "查看您的下一次门诊。",
+    },
+}
+"""One label per `app.reasoning.analyst.paper.PaperStepKey`, said the moment that real read
+finishes — the same "real work already happened" discipline `STEP_LABEL` above holds to."""
+
+# @patient
+PAPER_STEP_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "paper": "Looking at this paper.",
+        "medicines": "Looking at {patient}'s medicines.",
+        "history": "Looking at what this paper's numbers were before.",
+        "visit": "Looking at {patient}'s next visit.",
+    },
+    "ms": {
+        "paper": "Melihat surat ini.",
+        "medicines": "Melihat ubat {patient}.",
+        "history": "Melihat apa nombor dalam surat ini sebelum ini.",
+        "visit": "Melihat lawatan {patient} seterusnya.",
+    },
+    "zh": {
+        "paper": "正在查看这份文件。",
+        "medicines": "查看{patient}的药物。",
+        "history": "查看这份文件上的数字以前是怎样的。",
+        "visit": "查看{patient}的下一次门诊。",
+    },
+}
+
 # @patient
 WITHHELD_LINE: Mapping[str, str] = {
     "en": "{title} is not shown to you.",
@@ -409,6 +584,22 @@ __all__ = [
     "DUPLICATE_WHY",
     "DUPLICATE_WHY_THEIRS",
     "LANGUAGES",
+    "LOOKED_AT_LABEL",
+    "LOOKED_AT_LABEL_THEIRS",
+    "PAPER_HEADLINE",
+    "PAPER_HEADLINE_THEIRS",
+    "PAPER_NOTHING_LINE",
+    "PAPER_NOTHING_LINE_THEIRS",
+    "PAPER_REPEAT_LINE",
+    "PAPER_REPEAT_LINE_THEIRS",
+    "PAPER_REPEAT_WHY",
+    "PAPER_REPEAT_WHY_THEIRS",
+    "PAPER_STEP_LABEL",
+    "PAPER_STEP_LABEL_THEIRS",
+    "PAPER_VALUE_LINE",
+    "PAPER_VALUE_LINE_THEIRS",
+    "PAPER_VALUE_WHY",
+    "PAPER_VALUE_WHY_THEIRS",
     "SCREENING_LINE",
     "SCREENING_LINE_THEIRS",
     "SCREENING_NAME",

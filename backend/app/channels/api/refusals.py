@@ -151,6 +151,8 @@ from app.onboarding.biography import (
 from app.onboarding.biography import NoSuchQuestion as NoSuchBiographyQuestion
 from app.onboarding.plan import NoPlan, NoSuchPrompt, PromptAlreadySettled
 from app.onboarding.settings import NotTheirsToSetUp
+from app.reasoning.analyst.paper import NotAConfirmedPaper
+from app.reasoning.analyst.paper_service import NoPaperInsightYet
 from app.reasoning.analyst.service import NoReportYet
 from app.reasoning.feelings.service import AlreadyAnswered, NoSuchTap, NotAnAnswer
 from app.reasoning.signals import NotTheirsToSetSignals
@@ -261,6 +263,12 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     (NoState, 404),
     # The Health Analyst's weekly report (`app.reasoning.analyst`): nothing saved yet.
     (NoReportYet, 404),
+    # Checkpoint 3's paper-scoped insight (`app.reasoning.analyst.paper`): an unconfirmed
+    # card, another profile's artifact and a key without RECORDS all refuse the same way
+    # (`NotAConfirmedPaper`'s own reasoning); no insight has been generated for this paper yet
+    # (`NoPaperInsightYet`) is the same standing as `NoReportYet` above.
+    (NotAConfirmedPaper, 404),
+    (NoPaperInsightYet, 404),
     (NoWordsInThatLanguage, 404),
     # A stewarded profile has no patient to send the morning card to yet.
     (NoPatientYet, 404),

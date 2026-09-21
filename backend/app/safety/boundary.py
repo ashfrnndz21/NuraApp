@@ -315,14 +315,26 @@ BOUNDARY_THEIRS: Mapping[str, Mapping[str, tuple[str, str]]] = {
     "en": {
         "posture": ("Nura put your day in order.", "Nura put {patient}'s day in order."),
         "ask": ("Ask your doctor.", "Ask {patient}'s doctor."),
+        "insight": (
+            "Nura looked at your week and wrote this.",
+            "Nura looked at {patient}'s week and wrote this.",
+        ),
     },
     "ms": {
         "posture": ("Nura menyusun hari anda.", "Nura menyusun hari {patient}."),
         "ask": ("Tanya doktor anda.", "Tanya doktor {patient}."),
+        "insight": (
+            "Nura melihat minggu anda dan menulis ini.",
+            "Nura melihat minggu {patient} dan menulis ini.",
+        ),
     },
     "zh": {
         "posture": ("Nura 帮您把今天的事整理好了。", "Nura 帮{patient}把今天的事整理好了。"),
         "ask": ("问您的医生。", "问{patient}的医生。"),
+        "insight": (
+            "Nura 看了您这一周，写下了这个。",
+            "Nura 看了{patient}这一周，写下了这个。",
+        ),
     },
 }
 """Boundary lines that speak to him, each with its twin about him by name (line, twin)."""

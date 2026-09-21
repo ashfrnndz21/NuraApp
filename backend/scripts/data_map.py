@@ -1123,6 +1123,13 @@ CLASSES: dict[str, str] = {
     # Every section and insight the report holds: composed, already-verified text about his
     # week — health, the same standing as `trend_card.lines`.
     "insight_report.sections": HEALTH,
+    # The paper-scoped insight's own columns (0052, `app.reasoning.analyst.paper`): which
+    # paper it is about — a reference, the same standing as `fact.artifact_id` — and its
+    # headline and what was read, both composed, already-verified text, HEALTH the same as
+    # `sections` above. NULL on every weekly row.
+    "insight_report.artifact_id": IDENTIFIER,
+    "insight_report.headline": HEALTH,
+    "insight_report.looked_at": HEALTH,
     # Ask becomes a conversation (W2, `app.search.models`). Neither table holds a question's
     # or an answer's own words — those stay in the MESSAGE artefacts the two id columns below
     # point at (`event.artifact_id`'s own standing, HEALTH: a reference to health data). Who
