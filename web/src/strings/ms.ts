@@ -887,6 +887,8 @@ export const ms = {
     // @patient
     sourceVisits: "Ini datang dari lawatan anda ke doktor.",
     // @patient
+    sourceReviewCard: "Surat ini masih menunggu anda semak.",
+    // @patient
     askWithheld: "Sebahagian surat-surat ini tidak dibuka untuk anda.",
     // @patient
     askThinking: "Nura sedang mencari.",

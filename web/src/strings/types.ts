@@ -437,6 +437,7 @@ export interface Strings {
     sourcePapers: string;
     sourceMedicines: string;
     sourceVisits: string;
+    sourceReviewCard: string;
     askWithheld: string;
     askThinking: string;
     lookingForToday: string;

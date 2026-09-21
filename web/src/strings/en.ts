@@ -887,6 +887,8 @@ export const en = {
     // @patient
     sourceVisits: "This comes from your visits to the doctor.",
     // @patient
+    sourceReviewCard: "This paper is waiting for you to check.",
+    // @patient
     askWithheld: "Some of the papers are not open to you.",
     // @patient
     askThinking: "Nura is looking.",
