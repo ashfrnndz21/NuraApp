@@ -1,0 +1,262 @@
+/* The insurance passport (package 12a): new layout rules only — every surface, colour, radius,
+ * type size and motion number is the shared kit's own (`web/src/ui/kit`, `tokens.css`); nothing
+ * here re-declares a token. Kept in its own file, as its own new strings are kept in their own
+ * block, so this package's diff never touches a shared stylesheet another builder is also
+ * editing tonight. */
+
+/* The insurer name, then the state chip on its own line below it (independent review, package
+ * 12a fix round: the chip went from a short word ("In force") to a full neutral clause ("The
+ * policy says it runs to {date}"), which overlapped a long insurer name when the two shared a
+ * row — a `flex-shrink: 0` pill (`.flag-chip`, the shared kit class every flag in the app
+ * uses) never yields width back to its row, so it sat on top of the heading instead of
+ * wrapping under it. Stacked, and given room to wrap onto a second line itself, it never can
+ * again, whatever a policy's own dates say. */
+.insurance-passport-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.insurance-passport-head h2 {
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: var(--weight-title);
+}
+.insurance-passport-head .flag-chip {
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
+}
+.insurance-passport-sub {
+  margin: 0;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+
+/* Three real numbers from the ledger (claimed / paid by insurer / paid by you), this year only
+ * — never the blueprint's own placeholder "yearly limit" tile, which no field on `Policy`
+ * backs. */
+.insurance-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+.insurance-stats > div {
+  border-radius: var(--radius-badge);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 10px 6px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.insurance-stats b {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: var(--numeric);
+}
+.insurance-stats small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* The insurance boundary line (independent review, item 2): 12px under the passport card,
+ * the same 12px a section's own heading already keeps above its card — never touching the
+ * card above it, never crowding the first section's heading below it. */
+.insurance-boundary {
+  margin: 12px 0 0;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+
+/* Sections: "What it covers" / "What it does not cover" / "Benefits and limits" /
+ * "How to claim" — a heading, 12px above its card, 24px above the next section (the operator's
+ * own two rejection notes: headings touching cards, and sections crowding each other), and
+ * 12px under the boundary line above them (the operator's capture note on this round). */
+.insurance-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 12px;
+}
+.insurance-section-title {
+  margin: 0 0 12px;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-quiet);
+}
+.insurance-section-body p {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+/* The calm line a section shows when nothing is on file for it — never a placeholder, never a
+ * dash, never blank: named, the same discipline `why_sheet.py`'s withheld line already keeps. */
+.insurance-fallback {
+  opacity: 0.82;
+}
+
+/* Claims filed against this policy, restyled from the ledger (T2) already used elsewhere. */
+.insurance-claims {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.insurance-claim-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.insurance-claim-row .insurance-claim-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.insurance-claim-row b {
+  font-size: 15px;
+  font-weight: 500;
+}
+.insurance-claim-row small {
+  font-size: 11.5px;
+  opacity: 0.74;
+}
+.insurance-claim-row .insurance-claim-amount {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: var(--numeric);
+  flex-shrink: 0;
+}
+
+/* No policy yet: the orb, one quiet line, one action — centred, never a bare empty tile. */
+.insurance-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-4) var(--space-3);
+}
+.insurance-empty p {
+  margin: 0;
+  font-size: var(--text-body);
+  max-width: 30ch;
+}
+
+/* Two policies: each its own passport, never merged into one card. */
+.insurance-policies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* The paper bubble + status line while a policy is being read, before the report table takes
+ * over (`web/src/screens/onboarding/PaperReading.tsx`, reused unchanged). */
+.insurance-load {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* "Add this as your policy" (`ProposePolicy.tsx`), inside the shared `ActionSheet`: plain
+ * labelled fields, pre-filled from what was just confirmed, every one still his to change. */
+.insurance-propose-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.field-label {
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+  margin-top: var(--space-1);
+}
+.insurance-propose-fields input[type="text"] {
+  min-height: var(--target);
+  border-radius: var(--radius-badge);
+  border: var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--ink);
+  padding: 0 14px;
+  font-size: var(--text-body);
+  font-family: var(--font);
+}
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.pill-row .pill[aria-pressed="true"],
+.insurance-propose-fields .pill[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--ink-on-light, #2b2140);
+  border-color: var(--ink);
+}
+
+/* The essentials (package 12a): what covers/excludes/how-to-claim print, each line its own
+ * item — plain text, the page it came from named quietly beside it, never a link. */
+.insurance-essentials-list {
+  margin: 0;
+  padding: 0 0 0 1.1em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.insurance-essentials-list li {
+  font-size: var(--text-body);
+  line-height: 1.4;
+}
+.insurance-page {
+  margin-left: 6px;
+  font-size: 11.5px;
+  opacity: 0.68;
+  white-space: nowrap;
+}
+.insurance-essentials-more {
+  margin-top: 8px;
+}
+.insurance-essentials-more summary {
+  cursor: pointer;
+  font-size: var(--text-caption);
+  color: var(--plum, var(--ink));
+  min-height: var(--target);
+  display: flex;
+  align-items: center;
+}
+.insurance-essentials-more .insurance-essentials-list {
+  margin-top: 8px;
+}
+
+/* Benefits and limits: the item's own words left, its amount as printed right, tabular so a
+ * column of numbers lines up — never a total, never a sum across rows. */
+.insurance-benefits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.insurance-benefit-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.insurance-benefit-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+}
+.insurance-benefit-amount {
+  font-size: var(--text-body);
+  font-weight: 500;
+  font-variant-numeric: var(--numeric);
+  white-space: nowrap;
+}
+
+/* The silent-truncation notice (independent review, item 4): under the list it names, quiet
+ * but never hidden — the same "withheld, named" register `.insurance-fallback` already keeps. */
+.insurance-cut-notice {
+  margin: 8px 0 0;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}

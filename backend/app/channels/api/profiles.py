@@ -136,7 +136,7 @@ from app.ingestion.connectors.service import proposal_draft_for
 from app.ingestion.review import review_draft_for
 from app.insurance.claim import may_manage_a_claim
 from app.insurance.insurer import insurer_draft, may_set_insurer
-from app.insurance.policy import may_set_a_policy, policy_draft
+from app.insurance.policy import EssentialItem, may_set_a_policy, policy_draft
 from app.keys.confirm import confirm
 from app.keys.context import KeyContext, only_the_owner_while_closing, resolve_key_context
 from app.keys.grants import grant_key, key_change_draft_for, list_keys, may_cut_keys, revoke_key
@@ -150,6 +150,7 @@ from app.notes.service import list_notes, write_note
 from app.reasoning.visits.logistics import drive_draft_for
 from app.reasoning.visits.questions import question_draft_for
 from app.reasoning.visits.summary import summary_draft_for
+from app.regions import REGION_TZ
 from app.routines.service import routine_draft_for
 from app.safety.boundary import Surface, boundary_line
 from app.state.service import current_state
@@ -455,6 +456,16 @@ async def mint_confirmation(
             status=body.status,
             guarantee_letter=body.guarantee_letter,
             supersedes_id=body.supersedes_id,
+            plan=body.plan,
+            coverage_items=[EssentialItem(text=one.text, page=one.page) for one in body.coverage_items],
+            excludes=[EssentialItem(text=one.text, page=one.page) for one in body.excludes],
+            benefits=[EssentialItem(text=one.text, page=one.page) for one in body.benefits],
+            claim_steps=[EssentialItem(text=one.text, page=one.page) for one in body.claim_steps],
+            ends_on=body.ends_on,
+            waiting_period=body.waiting_period,
+            claims_contact=body.claims_contact,
+            review_card_id=body.review_card_id,
+            today=utcnow().astimezone(REGION_TZ[context.region]).date(),
         )
         return ConfirmationOut.of(await confirm(session, context, policy))
     if isinstance(body, InsuranceClaimConfirmIn):

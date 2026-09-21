@@ -64,15 +64,30 @@ export function effectiveValue(field: Pick<ReviewFieldOut, "value" | "state" | "
   return field.state === "corrected" && field.corrected_value != null ? field.corrected_value : field.value;
 }
 
+/** Control and bidi-override code points stripped from every field's display text
+ *  (independent review, package 12a fix round, item 6): the confirmation card renders
+ *  `displayValueText` with no sanitising at all before this, the one hostile surface this
+ *  package's own `sanitizeDisplayText` (`web/src/insurance/model.ts`) never reached — a bidi
+ *  override could show an exclusion line on the card he confirms in a different order than it
+ *  is actually kept. The same code points that sanitiser strips: zero-width (ZWSP/ZWNJ/ZWJ),
+ *  bidi override/embedding/isolate (LRM/RLM, LRE/RLE/PDF, LRO/RLO, LRI/RLI/FSI/PDI) and the
+ *  byte-order-mark. Applied here, in the one function every field on every report table reads
+ *  its display text through — not insurance-specific, since any paper's free text can carry a
+ *  hostile character, not only a policy's. */
+const DISPLAY_CONTROL_CHARS_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+const DISPLAY_BIDI_CONTROL_RE = /[\u00AD\u061C\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
 /** A field's display text, its own printed date read as a date in his language when the
  *  value is one (E02-07 library part A #3) — the paper's own words otherwise, exactly as
- *  `readableValueText` already shows them. */
+ *  `readableValueText` already shows them, with control and bidi-override code points
+ *  stripped (above). */
 export function displayValueText(value: unknown, s: Strings, locale: string): string {
   if (typeof value === "string") {
     const dated = fieldValueDate(value, locale);
     if (dated) return dated;
   }
-  return readableValueText(value, s);
+  const text = readableValueText(value, s);
+  return text.replace(DISPLAY_CONTROL_CHARS_RE, "").replace(DISPLAY_BIDI_CONTROL_RE, "");
 }
 
 /** Where a number sits against the paper's own printed range (never a judgement of ours,
@@ -170,6 +185,10 @@ export function decisionsFor(card: ReviewCardOut, edits: Record<string, FieldEdi
 /** A pharmacy receipt's line subjects are numbered in the order printed (`item_1`,
  *  `item_2`…) — every one of them shares one set of words (`s.onboarding.fields.item`). */
 const ITEM_SUBJECT = /^item_\d+$/;
+/** A policy essentials line (package 12a, `app/llm/prompts/extract_document.txt`): "covers_1",
+ *  "excludes_3", "benefit_2", "claim_step_4" — numbered in the order printed, the same way
+ *  `item_N` already collapses to one shared label ("item") rather than one label per number. */
+const ESSENTIAL_ATTRIBUTE = /^(covers|excludes|benefit|claim_step)_\d+$/;
 
 /** His words for the line: the canonical label for the backend's subject and attribute codes
  *  when Nura knows one; failing that, the paper's own words for the line (`label_on_paper` —
@@ -180,7 +199,9 @@ export function fieldLabel(
   s: Strings,
 ): string {
   const subject = ITEM_SUBJECT.test(field.subject) ? "item" : field.subject;
-  const known = s.onboarding.fields[subject]?.[field.attribute];
+  const essential = field.subject === "insurance_policy" ? field.attribute.match(ESSENTIAL_ATTRIBUTE) : null;
+  const attribute = essential ? essential[1]! : field.attribute;
+  const known = s.onboarding.fields[subject]?.[attribute];
   if (known) return known;
   const printed = field.label_on_paper?.trim();
   return printed && printed.length > 0 ? printed : s.onboarding.records.otherLine;
@@ -440,6 +461,14 @@ export function reportRow(field: ReviewFieldOut, s: Strings, locale = "en-SG"): 
  *  subject: the same test rows `readingTally` already counts as "parsable". */
 export function isResultRow(row: Pick<ReportRowView, "unit" | "geometry" | "rangeText">): boolean {
   return row.unit != null || row.geometry != null || row.rangeText != null;
+}
+
+/** Whether a card has even one numeric result row at all (a unit, a range) — the report
+ *  table's own fix-button reads "Fix a number" only when there is one to fix; a card of pure
+ *  words (a policy, a letter, a prescription) instead says "Fix something" (package 12a, item
+ *  10), the same distinction `reportSections`'s own folding already keys off. */
+export function hasNumericResults(card: Pick<ReviewCardOut, "fields">, s: Strings, locale = "en-SG"): boolean {
+  return card.fields.some((field) => isResultRow(reportRow(field, s, locale)));
 }
 
 /** The kinds of paper that are a table of results, where the rest is only about the paper. */

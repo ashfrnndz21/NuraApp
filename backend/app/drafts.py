@@ -547,6 +547,22 @@ class PolicyDraft:
     status: str
     guarantee_letter: bool
     supersedes_id: uuid.UUID | None
+    plan: str | None = None
+    # The essentials (package 12a), as read off the policy's own pages: each a tuple of
+    # `{"text": str, "page": int | None}` dicts, already capped and cleaned
+    # (`app.insurance.policy.policy_draft`/`_clean_essentials`) by the time a draft holds one.
+    coverage_items: tuple[dict[str, Any], ...] = ()
+    excludes: tuple[dict[str, Any], ...] = ()
+    benefits: tuple[dict[str, Any], ...] = ()
+    claim_steps: tuple[dict[str, Any], ...] = ()
+    ends_on: date | None = None
+    waiting_period: str | None = None
+    claims_contact: str | None = None
+    review_card_id: uuid.UUID | None = None
+    # Which of the four essentials lists above were actually cut at `ESSENTIAL_LIST_CAP`
+    # (`app.insurance.policy._clean_essentials`) — computed from the same lists this draft
+    # already carries, so it is bound by the same yes rather than a separate, untrusted claim.
+    essentials_cut: tuple[str, ...] = ()
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -569,6 +585,16 @@ class PolicyDraft:
             "status": self.status,
             "guarantee_letter": self.guarantee_letter,
             "supersedes_id": self.supersedes_id,
+            "plan": self.plan,
+            "coverage_items": self.coverage_items,
+            "excludes": self.excludes,
+            "benefits": self.benefits,
+            "claim_steps": self.claim_steps,
+            "ends_on": self.ends_on,
+            "waiting_period": self.waiting_period,
+            "claims_contact": self.claims_contact,
+            "review_card_id": self.review_card_id,
+            "essentials_cut": self.essentials_cut,
         }
 
 

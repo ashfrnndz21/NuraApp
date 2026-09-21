@@ -658,6 +658,21 @@ export interface ChangesOut {
 
 export type PolicyType = "hospital" | "outpatient" | "critical_illness" | "government_scheme";
 export type PolicyStatus = "active" | "lapsed" | "cancelled";
+/** The passport's own quiet state chip (package 12a, E13-04): computed server-side on the
+ *  profile's own wall-clock day (`app.insurance.policy.policy_period_state`) — never inferred
+ *  here from `renewal_date`/`ends_on` and the device's own clock, and never a claim that cover
+ *  is currently valid: `runs_to` says only what the date on file says, `ended` only that it
+ *  has passed, `undated` draws no chip at all. */
+export type PolicyPeriodState = "runs_to" | "ended" | "undated";
+
+/** One line of what a policy covers, does not cover, a benefit, or a step to claim — exactly
+ *  as its own pages print it, with the page it was read on (package 12a). Extractor-written
+ *  text: every caller renders `text` as a plain string only (`sanitizeDisplayText`), never
+ *  markup, never a link — true before confirmation and still true once it is his record. */
+export interface EssentialItemOut {
+  text: string;
+  page: number | null;
+}
 
 /** One policy on his profile (E13-03, `GET /profiles/{id}/insurance/policies`), the newest of
  *  its lineage — never edited, only ever superseded (`app.insurance.policy`). */
@@ -676,6 +691,61 @@ export interface PolicyOut {
   supersedes_id: string | null;
   set_by_person_id: string;
   set_at: string;
+  period_state: PolicyPeriodState;
+  period_state_said: string;
+  /** The one date `period_state`/`period_state_said` were computed from (`ends_on` when the
+   *  policy prints one, else `renewal_date`) — the passport's own period line reads the SAME
+   *  date from here, never recombining `start_date`/`ends_on` itself (independent review,
+   *  note 9: the chip and the card once showed two different dates for the same policy). */
+  period_state_date: string | null;
+  /** The plan's own name, exactly as printed ("Hospital Shield") — its own field, never
+   *  folded into `covers`. */
+  plan: string | null;
+  /** The essentials (package 12a), as the policy's own pages print them — never invented,
+   *  never computed: an empty list means the pages given did not carry that section, shown as
+   *  the one calm line, never a placeholder. */
+  coverage_items: EssentialItemOut[];
+  excludes: EssentialItemOut[];
+  benefits: EssentialItemOut[];
+  claim_steps: EssentialItemOut[];
+  /** Which of the four lists above this policy's own write actually cut at the backend's own
+   *  cap — empty when none were, never inferred here from a list's own length (independent
+   *  review, item 4). */
+  essentials_cut: string[];
+  ends_on: string | null;
+  waiting_period: string | null;
+  claims_contact: string | null;
+  /** The confirmed review card the essentials were read from, when there is one — "See the
+   *  policy itself" reads it through the existing `reviewCardArtifact` call, under that
+   *  route's own scope, not a new one. */
+  review_card_id: string | null;
+}
+
+/** A policy as typed, on a yes minted for exactly these fields (subject `"policy"`,
+ *  `POST /profiles/{id}/confirmations`, then `POST /profiles/{id}/insurance/policies` with the
+ *  `confirmation_id` it returns) — the same field set both calls carry, so the yes always binds
+ *  to exactly what is about to be written (`app.insurance.policy.policy_draft`). */
+export interface PolicyDraftFields {
+  insurer_name: string;
+  policy_reference: string | null;
+  policy_type: PolicyType;
+  covered: string | null;
+  covers: string | null;
+  start_date: string | null;
+  renewal_date: string | null;
+  premium_due_date: string | null;
+  status: PolicyStatus;
+  guarantee_letter: boolean;
+  supersedes_id?: string | null;
+  plan?: string | null;
+  coverage_items?: EssentialItemOut[];
+  excludes?: EssentialItemOut[];
+  benefits?: EssentialItemOut[];
+  claim_steps?: EssentialItemOut[];
+  ends_on?: string | null;
+  waiting_period?: string | null;
+  claims_contact?: string | null;
+  review_card_id?: string | null;
 }
 
 /** A typical fee range's own source (T3): who published it, the page, and the day it was

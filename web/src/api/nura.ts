@@ -78,6 +78,7 @@ import type {
   PaperInsightStreamEvent,
   PlaceNoteOut,
   PlanOut,
+  PolicyDraftFields,
   PolicyOut,
   ProfileOut,
   ProposedVisitsOut,
@@ -301,9 +302,32 @@ export const proud = (token: string, profileId: string) =>
   api<ProudOut>(`/profiles/${profileId}/proud`, { token });
 
 /** His policies (E13-03): every one on the profile, newest of each lineage — under
- *  `Scope.MONEY`, the door already reserved for his insurance letters. */
-export const policies = (token: string, profileId: string) =>
-  api<PolicyOut[]>(`/profiles/${profileId}/insurance/policies`, { token });
+ *  `Scope.MONEY`, the door already reserved for his insurance letters. `language` picks which
+ *  language `period_state_said` (package 12a's passport state chip) is said in; left off, the
+ *  backend's own default (English) is used. */
+export const policies = (token: string, profileId: string, language?: string) =>
+  api<PolicyOut[]>(`/profiles/${profileId}/insurance/policies`, { token, query: { language } });
+
+/** A yes to a policy exactly as typed (package 12a, "Add this as your policy"): new, or a
+ *  correction of one already held (`supersedes_id`). The confirmation must carry the exact
+ *  fields `writePolicy` is about to send — `app.insurance.policy.policy_draft` rebuilds the
+ *  draft from the write call and refuses a yes minted for anything else. */
+export const mintPolicyYes = (token: string, profileId: string, draft: PolicyDraftFields) =>
+  api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {
+    method: "POST",
+    token,
+    body: { subject: "policy", ...draft },
+  });
+
+/** Write the policy down — new, or a correction of one already held — on the yes just minted.
+ *  Never called with fields that were not part of that same yes (`mintPolicyYes`). */
+export const writePolicy = (token: string, profileId: string, draft: PolicyDraftFields, confirmation_id: string, language?: string) =>
+  api<PolicyOut>(`/profiles/${profileId}/insurance/policies`, {
+    method: "POST",
+    token,
+    query: { language },
+    body: { ...draft, confirmation_id },
+  });
 
 /** Every visit Nura proposes right now (T2, `app.reasoning.visits.planner`), cited, in the
  *  profile's own language unless one is named — never a booking. */

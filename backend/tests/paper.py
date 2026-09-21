@@ -74,7 +74,12 @@ CLINIC_LETTER_HYPERTENSION = "clinic-letter-hypertension-2026-09-12"
 """A clinic slip naming a condition in the clinician's own words, 12 September 2026."""
 
 INSURANCE_POLICY = "insurance-policy-2026-09-13"
-"""A policy schedule, 13 September 2026."""
+"""A policy schedule, 13 September 2026, with its own covers/excludes/benefits/how-to-claim
+essentials (package 12a)."""
+
+INSURANCE_POLICY_NO_EXCLUSIONS = "insurance-policy-no-exclusions-2026-09-20"
+"""A second, shorter policy schedule, 20 September 2026, whose pages print no exclusions
+section at all (package 12a) — the one calm line must show for that section only."""
 
 INSURANCE_CLAIM = "insurance-claim-2026-09-14"
 """A claim letter, 14 September 2026."""

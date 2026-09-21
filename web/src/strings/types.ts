@@ -566,9 +566,71 @@ export interface Strings {
     type: Record<"hospital" | "outpatient" | "critical_illness" | "government_scheme", string>;
     status: Record<"active" | "lapsed" | "cancelled", string>;
     covers: string;
+    covered: string;
     renews: string;
     premiumDue: string;
     reference: string;
+    /** The passport (package 12a): loading a policy paper, the four sections built from what
+     *  is really on the record, and the claims filed against it — a clearly separate block so
+     *  this package's strings never collide with another builder's edit to the block above. */
+    passport: {
+      coversTitle: string;
+      excludesTitle: string;
+      benefitsTitle: string;
+      claimTitle: string;
+      /** Two short lines, never one two-idea sentence (plain-words rule 2) — the calm line
+       *  every section shows when nothing is on file for it. */
+      notFound: readonly [string, string];
+      noPaperYet: readonly [string, string];
+      worksByGuaranteeLetter: string;
+      claimedThisYear: string;
+      paidByInsurer: string;
+      paidByPatient: string;
+      claimsTitle: string;
+      addPolicy: string;
+      loadTitle: string;
+      proposeTitle: string;
+      proposeSub: string;
+      policyTypeLabel: string;
+      proposeCta: string;
+      proposeCtaBusy: string;
+      proposeCtaDone: string;
+      notAPolicy: readonly [string, string];
+      savedAsPaper: string;
+      /** "From {date}" / "to {date}" — the passport card's own period line, built from the
+       *  confirmed start/end dates, never a free-text guess. */
+      periodFrom: string;
+      periodTo: string;
+      /** "p. {page}" — the quiet page marker after an essentials line. */
+      pageMarker: string;
+      /** "Show all {n}" — the disclosure under the first five lines of a longer section. */
+      showAllN: string;
+      whoToContact: string;
+      seePolicyItself: string;
+      /** The insurance-specific safety line (item 10): two short lines, replacing the report
+       *  table's lab-oriented "ranges are printed" line for an insurance kind only. Written
+       *  impersonally (never "your"/"his") so the same line is correct read to him or about
+       *  him, the same register `app.insurance.strings`' own lines already keep. */
+      confirmSafety: readonly [string, string, string];
+      /** "Fix something" — the report table's fix-hint pill, for a card with no numeric
+       *  result rows at all (a policy, a letter), in place of "Fix a number". */
+      fixSomething: string;
+      /** Two short lines, never one two-idea sentence (plain-words rule 2): "Nura read the
+       *  first {n} lines of this section." / "There may be more on the policy." — shown under
+       *  any essentials section a write actually cut at the backend's own cap
+       *  (`PolicyOut.essentials_cut`), and the same two lines again on the confirmation card
+       *  when any section would be cut once saved (independent review, package 12a fix round,
+       *  item 4) — never inferred from a list's own length. */
+      essentialsCutNotice: readonly [string, string];
+      /** "Waiting time: {text}" — the passport's own label for the printed waiting-period
+       *  line, so it reads as a labelled fact rather than a bare, unexplained sentence
+       *  (independent review, operator capture note). */
+      waitingPeriodLabel: string;
+      /** "As typed" — the small label under a covers/covered line shown from the policy's own
+       *  typed word (`Policy.covers`) rather than a paper's essentials list, so the two
+       *  sources are never confused for one another (independent review, item 3). */
+      typedLabel: string;
+    };
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The
    *  logistics card, the notice, the words for a no and the post-visit card are the backend's. */

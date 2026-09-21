@@ -678,6 +678,18 @@ class InsurerConfirmIn(BaseModel):
     policy_reference: str | None = Field(default=None, min_length=1, max_length=40)
 
 
+class PolicyEssentialItemIn(BaseModel):
+    """One line of what a policy covers, does not cover, a benefit, or a step to claim —
+    the same shape `app.insurance.policy.EssentialItem` keeps once confirmed. `page` is
+    bounded (independent review, package 12a fix round, item 8): a real policy is a few
+    hundred pages at most, so `le=2000` is generous headroom, never a real page number this
+    far out — the same bound `app.channels.api.insurance_schemas.EssentialItemIn` keeps for
+    the policy-write route's own input."""
+
+    text: str = Field(min_length=1, max_length=200)
+    page: int | None = Field(default=None, ge=1, le=2000)
+
+
 class PolicyConfirmIn(BaseModel):
     """A yes to a policy exactly as typed (E13-03): new, or a correction of one already held
     (`supersedes_id`). The owner's decision: this door is money, not the emergency card's
@@ -695,6 +707,15 @@ class PolicyConfirmIn(BaseModel):
     status: PolicyStatus
     guarantee_letter: bool = False
     supersedes_id: uuid.UUID | None = None
+    plan: str | None = Field(default=None, min_length=1, max_length=120)
+    coverage_items: list[PolicyEssentialItemIn] = []
+    excludes: list[PolicyEssentialItemIn] = []
+    benefits: list[PolicyEssentialItemIn] = []
+    claim_steps: list[PolicyEssentialItemIn] = []
+    ends_on: date | None = None
+    waiting_period: str | None = Field(default=None, min_length=1, max_length=200)
+    claims_contact: str | None = Field(default=None, min_length=1, max_length=200)
+    review_card_id: uuid.UUID | None = None
 
 
 class InsuranceClaimConfirmIn(BaseModel):
