@@ -113,3 +113,6 @@ the doctor. Body text 15px or larger, contrast 4.5:1. Three languages and the ca
 |---|---|---|---|---|
 | 2026-09-21 | Build started: phase 1, feed lock fix and the spec running | | | |
 | 2026-09-21 | Blueprint v3: the Add a medicine scene (photo, screenshot, text or voice) | | | Approved: "yes exactly this" |
+| 2026-09-21 | Build spec written (#290) | 12 min | | |
+| 2026-09-21 | Checkpoint 6, part: feed database-lock fix (#291) | 52 min | | Operator's live test with real searches on: 300 other requests during a 7-minute run, slowest 0.9 s, none failed, no lock errors. Every search was refused by the API (credit balance exhausted: 3 calls succeeded, 45 refused), and the fix marked the jobs failed and retried them up to three times as designed. Under independent review. |
+| 2026-09-21 | Checkpoint 2, data: labels, ranges on their results, no blank lines (#292) | 43 min | | Under independent safety review. |
