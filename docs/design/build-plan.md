@@ -77,8 +77,15 @@ Needs the written spec, **which country comes first**, and **your real papers wi
   overwritten.
 - **7b Policy passport** (scene 11). You test: your own policy PDF. Passes when every line shows the right page and
   nothing says you are covered, only what the policy says.
-- **7c Medicine registry** (scene 12). You test: a prescription, a label photo and a receipt for the same medicine
-  under two names. Passes when it becomes one medicine and one question for the pharmacist.
+- **7c Medicine registry** (scene 12). A medicine can be added by a photo or screenshot of the box, strip or label, or by
+  typing or saying it. Each entry records: the name as printed, the real medicine name from the licensed register,
+  strength, form, pack size, what it is for in plain words from the register (never made up), dose as written,
+  prescriber, pharmacy, date and expiry when printed or told, how it was added with the source kept, status, supply
+  left, and the high-risk tag. Nura reads printed text only and never names a medicine it cannot read: a box that
+  says only "STATIN 40 mg, 28 tablets" records 40 mg, tablets and 28, and asks which statin it is. You test: a
+  prescription, a label photo and a receipt for the same medicine under two names, a box photo with only a family
+  name on it, and one medicine typed in. Passes when they become the right entries, the unnamed one asks, and the
+  duplicate becomes one medicine and one question for the pharmacist.
 - **7d Everything connected** (scene 13). You test: open any result. Passes when every door leads somewhere real.
 Independent safety reviews of matching, medicines, and policy and money come before each of these reaches you.
 
