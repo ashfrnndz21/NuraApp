@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { focusHeading } from "../ui/focus";
 import { EmergencyCard } from "./Emergency";
 import type { KeptCard } from "../offline/emergencyCache";
@@ -489,9 +489,17 @@ function useHomeHero(v: TodayView, patientName: string, voice: HomeVoice) {
   const state = homeState({ flagged, act, topItem });
   // E15-04: a new screen starts at its heading. Home's heading only settles once the decision
   // is made — the header's question when busy, the large greeting when quiet — and the header
-  // is redrawn as it does, so the focus `app.tsx` gave the first one is lost. Give it again.
+  // is redrawn as it does, so the focus `app.tsx` gave the first one is lost. Give it again —
+  // ONCE, the first time Home is ready, and never after he has moved focus himself: a refresh
+  // that changes the state while he is tabbing through the page must not throw him back to
+  // the top (the a11y walk caught exactly that: "Your emergency card → How are you today?").
+  const headingGiven = useRef(false);
   useEffect(() => {
-    if (ready) focusHeading();
+    if (!ready || headingGiven.current) return;
+    headingGiven.current = true;
+    const active = document.activeElement;
+    const untouched = !active || active === document.body || active.closest("main h1, main h2") !== null;
+    if (untouched) focusHeading();
   }, [ready, state]);
   // The two rows under the insight card are a different, always-actionable fact each — never
   // the same fact the headline already gave: the dose row only when the headline is not
