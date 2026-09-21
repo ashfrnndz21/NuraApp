@@ -790,6 +790,48 @@ def test_the_reader_keeps_a_backwards_range_as_words_with_no_bounds() -> None:
     assert fine is not None and (fine.low, fine.high) == (3.5, 5.5)
 
 
+async def test_a_lab_report_that_prints_a_blood_pressure_confirms_and_both_numbers_are_read(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """#303 final check, NEW-4: `_write_lab_readings` paired the two numbers by SUBJECT alone,
+    so both collapsed onto "blood_pressure", the pair was never found, and confirming any lab
+    report that prints a blood pressure raised `KeyError: ('blood_pressure', 'systolic')`. No
+    lab fixture carried one. Confirmed, the pair is ONE reading fact, and the insight reads each
+    number against its own printed range (both out → the aggregate question, asked once)."""
+    import dataclasses
+
+    from app.ingestion.extract import PrintedRange
+
+    class _WithABloodPressure:
+        external_processor = None
+
+        async def extract(self, data: bytes, content_type: str, hints: Any) -> Any:
+            read = await extractor.extract(data, content_type, hints)
+            sugar = next(one for one in read.fields if one.attribute == "glucose")
+            top = dataclasses.replace(
+                sugar, subject="blood_pressure", attribute="systolic", value=168, unit="mmHg",
+                range=PrintedRange(90.0, 140.0, "90 - 140"),
+            )
+            bottom = dataclasses.replace(
+                sugar, subject="blood_pressure", attribute="diastolic", value=96, unit="mmHg",
+                range=PrintedRange(60.0, 90.0, "60 - 90"),
+            )
+            return dataclasses.replace(read, fields=(*read.fields, top, bottom))
+
+    owner = await pa(sg, phone="+6591160078")
+    card, fields = await _card(sg, owner, store, _WithABloodPressure(), LAB_REPORT_VITALS)  # type: ignore[arg-type]
+    decisions = _decide(fields)
+    yes = await _yes(sg, owner, card, decisions)
+    from app.ingestion.review import confirm_review_card
+
+    card, _decided, _facts = await confirm_review_card(
+        sg, context=owner, card_id=card.id, decisions=decisions, confirmation_id=yes
+    )  # raised KeyError before the fix
+    result = await _drain(sg, owner, card.artifact_id)
+    said = [question.text for question in result.questions]
+    assert any("of my numbers outside the range" in text for text in said), said
+
+
 async def test_a_vital_outside_its_printed_range_is_asked_about_never_called_nothing(
     sg: AsyncSession, store: LocalObjectStore, extractor
 ) -> None:
