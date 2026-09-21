@@ -314,6 +314,12 @@ class ClaudeSearcher:
     model asked to stay on a list is not the same guarantee as a caller that never returns a
     page off it, or a page whose text did not come from where its URL says it did."""
 
+    external_processor: str | None = "anthropic"
+    """Every real call sends the job's kind and terms — and, once a page is found, its own
+    text — to Anthropic's API (`search.search_and_compress` writes the
+    `EXTERNAL_MODEL_PROCESSOR` audit line for it, once per job, whether or not the call
+    then succeeds)."""
+
     def __init__(
         self,
         *,
@@ -417,6 +423,10 @@ class ClaudeCompressor:
     lines came from. `search.run_job` still rejects an empty citation, still reroutes a line
     that would change treatment, and still runs every line through the plain-words verifier —
     nothing here is trusted past those checks."""
+
+    external_processor: str | None = "anthropic"
+    """Every real call sends a found page's text and the profile's grounding facts to
+    Anthropic's API — see `ClaudeSearcher.external_processor`, the same rule."""
 
     def __init__(
         self,

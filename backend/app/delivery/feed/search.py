@@ -76,6 +76,7 @@ from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
 from app.drugs.registry import DrugRegistry, LabelFields, UnknownDrug
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
+from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
@@ -455,6 +456,13 @@ class SearchOutcome:
     for a retry (#297 defect 2). Whatever candidates were already compressed before the
     failure are still written as real cards; only the job's own status reflects the failure,
     so a retry never remakes them (`existing` already carries their dedupe keys by then)."""
+    external_processor: str | None = None
+    """The label of the external model processor this job actually reached, once, the first
+    time either port made a real call with something to send it (#291 review, REQUIRED 3) —
+    `None` for a fixture engine, or when nothing was ever sent (no usable domains). Set
+    whether or not that call then succeeded: a failed call still left the bytes with the
+    processor. `write_job_results` writes the one `EXTERNAL_MODEL_PROCESSOR` audit line for
+    it, in its own short unit of work."""
 
 
 async def search_and_compress(
@@ -491,6 +499,12 @@ async def search_and_compress(
     day = around.day
     domains = prep.domains
     rejected: list[dict[str, str]] = []
+    # #291 review, REQUIRED 3: the label of whichever port actually reaches outside the
+    # region first, this job — read defensively (`getattr`), so a test double that predates
+    # this attribute is still `None`, never an error.
+    reached: str | None = None
+    if domains and getattr(engine.searcher, "external_processor", None) is not None:
+        reached = engine.searcher.external_processor
     try:
         # `Searcher.search` is a synchronous port (the real adapter's own `messages.create`
         # call, `ClaudeSearcher._ask`), so awaiting it directly would block this event loop —
@@ -508,6 +522,7 @@ async def search_and_compress(
             domains=domains,
             reasons=[],
             failed_because=f"search_failed:{failed}",
+            external_processor=reached,
         )
     reasons: list[str] = []
     if job.kind is JobKind.LOCAL:
@@ -562,6 +577,8 @@ async def search_and_compress(
             # for why that reordering is safe: the key never depended on the compressed
             # text, only on the job, the page and its season, all already known here).
             continue
+        if reached is None and getattr(engine.compressor, "external_processor", None) is not None:
+            reached = engine.compressor.external_processor
         try:
             # Same reason as the search call above: `Compressor.compress` is synchronous too
             # (the real adapter's own model call), so it also runs off-thread.
@@ -575,6 +592,7 @@ async def search_and_compress(
                 domains=domains,
                 reasons=reasons,
                 failed_because=f"compress_failed:{failed}",
+                external_processor=reached,
             )
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
@@ -585,7 +603,11 @@ async def search_and_compress(
         seen.add(key)
         candidates.append(_Candidate(found=found, compressed=compressed, season=season, key=key))
     return SearchOutcome(
-        candidates=tuple(candidates), rejected=rejected, domains=domains, reasons=reasons
+        candidates=tuple(candidates),
+        rejected=rejected,
+        domains=domains,
+        reasons=reasons,
+        external_processor=reached,
     )
 
 
@@ -613,11 +635,28 @@ async def write_job_results(
     Writes the job's own `status`/`last_run_at`/`results` at the end: `FAILED`, not `DONE`,
     when `outcome.failed_because` is set, so `due` (#297 defect 2) leaves it due for a retry
     instead of writing it down as looked at and done.
+
+    Also writes the one `EXTERNAL_MODEL_PROCESSOR` audit line this job earns, when
+    `outcome.external_processor` is set — once, whether the job ends `DONE` or `FAILED`: a
+    failed call still left the job's terms, or a page's text, with the processor (#291
+    review, REQUIRED 3; the brief's own "do NOT drop the EXTERNAL_MODEL_PROCESSOR share
+    entry" — the feed's searcher and compressor never wrote one before this).
     """
     code = language_for(language)
     day = around.day
     moment = utcnow()
     reasons = outcome.reasons
+    if outcome.external_processor is not None:
+        await record(
+            session,
+            context=context,
+            action=Action.SHARE,
+            scope=Scope.RECORDS,
+            target=EXTERNAL_MODEL_PROCESSOR,
+            target_id=job.id,
+            rows=1,
+            shared_with_label=outcome.external_processor,
+        )
     made: list[FeedItem] = []
     questions: list[FeedItem] = []
     rejected: list[dict[str, str]] = list(outcome.rejected)

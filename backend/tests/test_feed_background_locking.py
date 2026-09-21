@@ -17,12 +17,15 @@ import asyncio
 import logging
 import tempfile
 import threading
+import uuid
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app.channels.api import Providers, create_app
 from app.channels.whatsapp.provider import FixtureProvider
@@ -30,7 +33,9 @@ from app.db import Base, make_engine, make_session_factory
 from app.delivery.feed import background as feed_background
 from app.delivery.feed.clips import FixtureClipRenderer
 from app.delivery.feed.compress import FixtureCompressor, FixtureSearcher, Found, Searcher
+from app.delivery.feed.models import CardType, FeedItem
 from app.drugs.fixture import FixtureRegistry
+from app.identity.closure_models import AccountClosure
 from app.identity.providers import LoggingCodeSender
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
@@ -244,3 +249,106 @@ async def test_a_released_job_still_makes_its_card_on_a_real_file_db() -> None:
         assert settled["jobs"]["state"] == "done"
         learning = [item for item in settled["items"] if item["type"] == "learning"]
         assert learning, "the job's own card landed once its phases all ran"
+
+
+async def test_a_pause_during_the_blocked_search_is_never_undone() -> None:
+    """#291 review, REQUIRED 1: `session.merge()`ing the job object carried across the network
+    wait copies every one of its load-time column values onto the fresh row —
+    `expire_on_commit=False` means that object never lost its stale `enabled=True`, so a pause
+    `pause_job` wrote while the search was blocked was silently overwritten back to `True` by
+    phase 3's write, with no error and no trail. `run_job` now re-fetches the job fresh by id
+    (`session.get`, never `.merge`) and skips writing cards for it when it comes back paused."""
+    gate = threading.Event()
+    async with _served_on_a_real_file(gate) as deployment:
+        pa = await register_by_phone(deployment, PA, "Pa")
+        profile_id = await own_profile(deployment, pa)
+        await _reading(deployment, profile_id, pa["token"], 138, 84)
+
+        started = await _feed(deployment, profile_id, pa["token"])
+        assert started["jobs"]["state"] == "looking"
+        for _ in range(50):
+            if deployment.searcher.calls:
+                break
+            await asyncio.sleep(0.05)
+        assert deployment.searcher.calls, "the background job never reached the searcher"
+
+        listed = await deployment.client.get(
+            f"/profiles/{profile_id}/search-jobs", headers=bearer(pa["token"])
+        )
+        assert listed.status_code == 200, listed.text
+        [job] = listed.json()
+        job_id = job["job_id"]
+
+        paused = await deployment.client.patch(
+            f"/profiles/{profile_id}/search-jobs/{job_id}",
+            json={"enabled": False},
+            headers=bearer(pa["token"]),
+        )
+        assert paused.status_code == 200, paused.text
+        assert paused.json()["enabled"] is False
+
+        gate.set()
+        await feed_background.drain()
+
+        after = await deployment.client.get(
+            f"/profiles/{profile_id}/search-jobs", headers=bearer(pa["token"])
+        )
+        [job_after] = after.json()
+        assert job_after["enabled"] is False, (
+            "a pause made while the job was mid-search must never be undone by its own "
+            "phase-3 write"
+        )
+
+        settled = await _feed(deployment, profile_id, pa["token"])
+        learning = [item for item in settled["items"] if item["type"] == "learning"]
+        assert not learning, "no cards are written for a job that came back paused"
+
+
+async def test_a_closing_account_during_the_blocked_search_writes_no_card() -> None:
+    """#291 review, REQUIRED 2: phase 3 must re-validate at write time, not trust the context
+    it carried across the wait — an account that started closing while the search was
+    blocked must refuse the write, the same as `resolve_key_context` already refuses any
+    other reach to a closing account. `run_job` re-resolves the context fresh in phase 3
+    (`resolve_key_context`) for exactly this."""
+    gate = threading.Event()
+    async with _served_on_a_real_file(gate) as deployment:
+        pa = await register_by_phone(deployment, PA, "Pa")
+        profile_id = await own_profile(deployment, pa)
+        await _reading(deployment, profile_id, pa["token"], 138, 84)
+
+        started = await _feed(deployment, profile_id, pa["token"])
+        assert started["jobs"]["state"] == "looking"
+        for _ in range(50):
+            if deployment.searcher.calls:
+                break
+            await asyncio.sleep(0.05)
+        assert deployment.searcher.calls, "the background job never reached the searcher"
+
+        # Closed directly at the database, mid-search: the full closure flow (preview,
+        # confirm) is not what this test is about — only that phase 3 notices, fresh, that
+        # the account is now closing.
+        async with deployment.sessions() as session:
+            session.add(
+                AccountClosure(
+                    profile_id=uuid.UUID(profile_id),
+                    requested_by_person_id=uuid.UUID(pa["person_id"]),
+                    delete_after=datetime.now(UTC) + timedelta(days=30),
+                )
+            )
+            await session.commit()
+
+        gate.set()
+        await feed_background.drain()
+
+        # The run itself never crashes or hangs on the closing account — it settles, with
+        # nothing written for the job whose write phase found the account closing.
+        async with deployment.sessions() as session:
+            items = (
+                await session.scalars(
+                    select(FeedItem).where(
+                        FeedItem.profile_id == uuid.UUID(profile_id),
+                        FeedItem.type == CardType.LEARNING,
+                    )
+                )
+            ).all()
+        assert not items, "no card is ever written once the account started closing mid-run"

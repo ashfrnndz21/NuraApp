@@ -67,6 +67,14 @@ class PortUnavailable(Exception):
 
 
 class Searcher(Protocol):
+    external_processor: str | None
+    """None for a searcher that never leaves the region (the fixture); a short name (e.g.
+    "anthropic") for one whose terms and domains go to a third-party model processor outside
+    it, so `search.search_and_compress` can write that reach down (`app.ingestion.review.
+    EXTERNAL_MODEL_PROCESSOR`, the same line `Extractor`/`Narrator`/`Asker` already carry)
+    without importing the adapter itself. Read defensively (`getattr(..., None)`) by callers,
+    so a test double that predates this need not declare it."""
+
     def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
         """Pages for these terms, from these domains only. Never a page from anywhere else."""
         ...
@@ -95,6 +103,10 @@ class Compressed:
 
 
 class Compressor(Protocol):
+    external_processor: str | None
+    """The same meaning as `Searcher.external_processor`, for the page text and the facts a
+    compressor grounds on."""
+
     def compress(self, text: str, language: str, facts: Mapping[str, Any]) -> Compressed | None:
         """The lines for this page and this person, or None when there is nothing for him."""
         ...
@@ -154,6 +166,9 @@ class FixtureSearcher:
     text}]}`. A page whose domain is not among the domains asked for is never returned, so
     the fixture cannot smuggle a source past the allowlist either."""
 
+    external_processor: str | None = None
+    """Answers from a file on disk; nothing ever leaves the region."""
+
     def __init__(self, root: Path) -> None:
         self._root = root
 
@@ -206,6 +221,9 @@ class FixtureCompressor:
     why_topic, passage, start_sec?, end_sec?}}`. No file, or no entry in the language, is
     "nothing for him". The `facts` are ignored by the fixture; the real adapter grounds on
     them."""
+
+    external_processor: str | None = None
+    """Answers from a file on disk; nothing ever leaves the region."""
 
     def __init__(self, root: Path) -> None:
         self._root = root

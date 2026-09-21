@@ -223,3 +223,39 @@ async def test_a_failed_job_is_retried_on_a_later_feed_the_same_day_but_only_onc
     )
     await background.drain()
     assert calls == 2, "the retry ran once, not once per racing request"
+
+
+async def test_the_run_summary_counts_a_failed_job_not_only_a_raised_one(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#291 review, REQUIRED 4: live, all 14 jobs ended `FAILED` (the adapter raised
+    `PortUnavailable`) while the log read "0 cards made, 0 failed" — the old count only ever
+    incremented on a job that raised or timed out inside `_run_one`, never on one that
+    `write_job_results` itself marked `FAILED` and returned normally. The run's own summary
+    line, and `RunRecord.failed`/`.made` (whatever it exposes), must count it either way."""
+    caplog.set_level("INFO", logger="nura.delivery.feed")
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    await _medicine(deployment, profile_id, pa)
+
+    real_search_and_compress = background.search_and_compress
+
+    async def _fail_the_safety_job(*args: object, **kwargs: object) -> SearchOutcome:
+        job = args[1] if len(args) > 1 else kwargs["job"]
+        if getattr(job, "kind", None) is JobKind.SAFETY:
+            return SearchOutcome(candidates=(), rejected=[], domains=[], reasons=[], failed_because="forced")
+        return await real_search_and_compress(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(background, "search_and_compress", _fail_the_safety_job)
+
+    await _feed(deployment, profile_id, pa["token"])
+    await background.drain()
+
+    summary = next(
+        record.message for record in caplog.records if "cards made" in record.message
+    )
+    assert "1 failed" in summary, f"the safety job's own FAILED status must be counted: {summary!r}"
+
+    [record] = list(background._runs.values())
+    assert record.failed == 1, "RunRecord itself exposes the same count, not only the log line"
+    assert record.made >= 1, "the explainer job's own card still counts as made"
