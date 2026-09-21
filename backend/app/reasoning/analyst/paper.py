@@ -49,6 +49,7 @@ from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
 from app.ingestion.extract import parse_printed_range as extract_printed_range
 from app.ingestion.models import ReviewCard, ReviewField
+from app.ingestion.readings import READING
 from app.ingestion.review import card_fields
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope, scope_for_subject
@@ -184,6 +185,11 @@ def _printed_range(
     """
     if field_range is not None:
         low, high = _number(field_range.get("low")), _number(field_range.get("high"))
+        if low is not None and high is not None and low > high:
+            # A backwards range is not a range (#303 re-review, NEW-1): the text path already
+            # refuses one (`parse_printed_range`), but these numbers come straight from the
+            # reader's JSON, and "5.5 to 3.5" made 4.0 read as BELOW a range it sits inside.
+            return None
         if low is not None or high is not None:
             return (low, high)
         text = field_range.get("text")
@@ -376,36 +382,47 @@ async def _flagged_values(
         }
     )
     flagged: list[_FlaggedValue] = []
-    seen_facts: set[uuid.UUID] = set()
+    seen_facts: set[tuple[uuid.UUID, str]] = set()
     for subject in subjects:
         facts = await current_facts(session, context=context, subject=subject, at=moment)
         by_attribute = {fact.attribute: fact for fact in facts if fact.artifact_id == card.artifact_id}
         for attribute, fact in by_attribute.items():
             if attribute.endswith(("_reference_range", "_flagged", "_date")):
                 continue
-            number = _number(fact.value)
-            if number is None or fact.id in seen_facts:
-                continue
-            sibling = by_attribute.get(f"{attribute}_reference_range")
-            field_range = _field_range_of(fields, subject=subject, attribute=attribute)
-            bounds = _printed_range(
-                fact.value,
-                sibling.value if sibling is not None else None,
-                field_range=field_range,
-            )
-            if bounds is None or (bounds[0] is None and bounds[1] is None):
-                continue
-            band = _band(number, bounds)
-            if band is None:
-                continue
-            seen_facts.add(fact.id)
-            page = _page_of(fields, subject=subject, attribute=attribute)
-            label = _analyte_label(subject, attribute, language=language)
-            flagged.append(
-                _FlaggedValue(
-                    fact_id=fact.id, subject=subject, attribute=attribute, band=band, label=label, page=page
+            # A vital on a lab paper is not a plain number: the confirm route folds it into ONE
+            # reading fact, `attribute="reading"`, `value={"glucose": 19}` (or the pair of a
+            # blood pressure) — `app.ingestion.review._write_lab_readings`. Read as a plain
+            # number it was skipped in silence, and a paper whose only out-of-range value was a
+            # sugar of 19 against a printed <6.0 said "Nothing on this paper looks worth a
+            # question" (#303 re-review, NEW-2). Each key of a reading is the field's own
+            # attribute under the same subject, so its printed range and label are found there.
+            if attribute == READING and isinstance(fact.value, Mapping):
+                measured = [(key, _number(each)) for key, each in fact.value.items()]
+            else:
+                measured = [(attribute, _number(fact.value))]
+            for key, number in measured:
+                if number is None or (fact.id, key) in seen_facts:
+                    continue
+                sibling = by_attribute.get(f"{key}_reference_range")
+                field_range = _field_range_of(fields, subject=subject, attribute=key)
+                bounds = _printed_range(
+                    fact.value if key == attribute else number,
+                    sibling.value if sibling is not None else None,
+                    field_range=field_range,
                 )
-            )
+                if bounds is None or (bounds[0] is None and bounds[1] is None):
+                    continue
+                band = _band(number, bounds)
+                if band is None:
+                    continue
+                seen_facts.add((fact.id, key))
+                page = _page_of(fields, subject=subject, attribute=key)
+                label = _analyte_label(subject, key, language=language)
+                flagged.append(
+                    _FlaggedValue(
+                        fact_id=fact.id, subject=subject, attribute=key, band=band, label=label, page=page
+                    )
+                )
     return flagged
 
 

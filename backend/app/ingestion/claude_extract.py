@@ -260,6 +260,11 @@ def _range_of(entry: Mapping[str, Any]) -> PrintedRange | None:
     high = float(high) if isinstance(high, int | float) and not isinstance(high, bool) else None
     if not isinstance(text, str):
         text = ""
+    if low is not None and high is not None and low > high:
+        # A backwards pair is a misread, not a range: keep what was printed as words, with no
+        # bounds, exactly as `extract.parse_printed_range` does for the same case — so no bar,
+        # no Above/Below and no question is ever drawn from it (#303 re-review, NEW-1).
+        low = high = None
     return PrintedRange(low=low, high=high, text=text)
 
 

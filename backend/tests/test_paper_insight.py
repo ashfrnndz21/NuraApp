@@ -771,6 +771,72 @@ def test_a_reversed_printed_range_is_refused_not_read_backwards() -> None:
     # The same fixture text, the right way round, still reads normally.
     assert _parse_printed_range("3.5 - 5.5") == (3.5, 5.5)
     assert _band(4.0, (3.5, 5.5)) is None
+    # #303 re-review, NEW-1: the NUMERIC shape — the live one, straight from the reader's JSON
+    # (`ReviewField.range`) — was still read backwards: 4.0 came out "below" 5.5-3.5.
+    assert _printed_range(4.0, None, field_range={"low": 5.5, "high": 3.5, "text": "5.5 - 3.5"}) is None
+    assert _printed_range(4.0, None, field_range={"low": 3.5, "high": 5.5, "text": "3.5 - 5.5"}) == (3.5, 5.5)
+
+
+def test_the_reader_keeps_a_backwards_range_as_words_with_no_bounds() -> None:
+    """#303 re-review, NEW-1, at the source: `claude_extract._range_of` took the model's own
+    `low`/`high` with no `low <= high` check, unlike `parse_printed_range`. A backwards pair is
+    a misread: the words stay, the bounds go, so no bar and no Above/Below is drawn from it."""
+    from app.ingestion.claude_extract import _range_of
+
+    backwards = _range_of({"range": {"low": 5.5, "high": 3.5, "text": "5.5 - 3.5"}})
+    assert backwards is not None
+    assert (backwards.low, backwards.high, backwards.text) == (None, None, "5.5 - 3.5")
+    fine = _range_of({"range": {"low": 3.5, "high": 5.5, "text": "3.5 - 5.5"}})
+    assert fine is not None and (fine.low, fine.high) == (3.5, 5.5)
+
+
+async def test_a_vital_outside_its_printed_range_is_asked_about_never_called_nothing(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """#303 re-review, NEW-2: the confirm route folds a lab paper's vital into ONE reading fact
+    (`attribute="reading"`, `value={"glucose": 19}`), which `_flagged_values` read as a plain
+    number and skipped in silence — so a paper whose only out-of-range value was a sugar of 19
+    against a printed <6.0 said "Nothing on this paper looks worth a question right now."""
+    import dataclasses
+
+    from app.ingestion.extract import PrintedRange
+
+    class _SugarOutOfRange:
+        """The vitals fixture as read, except: the sugar is 19.0 against a printed <6.0, and the
+        LDL's own range is wide enough that the sugar stands alone. Review rows are immutable,
+        so the paper is changed where it is read, never after."""
+
+        external_processor = None  # a fixture read: nothing leaves the region
+
+        async def extract(self, data: bytes, content_type: str, hints: Any) -> Any:
+            read = await extractor.extract(data, content_type, hints)
+            changed = []
+            for one in read.fields:
+                if (one.subject, one.attribute) == ("blood_sugar", "glucose"):
+                    one = dataclasses.replace(one, value=19.0, range=PrintedRange(None, 6.0, "<6.0"))
+                elif one.attribute == "ldl_reference_range":
+                    one = dataclasses.replace(one, value="<200")
+                changed.append(one)
+            return dataclasses.replace(read, fields=tuple(changed))
+
+    owner = await pa(sg, phone="+6591160077")
+    card, fields = await _card(sg, owner, store, _SugarOutOfRange(), LAB_REPORT_VITALS)  # type: ignore[arg-type]
+    decisions = _decide(fields)
+    yes = await _yes(sg, owner, card, decisions)
+    from app.ingestion.review import confirm_review_card
+
+    card, _decided, _facts = await confirm_review_card(
+        sg, context=owner, card_id=card.id, decisions=decisions, confirmation_id=yes
+    )
+    result = await _drain(sg, owner, card.artifact_id)
+    said = [question.text for question in result.questions]
+    assert said, "a sugar of 19 against a printed <6.0 is worth a question"
+    assert said[0] == "Why is my sugar number above the range on this paper?"
+    insight = build_insight(
+        language="en", source="rule", questions=result.questions, looked_at=result.looked_at,
+        withheld=result.withheld, now=datetime(2026, 9, 21, tzinfo=UTC), reader=Reader(his=True),
+    )
+    assert insight.headline != words.PAPER_NOTHING_LINE["en"]
 
 
 def test_field_range_with_boolean_bounds_is_never_read_as_one_point_zero() -> None:
