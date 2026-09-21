@@ -1,7 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import { Refused, Unreachable } from "../api/client";
 import type { InsightOut, InsightsReportOut, InsightsReportSummaryOut } from "../api/types";
 import {
   ANALYST_STREAM_IDLE,
