@@ -451,6 +451,15 @@ export const zh = {
     papersTitle: "您的文件",
     // @patient
     papersWithheld: "这把钥匙不包括{name}的文件。",
+    // --- package 10: the week ring's calm empty state ---
+    // @patient
+    ringEmpty: "这一周还没有药可以算。",
+    // @patient
+    ringEmptyOther: "这一周还没有{name}的药可以算。",
+    // @patient phrase
+    metricsNotLogged: "还没有写下：{list}。",
+    // @patient phrase
+    metricsNotLoggedOther: "还没有写下{name}的：{list}。",
   },
   insights: {
     // @patient headline
@@ -505,6 +514,21 @@ export const zh = {
     asked: "Nura把这个问题留给您的就诊。",
     // @patient
     noVisit: "还没有预约的看诊可以带上这个问题。",
+    // --- package 10: the Health Analyst screen ---
+    // @patient phrase
+    lookAgain: "再看一次",
+    // @patient headline
+    pastTitle: "之前的报告",
+    // @patient phrase
+    retryAfterError: "再试一次",
+    // @patient phrase
+    yourDoctor: "您的医生",
+    // @patient phrase
+    yourDoctorOther: "{name}的医生",
+    // @patient phrase
+    yourPharmacist: "您的药剂师",
+    // @patient phrase
+    yourPharmacistOther: "{name}的药剂师",
   },
   signIn: {
     // @patient headline
@@ -522,6 +546,10 @@ export const zh = {
     // @patient phrase
     sendCode: "发验证码给我",
     // @patient phrase
+    sending: "发送中…",
+    // @patient phrase
+    sent: "已发送",
+    // @patient phrase
     useEmail: "改用电邮登录",
     // @patient phrase
     usePhone: "改用手机号码登录",
@@ -535,6 +563,14 @@ export const zh = {
     codeLabel: "验证码",
     // @patient phrase
     signInButton: "登录",
+    // @patient phrase
+    checking: "核对中…",
+    // @patient phrase
+    signedIn: "已登录",
+    // @patient phrase
+    resend: "再发一次",
+    // @patient
+    resendDone: "Nura 已发送新的验证码。",
     // @patient
     emailLead: "请输入您的电邮地址。",
     // @patient phrase
@@ -555,6 +591,8 @@ export const zh = {
   doors: {
     // @patient headline
     title: "这是给谁用的？",
+    // @patient
+    greeting: "我要照顾的是谁？",
     // @patient phrase
     forMe: "给我自己",
     // @patient
@@ -848,6 +886,8 @@ export const zh = {
     sourceMedicines: "这来自您的药单。",
     // @patient
     sourceVisits: "这来自您看医生的安排。",
+    // @patient
+    sourceReviewCard: "这份文件还在等您检查。",
     // @patient
     askWithheld: "有些文件没有对您开放。",
     // @patient
@@ -1473,6 +1513,12 @@ export const zh = {
       countNone: "Nura 还没有记下什么。",
       // @patient
       count: "Nura 已经记下 {n} 项。",
+      // @patient
+      ackSelf: "您告诉我：{list}。",
+      // @patient
+      ackOther: "Nura 为 {name} 记下了：{list}。",
+      // @patient phrase
+      and: "和",
       // @patient phrase
       tellMe: "或者直接告诉我",
       // @patient

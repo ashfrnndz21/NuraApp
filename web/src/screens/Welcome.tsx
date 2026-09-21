@@ -6,8 +6,8 @@ import { demo, dev } from "../store/deployment";
 import { setToken, setWelcomed } from "../store/session";
 import { t } from "../strings";
 import { Notice } from "../ui/components";
-import { WelcomeIllustration } from "../ui/illustrations";
-import { Icon, IconBadge, PillButton, type IconName, type Tint } from "../ui/kit";
+import { IconBadge, Orb, PillButton, SoftText, type IconName, type Tint } from "../ui/kit";
+import { REVEAL_STAGGER_MS } from "../ui/motion";
 
 /** The two demo/dev shortcuts under Get started, and whether they show at all — a component
  *  of its own, with no hooks, so `demo.value || dev.value` can be checked without a phone's
@@ -28,8 +28,10 @@ export function DemoSignIn({
   const w = t().welcome;
   return (
     <div class="welcome-demo-signin" data-testid="welcome-demo-signin">
+      {/* Quiet text, not a second and third pill beside "Get started" — the one primary action
+          on this screen is the only thing that should look like a button (operator review). */}
       <PillButton
-        variant="secondary"
+        variant="quiet"
         onClick={() => onTry("pa")}
         disabled={busy !== null}
         testId="welcome-try-pa"
@@ -37,7 +39,7 @@ export function DemoSignIn({
         {w.tryAsPa}
       </PillButton>
       <PillButton
-        variant="secondary"
+        variant="quiet"
         onClick={() => onTry("mei")}
         disabled={busy !== null}
         testId="welcome-try-mei"
@@ -85,27 +87,31 @@ export function WelcomeScreen(): JSX.Element {
       setBusy(null);
     }
   };
+  // The living orb is the hero (docs/design/experience-blueprint.html `welcome`: "One living
+  // orb is the assistant... never still") — the static illustration and the heart mark are
+  // gone from THIS screen (operator review: the two together, plus a tall headline and three
+  // tall cards, pushed "Get started" below the fold at 390x844 — a first screen whose only
+  // action cannot be seen is a defect). `WelcomeIllustration`'s own file is untouched; nothing
+  // else in the app that uses it is affected. Order, top to bottom: the orb, the small
+  // wordmark, the SoftText headline, three compact one-line promises, the one primary action,
+  // the demo shortcuts as quiet text.
   return (
     <main class="screen welcome" data-testid="welcome-screen">
-      <div class="welcome-art">
-        <WelcomeIllustration class="welcome-illo" cover />
+      <div class="welcome-orb-wrap">
+        <Orb size="lg" testId="welcome-orb" />
       </div>
-      <div class="welcome-brand">
-        <span class="welcome-heart" aria-hidden="true">
-          <Icon name="heart" />
-        </span>
-        <h1 class="welcome-word">{s.appName}</h1>
-      </div>
-      <p class="welcome-tagline">
-        <span>{w.tagline1}</span> <span>{w.tagline2}</span>
-      </p>
-      <p class="welcome-lead">{w.lead}</p>
-      <ul class="value-tiles">
-        {values.map((value) => (
-          <li key={value.title} class="value-tile">
-            <IconBadge icon={value.icon} tint={value.tint} />
-            <span class="value-title">{value.title}</span>
-            <span class="value-line">{value.line}</span>
+      <h1 class="welcome-word welcome-word-small">{s.appName}</h1>
+      {/* One serif accent word (blueprint `.ser`), the words arriving one by one
+          (`SoftText`/`stream()`) — the wording itself is unchanged from the approved copy, only
+          how it arrives on screen. Read the plain sentence from `.sr-only`
+          (warm-home.spec.ts): the visible word spans repeat the same text for their own
+          animation, so asserting on the element itself would read it twice. */}
+      <SoftText text={`${w.tagline1} ${w.tagline2}`} pace="headline" as="p" className="welcome-tagline" testId="welcome-tagline" />
+      <ul class="value-tiles value-rows">
+        {values.map((value, at) => (
+          <li key={value.title} class="value-tile value-row reveal-item" style={{ transitionDelay: `${at * REVEAL_STAGGER_MS}ms` }}>
+            <IconBadge icon={value.icon} tint={value.tint} size="small" />
+            <span class="value-line value-row-text">{value.line}</span>
           </li>
         ))}
       </ul>
