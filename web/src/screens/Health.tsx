@@ -104,7 +104,7 @@ function ThisWeek({ overview, locale, owner, name }: { overview: HealthOverviewO
               ))}
               {unloggedLabels.length > 0 && (
                 <p class="caption" data-testid="metrics-not-logged">
-                  {fill(owner ? s.health.metricsNotLogged : s.health.metricsNotLoggedOther, { list: unloggedLabels.join(", "), name })}
+                  {fill(owner ? s.health.metricsNotLogged : s.health.metricsNotLoggedOther, { list: unloggedLabels.map(inSentence).join(", "), name })}
                 </p>
               )}
             </>
@@ -160,6 +160,10 @@ function useRecentPapers(scopes: readonly string[]): ReviewCardOut[] {
   }, [bearer, papers?.profile_id, scopes.join(",")]);
   return cards;
 }
+
+/** A label said inside a sentence, not at its start: "steps, heart rate", never "Steps, Heart
+ *  rate". Chinese has no case, so it is left as it is. */
+const inSentence = (label: string): string => label.charAt(0).toLowerCase() + label.slice(1);
 
 /** "Your papers" (E02-07 library part B #2): the newest few, the same row the full list
  *  under the Record uses — or, for a key whose scope does not cover them, the block named
@@ -289,7 +293,7 @@ export function InsightsCard({
         </span>
       </button>
       <PillButton variant="primary" onClick={onGenerate} testId="insights-generate">
-        {s.insights.generate}
+        {report ? s.insights.lookAgain : s.insights.generate}
       </PillButton>
     </TintCard>
   );
