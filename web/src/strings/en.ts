@@ -66,7 +66,7 @@ export const en = {
   },
   welcome: {
     // @patient headline
-    tagline1: "Your health, kept together.",
+    tagline1: "Your health, kept *together*.",
     // @patient headline
     tagline2: "Your family, close by.",
     // @patient
@@ -451,6 +451,15 @@ export const en = {
     papersTitle: "Your papers",
     // @patient
     papersWithheld: "This key does not cover {name}'s papers.",
+    // --- package 10: the week ring's calm empty state ---
+    // @patient
+    ringEmpty: "No tablets to count yet this week.",
+    // @patient
+    ringEmptyOther: "No tablets to count yet for {name} this week.",
+    // @patient phrase
+    metricsNotLogged: "Not written down yet: {list}.",
+    // @patient phrase
+    metricsNotLoggedOther: "Not written down yet for {name}: {list}.",
   },
   insights: {
     // @patient headline
@@ -505,6 +514,21 @@ export const en = {
     asked: "Nura kept this question for your visit.",
     // @patient
     noVisit: "There is no visit booked yet to take this to.",
+    // --- package 10: the Health Analyst screen ---
+    // @patient phrase
+    lookAgain: "Look again",
+    // @patient headline
+    pastTitle: "Earlier reports",
+    // @patient phrase
+    retryAfterError: "Try again",
+    // @patient phrase
+    yourDoctor: "your doctor",
+    // @patient phrase
+    yourDoctorOther: "{name}'s doctor",
+    // @patient phrase
+    yourPharmacist: "your pharmacist",
+    // @patient phrase
+    yourPharmacistOther: "{name}'s pharmacist",
   },
   signIn: {
     // @patient headline
@@ -522,6 +546,10 @@ export const en = {
     // @patient phrase
     sendCode: "Send me a code",
     // @patient phrase
+    sending: "Sending…",
+    // @patient phrase
+    sent: "Sent",
+    // @patient phrase
     useEmail: "Sign in with an email instead",
     // @patient phrase
     usePhone: "Sign in with a phone number instead",
@@ -535,6 +563,14 @@ export const en = {
     codeLabel: "The code",
     // @patient phrase
     signInButton: "Sign in",
+    // @patient phrase
+    checking: "Checking…",
+    // @patient phrase
+    signedIn: "Signed in",
+    // @patient phrase
+    resend: "Send it again",
+    // @patient
+    resendDone: "Nura sent a new code.",
     // @patient
     emailLead: "Type your email address.",
     // @patient phrase
@@ -555,6 +591,8 @@ export const en = {
   doors: {
     // @patient headline
     title: "Who is this for?",
+    // @patient
+    greeting: "Who am I looking after?",
     // @patient phrase
     forMe: "This is for me",
     // @patient
@@ -848,6 +886,8 @@ export const en = {
     sourceMedicines: "This comes from your medicines list.",
     // @patient
     sourceVisits: "This comes from your visits to the doctor.",
+    // @patient
+    sourceReviewCard: "This paper is waiting for you to check.",
     // @patient
     askWithheld: "Some of the papers are not open to you.",
     // @patient
@@ -1516,6 +1556,12 @@ export const en = {
       countNone: "Nura has not written anything down yet.",
       // @patient
       count: "Nura has written {n} things down.",
+      // @patient
+      ackSelf: "You told me about {list}.",
+      // @patient
+      ackOther: "Nura wrote down {list} for {name}.",
+      // @patient phrase
+      and: " and ",
       // @patient phrase
       tellMe: "Or just tell me",
       // @patient

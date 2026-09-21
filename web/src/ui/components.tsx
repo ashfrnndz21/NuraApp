@@ -27,14 +27,17 @@ interface TileProps {
   children: ComponentChildren;
   role?: "alert" | "status";
   testId?: string;
+  /** Only when a caller needs to point an `aria-describedby` at this tile — `Notice`'s own
+   *  inline-error use (`SignIn.tsx`). */
+  id?: string;
 }
 
-export function Tile({ paper, glass, sheet, settled, children, role, testId }: TileProps): JSX.Element {
+export function Tile({ paper, glass, sheet, settled, children, role, testId, id }: TileProps): JSX.Element {
   const classes = ["tile", paper && "paper", glass && "glass", sheet && "sheet", settled && "settled"]
     .filter(Boolean)
     .join(" ");
   return (
-    <section class={classes} role={role} data-testid={testId}>
+    <section class={classes} role={role} data-testid={testId} id={id}>
       {children}
     </section>
   );
@@ -160,8 +163,13 @@ export function RefusalNotice({ refusal }: { refusal: string | undefined }): JSX
   );
 }
 
-/** What happened and what to do, in one plain sentence — never the class, never an id. */
-export function Notice({ error }: { error: unknown }): JSX.Element | null {
+/** What happened and what to do, in one plain sentence — never the class, never an id by
+ *  default. `errorKind` is optional and purely for a test to tell one real state from another
+ *  (`web/src/signin.ts` `classifySignInError`) without parsing the sentence itself; it changes
+ *  nothing about what is shown. `id`: only when a caller needs to point a field's own
+ *  `aria-describedby` at this notice (a field's error read right next to the field it is about,
+ *  not a separate one somewhere else on the screen — `SignIn.tsx`). */
+export function Notice({ error, errorKind, id }: { error: unknown; errorKind?: string; id?: string }): JSX.Element | null {
   if (!error) return null;
   const lines =
     error instanceof Unreachable
@@ -170,7 +178,8 @@ export function Notice({ error }: { error: unknown }): JSX.Element | null {
         ? refusalLines(error.refusal, language.value)
         : refusalLines(undefined);
   return (
-    <Tile paper role="alert" testId="notice">
+    <Tile paper role="alert" testId="notice" id={id}>
+      {errorKind && <span data-error-kind={errorKind} aria-hidden="true" hidden />}
       {lines.map((line, index) => (
         <p key={index}>{line}</p>
       ))}
@@ -189,9 +198,14 @@ interface FieldProps {
   name: string;
   maxLength?: number;
   disabled?: boolean;
+  /** Ties this field to the error paragraph that names what's wrong with it (`Notice`'s own
+   *  `id`) — the field and its error read as one thing to a screen reader, not two unrelated
+   *  parts of the screen (`SignIn.tsx`). */
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
 }
 
-export function Field({ label, value, onInput, type = "text", inputMode, autoComplete, big, name, maxLength, disabled }: FieldProps): JSX.Element {
+export function Field({ label, value, onInput, type = "text", inputMode, autoComplete, big, name, maxLength, disabled, ariaDescribedBy, ariaInvalid }: FieldProps): JSX.Element {
   return (
     <label style="display:flex;flex-direction:column;gap:6px">
       <span class="label">{label}</span>
@@ -204,6 +218,8 @@ export function Field({ label, value, onInput, type = "text", inputMode, autoCom
         autoComplete={autoComplete}
         maxLength={maxLength}
         disabled={disabled}
+        aria-describedby={ariaDescribedBy}
+        aria-invalid={ariaInvalid || undefined}
         onInput={(event) => onInput((event.target as HTMLInputElement).value)}
       />
     </label>

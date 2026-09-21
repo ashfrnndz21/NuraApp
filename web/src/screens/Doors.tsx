@@ -8,6 +8,24 @@ import { me, token } from "../store/session";
 import { fill, language, t, RELATIONSHIPS, type Relationship } from "../strings";
 import { canPickContact, pickContact } from "../onboarding/contact";
 import { Field, Header, Notice, Pill, RefusalNotice, Tile } from "../ui/components";
+import { Icon, Orb, SoftText, type IconName } from "../ui/kit";
+
+/** One of the two large choose-cards a fresh phone sees (`who` scene: "for me" / "for someone I
+ *  look after"). A plain `<button>`, kept at its existing test id, only its shape and look are
+ *  new. */
+function ChooseCard({ icon, title, line, onClick, testId }: { icon: IconName; title: string; line: string; onClick: () => void; testId: string }): JSX.Element {
+  return (
+    <button type="button" class="choose-card" onClick={onClick} data-testid={testId}>
+      <span class="choose-card-icon" aria-hidden="true">
+        <Icon name={icon} />
+      </span>
+      <span class="choose-card-body">
+        <span class="choose-card-title">{title}</span>
+        <span class="choose-card-line">{line}</span>
+      </span>
+    </button>
+  );
+}
 
 function roleLine(each: ProfileOut): string {
   const s = t();
@@ -52,20 +70,21 @@ export function DoorsScreen({ doors, refusal }: { doors: DoorsOut; refusal?: str
           </button>
         </Tile>
       ))}
-      {!doors.own && doors.claimable.length === 0 && (
-        <Tile paper>
-          <button type="button" class="choice" onClick={() => go({ name: "consent" })} data-testid="door-for-me">
-            <div class="title">{s.doors.forMe}</div>
-            <p>{s.doors.forMeLine}</p>
-          </button>
-        </Tile>
+      {/* The `who` scene (docs/design/experience-blueprint.html): Nura's own line, only for a
+          phone with nothing open yet — a chief switching between keys she already holds sees
+          the plain header above instead, unchanged. */}
+      {!hasAny && (
+        <div class="who-say">
+          <Orb size="sm" />
+          <SoftText text={s.doors.greeting} pace="headline" as="p" className="who-say-line" testId="who-greeting" />
+        </div>
       )}
-      <Tile paper>
-        <button type="button" class="choice" onClick={() => go({ name: "forSomeone" })} data-testid="door-for-someone">
-          <div class="title">{s.doors.forSomeone}</div>
-          <p>{s.doors.forSomeoneLine}</p>
-        </button>
-      </Tile>
+      <div class="choose-cards">
+        {!doors.own && doors.claimable.length === 0 && (
+          <ChooseCard icon="profile" title={s.doors.forMe} line={s.doors.forMeLine} onClick={() => go({ name: "consent" })} testId="door-for-me" />
+        )}
+        <ChooseCard icon="care" title={s.doors.forSomeone} line={s.doors.forSomeoneLine} onClick={() => go({ name: "forSomeone" })} testId="door-for-someone" />
+      </div>
       {/* Someone waiting to be let in is sitting here when the key is cut. One tap asks the
           doors again, so the papers appear without signing out and back in. */}
       <Pill quiet onClick={() => void reloadDoors()} testId="doors-look-again">

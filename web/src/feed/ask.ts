@@ -11,15 +11,19 @@ export function askMode(density: Density): AskMode {
   return density === "patient" ? "voice" : "text";
 }
 
-/** Where a cited line came from, as a catalogue line: his medicines list, his visits, or his
- *  papers (a fact, the event or paper under it). A line that cites nothing has none. */
-export type SourceLine = "sourceMedicines" | "sourceVisits" | "sourcePapers";
+/** Where a cited line came from, as a catalogue line: his medicines list, his visits, a paper
+ *  still waiting for his own yes (never one already confirmed — those are `sourcePapers`), or
+ *  his papers (a fact, the event or paper under it). A line that cites nothing has none. */
+export type SourceLine = "sourceMedicines" | "sourceVisits" | "sourceReviewCard" | "sourcePapers";
 
 export function sourceOf(cites: AnswerLineOut["cites"]): SourceLine | null {
   if (cites.length === 0) return null;
   const kinds = new Set(cites.map((cite) => cite.kind));
   if (kinds.has("medication_line")) return "sourceMedicines";
   if (kinds.has("appointment") || kinds.has("provider") || kinds.has("summary_item") || kinds.has("visit_summary")) return "sourceVisits";
+  // A card still waiting for his own yes (W2, `app.search.ask.waiting_papers`) is not one of
+  // "his papers" yet — that caption would wrongly say it is already confirmed and read.
+  if (kinds.has("review_card")) return "sourceReviewCard";
   return "sourcePapers";
 }
 
