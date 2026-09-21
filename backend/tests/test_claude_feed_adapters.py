@@ -91,6 +91,15 @@ class FakeWebFetchToolResult:
 
 
 @dataclass
+class FakeWebSearchToolResultError:
+    """A `web_search_tool_result` block answering an error object, not a list — the shape the
+    API actually returns for `max_uses_exceeded` (HTTP 200, never a raised exception)."""
+
+    content: dict[str, Any]
+    type: str = "web_search_tool_result"
+
+
+@dataclass
 class FakeResponse:
     content: Sequence[Any]
     stop_reason: str = "end_turn"
@@ -495,6 +504,129 @@ def test_claude_searcher_keeps_a_matching_allowlisted_fetch_with_its_fetched_tex
     assert found[0].domain == "healthhub.sg"
     assert found[0].text == fetched_text
     assert found[0].text != model_restated_text
+
+
+# ---------------------------------------------------------------------------
+# #302: `allowed_domains` restricts both server tools, `queries` carries the safe phrasing, and
+# `last_search_detail()` reports operational-only diagnostics of the call.
+# ---------------------------------------------------------------------------
+
+
+def test_claude_searcher_restricts_both_server_tools_to_the_allowed_domains() -> None:
+    client = FakeClient([_search_response([])])
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    searcher.search("explainer", ["blood pressure"], ALLOWLIST)
+    call = client.messages.calls[0]
+    by_name = {tool["name"]: tool for tool in call["tools"]}
+    assert by_name["web_search"]["allowed_domains"] == sorted(ALLOWLIST)
+    assert by_name["web_fetch"]["allowed_domains"] == sorted(ALLOWLIST)
+    # Never both on the same tool (the API rejects the pair).
+    assert "blocked_domains" not in by_name["web_search"]
+    assert "blocked_domains" not in by_name["web_fetch"]
+
+
+def test_claude_searcher_uses_the_given_queries_verbatim_not_the_bare_term() -> None:
+    """#302: a bare generic name alone found nothing live 22 times out of 30. `queries` (built
+    by `app.delivery.feed.search._safe_queries` from the licensed catalogue) is what the model
+    is actually asked, in the same order as `terms`."""
+    client = FakeClient([_search_response([]), _search_response([])])
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    searcher.search(
+        "explainer",
+        ["amlodipine", "warfarin"],
+        ALLOWLIST,
+        queries=[
+            "your blood pressure tablet, for blood pressure — what it is for",
+            "the blood thinner tablet, for clots — what it is for",
+        ],
+    )
+    first_prompt = client.messages.calls[0]["messages"][0]["content"]
+    second_prompt = client.messages.calls[1]["messages"][0]["content"]
+    assert "your blood pressure tablet, for blood pressure — what it is for" in first_prompt
+    assert "the blood thinner tablet, for clots — what it is for" in second_prompt
+
+
+def test_claude_searcher_without_queries_falls_back_to_kind_and_term() -> None:
+    """A caller that predates `queries` (a direct test, mainly) still gets the old phrasing."""
+    client = FakeClient([_search_response([])])
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    searcher.search("explainer", ["blood pressure"], ALLOWLIST)
+    assert "explainer: blood pressure" in client.messages.calls[0]["messages"][0]["content"]
+
+
+def test_claude_searcher_last_search_detail_is_none_before_any_call() -> None:
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=FakeClient([]))
+    assert searcher.last_search_detail() is None
+
+
+def test_claude_searcher_last_search_detail_counts_the_happy_path() -> None:
+    url = "https://healthhub.sg/live-healthy/bp"
+    text = "Checking your blood pressure regularly helps you and your doctor."
+    off_list_url = "https://not-allowlisted.example/a"
+    client = FakeClient(
+        [
+            _search_response(
+                [
+                    {
+                        "title": "Managing high blood pressure",
+                        "url": url,
+                        "publisher": "HealthHub",
+                        "text": text,
+                        "media": "article",
+                    }
+                ],
+                tool_blocks=[
+                    _search_result_block([url, off_list_url]),
+                    _fetch_result_block(url, text),
+                ],
+            )
+        ]
+    )
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    searcher.search("explainer", ["blood pressure"], ALLOWLIST)
+    detail = searcher.last_search_detail()
+    assert detail is not None
+    assert detail["web_search_uses"] == 1
+    assert detail["web_fetch_uses"] == 1
+    assert detail["candidate_urls"] == 2  # url + off_list_url, both named by the tools
+    assert detail["on_allowlist"] == 1  # only `url` is on ALLOWLIST
+    assert detail["fetched_ok"] == 1  # only `url` was actually fetched
+    assert detail["stop_reasons"] == ["end_turn"]
+    assert detail["refused"] is False
+    assert detail["max_uses_reached"] is False
+    assert detail["queries"] == ["explainer: blood pressure"]
+
+
+def test_claude_searcher_last_search_detail_marks_a_refusal() -> None:
+    client = FakeClient([_search_response([], stop_reason="refusal")])
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    searcher.search("explainer", ["x"], ALLOWLIST)
+    detail = searcher.last_search_detail()
+    assert detail is not None
+    assert detail["refused"] is True
+    assert detail["stop_reasons"] == ["refusal"]
+
+
+def test_claude_searcher_last_search_detail_marks_a_max_uses_error() -> None:
+    error_block = FakeWebSearchToolResultError(content={"error_code": "max_uses_exceeded"})
+    client = FakeClient(
+        [_search_response([], tool_blocks=[error_block])]
+    )
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=client)
+    searcher.search("explainer", ["x"], ALLOWLIST)
+    detail = searcher.last_search_detail()
+    assert detail is not None
+    assert detail["max_uses_reached"] is True
+
+
+def test_claude_searcher_last_search_detail_marks_unparseable_json_as_parse_failed() -> None:
+    not_json = FakeClient([FakeResponse(content=[FakeBlock("not json at all")])])
+    searcher = ClaudeSearcher(api_key="sk-test", demo_mode=True, client=not_json)
+    searcher.search("explainer", ["x"], ALLOWLIST)
+    detail = searcher.last_search_detail()
+    assert detail is not None
+    assert detail["parse_failed"] is True
+    assert detail["refused"] is False
 
 
 # ---------------------------------------------------------------------------

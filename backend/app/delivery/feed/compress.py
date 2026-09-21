@@ -75,9 +75,30 @@ class Searcher(Protocol):
     without importing the adapter itself. Read defensively (`getattr(..., None)`) by callers,
     so a test double that predates this need not declare it."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
-        """Pages for these terms, from these domains only. Never a page from anywhere else."""
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
+        """Pages for these terms, from these domains only. Never a page from anywhere else.
+
+        `queries` (#302) is the safe, closed-vocabulary phrasing `app.delivery.feed.search.
+        _safe_queries` built for each of `terms`, in the same order — his catalogue word for a
+        medicine plus its reviewed purpose group, never the bare term alone. A real adapter
+        asks the model with `queries` when given (falling back to `terms` only for a caller
+        that predates this, chiefly a direct test); the fixture searcher ignores it outright —
+        `searches.json` is keyed on `terms`, never on what a real adapter would say aloud."""
         ...
+
+    # `last_search_detail() -> Mapping[str, Any] | None` is not part of this port's contract —
+    # only `ClaudeSearcher` carries it, for `app.delivery.feed.search._read_search_detail` to
+    # read back `getattr(..., None)`-style, the same defensive read `external_processor`
+    # already gets from every caller. Left off the Protocol on purpose: the fixture searcher
+    # never leaves the region and has nothing operational to report, and a Protocol member
+    # here would force it (and every test double) to grow a method that means nothing for it.
 
     def find(
         self, words: Sequence[str], domains: Sequence[str], *, media: str | None = None
@@ -179,7 +200,18 @@ class FixtureSearcher:
         loaded: dict[str, list[dict[str, Any]]] = json.loads(path.read_text(encoding="utf-8"))
         return loaded
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
+        # `queries` is ignored on purpose: `searches.json` is keyed on `kind:term`, the job's
+        # own words, never on the safe phrasing a real adapter would say to the model — see the
+        # `Searcher.search` docstring.
+        del queries
         table = self._table()
         allowed = set(domains)
         found: list[Found] = []

@@ -524,7 +524,14 @@ class _TreatyFoodSearcher:
     medicine, so this is the case #231's routing must hold for the chief alone, no doctor
     question invented from a name it does not have."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if kind != "food" or "food.example.sg" not in domains:
             return []
         return [
@@ -834,7 +841,14 @@ class _TreatyNoticeSearcher:
     """A safety notice whose words would change treatment — never the fixture data other
     tests share, so this scenario cannot leak into theirs."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if kind != "safety" or "notices.example.sg" not in domains:
             return []
         return [
@@ -966,7 +980,14 @@ class _TreatyMedicineSearcher:
     """A page about a medicine he actually takes, found by a watch added by hand — the
     `add_search_job` shape (`reason={"asked": ..., "by": ...}`, no `"scope"` key at all)."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if kind != "explainer" or "medicine.example.sg" not in domains:
             return []
         return [
@@ -1581,7 +1602,14 @@ class _RotatingSearcher:
     def __init__(self) -> None:
         self.calls = 0
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if "catchup.example.sg" not in domains:
             return []
         self.calls += 1
