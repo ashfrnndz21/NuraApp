@@ -371,10 +371,11 @@ export function askStream(
   onStep: (key: string, label: string, name: string) => void,
   onSentence?: (text: string, cites: AnswerLineOut["cites"]) => void,
   onStepLabel?: (key: string, label: string) => void,
+  value?: string,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    apiStream(`/profiles/${profileId}/ask/stream`, { method: "POST", token, body: { question, mode, language } }, (event) => {
+    apiStream(`/profiles/${profileId}/ask/stream`, { method: "POST", token, body: { question, mode, language, value } }, (event) => {
       const streamed = event as unknown as AskStreamEvent;
       if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
       else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
@@ -413,12 +414,13 @@ export function turnStream(
   onStep: (key: string, label: string, name: string) => void,
   onSentence?: (text: string, cites: AnswerLineOut["cites"]) => void,
   onStepLabel?: (key: string, label: string) => void,
+  value?: string,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
     apiStream(
       `/profiles/${profileId}/conversations/${conversationId}/turns/stream`,
-      { method: "POST", token, body: { question, mode, language } },
+      { method: "POST", token, body: { question, mode, language, value } },
       (event) => {
         const streamed = event as unknown as AskStreamEvent;
         if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);

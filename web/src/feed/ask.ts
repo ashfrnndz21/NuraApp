@@ -1,4 +1,4 @@
-import type { AnswerLineOut, AnswerOut, AskMode, ClipOut } from "../api/types";
+import type { AnswerLineOut, AnswerOut, AskMode, ClarifyOut, ClipOut } from "../api/types";
 import type { Density } from "../store/session";
 
 /** Ask about a card (E21-04 → E03-05). His question goes to the backend word for word; the
@@ -34,6 +34,8 @@ export interface AnswerView {
   boundary: string[];
   spoken: string[];
   withheld: boolean;
+  /** One clarifying question instead of an answer (W2) — never together with `lines`. */
+  clarify: ClarifyOut | null;
 }
 
 /** The answer in the order it is shown and heard: cited lines, honest lines, boundary last. */
@@ -44,5 +46,6 @@ export function answerView(answer: AnswerOut): AnswerView {
     boundary: [...answer.boundary],
     spoken: [...answer.spoken],
     withheld: answer.withheld.length > 0,
+    clarify: answer.clarify ?? null,
   };
 }
