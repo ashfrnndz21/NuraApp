@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ConditionOut } from "../../src/api/types";
-import { acknowledgementLine, asksFor, boost, cloudView, joinNames, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
+import { acknowledgementLine, asksFor, boost, cloudView, joinNames, lowerFirst, phaseOf, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
 import type { CloudWord } from "../../src/onboarding/cloud";
+import { en } from "../../src/strings/en";
+import { ms } from "../../src/strings/ms";
+import { zh } from "../../src/strings/zh";
 
 const w = (code: string, weight: number, top: boolean, related: string[] = [], ask = false, term: string | null = null): ConditionOut => ({
   code,
@@ -120,13 +123,39 @@ describe("joinNames", () => {
     expect(joinNames([], " and ")).toBe("");
     expect(joinNames(["High blood pressure"], " and ")).toBe("High blood pressure");
     expect(joinNames(["High blood pressure", "Cholesterol"], " and ")).toBe("High blood pressure and Cholesterol");
-    expect(joinNames(["High blood pressure", "Cholesterol", "Sugar, diabetes"], " and ")).toBe(
-      "High blood pressure, Cholesterol and Sugar, diabetes",
-    );
+    expect(joinNames(["High blood pressure", "Cholesterol", "Weight"], " and ")).toBe("High blood pressure, Cholesterol and Weight");
   });
 
   it("never adds a space of its own — a language that wants none (Chinese) gets none", () => {
     expect(joinNames(["高血压", "胆固醇"], "和")).toBe("高血压和胆固醇");
+  });
+
+  it("falls back to semicolons throughout when any one name already carries its own comma — the list grammar would otherwise read as one more item than he actually picked", () => {
+    expect(joinNames(["High blood pressure", "Cholesterol", "In hospital, last year"], " and ")).toBe(
+      "High blood pressure; Cholesterol; In hospital, last year",
+    );
+    // Even with exactly two names, and even when the comma is on the FIRST one, not the last.
+    expect(joinNames(["In hospital, last year", "Weight"], " and ")).toBe("In hospital, last year; Weight");
+  });
+
+  it("a single comma-carrying name is returned as-is — nothing to join yet", () => {
+    expect(joinNames(["In hospital, last year"], " and ")).toBe("In hospital, last year");
+  });
+});
+
+describe("lowerFirst", () => {
+  it("lower-cases an ordinary name's first letter, for a mid-sentence read", () => {
+    expect(lowerFirst("High blood pressure")).toBe("high blood pressure");
+    expect(lowerFirst("Cholesterol")).toBe("cholesterol");
+  });
+
+  it("leaves a genuine acronym alone — lower-casing 'Tb' would be wrong", () => {
+    expect(lowerFirst("TB")).toBe("TB");
+    expect(lowerFirst("CPR training")).toBe("CPR training");
+  });
+
+  it("leaves the empty string alone", () => {
+    expect(lowerFirst("")).toBe("");
   });
 });
 
@@ -138,13 +167,99 @@ describe("acknowledgementLine", () => {
   });
 
   it("reads back exactly what he picked, in his own words — never a diagnosis", () => {
-    const line = acknowledgementLine([bubble("High blood pressure"), bubble("Sugar, diabetes")], "You told me about {list}.", " and ");
-    expect(line).toBe("You told me about High blood pressure and Sugar, diabetes.");
+    const line = acknowledgementLine([bubble("High blood pressure"), bubble("Cholesterol")], "You told me about {list}.", " and ", {
+      lowercase: true,
+    });
+    expect(line).toBe("You told me about high blood pressure and cholesterol.");
   });
 
   it("names a caregiver's patient rather than saying 'your'", () => {
-    const line = acknowledgementLine([bubble("High blood pressure")], "Nura wrote down {list} for {name}.", " and ", { name: "Pa" });
-    expect(line).toBe("Nura wrote down High blood pressure for Pa.");
+    const line = acknowledgementLine([bubble("High blood pressure")], "Nura wrote down {list} for {name}.", " and ", {
+      slots: { name: "Pa" },
+      lowercase: true,
+    });
+    expect(line).toBe("Nura wrote down high blood pressure for Pa.");
     expect(line).not.toContain("your");
+  });
+
+  it("lower-cases every name mid-sentence, none of them sits first in the rendered sentence", () => {
+    const line = acknowledgementLine([bubble("High blood pressure"), bubble("Cholesterol"), bubble("Weight")], "You told me about {list}.", " and ", {
+      lowercase: true,
+    });
+    expect(line).toBe("You told me about high blood pressure, cholesterol and weight.");
+  });
+
+  it("keeps an acronym's own case even mid-sentence", () => {
+    const line = acknowledgementLine([bubble("TB")], "You told me about {list}.", " and ", { lowercase: true });
+    expect(line).toBe("You told me about TB.");
+  });
+
+  it("without `lowercase` (zh has no case to change), a name's own case is kept exactly", () => {
+    const line = acknowledgementLine([bubble("高血压"), bubble("胆固醇")], "您告诉我：{list}。", "和");
+    expect(line).toBe("您告诉我：高血压和胆固醇。");
+  });
+
+  it("still falls back to semicolons when a picked name carries its own comma, whether or not names are lower-cased", () => {
+    const withCase = acknowledgementLine(
+      [bubble("High blood pressure"), bubble("Cholesterol"), bubble("In hospital, last year")],
+      "You told me about {list}.",
+      " and ",
+      { lowercase: true },
+    );
+    expect(withCase).toBe("You told me about high blood pressure; cholesterol; in hospital, last year.");
+  });
+
+  // Both rules, in en, ms and zh, in the owner's own voice and the caregiver's — the exact
+  // catalogue templates and connectors each language ships (`strings/{en,ms,zh}.ts`
+  // `onboarding.cloud.ackSelf`/`ackOther`/`and`), not a copy of them, so a future wording change
+  // that breaks this composition fails here first.
+  const CATALOGUES = [
+    { code: "en", s: en, lowercase: true },
+    { code: "ms", s: ms, lowercase: true },
+    { code: "zh", s: zh, lowercase: false },
+  ] as const;
+
+  for (const { code, s, lowercase } of CATALOGUES) {
+    const c = s.onboarding.cloud;
+
+    it(`${code}, the owner's own voice`, () => {
+      const line = acknowledgementLine([bubble("High blood pressure")], c.ackSelf, c.and, { lowercase });
+      expect(line).toBeTruthy();
+      expect(line).toContain(lowercase ? "high blood pressure" : "High blood pressure");
+    });
+
+    it(`${code}, the caregiver's voice — names the patient, never "your"`, () => {
+      const line = acknowledgementLine([bubble("High blood pressure")], c.ackOther, c.and, { slots: { name: "Pa" }, lowercase });
+      expect(line).toBeTruthy();
+      expect(line).toContain("Pa");
+      expect(line).not.toMatch(/\byour\b/i);
+    });
+
+    it(`${code}, a comma-carrying name falls back to semicolons in both voices`, () => {
+      const names = [bubble("High blood pressure"), bubble("In hospital, last year")];
+      const self = acknowledgementLine(names, c.ackSelf, c.and, { lowercase })!;
+      const other = acknowledgementLine(names, c.ackOther, c.and, { slots: { name: "Pa" }, lowercase })!;
+      expect(self).toContain("; ");
+      expect(other).toContain("; ");
+    });
+  }
+});
+
+describe("phaseOf", () => {
+  it("is deterministic — the same code always gets the same phase", () => {
+    expect(phaseOf("high_blood_pressure")).toBe(phaseOf("high_blood_pressure"));
+  });
+
+  it("stays within 0–1", () => {
+    for (const code of ["a", "high_blood_pressure", "in_hospital_last_year", ""]) {
+      const phase = phaseOf(code);
+      expect(phase).toBeGreaterThanOrEqual(0);
+      expect(phase).toBeLessThan(1);
+    }
+  });
+
+  it("varies between different codes — the whole point is neighbours do not move in lockstep", () => {
+    const phases = new Set(["high_blood_pressure", "cholesterol", "diabetes", "heart"].map(phaseOf));
+    expect(phases.size).toBeGreaterThan(1);
   });
 });

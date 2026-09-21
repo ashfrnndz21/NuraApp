@@ -53,7 +53,27 @@ export function PhoneScreen(): JSX.Element {
         <div class="signin-step">
           <Says text={s.signIn.phoneLead} testId="signin-say" />
           <p class="caption">{s.signIn.phoneHint}</p>
-          <Field name="phone" label={s.signIn.phoneLabel} value={phone} onInput={setPhone} type="tel" inputMode="tel" autoComplete="tel" />
+          <Field
+            name="phone"
+            label={s.signIn.phoneLabel}
+            value={phone}
+            onInput={(value) => {
+              setPhone(value);
+              // Clears the moment he types again — the refusal was about the number he already
+              // sent, not the one he is now editing (operator review: keep the error tied to
+              // the field it is about, and gone the instant that changes).
+              if (error) setError(null);
+            }}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            ariaInvalid={Boolean(error)}
+            ariaDescribedBy={error ? "phone-error" : undefined}
+          />
+          {/* Right under the field it is about, not a separate card below the whole form
+              (operator review) — one `role="alert"` region, tied to the input by
+              `aria-describedby` above. */}
+          <Notice error={error} id="phone-error" />
           <Field name="name" label={s.signIn.nameLabel} value={name} onInput={setName} autoComplete="given-name" />
           <ThreeStateButton
             label={s.signIn.sendCode}
@@ -64,7 +84,6 @@ export function PhoneScreen(): JSX.Element {
           />
         </div>
       </Tile>
-      <Notice error={error} />
       <Pill quiet onClick={() => go({ name: "email" })}>
         {s.signIn.useEmail}
       </Pill>
@@ -117,7 +136,27 @@ export function CodeScreen({ phone }: { phone: string }): JSX.Element {
         <div class="signin-step">
           <Says text={s.signIn.codeLead} testId="signin-say" />
           <p>{s.signIn.codeHint}</p>
-          <Field name="code" label={s.signIn.codeLabel} value={code} onInput={setCode} inputMode="numeric" autoComplete="one-time-code" big maxLength={6} />
+          <Field
+            name="code"
+            label={s.signIn.codeLabel}
+            value={code}
+            onInput={(value) => {
+              setCode(value);
+              // The old code he just typed is what the refusal was about; typing again is a
+              // fresh try, so the error clears the instant he does (operator review).
+              if (error) setError(null);
+            }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            big
+            maxLength={6}
+            ariaInvalid={Boolean(error)}
+            ariaDescribedBy={error ? "code-error" : undefined}
+          />
+          {/* Right under the code field, not a separate card far below it (operator review):
+              `role="alert"` announces it once, and `aria-describedby` above ties it to the
+              input a screen reader is already on. */}
+          <Notice error={error} errorKind={errorKind ?? undefined} id="code-error" />
           <ThreeStateButton
             label={s.signIn.signInButton}
             busyLabel={s.signIn.checking}
@@ -143,7 +182,6 @@ export function CodeScreen({ phone }: { phone: string }): JSX.Element {
           )}
         </div>
       </Tile>
-      <Notice error={error} errorKind={errorKind ?? undefined} />
     </main>
   );
 }

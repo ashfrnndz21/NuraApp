@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import { saveWordsAndGoOn } from "../../onboarding/actions";
-import { acknowledgementLine, asksFor, cloudView, foldTold, toggle, type CloudWord } from "../../onboarding/cloud";
+import { acknowledgementLine, asksFor, cloudView, foldTold, phaseOf, toggle, type CloudWord } from "../../onboarding/cloud";
 import { answers, conditions, picked, say, to, whose } from "../../onboarding/state";
 import { speak } from "../../speech/speak";
 import { token } from "../../store/session";
@@ -98,7 +98,9 @@ export function CloudStep(): JSX.Element {
 
   const title = say(c.titleSelf, c.titleOther);
   const pickedWords = view.filter((word) => word.picked);
-  const ack = acknowledgementLine(pickedWords, say(c.ackSelf, c.ackOther), c.and, { name: whose().name });
+  // en/ms read a name mid-sentence lower-case ("you told me about high blood pressure"); zh has
+  // no letter case to change (`lowerFirst`, `onboarding/cloud.ts`).
+  const ack = acknowledgementLine(pickedWords, say(c.ackSelf, c.ackOther), c.and, { slots: { name: whose().name }, lowercase: language.value !== "zh" });
   return (
     <main class="screen onboarding" data-stage="cloud">
       <StepTitle title={title} />
@@ -107,36 +109,48 @@ export function CloudStep(): JSX.Element {
           tappable bubbles, sized by how common the word is; a tick and heavier weight mark a
           pick, never colour alone (WCAG 1.4.1). The words, sizes, order and every test id below
           are exactly what the plain word-cloud markup this replaces already had — only the
-          shape and the drift are new. */}
+          shape and the drift are new. Each bubble's own `phaseOf(word.code)` gives its drift a
+          different delay and duration (on the inner `.bubble-surface`, never the button itself
+          — see the comment on `.word.bubble` in onboarding.css) so neighbours never move in
+          lockstep. */}
       <div class="cloud bubble-cloud" role="group" aria-label={title} data-testid="cloud">
-        {view.map((word) => (
-          <button
-            key={word.code}
-            type="button"
-            class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
-            aria-pressed={word.picked}
-            data-testid={`word-${word.code}`}
-            data-size={word.size}
-            onClick={() => tap(word)}
-          >
-            <span class="bubble-surface" aria-hidden="true" />
-            {word.picked && (
-              <span class="bubble-tick" aria-hidden="true">
-                <Icon name="check" />
-              </span>
-            )}
-            {word.name}
-            {word.picked && word.term && <span class="term" data-testid="term">{` (${word.term})`}</span>}
-          </button>
-        ))}
+        {view.map((word, at) => {
+          const phase = phaseOf(word.code);
+          return (
+            <button
+              key={word.code}
+              type="button"
+              class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}${at % 3 === 1 ? " stagger-a" : at % 3 === 2 ? " stagger-b" : ""}`}
+              aria-pressed={word.picked}
+              data-testid={`word-${word.code}`}
+              data-size={word.size}
+              onClick={() => tap(word)}
+            >
+              <span class="bubble-surface" aria-hidden="true" style={{ animationDelay: `${-phase * 7}s`, animationDuration: `${5 + phase * 3}s` }} />
+              {word.picked && (
+                <span class="bubble-tick" aria-hidden="true">
+                  <Icon name="check" />
+                </span>
+              )}
+              {word.name}
+              {word.picked && word.term && <span class="term" data-testid="term">{` (${word.term})`}</span>}
+            </button>
+          );
+        })}
       </div>
-      {ack && (
+      {/* One Nura turn, one orb: the acknowledgement and the per-tap status
+          ("Nura wrote that down.") are the same turn's two lines, not an orphan status line
+          floating with no indent under it (operator review) — `status` alone (nothing picked
+          yet, or the last tap unpicked down to zero) still shows under the orb on its own. */}
+      {(ack || status) && (
         <div class="cloud-ack">
           <Orb size="sm" />
-          <SoftText text={ack} pace="body" as="p" className="cloud-ack-line" testId="cloud-ack" />
+          <div class="cloud-ack-lines">
+            {ack && <SoftText text={ack} pace="body" as="p" className="cloud-ack-line" testId="cloud-ack" />}
+            <Status text={status} testId="cloud-status" />
+          </div>
         </div>
       )}
-      <Status text={status} testId="cloud-status" />
       <p class="caption" data-testid="cloud-count">
         {picked.value.length > 0 ? fill(c.count, { n: picked.value.length }) : c.countNone}
       </p>

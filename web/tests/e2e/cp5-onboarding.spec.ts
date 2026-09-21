@@ -69,6 +69,67 @@ test("welcome and sign in, in the blueprint's own shape", async ({ page }) => {
   await expect(page.getByTestId("signin-say")).toBeVisible();
 });
 
+test("sign-in: the phone-number step's own error sits right under the field, and clears when he types again", async ({ page }) => {
+  await page.goto("./");
+  await pastWelcome(page);
+  const phone = page.getByLabel("Your phone number");
+  const already = freshPhone("+659878");
+  // AlreadyRegistered is a real refusal `startPhone` can return for a number already signed up
+  // (mocked here only because seeding one through the app first would need its own sign-in,
+  // not because the backend can't produce it) — the point is the placement/aria wiring, not
+  // this one particular refusal class.
+  await page.route("**/auth/phone/start", async (route) => {
+    await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ refusal: "AlreadyRegistered" }) });
+  });
+  await phone.fill(already);
+  await page.getByTestId("send-code").click();
+  const notice = page.getByTestId("notice");
+  await expect(notice).toBeVisible();
+  const noticeId = await notice.getAttribute("id");
+  expect(noticeId).toBeTruthy();
+  await expect(phone).toHaveAttribute("aria-describedby", noticeId!);
+  await expect(phone).toHaveAttribute("aria-invalid", "true");
+
+  await phone.fill(freshPhone("+659877"));
+  await expect(notice).toHaveCount(0);
+  await expect(phone).not.toHaveAttribute("aria-invalid", "true");
+});
+
+/** Operator review: the old layout (illustration + heart + tall headline + three tall cards)
+ *  pushed "Get started" below the fold at 390x844 — a first screen whose only action is not
+ *  visible is a defect. This must hold with no scrolling at both sizes; at 360x640 the orb is
+ *  allowed to shrink (`clamp()`, onboarding.css) but the button must still be on screen. */
+for (const size of [
+  { width: 390, height: 844, label: "390x844" },
+  { width: 360, height: 640, label: "360x640" },
+]) {
+  test(`welcome: "Get started" is on screen with no scrolling at ${size.label}`, async ({ page }) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await page.goto("./");
+    const welcome = page.getByTestId("welcome-screen");
+    await expect(welcome).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+
+    const scrollHeight = await page.evaluate(() => document.scrollingElement?.scrollHeight ?? 0);
+    expect(scrollHeight, "the welcome screen scrolls").toBeLessThanOrEqual(size.height + 1);
+
+    const button = page.getByTestId("welcome-start");
+    const box = (await button.boundingBox())!;
+    expect(box.y, "Get started's top").toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height, "Get started's bottom").toBeLessThanOrEqual(size.height);
+
+    const rows = await page.locator(".value-row").evaluateAll((nodes, viewportHeight) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom, clipped: rect.top < 0 || rect.bottom > viewportHeight, text: (node.textContent ?? "").trim() };
+      }),
+      size.height,
+    );
+    expect(rows.length).toBe(3);
+    for (const row of rows) expect(row.clipped, row.text).toBe(false);
+  });
+}
+
 test("who is this for: two choose-cards, and the caregiver path names him rather than saying 'your'", async ({ page, request }) => {
   const phone = freshPhone("+659872");
   await throughSignIn(page, phone, "Ash");
@@ -113,11 +174,31 @@ test("sign-in: wrong code, then a real resend, then the right one", async ({ pag
   const phone = freshPhone("+659873");
   await throughSend(page, phone, "Pa");
 
-  await page.getByLabel("The code").fill("000000");
+  const code = page.getByLabel("The code");
+  await code.fill("000000");
   await page.getByTestId("verify-code").click();
   const notice = page.getByTestId("notice");
   await expect(notice).toBeVisible();
   await expect(notice.locator("[data-error-kind]")).toHaveAttribute("data-error-kind", "wrongCode");
+  // Right under the field it is about (operator review), tied to it for a screen reader, not a
+  // separate card elsewhere on the screen.
+  const noticeId = await notice.getAttribute("id");
+  expect(noticeId).toBeTruthy();
+  await expect(code).toHaveAttribute("aria-describedby", noticeId!);
+  await expect(code).toHaveAttribute("aria-invalid", "true");
+  const fieldBox = (await code.boundingBox())!;
+  const noticeBox = (await notice.boundingBox())!;
+  expect(noticeBox.y, "the notice sits right under the code field, not far below the form").toBeLessThan(fieldBox.y + fieldBox.height + 120);
+
+  // Typing again clears it — the refusal was about the code already sent, not the one now
+  // being typed.
+  await code.fill("111111");
+  await expect(notice).toHaveCount(0);
+  await expect(code).not.toHaveAttribute("aria-invalid", "true");
+
+  await code.fill("000000");
+  await page.getByTestId("verify-code").click();
+  await expect(notice).toBeVisible();
 
   // A real resend: it asks the backend again, exactly as the first send did, and shows what
   // came back — never a client-side countdown.
