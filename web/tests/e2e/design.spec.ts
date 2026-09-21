@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { API, fixClock, nothingDrawnOverLines, openMe, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
+import { API, fixClock, nothingDrawnOverLines, openMe, seedOwner, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
 import { seedHome } from "./homeSeed";
 
 /** D1, the design pass: his Today and her Home as designed, on the patient's phone and a small
@@ -56,29 +56,25 @@ for (const [label, viewport] of [
       await todayReady(page);
       await expect(page.locator("html")).toHaveAttribute("data-density", "patient");
 
-      // The hero is the backend's count and words, never one worked out on the phone.
-      const now = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines/now?language=en`, auth(pa.token))).json()) as { count: number | null; words: string | null };
-      if (now.count === null) await expect(page.getByTestId("hero-figure")).toHaveCount(0);
-      else {
-        await expect(page.getByTestId("today-hero").getByTestId("hero-figure")).toHaveText(String(now.count));
-        await expect(page.getByTestId("today-hero").getByTestId("hero-words")).toHaveText(now.words!);
-      }
+      // Home's own doses still come from the backend's own numbers, never one worked out on
+      // the phone (cp3-home moved the hero's old "count/words" figure into the Now section and
+      // the busy-day insight card; `hero-figure`/`hero-words` no longer exist on Home).
       const slots = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines/today?language=en`, auth(pa.token))).json()) as { due_now: boolean; taken: boolean }[];
       await expect(page.getByTestId("now-card")).toHaveCount(slots.filter((slot) => slot.due_now && !slot.taken).length);
-      if (now.count !== null && slots.some((slot) => slot.due_now)) await expect(page.getByTestId("now-card")).toHaveCount(now.count);
 
-      // One tab set (D1, the reset), his ask bar, the family's note, the visit, and the coral
-      // pill under the hero.
+      // One tab set (D1, the reset), his own docked ask bar with the orb, the family's note,
+      // the visit, and the coral "Not well?" pill in the header (cp3-home).
       await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
-      await expect(page.getByTestId("askbar").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask Nura a question");
+      await expect(page.getByTestId("home-ask-bar").getByTestId("home-ask-open")).toHaveText("Ask Nura anything");
+      await expect(page.getByTestId("home-ask-bar").getByTestId("home-ask-orb")).toBeVisible();
       await expect(page.getByTestId("family-note")).toContainText("From Mei");
       await expect(page.getByTestId("family-note")).toContainText("The grandchildren were at the park this morning.");
       await expect(page.getByTestId("visit-tile")).toBeVisible();
-      // The way in when he feels unwell comes before anything ranked: right under the hero.
-      expect(await page.getByTestId("today-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
+      // The way in when he feels unwell is in the header, beside the greeting (cp3-home).
+      await expect(page.getByTestId("home-head").getByTestId("not-well")).toBeVisible();
       await expect(page.getByTestId("not-well")).toHaveAttribute("class", /coral/);
       // At most one Plum-filled button on the screen.
-      expect(await page.locator("main button.plum, main .askbar-go").count()).toBeLessThanOrEqual(1);
+      expect(await page.locator("main button.plum").count()).toBeLessThanOrEqual(1);
 
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label", controls: "button", minTarget: 56 })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);
@@ -115,16 +111,35 @@ for (const [label, viewport] of [
       await todayReady(page);
       await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
 
-      const state = (await (await request.get(`${API}/profiles/${family.profileId}/state?language=en`, auth(family.meiToken))).json()) as { word: string; line: string; drivers: { text: string }[] };
-      const hero = page.getByTestId("home-hero");
-      await expect(hero.getByTestId("hero-figure")).toHaveText(state.word);
-      await expect(hero.getByTestId("hero-words")).toHaveText(state.line);
+      const state = (await (await request.get(`${API}/profiles/${family.profileId}/state?language=en`, auth(family.meiToken))).json()) as {
+        word: string;
+        line: string;
+        posture: string;
+        drivers: { text: string }[];
+      };
+      // cp3-home: the State's own drivers and sparkline sit in their own panel under the header
+      // (`home-state`), shown whenever there is a current State — unchanged from before this
+      // rebuild; the safety/boundary sentences themselves stay to once per screen, on the State
+      // card when one is also on the page, else in the foot note (`home-safety-note`). The
+      // word and its provenance (owner review round 3, fix #4) draw only while a posture
+      // actually leads — stable's own "Steady — nothing needs doing" was the leftover
+      // boilerplate on the first screen the owner found; reachable through the State card and
+      // the why sheet either way.
+      const panel = page.getByTestId("home-state");
+      const leads = state.posture === "act" || state.posture === "watch";
+      if (leads) {
+        await expect(panel).toContainText(state.word);
+        await expect(panel).toContainText(state.line);
+        await expect(panel.getByTestId("home-from")).toContainText("Nura worked this out on");
+      } else {
+        await expect(panel.locator(".home-state-word")).toHaveCount(0);
+        await expect(panel.getByTestId("home-from")).toHaveCount(0);
+      }
       if (state.drivers.length > 0) await expect(page.getByTestId("drivers").locator(".glass-chip")).toHaveText(state.drivers.map((driver) => driver.text));
-      await expect(hero.getByTestId("sparkline")).toBeVisible();
-      await expect(hero.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last blood pressure had a top number of 138.");
-      // Where the State came from, and the way in when he is unwell, on her Home too.
-      await expect(hero.getByTestId("home-from")).toContainText("Nura worked this out on");
-      expect(await page.getByTestId("home-hero").evaluate((hero) => hero.nextElementSibling?.getAttribute("data-testid"))).toBe("not-well");
+      await expect(panel.getByTestId("sparkline")).toBeVisible();
+      await expect(panel.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last blood pressure had a top number of 138.");
+      // The way in when he is unwell is in the header, beside her greeting (cp3-home).
+      await expect(page.getByTestId("home-head").getByTestId("not-well")).toBeVisible();
 
       // "What changed" is back on her Home (#207): `GET /changes?peek=true` answers the same
       // words without spending his look, so the tile draws without writing his trail — it is
@@ -141,11 +156,12 @@ for (const [label, viewport] of [
       // key's own two panels, immediately below the row (F1, #177).
       await expect(page.getByTestId("watching")).toBeVisible();
       await expect(page.getByTestId("sent")).toBeVisible();
-      await expect(page.getByTestId("ask-about")).toHaveText("Ask about Pa");
+      // "Ask about Pa" is Home's own docked ask bar now (cp3-home's `home-ask-bar`), not a
+      // separate pill in the flow.
+      await expect(page.getByTestId("home-ask-bar").getByTestId("home-ask-open")).toHaveText("Ask about Pa");
 
       // The same list for her: density changes the look, never the tabs.
       await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
-      await expect(page.locator(".shell-ask").getByTestId("ask-input")).toHaveAttribute("placeholder", "Ask about Pa");
       expect(await nothingDrawnOverLines(page.locator("main"), { lines: "h1, h2, p, .label" })).toEqual([]);
       expect(await shellHolds(page)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
@@ -163,17 +179,136 @@ for (const [label, viewport] of [
   });
 }
 
-/** A red word typed into Ask or search (on the top of his Today) goes the red-flag path first,
- *  on the backend, exactly as the same word tapped on the feeling cloud: what to do now, never
- *  an answer looked up first. */
+/** A red word typed into Ask (reached from Home's own docked ask bar, cp3-home) goes the
+ *  red-flag path first, on the backend, exactly as the same word tapped on the feeling cloud:
+ *  what to do now, never an answer looked up first. */
 test("a red word typed into Ask or search: the red-flag path first, then what to do now", async ({ page, request }) => {
   const pa = await seedHome(request);
   await signInThroughTheApp(page, pa.phone, "Pa");
   await todayReady(page);
-  const ask = page.getByTestId("askbar").getByTestId("ask-input");
-  await ask.fill("My chest is tight");
-  await ask.press("Enter");
+  await page.getByTestId("home-ask-open").click();
+  await expect(page.getByTestId("ask-screen")).toBeVisible();
+  await page.getByLabel("Your question").fill("My chest is tight");
+  await page.getByTestId("ask-send").click();
   await expect(page.getByTestId("what-to-do-screen")).toBeVisible();
   await expect(page.getByTestId("what-to-do-lines").locator("p").first()).toBeVisible();
   await expect(page.getByTestId("answer")).toHaveCount(0);
+});
+
+/** Fix #1 (owner review of PR #295): "Ask Nura anyth…" clipped was a bug — the whole word must
+ *  be readable, at 390px, in every language, for his own voice and the caregiver's longer
+ *  "Ask about {patient}". `scrollWidth <= clientWidth` is the same check the browser's own
+ *  overflow does: nothing of the label is cut off, whether it takes one line or wraps to two. */
+async function askWordFits(page: Page): Promise<void> {
+  const word = page.getByTestId("home-ask-open");
+  const box = await word.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+  expect(box.scrollWidth, (await word.textContent()) ?? "").toBeLessThanOrEqual(box.clientWidth + 1);
+}
+
+test("Home's ask bar label never clips: at 390px, in en, ms and zh, his own voice", async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const pa = await seedOwner(request, "Pa");
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  await askWordFits(page); // English, his own voice.
+  await openMe(page);
+  await page.getByTestId("lang-ms").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+  await openMe(page);
+  await page.getByTestId("lang-zh").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+});
+
+test("Home's ask bar label never clips: at 390px, in en, ms and zh, the caregiver's own voice", async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The caregiver's own, longer line ("Ask about {patient}"): a fresh page and a fresh sign-in
+  // (never a sign-out mid-test — the same isolation every other spec's own test already gets).
+  const family = await seedHome(request);
+  await signInThroughTheApp(page, family.meiPhone, "Mei");
+  await page.getByTestId("door-key").click();
+  await todayReady(page);
+  await askWordFits(page);
+  await openMe(page);
+  await page.getByTestId("lang-ms").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+  await openMe(page);
+  await page.getByTestId("lang-zh").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+});
+
+/** Fix #1 (owner review round 2 of PR #295): the merged header — avatar/switcher, greeting,
+ *  bell, "Not well?" and the menu — is one row, and only one, at 390px: every one of its real
+ *  controls shares a single vertical band (never one drawn above or below the rest, the visible
+ *  shape the `.shell-head`'s own broken `display: grid` had produced before it was fixed), and
+ *  the whole header stays inside the 72px the owner set for it. */
+test("Home's header is one visual row at 390px, no taller than 72px", async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const pa = await seedOwner(request, "Pa");
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  const header = page.getByTestId("home-head");
+  const headerBox = (await header.boundingBox())!;
+  expect(headerBox.height, "home-head's own height").toBeLessThanOrEqual(72);
+
+  const boxes = await Promise.all(
+    [page.getByTestId("whose"), page.getByTestId("bell"), page.getByTestId("not-well"), page.getByTestId("open-me")].map(async (each) => (await each.boundingBox())!),
+  );
+  // One shared band: every control's own vertical middle falls inside every other control's
+  // own top-to-bottom span — the way the eye reads a single row, not stacked ones.
+  for (const a of boxes) {
+    const middle = a.y + a.height / 2;
+    for (const b of boxes) {
+      expect(middle, "a control's own middle, inside every other control's own span").toBeGreaterThanOrEqual(b.y - 1);
+      expect(middle).toBeLessThanOrEqual(b.y + b.height + 1);
+    }
+  }
+});
+
+/** Fix #6 (owner review of PR #295): the quiet day the owner explicitly asked to see — nothing
+ *  due, nothing new, no visit soon, nothing near its reorder point, no insight raised — is the
+ *  large breathing orb, the greeting, and chips that each go somewhere real. No boilerplate
+ *  paragraph anywhere on it, and the safety line (his State's own boundary) appears once. */
+test("a quiet day: the large orb, the greeting, working chips, no boilerplate, the safety line once", async ({ page, request }) => {
+  const pa = await seedOwner(request, "Pa", []);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  const hero = page.getByTestId("today-hero");
+  await expect(hero.getByTestId("home-orb-lg")).toBeVisible();
+  await expect(hero.getByTestId("quiet-greeting")).toContainText("Pa");
+  await expect(page.getByTestId("home-headline")).toHaveCount(0);
+  await expect(page.getByTestId("insight-card")).toHaveCount(0);
+
+  // No boilerplate paragraph: the old fixed provenance line the redesign removed from the
+  // hero (it only ever belonged on a State card, and no State card is on a quiet day).
+  const shown = await page.getByTestId("shell-scroll").innerText();
+  expect(shown).not.toContain("Nura worked this out on");
+
+  // The safety line — the State's own real boundary sentence (not invented here: a quiet,
+  // stable day's own words, "Nura put your day in order...", `backend/app/safety/boundary.py`)
+  // — appears exactly once on the page. `SafetyNote` (Today.tsx) joins every boundary line
+  // into one line with a space, so the count is of that whole joined sentence, not of its
+  // first line alone (which never stands on its own in the DOM).
+  const state = (await (await request.get(`${API}/profiles/${pa.profileId}/state?language=en`, { headers: { Authorization: `Bearer ${pa.token}` } })).json()) as { boundary: string };
+  const wholeBoundary = state.boundary.split("\n").map((l) => l.trim()).filter(Boolean).join(" ");
+  if (wholeBoundary) {
+    const seen = shown.split(wholeBoundary).length - 1;
+    expect(seen, "the safety line must appear exactly once").toBe(1);
+  }
+
+  // Each chip goes somewhere real.
+  await expect(page.getByTestId("chip-report")).toBeVisible();
+  await expect(page.getByTestId("chip-week")).toBeVisible();
+  await page.getByTestId("chip-week").click();
+  await expect(page.getByTestId("tab-health")).toHaveAttribute("aria-current", "page");
 });

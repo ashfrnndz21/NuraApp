@@ -1,26 +1,37 @@
 import { useEffect, useState } from "preact/hooks";
 import { EmergencyCard } from "./Emergency";
 import type { KeptCard } from "../offline/emergencyCache";
+import { emergencyOnly } from "../offline/emergencyCache";
 import { zoneOf } from "../offline/todayCache";
 import type { JSX } from "preact";
 import * as family from "../api/family";
 import * as nura from "../api/nura";
 import type { AppointmentOut, ChangesOut, FeedItemOut, LineOut, LogisticsOut, VisitQuestionOut } from "../api/types";
+import { batch } from "../capture/session";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
 import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
-import { go, openTab } from "../flow";
-import { density, me, profile, token } from "../store/session";
+import { go, openMe, openTab } from "../flow";
+import { speak } from "../speech/speak";
+import { density, isSelf, me, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
+import { rangeStatus } from "../onboarding/review";
 import {
   clockWords,
   lineTitle,
+  dateChip,
   dateLine,
+  dayKey,
   dueCards,
   feedLines,
   greeting,
   heroFurnitureAllowed,
+  homeHeadlineFor,
   homeHero,
+  insightExtraLines,
+  homeState,
+  homeTopItem,
+  homeTopItemDate,
   nearestToRunOut,
   readingLead,
   stateLines,
@@ -29,56 +40,62 @@ import {
   todayList,
   weekdayOf,
   whyLine,
+  type HomeTopItem,
+  type PaperSummary,
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
-import { Avatar, Chip, ChipRow, FeedCard, GlassTile, Hero, Icon, IconBadge, PanelList, PillButton, SectionLabel, Sparkline, TintCard, toneOf } from "../ui/kit";
-import { CoupleIllustration } from "../ui/illustrations";
+import { Avatar, Chip, ChipRow, FeedCard, Glass, GlassTile, Icon, IconBadge, Orb, PanelList, PillButton, SectionLabel, SoftText, Sparkline, TintCard, toneOf } from "../ui/kit";
 import { AddReport, CheckInCard, DoGrid, HomeSkeleton, Upcoming } from "./HomeParts";
-import { AskField, Shell } from "./Shell";
+import { BellButton, Shell } from "./Shell";
+import { ProfileSwitcher } from "./Switcher";
 import { ChiefPanels } from "./ChiefPanels";
 
-/** Today (D1, docs/ui-mockup.html and docs/ui-mockup-v2.html): his Today in the patient's
- *  density, the chief's Home in the caregiver's. Both read the same page (`useToday`); every
- *  line on either is the backend's or the catalogue's, every card has its source and its
- *  spoken twin, and nothing is drawn over a line. */
+/** Home (cp3-home, the living orb): his own Home in the patient's density, the chief's Home in
+ *  the caregiver's — both read the same page (`useToday`) and both draw through `HomeHero`
+ *  below, which is the one place that decides whose voice Home speaks in (`isSelf()`, never
+ *  `density()`: a "Look" chosen for size or simplicity must never put the wrong voice in
+ *  either mouth — the bug the owner found, "Ask about Tan" on Tan's own phone, was `density()`
+ *  doing that job). Every line is the backend's or the catalogue's; nothing is drawn over a
+ *  line; the safety line appears once (`SafetyNote` below, or the State card's own boundary
+ *  when a State card is already on the page — never both). */
 export function TodayScreen({ saved }: { saved?: boolean }): JSX.Element {
   return density() === "patient" ? <DadToday saved={saved ?? false} /> : <ChiefHome saved={saved ?? false} />;
 }
 
-/** His Today: ask or search; the one big number on the wash; "Now", a tile for each dose due
- *  with its pill and a full-width Taken; the day's check-in; "For you today" in the card
- *  grammar; the next visit with what to bring; a note from the family; and the coral pill,
- *  always last, always there — offline too. */
+/** His Home: the orb-led hero, "Now" for a dose due with its pill and a full-width Taken, the
+ *  day's check-in, "For you today" in the card grammar, the next visit with what to bring, a
+ *  note from the family, and the coral "Not well?" pill in the header, always there. */
 function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
-  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, stateAt, now, nextVisit, papers } = v;
-  const locale = LOCALE[language.value];
+  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, stateAt, nextVisit, papers } = v;
   const name = papers?.display_name || me.value?.display_name || "";
-  const hero = page?.hero ?? null;
   // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
-  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
+  // it — not even the hero's question or the daily check-in (today/model.ts:260-269).
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
+  const showsBoundary = stateAt === "top" || stateAt === "now" || stateAt === "forYou";
+  const voice = homeVoice(v, name);
+  const hero = useHomeHero(v, name, voice);
   return (
-    <Shell tab="home" testId="today-screen" topBar={{ variant: "home" }}>
-      <AskField placeholder={s.shell.askNura} />
-      <Hero
-        greeting={greeting(now.getHours(), name, s)}
-        wave={furniture}
-        ask={furniture ? s.hub.howFeeling : undefined}
-        sub={dateLine(now, locale)}
-        art={furniture ? <CoupleIllustration /> : undefined}
-        figure={fromPhone ? null : (hero?.count ?? null)}
-        words={!fromPhone && hero?.count !== null && hero?.count !== undefined ? hero.words : null}
-        testId="today-hero"
-      />
-      {/* The way in when he feels unwell comes before anything ranked (red flags escalate first). */}
-      <NotWellButton />
+    <Shell
+      tab="home"
+      testId="today-screen"
+      header={<HomeTopBar voice={voice} quiet={hero.ready && hero.state === "quiet"} />}
+      ask={false}
+      bottomBar={<HomeAskBar patientName={name} />}
+    >
+      <HomeHero v={v} patientName={name} voice={voice} hero={hero} />
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       <Held v={v} />
-      {!page && !blank && !v.error && <HomeSkeleton />}
+      {/* Fix #1 (owner review round 3): the calm skeleton stays until Home's own busy/quiet
+          decision is actually ready, not only until `page` lands — the flash the owner found
+          was the quiet state painting first, as a placeholder, while a slower input (the
+          visits read, today's own reading, a confirmed paper's range summary) was still on
+          its way. Header and ask bar need none of this (`Shell`'s own props, above) and never
+          wait for it. */}
+      {(!page || !hero.ready) && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -108,7 +125,7 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             {!fromPhone && (
               <Card
                 title={s.today.readingTitle}
-                lines={[readingLead(now.getHours(), s)]}
+                lines={[readingLead(v.now.getHours(), s)]}
                 testId="reading-prompt"
                 action={
                   <PillButton onClick={() => go({ name: "reading" })} testId="write-reading">
@@ -120,15 +137,13 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
             </PillButton>
-            <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
-              {s.feed.askOrSearch}
-            </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
             {!fromPhone && <FamilyNote />}
-            {/* The emergency card, one tap from Today, with no network too (W4). */}
+            {/* The emergency card, one tap from Home, with no network too (W4). */}
             <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
               {s.today.emergencyOpen}
             </PillButton>
+            {!showsBoundary && <SafetyNote boundary={page.boundary} />}
           </>
         )
       )}
@@ -136,73 +151,76 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   );
 }
 
-/** The chief's Home: "Ask about Pa" on top (the shell's); the State as its word with the
- *  drivers as chips and his blood pressures as a sparkline; what changed since she last looked,
- *  a dot in its tone on each line; the next visit and what to buy side by side; what the papers
- *  are missing; then the doses she may tap for him, and today's cards. */
+/** The chief's Home: the same orb-led hero speaking of him by name, the State's drivers and his
+ *  blood pressures as a sparkline once there is a State card to carry them, what changed since
+ *  she last looked, the next visit and what to buy side by side, what the papers are missing,
+ *  then the doses she may tap for him, and today's cards. */
 function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const v = useToday();
-  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt, now, papers } = v;
+  const { s, page, blank, feed, fromPhone, unreached, top, useFeed, nextVisit, stateAt, papers } = v;
   const bearer = token.value;
   const drivers = page?.drivers ?? [];
-  // Safety check 5: while a red-flag card is on the page, nothing of the State may sit above
-  // it — not even the Hero's wave, its question, or its illustration (today/model.ts:260-269).
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
-  const hero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
-  const locale = LOCALE[language.value];
-  const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
+  const stateHero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
+  const state = page !== null && page.stateId !== null && Boolean(page.word) && stateHero !== null;
+  const showsBoundary = stateAt === "top" || stateAt === "forYou";
+  const patientName = papers?.display_name || "";
+  const voice = homeVoice(v, patientName);
+  const hero = useHomeHero(v, patientName, voice);
   return (
-    <Shell tab="home" testId="home-screen" topBar={{ variant: "home" }}>
+    <Shell
+      tab="home"
+      testId="home-screen"
+      header={<HomeTopBar voice={voice} quiet={hero.ready && hero.state === "quiet"} />}
+      ask={false}
+      bottomBar={<HomeAskBar patientName={patientName} />}
+    >
       {page && <span data-testid="today-ready" hidden />}
-      {/* Her greeting is hers — her own name — and the question under it is about him, by name:
-          on a key that is not his, `t()` reads `hub.howFeeling` as its twin `howFeelingOther`
-          (strings/index.ts, ABOUT_HIM), so a caregiver's Home never speaks in his voice. */}
-      <Hero
-        greeting={greeting(now.getHours(), me.value?.display_name || "", s)}
-        wave={furniture}
-        ask={furniture ? s.hub.howFeeling : undefined}
-        art={furniture ? <CoupleIllustration /> : undefined}
-        label={state && hero?.word ? s.home.mostLikely : undefined}
-        figure={state ? hero?.word : undefined}
-        words={state ? hero?.line : undefined}
-        testId="home-hero"
-      >
-        {state && page && hero && (
-          <>
-            <Readings />
-            {hero.drivers && drivers.length > 0 && (
-              <ChipRow testId="drivers" label={s.home.mostLikely}>
-                {drivers.map((driver) => (
-                  <Chip key={driver.key} tone={toneOf(driver.tone)}>
-                    {driver.text}
-                  </Chip>
-                ))}
-              </ChipRow>
-            )}
-            {/* Where the State came from and when, and the boundary it is shown under: with the
-                State's word, never over a flag. */}
-            {hero.word && (
-              <>
-                <p class="hero-sub" data-testid="home-from">
-                  {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), locale) })}
-                </p>
-                {(page.boundary ?? []).length > 0 && (
-                  <div class="hero-boundary" data-testid="home-boundary">
-                    {(page.boundary ?? []).map((line, at) => (
-                      <p key={at}>{line}</p>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </Hero>
-      <NotWellButton />
+      <HomeHero v={v} patientName={patientName} voice={voice} hero={hero} />
+      {/* Her Home's State word (docs/design/full-experience.html): shown whenever there is a
+          current State to show (`homeHero`'s own flagged/kept rule — unchanged from before
+          cp3-home), never gated on `stateAt`, which decides only where the *State card itself*
+          lands among today's cards, not whether the word is reachable at all. Its provenance
+          line is here, as it always was; the safety/boundary sentences themselves are not —
+          those stay exactly once, on the State card when `stateAt` puts one on the page, else
+          in `SafetyNote` at the foot (below). */}
+      {state && page && stateHero && (
+        <div class="panel-stack" data-testid="home-state">
+          {/* The state's own word and its provenance line (owner review round 3, fix #4): shown
+              only while a posture actually leads (act or watch — "unchanged" per the owner) —
+              stable's own "Steady — nothing needs doing" was the leftover boilerplate the owner
+              found on the first screen, in both the busy and the quiet state. The word and its
+              provenance are still reachable through the existing State card route
+              (`stateAt === "top"`, below) and the why sheet; the drivers and the sparkline are
+              real data, not boilerplate, and stay exactly as they were. */}
+          {stateHero.word && (page.posture === "act" || page.posture === "watch") && (
+            <p class="home-state-word">
+              <strong>{stateHero.word}</strong>
+              {stateHero.line && <span> — {stateHero.line}</span>}
+            </p>
+          )}
+          <Readings />
+          {stateHero.drivers && drivers.length > 0 && (
+            <ChipRow testId="drivers" label={s.home.mostLikely}>
+              {drivers.map((driver) => (
+                <Chip key={driver.key} tone={toneOf(driver.tone)}>
+                  {driver.text}
+                </Chip>
+              ))}
+            </ChipRow>
+          )}
+          {stateHero.word && (page.posture === "act" || page.posture === "watch") && (
+            <p class="hero-sub" data-testid="home-from">
+              {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), LOCALE[language.value]) })}
+            </p>
+          )}
+        </div>
+      )}
       <Notices v={v} saved={saved} />
       <Held v={v} />
-      {!page && !blank && !v.error && <HomeSkeleton />}
+      {/* Fix #1 (owner review round 3): see DadToday's own copy of this comment above. */}
+      {(!page || !hero.ready) && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -228,7 +246,6 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             {/* The chief's Home (F1, #177): what was sent to him this week, and what Nura is
                 watching for him. Her key's and his steward's; nobody else's. */}
             {!fromPhone && bearer && v.papers && (v.papers.role === "chief" || v.papers.standing === "steward") && <ChiefPanels bearer={bearer} papers={v.papers} />}
-            <AskAboutPill />
             {furniture && <CheckInCard papers={papers} />}
             <DoGrid papers={papers} />
             <AddReport papers={papers} />
@@ -243,18 +260,434 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
             <PillButton onClick={() => go({ name: "feed" })} testId="open-feed">
               {s.feed.open}
             </PillButton>
-            <PillButton onClick={() => go({ name: "ask" })} testId="open-ask">
-              {s.feed.askOrSearch}
-            </PillButton>
-            {/* His emergency card, one tap from Today — hers as much as his (W4). */}
+            {/* His emergency card, one tap from Home — hers as much as his (W4). */}
             <PillButton onClick={() => go({ name: "emergency" })} testId="open-emergency">
               {s.today.emergencyOpen}
             </PillButton>
             <DayOnToday stateId={page.stateId} live={!fromPhone && unreached === null} />
+            {!showsBoundary && <SafetyNote boundary={page.boundary} />}
           </>
         )
       )}
     </Shell>
+  );
+}
+
+/** Whose voice Home speaks in, and the greeting itself — computed once and shared by the
+ *  header (`HomeTopBar`) and the hero (`HomeHero`) below it, so the two can never drift apart.
+ *  `isSelf()` (store/session.ts) decides it, never `density()`. His own greeting names him;
+ *  hers names her — the person the greeting is *from* is always whoever is signed in, never
+ *  the papers' name on a caregiver's own Home. */
+export interface HomeVoice {
+  self: boolean;
+  greetName: string;
+  question: string;
+  hello: string;
+  date: string;
+}
+
+function homeVoice(v: TodayView, patientName: string): HomeVoice {
+  const { s, now } = v;
+  const self = isSelf();
+  const locale = LOCALE[language.value];
+  const greetName = self ? patientName || me.value?.display_name || "" : me.value?.display_name || "";
+  return {
+    self,
+    greetName,
+    question: self ? s.hub.howFeeling : fill(s.hub.howFeelingOther, { patient: patientName }),
+    hello: greeting(now.getHours(), greetName, s),
+    date: dateLine(now, locale),
+  };
+}
+
+/** Home's own header (cp3-home, owner review round 2): one row, and only one, at 390px — the
+ *  avatar IS the papers switcher (`whose`, its existing behaviour and test id, unchanged), the
+ *  greeting beside it (hello over the question, no date line — the date moved to sit under
+ *  "Today" in the hero below it, `HomeHero`'s own kicker, so the row never needs a second one to
+ *  fit), the bell, "Not well?" (its short pill, `NotWellButton`'s own compact label, the full
+ *  phrase still its accessible name), and the menu (`open-me`, the same sheet every other
+ *  screen's header opens it from) — trailing, not its own leading slot, so the row reads avatar
+ *  first, the way the eye already goes. Replaces both the old global `ShellHeader` and the
+ *  board's own "home" topbar for this screen — neither drew whose-papers and the greeting in the
+ *  same row, so his own initial used to appear twice. */
+/** `quiet`: true once Home's own decision (`useHomeHero`) is ready and is the quiet state — the
+ *  greeting and the question drop out of the header row entirely then (owner review round 3,
+ *  fix #5, the defect the owner found: "Good afternoon, Tan." twice, small in the header and
+ *  large again under the orb, which already carries the greeting on a quiet day). The header
+ *  still shows the avatar/switcher, the bell, "Not well?" and the menu — every control that
+ *  needs no data — whatever the decision is, or before it is even made. */
+function HomeTopBar({ voice, quiet }: { voice: HomeVoice; quiet: boolean }): JSX.Element {
+  const s = t();
+  const papers = profile.value;
+  const bell = papers !== null && !emergencyOnly(papers);
+  return (
+    <header class="shell-head home-top-bar" data-testid="home-head">
+      {papers && <ProfileSwitcher compact />}
+      {!quiet && (
+        <div class="home-head-text">
+          <p class="home-head-hello" data-testid="home-head-hello">{voice.hello}</p>
+          <h1 class="home-head-question" tabIndex={-1}>{voice.question}</h1>
+        </div>
+      )}
+      <span class="home-head-end">
+        {bell && <BellButton />}
+        {/* The way in when he feels unwell comes before anything ranked (red flags escalate
+            first): unchanged behaviour, unchanged test id, no animation on the red path — a
+            small pill here now, never the full-width rose button (that is the not-feeling-well
+            screen's own call button, `NotWell.tsx`). */}
+        <NotWellButton compact />
+        <button type="button" class="head-button head-button-small" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+          <Icon name="menu" />
+        </button>
+      </span>
+    </header>
+  );
+}
+
+/** Today's own reading, read fresh (the same call `Readings()` below already makes, kept
+ *  separate so a stale or an old reading never drives the headline — "today's" means today) —
+ *  and, beside it, the most recent reading from an *earlier* day, if there is one: the insight
+ *  card's own extra fact for a "reading" headline (owner review round 2) is how today's compares
+ *  to that, never the systolic/diastolic the headline already gave in full. Both come from the
+ *  one fetch; no second call. */
+function useTodayReading(now: Date): { systolic: number; diastolic: number } | null;
+function useTodayReading(
+  now: Date,
+  withTrend: true,
+): { reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null; ready: boolean };
+function useTodayReading(now: Date, withTrend?: true) {
+  const bearer = token.value;
+  const papers = profile.value;
+  const [state, setState] = useState<{ reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null; ready: boolean }>({
+    reading: null,
+    priorSystolic: null,
+    ready: false,
+  });
+  useEffect(() => {
+    setState({ reading: null, priorSystolic: null, ready: false });
+    // No `readings` scope: nothing to wait for — ready at once (owner review round 3, the
+    // busy/quiet decision below waits on this the same way it waits on `page`).
+    if (!bearer || !papers || !papers.scopes.includes("readings")) return setState({ reading: null, priorSystolic: null, ready: true });
+    nura.facts(bearer, papers.profile_id, "blood_pressure").then((found) => {
+      const today = dayKey(now);
+      const readings = found
+        .filter((fact) => fact.subject === "blood_pressure" && fact.attribute === "reading")
+        .sort((a, b) => Date.parse(b.valid_from) - Date.parse(a.valid_from));
+      const todaysOwn = readings.find((fact) => dayKey(new Date(fact.valid_from)) === today);
+      const value = todaysOwn?.value as { systolic?: unknown; diastolic?: unknown } | null;
+      const reading = typeof value?.systolic === "number" && typeof value?.diastolic === "number" ? { systolic: value.systolic, diastolic: value.diastolic } : null;
+      const earlier = readings.find((fact) => dayKey(new Date(fact.valid_from)) !== today);
+      const earlierValue = earlier?.value as { systolic?: unknown } | null;
+      const priorSystolic = typeof earlierValue?.systolic === "number" ? earlierValue.systolic : null;
+      setState({ reading, priorSystolic, ready: true });
+    }, () => setState({ reading: null, priorSystolic: null, ready: true }));
+    // `dayKey(now)`, not `now.getTime()` (owner review round 3): this hook now runs inside
+    // `useHomeHero`, called directly from `DadToday`/`ChiefHome` rather than a child
+    // component — its own `setState` above re-renders them, which builds a fresh `now = new
+    // Date()` (`useToday.ts`) on every pass; keyed on the exact millisecond, that re-triggered
+    // this same effect forever (the request storm on `/facts` the owner would have hit at
+    // once). The calendar day is the only thing "today's own reading" ever actually depends on.
+  }, [bearer, papers?.profile_id, dayKey(now)]);
+  return withTrend ? state : state.reading;
+}
+
+/** The next visit's own place and driver lines (`useLogistics`, below — the same fetch
+ *  `VisitTile` already makes for the full visit tile): the insight card's own extra fact for a
+ *  "visit" headline (owner review round 2), never the doctor/weekday the headline already gave.
+ *  Null with no visit, or while its logistics card is still loading — a visit headline with
+ *  nothing more to say yet renders its rows without the card, same as any other empty case. */
+function useVisitAbout(visit: AppointmentOut | null): string[] {
+  const bearer = token.value;
+  const papers = profile.value;
+  const [about, setAbout] = useState<string[]>([]);
+  useEffect(() => {
+    if (!bearer || !papers || !visit) return setAbout([]);
+    nura.logistics(bearer, papers.profile_id, visit.appointment_id).then(
+      (card) => setAbout(card.lines.filter((line) => line.section === "place" || line.section === "driver").map((line) => line.text)),
+      () => setAbout([]),
+    );
+  }, [bearer, papers?.profile_id, visit?.appointment_id, language.value]);
+  return about;
+}
+
+/** The ranked feed's own flagged insight, if it raised one today — never a plain "today"/"now"
+ *  listing card, which is not an insight about anything in particular. */
+function insightOf(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]): FeedItemOut | null {
+  return [...top, ...forYou].find((item) => item.category === "insight") ?? null;
+}
+
+/** A newly confirmed paper's own range summary, read from the review cards (owner review round
+ *  3, fix #2): `ready` false until the read has come back at least once — Home's own busy/quiet
+ *  decision waits for it the same way it waits for `page` (fix #1, the flash the owner found:
+ *  a confirmed paper is exactly the case that used to decide quiet first, busy a second later,
+ *  because this read had not landed yet). `null` with no insight-category card at all, or with
+ *  one whose card is not (yet, or ever) among the review cards this key can read — never a bare
+ *  title standing in for a card type with no template (nothing here trusts `item.headline`). */
+function usePaperInsight(item: FeedItemOut | null): { ready: boolean; summary: PaperSummary | null } {
+  const bearer = token.value;
+  const papers = profile.value;
+  const artifactId = typeof (item?.why as { artifact_id?: unknown } | undefined)?.artifact_id === "string" ? ((item!.why as { artifact_id: string }).artifact_id) : null;
+  const [state, setState] = useState<{ ready: boolean; summary: PaperSummary | null }>({ ready: false, summary: null });
+  useEffect(() => {
+    // No paper on this card at all: nothing to wait for — ready at once.
+    if (!artifactId || !item) return setState({ ready: true, summary: null });
+    if (!bearer || !papers) return setState({ ready: true, summary: null });
+    setState({ ready: false, summary: null });
+    nura.reviewCards(bearer, papers.profile_id, false).then(
+      (cards) => {
+        const card = cards.find((each) => each.artifact_id === artifactId) ?? null;
+        if (!card) return setState({ ready: true, summary: null });
+        const known = card.fields.map((field) => rangeStatus(field.value, field.range)).filter((each) => each !== "unknown");
+        const outside = known.filter((each) => each === "above" || each === "below").length;
+        setState({
+          ready: true,
+          summary: {
+            item,
+            documentKind: card.document_kind,
+            date: card.document_date ? new Date(card.document_date) : new Date(card.created_at),
+            outside: known.length > 0 ? outside : null,
+            total: known.length > 0 ? known.length : null,
+          },
+        });
+      },
+      () => setState({ ready: true, summary: null }),
+    );
+  }, [artifactId, bearer, papers?.profile_id]);
+  return state;
+}
+
+/** Home's hero (cp3-home, the living orb) and its own busy/quiet decision, made once — never
+ *  while an input it needs (`page`, the visits read, today's own reading, a confirmed paper's
+ *  range summary) is still on the way (owner review round 3, fix #1: the flash the owner found,
+ *  the quiet state painted first as a placeholder and the busy one a second later, once every
+ *  input had actually arrived — an empty value that has simply not answered yet must never be
+ *  read as "nothing here"). `ready` false holds the header's own greeting/question blank and the
+ *  hero at the calm skeleton (`DadToday`/`ChiefHome`, below) rather than guessing. */
+function useHomeHero(v: TodayView, patientName: string, voice: HomeVoice) {
+  const { s, page, feed, act, top, now, nextVisit, dose, visitsReady } = v;
+  const { self } = voice;
+  const flagged = feed.flags.length > 0;
+  const { reading, priorSystolic, ready: readingReady } = useTodayReading(now, true);
+  const visitAbout = useVisitAbout(nextVisit);
+  const insightItem = insightOf(top, feed.forYou);
+  const { ready: paperReady, summary: paperSummary } = usePaperInsight(insightItem);
+  const ready = page !== null && visitsReady && readingReady && paperReady;
+  const topItem: HomeTopItem | null = ready
+    ? homeTopItem(
+        {
+          dose: dose ?? null,
+          reading,
+          nextVisit: nextVisit ? { scheduled_at: nextVisit.scheduled_at, doctor: nextVisit.doctor ?? null } : null,
+          lines: page!.lines,
+          paper: paperSummary,
+        },
+        now,
+        s,
+      )
+    : null;
+  const state = homeState({ flagged, act, topItem });
+  // The two rows under the insight card are a different, always-actionable fact each — never
+  // the same fact the headline already gave: the dose row only when the headline is not
+  // already that dose, the "for you" row only for a feed item the headline is not already
+  // showing as its own insight — and never the backend's own "A quiet day" placeholder card
+  // (`app/delivery/strings.py`'s "now_quiet"), a leftover from a day this key's own dose data
+  // has already decided is not quiet (fix #4: no structural flag marks that card, so it is
+  // read off its own known, stable headline text in every language the catalogue ships).
+  const dueNow = dose?.kind === "due" && topItem?.kind !== "doseDue" ? dose : null;
+  const shownInsightId = topItem?.kind === "paper" ? topItem.item.item_id : null;
+  const forYouItem = feed.forYou.find((item) => item.item_id !== shownInsightId && !QUIET_PLACEHOLDER_HEADLINES.has(item.headline)) ?? null;
+  // The insight card's own extra fact (owner review round 2): a real thing the headline did not
+  // already say, from that same item's own fields — never the headline's sentence again. `null`
+  // with nothing more to say yet, in which case the card itself does not render at all; the
+  // rows below still do (`insightExtraLines`, today/model.ts).
+  const extra = topItem
+    ? insightExtraLines(
+        topItem,
+        {
+          doseProvenance: dose?.kind === "due" ? dose.provenance : null,
+          slotsTotal: page?.slots.length ?? 0,
+          slotsDone: page?.slots.filter((slot) => slot.taken).length ?? 0,
+          priorSystolic,
+          visitAbout,
+          reorderLine: page ? nearestToRunOut(page.lines)?.count?.lines[0] ?? null : null,
+        },
+        s,
+        self,
+        patientName,
+      )
+    : null;
+  return { ready, state, topItem, dueNow, forYouItem, extra };
+}
+
+/** The backend's own "A quiet day"/"There is nothing new..." placeholder headline, in every
+ *  language the catalogue ships (`app/delivery/strings.py`'s `HEADLINES["now_quiet"]`) — no
+ *  `_THEIRS` twin exists for it, so it reads the same in both voices. There is no structural
+ *  flag on the card itself to filter by; this is the only signal there is (fix #4). */
+const QUIET_PLACEHOLDER_HEADLINES = new Set(["A quiet day", "Hari yang tenang", "平静的一天"]);
+
+type HomeHeroState = ReturnType<typeof useHomeHero>;
+
+/** Home's hero (cp3-home, the living orb): a busy day's one real headline and insight card, or
+ *  a quiet day's large orb and chips — never a generic feed card's own title standing in for
+ *  either (`homeTopItem`, today/model.ts), and never painted before its own decision is ready
+ *  (fix #1 — `DadToday`/`ChiefHome` hold the calm skeleton until then). An act posture or a red
+ *  flag pre-empts both entirely (`homeState`); the header above (`HomeTopBar`) is unconditional
+ *  and always there. */
+function HomeHero({ v, patientName, voice, hero }: { v: TodayView; patientName: string; voice: HomeVoice; hero: HomeHeroState }): JSX.Element {
+  const { s, page, now, papers, busy, take, nextVisit } = v;
+  const { self } = voice;
+  const locale = LOCALE[language.value];
+  const { ready, state, topItem, dueNow, forYouItem, extra } = hero;
+  return (
+    <>
+      {/* The date, moved here from the header (owner review round 2, fix #1: the header row had
+          no room left for a third line) — unconditional, the way it always was as part of the
+          header itself: every page state shows it (busy, quiet, or a red flag/act state, which
+          draws nothing else here at all), never only the busy day's own kicker. Same test id it
+          always had (`home-head-date`): moved, never renamed. */}
+      {ready && page && (
+        <p class="home-kick-date" data-testid="home-head-date">
+          {voice.date}
+        </p>
+      )}
+      {ready && page && state === "busy" && topItem && (
+        <div data-testid={self ? "today-hero" : "home-hero"}>
+          <span class="home-kick">{s.home.todayKicker}</span>
+          <SoftText as="h2" pace="headline" className="home-headline" text={homeHeadlineFor(topItem, s, locale, self, patientName)} testId="home-headline" />
+          {extra && (
+            <Glass className="home-insight" testId="insight-card">
+              <h3>{self ? s.home.insightTitle : fill(s.home.insightTitleOther, { patient: patientName })}</h3>
+              <div class="home-insight-body">
+                <div class="home-date-chip" aria-hidden="true">
+                  <b>{dateChip(homeTopItemDate(topItem, now), locale).day}</b>
+                  <small>{dateChip(homeTopItemDate(topItem, now), locale).month}</small>
+                </div>
+                <div class="home-insight-lines">
+                  {extra.map((line, at) => (
+                    <p key={at}>{line}</p>
+                  ))}
+                </div>
+              </div>
+              {/* Not `variant="primary"`: the daily check-in's own "Tell Nura" (`HomeParts.tsx`)
+                  is already the screen's one Plum-filled button when it is on the page too, and
+                  the design rule (`design.spec.ts`) is at most one. */}
+              <PillButton variant="secondary" onClick={() => go({ name: "feed" })} testId="insight-open">
+                {s.home.insightOpen}
+              </PillButton>
+            </Glass>
+          )}
+          {dueNow && (
+            <button type="button" class="home-row" onClick={() => void take(dueNow.lineId, dueNow.anchor)} disabled={busy} data-testid="home-row-dose">
+              <span>{dueNow.sentence}</span>
+              <Icon name="chevron" />
+            </button>
+          )}
+          {forYouItem && (
+            <button type="button" class="home-row" onClick={() => go({ name: "feed" })} data-testid="home-row-for-you">
+              <span>{forYouItem.headline}</span>
+              <Icon name="chevron" />
+            </button>
+          )}
+        </div>
+      )}
+      {ready && page && state === "quiet" && (
+        <div class="home-quiet" data-testid={self ? "today-hero" : "home-hero"}>
+          <Orb size="lg" testId="home-orb-lg" />
+          <SoftText as="h2" pace="headline" className="home-quiet-greeting" text={voice.hello} testId="quiet-greeting" />
+          <SoftText
+            as="p"
+            pace="body"
+            className="home-quiet-prompt"
+            text={self ? s.home.quietPrompt : fill(s.home.quietPromptOther, { patient: patientName })}
+          />
+          <div class="chip-row quiet-chips" data-testid="quiet-chips">
+            <ReportChip label={s.home.chipReport} />
+            {papers && (papers.standing === "owner" || papers.scopes.includes("medicines")) && (
+              <button type="button" class="glass-chip chip-button" onClick={() => go({ name: "record", at: { name: "medicines" } })} data-testid="chip-medicines">
+                {self ? s.home.chipMedicines : fill(s.home.chipMedicinesOther, { patient: patientName })}
+              </button>
+            )}
+            {nextVisit && (
+              <button
+                type="button"
+                class="glass-chip chip-button"
+                onClick={() => go({ name: "visit", appointmentId: nextVisit.appointment_id })}
+                data-testid="chip-visit"
+              >
+                {self ? s.home.chipVisit : fill(s.home.chipVisitOther, { patient: patientName })}
+              </button>
+            )}
+            <button type="button" class="glass-chip chip-button" onClick={() => openTab("health")} data-testid="chip-week">
+              {self ? s.home.chipWeek : fill(s.home.chipWeekOther, { patient: patientName })}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** "Read a report", the quiet day's own chip: the same picker `AddReport` (HomeParts.tsx)
+ *  opens, styled as a chip rather than a row — one file, straight to its own review card,
+ *  never sent until he says so there (reviewer #237 item 6). */
+function ReportChip({ label }: { label: string }): JSX.Element {
+  const chosen = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    batch.forget();
+    batch.pick([file]);
+    go({ name: "papers", report: true });
+  };
+  return (
+    <label class="glass-chip chip-button" data-testid="chip-report">
+      {label}
+      <input type="file" accept="application/pdf,image/*" onChange={chosen} />
+    </label>
+  );
+}
+
+/** Home's own ask bar (cp3-home), docked above the tab bar (`Shell`'s `bottomBar`): the small
+ *  living orb, "Ask Nura anything" (caregiver: "Ask about Pa" — `shell.askAbout`, the same
+ *  template the header's old ask bar used), and Speak, unchanged in behaviour from `AskField`'s
+ *  own voice button. Two buttons, never one nested in another. */
+function HomeAskBar({ patientName }: { patientName: string }): JSX.Element {
+  const s = t();
+  const self = isSelf();
+  const word = self ? s.home.askNura : fill(s.shell.askAbout, { name: patientName });
+  return (
+    <div class="home-ask" data-testid="home-ask-bar">
+      <Orb testId="home-ask-orb" />
+      <button type="button" class="home-ask-word" onClick={() => go({ name: "ask" })} data-testid="home-ask-open">
+        {word}
+      </button>
+      <button
+        type="button"
+        class="home-ask-speak"
+        onClick={() => {
+          speak({ lines: [s.shell.voiceSaid1, s.shell.voiceSaid2], language: language.value });
+          go({ name: "ask" });
+        }}
+        data-testid="home-ask-speak"
+      >
+        <Icon name="mic" />
+        <span>{s.shell.voice}</span>
+      </button>
+    </div>
+  );
+}
+
+/** The safety line, once (cp3-home): the State's own boundary — never invented here — shown at
+ *  the foot of the scroll when no State card already carries it (`showsBoundary` above). A
+ *  State card that is on the page always carries its own boundary already; this is never drawn
+ *  beside one, only in its place. */
+function SafetyNote({ boundary }: { boundary: readonly string[] }): JSX.Element | null {
+  if (boundary.length === 0) return null;
+  return (
+    <p class="home-safety-note" data-testid="home-safety-note">
+      {boundary.join(" ")}
+    </p>
   );
 }
 

@@ -1,4 +1,5 @@
-import type { FactOut, FeedItemOut, LineOut, NowOut, Posture, SlotOut, StateDriverOut, StateOut } from "../api/types";
+import type { DocumentKind, FactOut, FeedItemOut, LineOut, NowOut, Posture, SlotOut, StateDriverOut, StateOut } from "../api/types";
+import { kindTitle } from "../onboarding/review";
 import { fill, type Language, type Strings } from "../strings";
 
 /** The Today page, built only from what the backend already says in his words: today's dose
@@ -296,6 +297,265 @@ export function systolics(facts: readonly FactOut[]): number[] {
     .sort((a, b) => a.at - b.at)
     .slice(-10)
     .map((each) => each.top);
+}
+
+// --- the new Home's hero (P1's orb): the day's top item, and the one headline it earns -------
+
+/** The day's one thing to say, as a closed set of real, already-known facts — never a generic
+ *  feed card's own title (the defect the owner found: "Your tablets *today*" said nothing).
+ *  Each variant carries only what its own template needs, and only from where that fact
+ *  already lives: the dose the backend marks due, the day's own reading, the next visit within
+ *  a week, a medicine nearing its reorder point, or a feed card the backend itself flagged an
+ *  insight (its own real headline, never re-composed). */
+/** A newly confirmed paper's own range summary (owner review round 3, fix #2): the review
+ *  card's own fields, each against its own printed range (`rangeStatus`, onboarding/review.ts —
+ *  reused, never a second reckoning of the same question). `outside`/`total` are both `null`
+ *  with no field on the paper carrying a printed range at all — the honest "no ranges" case,
+ *  never a "0 of 0" pretending to be a real count. */
+export interface PaperSummary {
+  item: FeedItemOut;
+  documentKind: DocumentKind;
+  /** The date printed on the paper (fix #3) — never `created_at`, the day it happened to be
+   *  confirmed. */
+  date: Date;
+  outside: number | null;
+  total: number | null;
+}
+
+export type HomeTopItem =
+  | { kind: "doseDue"; title: string; when: string }
+  | { kind: "allTaken" }
+  | { kind: "reading"; systolic: number; diastolic: number }
+  | { kind: "visit"; doctor: string | null; at: Date }
+  | { kind: "reorder"; title: string; days: number }
+  | ({ kind: "paper" } & PaperSummary);
+
+export interface HomeTopInputs {
+  dose: NowCard | null;
+  /** Today's own reading, or null with none written down today (a reading from another day
+   *  never drives the headline — that is not "today's" anything). */
+  reading: { systolic: number; diastolic: number } | null;
+  nextVisit: { scheduled_at: string; doctor: string | null } | null;
+  lines: readonly LineOut[];
+  /** A newly confirmed paper's own range summary, read for the feed's own top insight/alert
+   *  card (`category`) — `null` with no such card, or with one whose own summary has not
+   *  finished loading yet (`usePaperInsight`, screens/Today.tsx: the caller holds this at `null`
+   *  until it knows one way or the other, never guesses). No other feed card type earns a
+   *  headline here (owner review round 3): a card type with no template of its own is a quiet
+   *  day, never a bare title standing in for one (the defect the owner found, "From your
+   *  papers"). */
+  paper: PaperSummary | null;
+}
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The single fact Home's hero speaks about today, in priority order: the dose due right now,
+ *  else every dose already taken, else today's own reading, else a visit within the week, else
+ *  a medicine close enough to run out to reorder, else the feed's own flagged insight — else
+ *  none, which is a quiet day (`homeState` below), never a bare card title standing in. */
+export function homeTopItem(on: HomeTopInputs, now: Date, s: Strings): HomeTopItem | null {
+  if (on.dose?.kind === "due") return { kind: "doseDue", title: on.dose.title, when: on.dose.anchor };
+  if (on.dose?.kind === "allTaken") return { kind: "allTaken" };
+  if (on.reading) return { kind: "reading", systolic: on.reading.systolic, diastolic: on.reading.diastolic };
+  if (on.nextVisit) {
+    const at = new Date(on.nextVisit.scheduled_at);
+    const until = at.getTime() - now.getTime();
+    if (until >= 0 && until <= WEEK_MS) return { kind: "visit", doctor: on.nextVisit.doctor, at };
+  }
+  const nearest = nearestToRunOut(on.lines);
+  if (nearest?.count?.reorder_due && typeof nearest.count.days_left === "number") {
+    return { kind: "reorder", title: lineTitle(nearest, s), days: nearest.count.days_left };
+  }
+  if (on.paper) return { kind: "paper", ...on.paper };
+  return null;
+}
+
+export type HomeState = "safety" | "busy" | "quiet";
+
+/** Which of Home's three hero treatments draws (safety check 5's own rule, extended): a flag
+ *  or an act posture outranks everything, including the quiet-day greeting — neither a big
+ *  breathing orb nor a chip asking "what shall we look at" may sit over either, so this never
+ *  reaches `busy`/`quiet` while one holds. Only once neither holds does the day's own top item
+ *  decide busy from quiet. */
+export function homeState(on: { flagged: boolean; act: boolean; topItem: HomeTopItem | null }): HomeState {
+  if (on.flagged || on.act) return "safety";
+  return on.topItem === null ? "quiet" : "busy";
+}
+
+/** The one italic accent a Home headline carries (`SoftText`'s `*word*`): the sentence's own
+ *  last word, always — the way every example in the blueprint accents its closing word
+ *  ("...raise with your *doctor.*"). Never a free choice, and safe with a slot value that is
+ *  itself more than one word (a time, a name): the accent lands on the sentence's true last
+ *  word, not necessarily the whole filled phrase. A sentence with no words is returned as is. */
+export function accentLastWord(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return text;
+  const last = words[words.length - 1]!;
+  const match = last.match(/^(.*?)([.,!?;:]*)$/);
+  const stem = match?.[1] || last;
+  const punct = match?.[2] ?? "";
+  if (!stem) return text;
+  words[words.length - 1] = `*${stem}*${punct}`;
+  return words.join(" ");
+}
+
+/** `lineTitle` reads the backend's own colloquial name for the class straight through
+ *  (`app/medicines/strings.py`), some of which carry a self-voiced possessive of their own —
+ *  English leading "your"/"the" ("your blood pressure tablet"), Malay a trailing "anda"
+ *  ("ubat tekanan darah anda"), Chinese a leading "您的" — the same word for every reader
+ *  (DoseSection's own cards show it verbatim to a caregiver too). A caregiver headline that
+ *  also names her by "{patient}'s" cannot repeat that word without contradicting it ("Pa's Your
+ *  blood pressure tablet"), so her templates use the bare noun phrase this strips to — never a
+ *  different name for the medicine, only the one word this reader's line never carries. */
+export function dropPossessive(title: string): string {
+  return title
+    .replace(/^(your|the)\s+/i, "")
+    .replace(/\s+anda$/i, "")
+    .replace(/^您的/, "");
+}
+
+/** `lineTitle` capitalises its first letter for a sentence that starts with it (a card's own
+ *  title). Embedded mid-sentence instead ("...of {title} are left"), that capital reads as a
+ *  mistake, so a template that does not open on `title` reads it back down first. */
+function lowerFirst(text: string): string {
+  return text.length ? text[0]!.toLowerCase() + text.slice(1) : text;
+}
+
+/** The catalogue template for each `HomeTopItem` kind, filled only from that item's own real
+ *  facts and accented on its own last word — never the model's free text. An `insight` card
+ *  keeps the backend's own real headline, accented the same way; every other kind is composed
+ *  from a whole-sentence template in `strings/*.ts` (`home.headline*`/`…Other`). */
+export function homeHeadlineFor(item: HomeTopItem, s: Strings, locale: string, self: boolean, patientName: string): string {
+  const h = s.home;
+  const slots = { patient: patientName } as Record<string, string | number>;
+  switch (item.kind) {
+    case "doseDue":
+      // Self opens the sentence with `title` (its own leading capital is correct there);
+      // the caregiver's puts it after "{patient}'s", so it reads back down first.
+      Object.assign(slots, { title: self ? item.title : lowerFirst(dropPossessive(item.title)), when: item.when });
+      return accentLastWord(fill(self ? h.headlineDoseDue : h.headlineDoseDueOther, slots));
+    case "allTaken":
+      return accentLastWord(self ? h.headlineAllTaken : fill(h.headlineAllTakenOther, slots));
+    case "reading":
+      Object.assign(slots, { systolic: item.systolic, diastolic: item.diastolic });
+      return accentLastWord(fill(self ? h.headlineReading : h.headlineReadingOther, slots));
+    case "visit": {
+      Object.assign(slots, { weekday: weekdayOf(item.at, locale), doctor: item.doctor ?? "" });
+      const template = item.doctor ? (self ? h.headlineVisit : h.headlineVisitOther) : self ? h.headlineVisitNoDoctor : h.headlineVisitNoDoctorOther;
+      return accentLastWord(fill(template, slots));
+    }
+    case "reorder":
+      // Neither template opens on `title` here ("About {days} days of {title}..."), so both
+      // read it back down first.
+      Object.assign(slots, { title: self ? lowerFirst(item.title) : lowerFirst(dropPossessive(item.title)), days: item.days });
+      return accentLastWord(fill(self ? h.headlineReorder : h.headlineReorderOther, slots));
+    case "paper": {
+      // `kindTitle` capitalises its first letter for a title ("Blood test"); no template here
+      // opens on `{kind}`, so it reads back down first, the same reasoning `lowerFirst` already
+      // carries elsewhere in this file.
+      const kind = lowerFirst(kindTitle(item.documentKind, s));
+      const date = dayMonthLine(item.date, locale);
+      if (item.total !== null && item.total > 0) {
+        if (item.outside !== null && item.outside > 0) {
+          Object.assign(slots, { n: item.outside, m: item.total, kind, date });
+          return accentLastWord(fill(self ? h.headlinePaperOutside : h.headlinePaperOutsideOther, slots));
+        }
+        Object.assign(slots, { kind, date });
+        return accentLastWord(fill(self ? h.headlinePaperAllIn : h.headlinePaperAllInOther, slots));
+      }
+      Object.assign(slots, { kind, date });
+      return accentLastWord(fill(self ? h.headlinePaperNoRange : h.headlinePaperNoRangeOther, slots));
+    }
+  }
+}
+
+/** What `insightExtraLines` needs beyond the `HomeTopItem` itself: real facts already on the
+ *  page or already being fetched for another part of Today, never a new request made only for
+ *  this card. Each field is `null`/empty with nothing yet known, never a placeholder line. */
+export interface InsightExtraContext {
+  /** The due dose's own source line ("As your doctor set it.") — `NowCard`'s "due" variant. */
+  doseProvenance: string | null;
+  /** Today's own dose count, whole and taken — the day's own tally, not a week the phone does
+   *  not carry (there is no weekly count on this page to draw one from truthfully). */
+  slotsTotal: number;
+  slotsDone: number;
+  /** The most recent reading from a day *before* today, if one exists — the insight card's own
+   *  comparison for a "reading" headline, which already gave today's own numbers in full. */
+  priorSystolic: number | null;
+  /** The next visit's own place/driver lines, from its logistics card (`useLogistics`'s own
+   *  fetch, read again for Home — the visit tile's card, not a new endpoint). */
+  visitAbout: readonly string[];
+  /** The medicine's own first reorder sentence, from its `count.lines` (the backend's own
+   *  wording — a delivery date or a pharmacy it names — not the day-count the headline used). */
+  reorderLine: string | null;
+}
+
+/** The insight card's own extra fact (owner review round 2): a real thing the headline did not
+ *  already say, from the same `HomeTopItem`'s own kind and real fields — never the headline's
+ *  sentence again (the defect the owner found: "Every tablet for today is taken." twice, 40px
+ *  apart). `null` when there genuinely is nothing more to say yet (a dose with no source line, a
+ *  reading with no earlier one to compare, a visit whose logistics have not loaded, a reorder
+ *  with no backend sentence of its own): the card itself does not render then (`HomeHero`,
+ *  screens/Today.tsx) — the rows under it still do, directly under the headline. An `insight`
+ *  item keeps the feed's own body lines, the one place free text from the backend is shown,
+ *  unchanged — that was never the duplicate the owner found. */
+export function insightExtraLines(item: HomeTopItem, on: InsightExtraContext, s: Strings, self: boolean, patientName: string): string[] | null {
+  const h = s.home;
+  const slots = { patient: patientName } as Record<string, string | number>;
+  switch (item.kind) {
+    case "doseDue":
+      return on.doseProvenance ? [on.doseProvenance] : null;
+    case "allTaken":
+      return on.slotsTotal > 0 ? [fill(self ? h.tookCount : h.tookCountOther, { ...slots, done: on.slotsDone, total: on.slotsTotal })] : null;
+    case "reading": {
+      if (on.priorSystolic === null) return null;
+      const diff = item.systolic - on.priorSystolic;
+      const template = diff > 3 ? (self ? h.trendHigher : h.trendHigherOther) : diff < -3 ? (self ? h.trendLower : h.trendLowerOther) : self ? h.trendSame : h.trendSameOther;
+      return [fill(template, slots)];
+    }
+    case "visit":
+      return on.visitAbout.length > 0 ? on.visitAbout.slice(0, 2) : null;
+    case "reorder":
+      return on.reorderLine ? [on.reorderLine] : null;
+    case "paper": {
+      const lines = feedLines(item.item).lines.slice(0, 2);
+      return lines.length > 0 ? lines : null;
+    }
+  }
+}
+
+/** The date the insight card's chip is about — never the feed row's own `created_at` (a
+ *  seeding or a generation timestamp, not what the card is *about*, the defect the owner found:
+ *  a card about today's tablets showing the day it happened to be written). Today for a dose or
+ *  a reading (both are always about today); the visit's own date for a visit; the reorder
+ *  read's own moment for a reorder (there is no other date to give it); a paper's own printed
+ *  date for a paper (owner review round 3, fix #3 — the defect the owner found: a paper dated
+ *  22 January showing "18 Sep", the day it happened to be confirmed, never the day it is about). */
+export function homeTopItemDate(item: HomeTopItem, now: Date): Date {
+  switch (item.kind) {
+    case "doseDue":
+    case "allTaken":
+    case "reading":
+      return now;
+    case "visit":
+      return item.at;
+    case "reorder":
+      return now;
+    case "paper":
+      return item.date;
+  }
+}
+
+/** "12 September" split for the insight card's date chip: the day, and the month short enough
+ *  to sit under it (the blueprint's `<div class="date"><b>12</b><small>Sep</small></div>`). */
+export function dateChip(date: Date, locale: string): { day: string; month: string } {
+  const parts = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? "";
+  // Three letters, the blueprint's own width for the chip (owner review round 2) — `en-SG`'s
+  // own "short" gives "Sept" (four), which the chip has no more room for than "Sep"; slicing
+  // after the period is stripped only ever shortens a Latin abbreviation further, and is a
+  // no-op on ms's own three letters or zh's bare numeral.
+  return { day: part("day"), month: part("month").replace(/\.$/, "").slice(0, 3) };
 }
 
 /** The hour the way he says it (plain words, rule 5; the backend's `when_words.say_clock`):

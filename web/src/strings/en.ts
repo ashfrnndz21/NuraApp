@@ -112,9 +112,9 @@ export const en = {
   },
   hub: {
     // @patient
-    howFeeling: "How are you feeling today?",
+    howFeeling: "How are you today?",
     // @patient
-    howFeelingOther: "How is {patient} feeling today?",
+    howFeelingOther: "How is {patient} today?",
     // @patient headline
     checkTitle: "How you feel today",
     // @patient headline
@@ -219,6 +219,86 @@ export const en = {
     showFewer: "See fewer",
     // @patient
     bpLast: "The last blood pressure had a top number of {number}.",
+    // @patient headline
+    todayKicker: "Today",
+    // @patient headline
+    insightTitle: "Your health",
+    // @patient headline
+    insightTitleOther: "{patient}'s health",
+    // @patient phrase
+    insightOpen: "See more about this",
+    // @patient
+    quietPrompt: "What shall we look at?",
+    // @patient
+    quietPromptOther: "What shall we look at for {patient}?",
+    // @patient phrase
+    chipReport: "Read a report",
+    // @patient phrase
+    chipMedicines: "My medicines",
+    // @patient phrase
+    chipMedicinesOther: "{patient}'s medicines",
+    // @patient phrase
+    chipVisit: "My next visit",
+    // @patient phrase
+    chipVisitOther: "{patient}'s next visit",
+    // @patient phrase
+    chipWeek: "How was my week?",
+    // @patient phrase
+    chipWeekOther: "How was {patient}'s week?",
+    // @patient phrase
+    askNura: "Ask Nura anything",
+    // @patient headline
+    headlineDoseDue: "{title} is due at {when}.",
+    // @patient headline
+    headlineDoseDueOther: "{patient}'s {title} is due at {when}.",
+    // @patient headline
+    headlineAllTaken: "Every tablet for today is taken.",
+    // @patient headline
+    headlineAllTakenOther: "Every tablet for {patient} today is taken.",
+    // @patient headline
+    headlineReading: "Your blood pressure today was {systolic} over {diastolic}.",
+    // @patient headline
+    headlineReadingOther: "{patient}'s blood pressure today was {systolic} over {diastolic}.",
+    // @patient headline
+    headlineVisit: "You see {doctor} on {weekday}.",
+    // @patient headline
+    headlineVisitOther: "{patient} sees {doctor} on {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctor: "You have a visit on {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctorOther: "{patient} has a visit on {weekday}.",
+    // @patient headline
+    headlineReorder: "About {days} days of {title} are left.",
+    // @patient headline
+    headlineReorderOther: "About {days} days of {patient}'s {title} are left.",
+    // @patient headline
+    headlinePaperOutside: "{n} of {m} numbers on your {kind} from {date} are outside range on the paper.",
+    // @patient headline
+    headlinePaperOutsideOther: "{n} of {m} numbers on {patient}'s {kind} from {date} are outside range on the paper.",
+    // @patient headline
+    headlinePaperAllIn: "Every number on your {kind} from {date} is inside the range on the paper.",
+    // @patient headline
+    headlinePaperAllInOther: "Every number on {patient}'s {kind} from {date} is inside the range on the paper.",
+    // @patient headline
+    headlinePaperNoRange: "Your {kind} from {date} is in your papers.",
+    // @patient headline
+    headlinePaperNoRangeOther: "{patient}'s {kind} from {date} is in the papers.",
+    // @patient headline
+    tookCount: "You took {done} of {total} today.",
+    // @patient headline
+    tookCountOther: "{patient} took {done} of {total} today.",
+    // @patient headline
+    trendHigher: "That is higher than your blood pressure last time.",
+    // @patient headline
+    trendHigherOther: "That is higher than {patient}'s blood pressure last time.",
+    // @patient headline
+    trendLower: "That is lower than your blood pressure last time.",
+    // @patient headline
+    trendLowerOther: "That is lower than {patient}'s blood pressure last time.",
+    // @patient headline
+    trendSame: "That is about the same as your blood pressure last time.",
+    // @patient headline
+    trendSameOther: "That is about the same as {patient}'s blood pressure last time.",
   },
   activity: {
     // @patient headline
@@ -1135,6 +1215,10 @@ export const en = {
     topThree: "3 things for today",
     // @patient phrase
     notWell: "I am not feeling well",
+    // @patient phrase
+    notWellShort: "Not well?",
+    // @patient phrase
+    notWellShortOther: "Not well?",
     // @patient headline
     notWellTitle: "Tell Nura how you feel",
     // @patient headline

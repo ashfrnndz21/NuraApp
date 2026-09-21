@@ -55,10 +55,14 @@ interface PillProps {
   /** A toggle's state, for the screen reader and the answered colours. */
   pressed?: boolean;
   extraClass?: string;
+  /** As wide as its words, not the full width the patient density gives every `.pill` by
+   *  default (`PillButton`'s own `compact`, the same class, `.pill.compact` in design.css):
+   *  a small pill beside other chrome, never the screen's one full-width call to action. */
+  compact?: boolean;
 }
 
-export function Pill({ onClick, children, plum, coral, done, quiet, disabled, label, testId, chosen, pressed, extraClass }: PillProps): JSX.Element {
-  const classes = ["pill", plum && "plum", coral && "coral", done && "done", quiet && "quiet", chosen && "chosen", extraClass]
+export function Pill({ onClick, children, plum, coral, done, quiet, disabled, label, testId, chosen, pressed, extraClass, compact }: PillProps): JSX.Element {
+  const classes = ["pill", plum && "plum", coral && "coral", done && "done", quiet && "quiet", chosen && "chosen", compact && "compact", extraClass]
     .filter(Boolean)
     .join(" ");
   return (

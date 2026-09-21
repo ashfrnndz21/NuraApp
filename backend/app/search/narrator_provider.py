@@ -21,6 +21,7 @@ nothing above this module changes.
 from __future__ import annotations
 
 from app.llm.client import client_for
+from app.llm.models import Task
 from app.llm.narrate import ClaudeNarrator
 from app.llm.residency import allow_external_model
 from app.search.narrate import FixtureNarrator, Narrator
@@ -51,7 +52,7 @@ def narrator_for(settings: Settings) -> Narrator:
             refusal=ClaudeNarratorOutsideDemo,
             what="NURA_NARRATOR=claude",
         )
-        return ClaudeNarrator(client_for(settings))
+        return ClaudeNarrator(client_for(settings), model=settings.models.for_task(Task.NARRATE))
     raise NoNarrator(
         f"no narrator named {settings.narrator!r}; only {FIXTURE!r} and {CLAUDE!r} are "
         "built. Set NURA_NARRATOR=fixture for a local run"

@@ -98,6 +98,7 @@ from app.delivery.feed.search import (
 from app.errors import Refusal
 from app.keys.context import KeyContext, resolve_key_context
 from app.keys.scopes import Scope
+from app.llm import call_counter
 from app.medicines.service import LineView, active_lines
 from app.state.service import current_state
 
@@ -117,6 +118,16 @@ JOB_DEADLINE_SECONDS = 60
 RUN_DEADLINE_SECONDS = 900
 """The whole day's catch-up, however many jobs it holds, gets at most this long: one at a
 time, a dozen live jobs at their own pace fit well inside it, and nothing waits on the run."""
+
+MAX_JOBS_PER_RUN = 6
+"""The default cap on how many of the plan's jobs one run actually executes, when a caller
+does not pass `max_jobs_per_run=` (`ensure_learning_scheduled`'s own default; a real
+deployment's cap comes from `Settings.max_jobs_per_run`/`NURA_MAX_JOBS_PER_RUN`, read by
+`app.channels.api.feed.feed`). A run takes the plan's *first* N jobs, in the plan's own order
+(the broker's — see `MAX_CONCURRENT_JOBS` above on why that order matters) and leaves the
+rest untouched, due for a later run — ordinarily the next day's. One live run fanned out into
+about 48 Opus calls behind one card; this is the run-level cap that keeps any one run bounded,
+whatever a deployment's plan turns up."""
 
 State = Literal["looking", "done", "none"]
 
@@ -145,6 +156,13 @@ class RunRecord:
     `FAILED` by `write_job_results` — every way a job can end badly, not only the ones that
     raise (#291 review, REQUIRED 4: live, all 14 jobs ended `FAILED` while the old count,
     which only ever incremented on a raise or a timeout, read 0)."""
+    deferred: int = 0
+    """How many of the plan's jobs this run left untouched past `max_jobs_per_run`
+    (`MAX_JOBS_PER_RUN`/`NURA_MAX_JOBS_PER_RUN`): the plan found more work than the cap, so
+    only its first N, in the plan's own order, actually ran — the rest stay due, for a later
+    run. 0 the ordinary day the plan never reaches the cap. The feed response's `jobs` block
+    (`app.channels.api.feed_schemas.FeedJobsOut.deferred`) reads this back, so a live check
+    can say exactly how many were held back, not just how many ran."""
 
 
 _runs: dict[tuple[uuid.UUID, str], RunRecord] = {}
@@ -171,6 +189,7 @@ def ensure_learning_scheduled(
     engine: Engine,
     day: Day,
     sessions: async_sessionmaker[AsyncSession],
+    max_jobs_per_run: int = MAX_JOBS_PER_RUN,
 ) -> RunRecord | None:
     """Called from `GET /feed` after the page is built. Starts today's catch-up at most once
     while it is actually running: a "looking" record already here means a run for today is in
@@ -188,7 +207,15 @@ def ensure_learning_scheduled(
         state="looking", started_at=existing.started_at if existing is not None else utcnow()
     )
     task = asyncio.create_task(
-        _run(key, context=context, engine=engine, day=day, sessions=sessions, resuming=existing is not None)
+        _run(
+            key,
+            context=context,
+            engine=engine,
+            day=day,
+            sessions=sessions,
+            resuming=existing is not None,
+            max_jobs_per_run=max_jobs_per_run,
+        )
     )
     _tasks.add(task)
     task.add_done_callback(_log_if_failed)
@@ -427,6 +454,7 @@ async def _run(
     day: Day,
     sessions: async_sessionmaker[AsyncSession],
     resuming: bool = False,
+    max_jobs_per_run: int = MAX_JOBS_PER_RUN,
 ) -> None:
     record = _runs[key]
     try:
@@ -440,7 +468,23 @@ async def _run(
             record.done_at = utcnow()
             return
         plan, house, keys = planned
-        log.info("feed: running %d learning jobs in the background", len(plan.jobs))
+        # The plan's *first* N jobs, in the plan's own order (the broker's — see
+        # `MAX_CONCURRENT_JOBS`'s docstring on why that order matters): the rest are left
+        # exactly as `plan_learning_jobs` found them, never run, never marked done, so they
+        # stay due for a later run by their own ordinary cadence (`app.delivery.feed.search.
+        # due`) — ordinarily the next day's, unless something else about them is due sooner.
+        run_jobs = plan.jobs[:max_jobs_per_run]
+        deferred = len(plan.jobs) - len(run_jobs)
+        record.deferred = deferred
+        if deferred:
+            log.info(
+                "feed: plan held %d learning jobs, capped at %d; deferring %d to a later run",
+                len(plan.jobs),
+                max_jobs_per_run,
+                deferred,
+            )
+        log.info("feed: running %d learning jobs in the background", len(run_jobs))
+        calls_before = call_counter.counts()
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
         made = 0
         failed = 0
@@ -457,11 +501,23 @@ async def _run(
 
         try:
             await asyncio.wait_for(
-                asyncio.gather(*(_one(job) for job in plan.jobs)), timeout=RUN_DEADLINE_SECONDS
+                asyncio.gather(*(_one(job) for job in run_jobs)), timeout=RUN_DEADLINE_SECONDS
             )
         except TimeoutError:
             log.warning("feed: the background learning run hit its %ss deadline", RUN_DEADLINE_SECONDS)
         log.info("feed: %d cards made, %d failed", made, failed)
+        calls_after = call_counter.counts()
+        run_calls = {
+            key: calls_after[key] - calls_before.get(key, 0)
+            for key in calls_after
+            if calls_after[key] > calls_before.get(key, 0)
+        }
+        log.info(
+            "feed: %d external model calls this run (%s)",
+            sum(run_calls.values()),
+            ", ".join(f"{task.value}/{model}={count}" for (task, model), count in sorted(run_calls.items()))
+            or "none",
+        )
         record.state = "done"
         record.made = made
         record.failed = failed

@@ -67,6 +67,8 @@ from app.insurance.ledger import insurance_ledger
 from app.insurance.policy import current_policies
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.narrate import _has_conclusion_language
 from app.llm.prompts import load_prompt
 from app.medicines.models import MedicationLine
@@ -105,7 +107,10 @@ from app.search.retrieve import Retriever
 
 log = logging.getLogger("nura.llm.ask_agent")
 
-MODEL: Final = "claude-opus-5"
+MODEL: Final = DEFAULT_MODELS[Task.ASK]
+"""The default `ClaudeAsker` is built with when a caller does not pass `model=` (a test,
+mainly — `asker_for` always does). Opus 5: Ask decides for itself what to look at and answers
+him directly, so quality and safety matter most here, the same as reading a paper."""
 MAX_TOKENS: Final = 4096
 MAX_ROUNDS: Final = 6
 """A round is one call and its response. A question this build cannot settle in six never
@@ -618,9 +623,12 @@ class ClaudeAsker:
     writes this reach to the audit trail once per ask, the way `ClaudeNarrator` already does
     for narration."""
 
-    def __init__(self, client: AsyncAnthropic, *, searcher: Searcher) -> None:
+    def __init__(
+        self, client: AsyncAnthropic, *, searcher: Searcher, model: str = MODEL
+    ) -> None:
         self._client = client
         self._searcher = searcher
+        self._model = model
 
     async def ask_stream(
         self,
@@ -694,8 +702,9 @@ class ClaudeAsker:
             repaired = False
             try:
                 for _round in range(MAX_ROUNDS):
+                    record_call(Task.ASK, self._model)
                     response = await self._client.messages.create(  # type: ignore[call-overload]
-                        model=MODEL,
+                        model=self._model,
                         max_tokens=MAX_TOKENS,
                         system=system,
                         thinking={"type": "adaptive"},

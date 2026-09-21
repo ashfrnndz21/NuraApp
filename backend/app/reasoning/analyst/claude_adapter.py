@@ -52,13 +52,19 @@ from app.audit.models import Channel
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.reasoning.analyst.pipeline import Candidate, finalize
 from app.reasoning.analyst.port import AskWho, Insight, Report, ReportEvent, Section
 from app.reasoning.analyst.rule import QUESTIONS_KEY, RuleAnalyst, ask_the_doctor
 
 log = logging.getLogger("nura.reasoning.analyst.claude")
 
-MODEL = "claude-sonnet-4-5"
+MODEL = DEFAULT_MODELS[Task.ANALYST]
+"""The default `ClaudeAnalyst` is built with when a caller does not pass `model=` (a test,
+mainly — `analyst_for` always does). Sonnet 5, replacing the older `claude-sonnet-4-5`: this
+class only chooses and rephrases from `RuleAnalyst`'s own read, falling back whole on doubt —
+not the dearest model's job."""
 MAX_TOKENS = 2048
 
 CHOICES_SCHEMA: Final[dict[str, Any]] = {
@@ -228,9 +234,12 @@ class ClaudeAnalyst:
     choose and rephrase from what that read already produced, and falls back to it whole on
     any doubt."""
 
-    def __init__(self, *, client: AsyncAnthropic, registry: object | None = None) -> None:
+    def __init__(
+        self, *, client: AsyncAnthropic, registry: object | None = None, model: str = MODEL
+    ) -> None:
         self._client = client
         self._rule = RuleAnalyst(registry=registry)  # type: ignore[arg-type]
+        self._model = model
 
     async def _ask_claude(self, report: Report) -> str | None:
         """The one network call, isolated so a test can replace it without a live key.
@@ -248,8 +257,9 @@ class ClaudeAnalyst:
             for section in report.sections
             for insight in section.insights
         ]
+        record_call(Task.ANALYST, self._model)
         response = await self._client.messages.create(
-            model=MODEL,
+            model=self._model,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
             messages=[

@@ -50,6 +50,10 @@ export function useToday() {
   const [busy, setBusy] = useState(false);
   // The visits, when the key reaches them: the next one is the first (E05-03).
   const [visits, setVisits] = useState<AppointmentOut[]>([]);
+  // Whether the visits read has come back at least once for this key (owner review round 3):
+  // Home's own busy/quiet decision waits for this the same way it waits for `page` — an empty
+  // `visits` that simply has not answered yet must never read as "no visit soon".
+  const [visitsReady, setVisitsReady] = useState(false);
   // Today's top three (E11-02), read live; a kept page shows the feed's own cards instead.
   const [topThree, setTopThree] = useState<FeedItemOut[]>([]);
   // Taps held while offline, whether the last replay sent any, and what the backend said no to.
@@ -231,8 +235,23 @@ export function useToday() {
   }, [bearer, papers?.profile_id, language.value]);
 
   useEffect(() => {
-    if (!bearer || !papers || !papers.scopes.includes("visits")) return;
-    nura.appointments(bearer, papers.profile_id).then(setVisits, () => setVisits([]));
+    setVisitsReady(false);
+    // No `visits` scope: there is nothing to wait for — ready at once, not stuck forever.
+    if (!bearer || !papers || !papers.scopes.includes("visits")) {
+      setVisits([]);
+      setVisitsReady(true);
+      return;
+    }
+    nura.appointments(bearer, papers.profile_id).then(
+      (got) => {
+        setVisits(got);
+        setVisitsReady(true);
+      },
+      () => {
+        setVisits([]);
+        setVisitsReady(true);
+      },
+    );
   }, [bearer, papers?.profile_id]);
 
   // At midnight on the region's clock the page on screen is yesterday's: read today's.
@@ -298,7 +317,37 @@ export function useToday() {
   const dose = page && !fromPhone && !stale ? nowCard(page.slots.filter((slot) => heldTapOf(slot) === undefined), page.lines, s) : null;
   const nextVisit = visits[0] ?? null;
 
-  return { s, bearer, papers, page, kept, unreached, error, justTook, busy, take, fromPhone, blank, feed, act, stale, useFeed, top, stateAt, doseSource, dose, nextVisit, now, held, sent, heldRefused, card, heldSlots, heldTapOf };
+  return {
+    s,
+    bearer,
+    papers,
+    page,
+    kept,
+    unreached,
+    error,
+    justTook,
+    busy,
+    take,
+    fromPhone,
+    blank,
+    feed,
+    act,
+    stale,
+    useFeed,
+    top,
+    stateAt,
+    doseSource,
+    dose,
+    nextVisit,
+    visitsReady,
+    now,
+    held,
+    sent,
+    heldRefused,
+    card,
+    heldSlots,
+    heldTapOf,
+  };
 }
 
 export type TodayView = ReturnType<typeof useToday>;

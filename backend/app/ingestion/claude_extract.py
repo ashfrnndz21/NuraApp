@@ -64,11 +64,16 @@ from app.ingestion.extract import (
     Span,
 )
 from app.llm.blocks import answer_text
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.prompts import load_prompt
 
 log = logging.getLogger("nura.ingestion.claude_extract")
 
-MODEL: Final = "claude-opus-5"
+MODEL: Final = DEFAULT_MODELS[Task.EXTRACT]
+"""The default `ClaudeExtractor` is built with when a caller does not pass `model=` (a test,
+mainly — `extractor_for` below always does). Opus 5: reading a paper wrong reaches a family
+directly, so this stays on the model that reads best, not the cheapest one."""
 MAX_TOKENS: Final = 8192
 """Enough for a full multi-page discharge letter's fields as JSON; a page that still overruns
 this is a truncated answer, handled as its own case (`stop_reason == "max_tokens"`), not a
@@ -339,8 +344,9 @@ class ClaudeExtractor:
     docstring): `app.ingestion.review.review_artifact` reads this to write the audit line
     a fixture read never needs."""
 
-    def __init__(self, client: AsyncAnthropic) -> None:
+    def __init__(self, client: AsyncAnthropic, *, model: str = MODEL) -> None:
         self._client = client
+        self._model = model
 
     async def extract(self, data: bytes, content_type: str, hints: Hints) -> Extraction:
         kind = content_type.strip().lower()
@@ -359,8 +365,9 @@ class ClaudeExtractor:
         # The SDK's `MessageParam`/content-block TypedDicts are precise unions that plain
         # dicts built from `_content_block`'s `dict[str, Any]` cannot be checked against
         # structurally; the shapes here are exactly the ones the Claude API documents.
+        record_call(Task.EXTRACT, self._model)
         message = await self._client.messages.create(  # type: ignore[call-overload]
-            model=MODEL,
+            model=self._model,
             max_tokens=MAX_TOKENS,
             system=_SYSTEM_PROMPT,
             messages=[

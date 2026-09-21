@@ -26,6 +26,7 @@ from pathlib import Path
 from app.ingestion.claude_extract import ClaudeExtractor
 from app.ingestion.extract import Extractor, FixtureExtractor
 from app.llm.client import client_for
+from app.llm.models import Task
 from app.llm.residency import allow_external_model
 from app.settings import MissingSetting, Settings
 
@@ -58,7 +59,7 @@ def extractor_for(settings: Settings) -> Extractor:
             refusal=ClaudeExtractorOutsideDemo,
             what="NURA_EXTRACTOR=claude",
         )
-        return ClaudeExtractor(client_for(settings))
+        return ClaudeExtractor(client_for(settings), model=settings.models.for_task(Task.EXTRACT))
     raise NoExtractor(
         f"no extractor named {settings.extractor!r}; only {FIXTURE!r} and {CLAUDE!r} are "
         "built. Set NURA_EXTRACTOR=fixture for a local run"

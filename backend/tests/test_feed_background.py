@@ -12,9 +12,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from sqlalchemy import select
 
 from app.delivery.feed import background
-from app.delivery.feed.models import JobKind
+from app.delivery.feed.models import JobKind, SearchJob
 from app.delivery.feed.search import SearchOutcome
 from tests.api import own_profile, register_by_phone
 from tests.conftest import Deployment
@@ -28,12 +29,33 @@ async def _medicine(deployment: Deployment, profile_id: str, pa: dict[str, str])
     """Amlodipine, thirty tablets: a real gap, so planning queues both an EXPLAINER and a
     SAFETY job (spec §9) — two jobs to a run, not one, for the tests below that care which
     of several jobs failed or ran slowly, and that the others still complete."""
-    photo = await _artefact(deployment.client, profile_id, pa)
+    await _named_medicine(deployment, profile_id, pa, "amlodipine")
+
+
+_REGISTRY_STRENGTH = {
+    "amlodipine": "5 mg",
+    "metformin": "500 mg",
+    "atorvastatin": "20 mg",
+    "losartan": "50 mg",
+}
+"""The one strength `tests/fixtures/drugs/registry.json` actually carries for each of these
+four generics — the label has to match a real product (`app.drugs.registry.NotIdentified`),
+not just name a generic the register happens to know."""
+
+
+async def _named_medicine(
+    deployment: Deployment, profile_id: str, pa: dict[str, str], generic: str
+) -> None:
+    """Like `_medicine`, one gap of the caller's own generic name — a distinct medicine name
+    queues its own EXPLAINER and SAFETY jobs (`app.delivery.feed.compose._gaps`, keyed on the
+    generic), so several calls with several names are what the run-cap test below uses to
+    build a plan bigger than `NURA_MAX_JOBS_PER_RUN`'s default."""
+    photo = await _artefact(deployment.client, profile_id, pa, salt=generic)
     added = await _add(
         deployment.client,
         profile_id,
         pa,
-        _label("amlodipine", "5 mg", "1 biji sekali sehari pagi", quantity=30),
+        _label(generic, _REGISTRY_STRENGTH[generic], "1 biji sekali sehari pagi", quantity=30),
         photo,
     )
     assert added.status_code == 201, added.text
@@ -259,3 +281,40 @@ async def test_the_run_summary_counts_a_failed_job_not_only_a_raised_one(
     [record] = list(background._runs.values())
     assert record.failed == 1, "RunRecord itself exposes the same count, not only the log line"
     assert record.made >= 1, "the explainer job's own card still counts as made"
+
+
+async def test_a_plan_bigger_than_the_run_cap_runs_only_the_first_n_and_defers_the_rest(
+    deployment: Deployment,
+) -> None:
+    """`Settings.max_jobs_per_run`/`NURA_MAX_JOBS_PER_RUN` (default 6): four distinct
+    medicines queue an EXPLAINER and a SAFETY job each (`app.delivery.feed.compose._gaps`,
+    keyed on the generic) on top of whatever else a fresh profile's first day already queues
+    (RE-07's broker slate among them) — enough, together, to clear the default cap. Only the
+    plan's first six jobs, in its own order, actually run; the rest are left untouched,
+    `RunRecord.deferred` and the feed response's own `jobs.deferred` say exactly how many, and
+    they carry no `last_run_at` at all (never run, never touched — due again by their own
+    ordinary cadence, not by anything this run did)."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    for generic in ("amlodipine", "metformin", "atorvastatin", "losartan"):
+        await _named_medicine(deployment, profile_id, pa, generic)
+
+    first = await _feed(deployment, profile_id, pa["token"])
+    assert first["jobs"]["state"] == "looking"
+
+    await background.drain()
+
+    second = await _feed(deployment, profile_id, pa["token"])
+    assert second["jobs"]["state"] == "done"
+
+    async with deployment.sessions() as session:
+        jobs = (await session.execute(select(SearchJob))).scalars().all()
+        ran = [job for job in jobs if job.last_run_at is not None]
+        never_ran = [job for job in jobs if job.last_run_at is None]
+        assert len(jobs) > 6, "the setup must queue more jobs than the default cap for this test to mean anything"
+        assert len(ran) == 6, "only the plan's first six jobs actually ran"
+        assert len(never_ran) == len(jobs) - 6, "the rest were left untouched, due for a later run"
+
+    assert second["jobs"]["deferred"] == len(jobs) - 6, second["jobs"]
+    [record] = list(background._runs.values())
+    assert record.deferred == len(jobs) - 6
