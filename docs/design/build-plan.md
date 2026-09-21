@@ -27,10 +27,12 @@ Everything lands on the `redesign` branch. `main` takes it at checkpoint 8.
 ### Checkpoint 1 — The look and the building blocks
 **Scope:** the dusk glass look across every existing screen; Figtree and the serif accent bundled into the app; the
 orb; the in-place status line with the light sweep; soft word-by-word text; staggered reveal; the action sheet with its
-three-state button; range bar and chips; the app as a phone column on wide screens; the overlapping ring on Health fixed.
+three-state button; range bar and chips; **on the web the whole app sits inside a phone frame** (above 600px wide: a
+390px device frame with a bezel, the atmosphere inside it, and every bar, sheet and toast kept inside the frame; on a
+real phone it is full-bleed with no frame); the overlapping ring on Health fixed.
 No screen is restructured and no wording changes yet.
-**You test:** open the app as Pa and walk every tab. Open `#/blueprint-kit` and try each component.
-**Passes when:** it looks like the blueprint; text is comfortable to read; nothing overlaps; large type still works.
+**You test:** open the app on the web as Pa and walk every tab inside the phone frame. Open `#/blueprint-kit` and try each component.
+**Passes when:** it looks like the blueprint's phone; nothing escapes the frame; text is comfortable to read; nothing overlaps; large type still works.
 
 ### Checkpoint 2 — Load a paper
 **Scope:** blueprint scenes 5, 6, 7. The reading screen with the orb and the real stages changing in place; the report
@@ -77,8 +79,15 @@ Needs the written spec, **which country comes first**, and **your real papers wi
   overwritten.
 - **7b Policy passport** (scene 11). You test: your own policy PDF. Passes when every line shows the right page and
   nothing says you are covered, only what the policy says.
-- **7c Medicine registry** (scene 12). You test: a prescription, a label photo and a receipt for the same medicine
-  under two names. Passes when it becomes one medicine and one question for the pharmacist.
+- **7c Medicine registry** (scene 12). A medicine can be added by a photo or screenshot of the box, strip or label, or by
+  typing or saying it. Each entry records: the name as printed, the real medicine name from the licensed register,
+  strength, form, pack size, what it is for in plain words from the register (never made up), dose as written,
+  prescriber, pharmacy, date and expiry when printed or told, how it was added with the source kept, status, supply
+  left, and the high-risk tag. Nura reads printed text only and never names a medicine it cannot read: a box that
+  says only "STATIN 40 mg, 28 tablets" records 40 mg, tablets and 28, and asks which statin it is. You test: a
+  prescription, a label photo and a receipt for the same medicine under two names, a box photo with only a family
+  name on it, and one medicine typed in. Passes when they become the right entries, the unnamed one asks, and the
+  duplicate becomes one medicine and one question for the pharmacist.
 - **7d Everything connected** (scene 13). You test: open any result. Passes when every door leads somewhere real.
 Independent safety reviews of matching, medicines, and policy and money come before each of these reaches you.
 
@@ -103,3 +112,4 @@ the doctor. Body text 15px or larger, contrast 4.5:1. Three languages and the ca
 | Date | Checkpoint | Builder time measured | Check rounds | Owner's verdict |
 |---|---|---|---|---|
 | 2026-09-21 | Build started: phase 1, feed lock fix and the spec running | | | |
+| 2026-09-21 | Blueprint v3: the Add a medicine scene (photo, screenshot, text or voice) | | | Approved: "yes exactly this" |
