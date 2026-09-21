@@ -75,14 +75,105 @@ test("generate a report on demand: the real stream's stages, then the headline, 
   await expect(headline).toBeVisible();
   await expect(headline.locator(".sr-only")).not.toBeEmpty();
 
+  // The orb sits beside the finished headline (not thinking) — the same treatment Ask gives a
+  // settled turn (package 10 review #3).
+  await expect(page.getByTestId("insights-orb-done")).toBeVisible();
+
+  // "What Nura looked at" collapses the five real stages into ONE quiet, expandable line —
+  // never five chips left standing after the report is assembled (package 10 review #1).
+  const lookedAt = page.getByTestId("insights-looked-at");
+  await expect(lookedAt).toBeVisible();
+  await expect(lookedAt).toContainText("What Nura looked at:");
+  await expect(lookedAt.locator(".chip-row")).toHaveCount(0);
+  await expect(lookedAt).not.toHaveAttribute("open", "");
+
   const report = page.getByTestId("insights-report");
   await expect(report).toBeVisible();
   await expect(page.getByTestId("insights-section-what_changed")).toBeVisible();
   await expect(page.getByTestId("insights-section-questions_for_the_doctor")).toBeVisible();
   await expect(page.getByTestId("insights-boundary")).toBeVisible();
 
+  // "Say it once": the headline's own sentence is the one insight promoted out of its
+  // section, so it is not repeated as the first item under "What changed" (package 10 review
+  // #2).
+  const headlineText = (await headline.locator(".sr-only").textContent())?.trim() ?? "";
+  expect(headlineText.length).toBeGreaterThan(0);
+  const whatChangedText = await page.getByTestId("insights-section-what_changed").innerText();
+  expect(whatChangedText.split(headlineText).length - 1, `"${headlineText}" repeated in What changed:\n${whatChangedText}`).toBeLessThanOrEqual(1);
+
   // "Look again", not "Generate now", once a report is already on screen.
   await expect(page.getByTestId("insights-generate")).toHaveText("Look again");
+});
+
+test("'Ask … this' names a real doctor, never the raw role word", async ({ page, request }) => {
+  const pa = await seedHome(request);
+  await signInAs(page, pa, "Pa");
+  await page.getByTestId("tab-health").click();
+  await page.getByTestId("insights-generate").click();
+  await expect(page.getByTestId("insights-report")).toBeVisible({ timeout: 15_000 });
+
+  const askButtons = page.getByTestId("insight-ask");
+  const count = await askButtons.count();
+  const texts = await askButtons.allTextContents();
+  for (const one of texts) {
+    expect(one, `broken "Ask … this" wording: "${one}"`).not.toMatch(/Ask (doctor|pharmacist|nobody) this/);
+  }
+  // seedHome's own next visit names a real doctor (`homeSeed.ts`, "Dr Tan" — the same one
+  // health.spec.ts's "Coming up" tile already asserts): at least one ask names him by name
+  // rather than falling back to the plain word, when the report has a doctor-ask finding at
+  // all.
+  if (count > 0) expect(texts.some((one) => one.includes("Dr Tan") || one.includes("your pharmacist"))).toBe(true);
+});
+
+test("'Why' is a real disclosure: closed by default, a chevron, opens on tap", async ({ page, request }) => {
+  const pa = await seedHome(request);
+  await signInAs(page, pa, "Pa");
+  await page.getByTestId("tab-health").click();
+  await page.getByTestId("insights-generate").click();
+  await expect(page.getByTestId("insights-report")).toBeVisible({ timeout: 15_000 });
+
+  const why = page.getByTestId("insight-why").first();
+  await expect(why).toBeVisible();
+  await expect(why).not.toHaveAttribute("open", "");
+  await expect(why.locator("svg")).toBeVisible();
+  await why.locator("summary").click();
+  await expect(why).toHaveAttribute("open", "");
+  await expect(page.getByTestId("insight-why-body").first()).toBeVisible();
+});
+
+// --- package 10 review #6: 12px between a section heading and its card, 24px between one
+// section and the next, on both screens ---------------------------------------------------------
+
+async function headingCardGaps(page: import("@playwright/test").Page, screenTestId: string): Promise<number[]> {
+  return page.locator(`main[data-testid="${screenTestId}"] .section-head`).evaluateAll((heads) =>
+    heads
+      .map((head) => {
+        const next = head.nextElementSibling;
+        if (!next) return null;
+        const a = head.getBoundingClientRect();
+        const b = next.getBoundingClientRect();
+        return b.top - a.bottom;
+      })
+      .filter((gap): gap is number => gap !== null),
+  );
+}
+
+test("every section heading sits at least 8px above its card, on Health and the Health Analyst", async ({ page, request }) => {
+  const pa = await seedHome(request);
+  await signInAs(page, pa, "Pa");
+  await page.getByTestId("tab-health").click();
+  await expect(page.getByTestId("reading-bp")).toBeVisible();
+  await page.waitForTimeout(1_700); // the reveal stagger (up to ~7 sections, 140ms apart) and its 550ms transition settle
+  const healthGaps = await headingCardGaps(page, "health-screen");
+  expect(healthGaps.length).toBeGreaterThan(0);
+  for (const gap of healthGaps) expect(gap, `Health: a heading sits ${gap}px above its card`).toBeGreaterThanOrEqual(8);
+
+  await page.getByTestId("insights-generate").click();
+  await expect(page.getByTestId("insights-report")).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1_700);
+  const analystGaps = await headingCardGaps(page, "insights-screen");
+  expect(analystGaps.length).toBeGreaterThan(0);
+  for (const gap of analystGaps) expect(gap, `Health Analyst: a heading sits ${gap}px above its card`).toBeGreaterThanOrEqual(8);
 });
 
 test("open a past report from the quiet list", async ({ page, request }) => {
@@ -115,9 +206,16 @@ test("her Health Analyst: Pa's report, in her own voice, never \"your\"", async 
   await expect(page.getByTestId("insights-screen").locator("h1")).toHaveText("Pa's week");
   await expect(page.getByTestId("insights-report")).toBeVisible({ timeout: 15_000 });
 
-  const lines = await page.locator('[data-testid="insights-report"] p, [data-testid="insights-headline"] .sr-only').allTextContents();
+  const lines = await page
+    .locator('[data-testid="insights-report"] p, [data-testid="insights-headline"] .sr-only, [data-testid="insight-ask"], [data-testid="insights-looked-at"]')
+    .allTextContents();
   const aboutHer = lines.filter((line) => /\byour\b|\byou\b/i.test(line));
   expect(aboutHer, aboutHer.join("\n")).toEqual([]);
+
+  // Named doctor or not, an ask button never reads the broken "Ask doctor this" — and in her
+  // voice the fallback is "Pa's doctor", never "your doctor" (package 10 review #4).
+  const askTexts = await page.getByTestId("insight-ask").allTextContents();
+  for (const one of askTexts) expect(one, `broken "Ask … this" wording: "${one}"`).not.toMatch(/Ask (doctor|pharmacist|nobody) this/);
 });
 
 test("leaving the screen mid-stream aborts it: no error, no state update after unmount", async ({ page, request }) => {
@@ -168,15 +266,18 @@ for (const [label, size] of [
   ["360x640", { width: 360, height: 640 }],
   ["1280x900", { width: 1280, height: 900 }],
 ] as const) {
-  test(`Health's geometry holds at ${label}: nothing under the tab bar, no label crossing its value`, async ({ page, request }) => {
+  test(`Health's geometry holds at ${label}: no label crossing its value, nothing left under the tab bar once scrolled to`, async ({ page, request }) => {
     await page.setViewportSize(size);
     const pa = await seedHome(request);
     await signInAs(page, pa, "Pa");
     await page.getByTestId("tab-health").click();
     await expect(page.getByTestId("health-screen")).toBeVisible();
     // Real seeded data (`seedHome`'s blood pressure book): wait for the row itself, not merely
-    // its (possibly still-loading) container, before counting metric rows below it.
+    // its (possibly still-loading) container, before counting metric rows below it — and for
+    // the reveal stagger and its own transition to fully settle, so a mid-transition (still
+    // blurred, still translating) frame is never what geometry is measured against.
     await expect(page.getByTestId("reading-bp")).toBeVisible();
+    await page.waitForTimeout(1_700);
 
     const tabBar = page.locator(".tabbar").first();
     const tabBarBox = await tabBar.boundingBox().catch(() => null);
@@ -185,12 +286,16 @@ for (const [label, size] of [
     expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       const row = rows.nth(i);
+      // A screen this full does not fit above the fold on a short phone without scrolling —
+      // scrolled to (never simply "on the first screenful"), a row must still never end up
+      // physically covered by the docked tab bar.
+      await row.scrollIntoViewIfNeeded();
       const labelBox = await row.locator(".metric-label").boundingBox();
       const valueBox = await row.locator(".metric-value").boundingBox();
       if (!labelBox || !valueBox) continue;
       expect(boxesIntersect(labelBox, valueBox), `row ${i} at ${label}: label crosses value`).toBe(false);
       if (tabBarBox) {
-        expect(labelBox.y + labelBox.height, `row ${i} at ${label}: under the tab bar`).toBeLessThanOrEqual(tabBarBox.y + 1);
+        expect(labelBox.y + labelBox.height, `row ${i} at ${label}: under the tab bar once scrolled to`).toBeLessThanOrEqual(tabBarBox.y + 1);
       }
     }
   });

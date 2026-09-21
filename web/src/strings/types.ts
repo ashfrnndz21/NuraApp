@@ -228,6 +228,10 @@ export interface Strings {
     // --- package 10: the week ring's calm empty state (a fresh profile, no medicines yet) ---
     ringEmpty: string;
     ringEmptyOther: string;
+    // --- package 10 review: one quiet line for every metric with nothing written down, never
+    //     a separate empty row each ---
+    metricsNotLogged: string;
+    metricsNotLoggedOther: string;
   };
   /** The weekly report (W1, docs/design/nura-concept-board.html): the Health card, the live
    *  trace while it builds, the report itself, and the bell's row that opens it. */
@@ -262,6 +266,15 @@ export interface Strings {
      *  arrived stays on screen (`Notice` already says the refusal's own sentence); this is
      *  the way to try again. */
     retryAfterError: string;
+    /** Who "Ask … this" names when `ask_who` is `"doctor"` and no visit names one — the same
+     *  fallback word the backend's own `doctor_to_ask`/`YOUR_DOCTOR` already picks. A real
+     *  name (the next visit's own doctor) is used instead when the record has one. */
+    yourDoctor: string;
+    yourDoctorOther: string;
+    /** The same fallback for `ask_who === "pharmacist"` — there is no "named pharmacist" on
+     *  the record, so this is always the word used. */
+    yourPharmacist: string;
+    yourPharmacistOther: string;
   };
   signIn: {
     title: string;

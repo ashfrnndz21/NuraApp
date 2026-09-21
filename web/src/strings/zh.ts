@@ -456,6 +456,10 @@ export const zh = {
     ringEmpty: "这一周还没有药可以算。",
     // @patient
     ringEmptyOther: "这一周还没有{name}的药可以算。",
+    // @patient phrase
+    metricsNotLogged: "还没有写下：{list}。",
+    // @patient phrase
+    metricsNotLoggedOther: "还没有写下{name}的：{list}。",
   },
   insights: {
     // @patient headline
@@ -517,6 +521,14 @@ export const zh = {
     pastTitle: "之前的报告",
     // @patient phrase
     retryAfterError: "再试一次",
+    // @patient phrase
+    yourDoctor: "您的医生",
+    // @patient phrase
+    yourDoctorOther: "{name}的医生",
+    // @patient phrase
+    yourPharmacist: "您的药剂师",
+    // @patient phrase
+    yourPharmacistOther: "{name}的药剂师",
   },
   signIn: {
     // @patient headline

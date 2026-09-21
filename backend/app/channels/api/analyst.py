@@ -52,6 +52,7 @@ from app.audit.models import Channel
 from app.channels.about_him import reader_of
 from app.channels.api.deps import Context, Db, providers_of, session_scope
 from app.db import utcnow
+from app.delivery import analyst_strings as analyst_words
 from app.errors import Refusal
 from app.identity.models import Profile, Stewardship
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -210,7 +211,20 @@ async def insights_stream(request: Request, context: Context) -> StreamingRespon
                 async for event in analyst.report_stream(session, context=context, language=language):
                     if isinstance(event, Step):
                         yield _sse(
-                            {"type": "step", "key": event.key.value, "label": reader.says(event.label)}
+                            {
+                                "type": "step",
+                                "key": event.key.value,
+                                "label": reader.says(event.label),
+                                # The bare noun (`STEP_NAME`, the same idea as Ask's own
+                                # `ASK_STEP_NAMES`): what the Health Analyst screen collapses
+                                # five real reads into, once, after the stream settles
+                                # ("What Nura looked at: …"). Two of the five do speak to him
+                                # ("what you have told Nura", "what you paid") and need
+                                # `reader.says()` the same as `label` above — caught by a
+                                # caregiver-voice e2e sweep the first time this shipped without
+                                # it (package 10 review #1).
+                                "name": reader.says(analyst_words.STEP_NAME[language][event.key.value]),
+                            }
                         )
                     else:
                         report = event

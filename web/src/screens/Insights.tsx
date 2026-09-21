@@ -5,9 +5,12 @@ import type { InsightOut, InsightsReportOut, InsightsReportSummaryOut } from "..
 import {
   ANALYST_STREAM_IDLE,
   analystStreamReducer,
+  askWhoLabel,
   confidenceWordKey,
   headlineInsight,
+  lookedAtParts,
   pastReportsNewestFirst,
+  sectionInsightsView,
   sectionsFor,
   type SectionView,
 } from "../health/insights";
@@ -16,17 +19,96 @@ import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine } from "../today/model";
 import { useToday } from "../today/useToday";
 import { Notice } from "../ui/components";
-import { Chip, ChipRow, IconBadge, ListRow, Orb, PillButton, RevealGroup, SectionHeader, SoftText, StatusLine, TintCard } from "../ui/kit";
+import { Chip, ChipRow, Icon, IconBadge, ListRow, LookedAt, Orb, PillButton, RevealGroup, SectionHeader, SoftText, StatusLine, TintCard } from "../ui/kit";
 import { Shell } from "./Shell";
 import "../ui/health.css";
 
-/** One line of the weekly report, drawn exactly as the backend wrote it: his sentence, how
- *  sure Nura is, the why (its evidence, in his papers' own words), and, when a doctor's name
- *  comes with it, the one button that takes it to the visit. No hook, so it renders the same
- *  from a test as it does on the screen. */
+/** The chip, the "Ask … this" action and the "Why" disclosure that follow an insight's own
+ *  sentence — pulled out of `InsightRow` so the screen's own headline (package 10 review: "say
+ *  it once") can carry the *same* row of actions without repeating the sentence itself.
+ *
+ *  "Why" is a real disclosure, not an orphan label: a native `<details>`/`<summary>` (kept
+ *  hookless, like every other component in this file and `ui/kit/Conversation.tsx`, so it
+ *  renders the same from the static-tree unit tests as it does on the screen) with the same
+ *  chevron `ReportTable.tsx`'s "About this paper" toggle uses, rotating open/closed by CSS off
+ *  `details[open]` rather than a component-owned `aria-expanded` (`.insight-why` in
+ *  `ui/health.css`) — closed by default (a `<details>` with no `open` attribute), and never
+ *  rendered at all when the insight carries no `why_plain` to show.
+ *
+ *  Who "Ask … this" names is composed here, never read off `ask_who` verbatim: the backend's
+ *  `ask_who` is one of `"doctor"`, `"pharmacist"`, `"nobody"` — a role, never a literal name
+ *  (`askWhoLabel`). `"nobody"` (and any row with none of the three) shows no action at all. */
+function InsightActions({
+  insight,
+  s,
+  owner,
+  name,
+  nextVisitDoctor,
+  asking,
+  asked,
+  onAsk,
+}: {
+  insight: InsightOut;
+  s: Strings;
+  owner: boolean;
+  name: string;
+  nextVisitDoctor: string | null;
+  asking: boolean;
+  asked: boolean;
+  onAsk?: (insight: InsightOut) => void;
+}): JSX.Element {
+  const who = askWhoLabel(insight.ask_who, s, owner, name, nextVisitDoctor);
+  return (
+    <div class="insight-meta">
+      <div class="insight-actions-row">
+        <Chip>{s.insights[confidenceWordKey(insight.confidence)]}</Chip>
+        {who &&
+          (onAsk ? (
+            <PillButton variant="quiet" compact onClick={() => onAsk(insight)} disabled={asking || asked} testId="insight-ask">
+              {fill(s.insights.askThis, { who })}
+            </PillButton>
+          ) : (
+            <p class="caption" data-testid="insight-no-visit">
+              {s.insights.noVisit}
+            </p>
+          ))}
+        {asked && (
+          <p class="caption" data-testid="insight-asked">
+            {s.insights.asked}
+          </p>
+        )}
+      </div>
+      {insight.why_plain && (
+        <details class="insight-why" data-testid="insight-why">
+          <summary>
+            <span>{s.insights.why}</span>
+            <Icon name="chevron" />
+          </summary>
+          <div data-testid="insight-why-body">
+            <p>{insight.why_plain}</p>
+            {insight.evidence.length > 0 && (
+              <ChipRow testId="insight-evidence">
+                {insight.evidence.map((one) => (
+                  <Chip key={one.id}>{one.label}</Chip>
+                ))}
+              </ChipRow>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** One line of the weekly report, drawn exactly as the backend wrote it: his sentence, then
+ *  `InsightActions`. No hook of its own, so it renders the same from a test as it does on the
+ *  screen (the "why" toggle's own state lives in `InsightActions`, not here). */
 export function InsightRow({
   insight,
   s,
+  owner,
+  name,
+  nextVisitDoctor,
   asking,
   asked,
   onAsk,
@@ -34,6 +116,9 @@ export function InsightRow({
 }: {
   insight: InsightOut;
   s: Strings;
+  owner: boolean;
+  name: string;
+  nextVisitDoctor: string | null;
   asking: boolean;
   asked: boolean;
   onAsk?: (insight: InsightOut) => void;
@@ -42,71 +127,55 @@ export function InsightRow({
   return (
     <div class="insight-row" data-testid={testId ?? "insight"}>
       <p class="insight-text">{insight.text}</p>
-      <ChipRow testId="insight-confidence">
-        <Chip>{s.insights[confidenceWordKey(insight.confidence)]}</Chip>
-      </ChipRow>
-      <details class="insight-why" data-testid="insight-why">
-        <summary>{s.insights.why}</summary>
-        <p>{insight.why_plain}</p>
-        {insight.evidence.length > 0 && (
-          <ChipRow testId="insight-evidence">
-            {insight.evidence.map((one) => (
-              <Chip key={one.id}>{one.label}</Chip>
-            ))}
-          </ChipRow>
-        )}
-      </details>
-      {insight.ask_who &&
-        (onAsk ? (
-          <PillButton variant="secondary" onClick={() => onAsk(insight)} disabled={asking || asked} testId="insight-ask">
-            {fill(s.insights.askThis, { who: insight.ask_who })}
-          </PillButton>
-        ) : (
-          <p class="caption" data-testid="insight-no-visit">
-            {s.insights.noVisit}
-          </p>
-        ))}
-      {asked && (
-        <p class="caption" data-testid="insight-asked">
-          {s.insights.asked}
-        </p>
-      )}
+      <InsightActions insight={insight} s={s} owner={owner} name={name} nextVisitDoctor={nextVisitDoctor} asking={asking} asked={asked} onAsk={onAsk} />
     </div>
   );
 }
 
 /** One section: the backend's own title and lines when it sent the section at all; a plain
  *  line, never silence, when this key's scope leaves it out, or when Nura looked and found
- *  nothing to say. */
+ *  nothing to say. `promotedId`: the one insight already shown as the screen's own headline —
+ *  left out of this section's own list (`sectionInsightsView`), never repeated, and never
+ *  mistaken for "nothing to say" when it is the only reason the list is empty. */
 export function SectionCard({
   section,
   s,
   name,
+  owner,
+  nextVisitDoctor,
   askingId,
   askedIds,
   onAsk,
   hasNextVisit,
+  promotedId,
 }: {
   section: SectionView;
   s: Strings;
   name: string;
+  owner: boolean;
+  nextVisitDoctor: string | null;
   askingId: string | null;
   askedIds: ReadonlySet<string>;
   onAsk?: (insight: InsightOut) => void;
   hasNextVisit: boolean;
+  promotedId?: string | null;
 }): JSX.Element {
   const title = section.state === "present" ? section.title : s.insights.sectionTitles[section.key as keyof typeof s.insights.sectionTitles] ?? section.key;
+  const view = section.state === "present" ? sectionInsightsView(section.insights, promotedId) : { insights: [], emptyBecausePromoted: false };
   return (
     <TintCard tint="paper" testId={`insights-section-${section.key}`}>
       <SectionHeader title={title} />
       {section.state === "withheld" && <p class="caption">{fill(s.insights.sectionWithheld, { name })}</p>}
-      {section.state === "present" && section.insights.length === 0 && <p class="caption">{s.insights.sectionEmpty}</p>}
+      {section.state === "present" && view.insights.length === 0 && !view.emptyBecausePromoted && <p class="caption">{s.insights.sectionEmpty}</p>}
       {section.state === "present" &&
-        section.insights.map((insight) => (
+        view.insights.map((insight) => (
           <InsightRow
             key={insight.insight_id}
             insight={insight}
             s={s}
+            owner={owner}
+            name={name}
+            nextVisitDoctor={nextVisitDoctor}
             asking={askingId === insight.insight_id}
             asked={askedIds.has(insight.insight_id)}
             onAsk={hasNextVisit ? onAsk : undefined}
@@ -126,21 +195,27 @@ export function ReportBody({
   report,
   s,
   name,
+  owner,
+  nextVisitDoctor,
   askingId,
   askedIds,
   onAsk,
   hasNextVisit,
   locale,
+  promotedId,
   testId,
 }: {
   report: InsightsReportOut;
   s: Strings;
   name: string;
+  owner: boolean;
+  nextVisitDoctor: string | null;
   askingId: string | null;
   askedIds: ReadonlySet<string>;
   onAsk?: (insight: InsightOut) => void;
   hasNextVisit: boolean;
   locale: string;
+  promotedId?: string | null;
   testId?: string;
 }): JSX.Element {
   return (
@@ -150,7 +225,19 @@ export function ReportBody({
       </p>
       <RevealGroup testId="insights-sections">
         {sectionsFor(report).map((section) => (
-          <SectionCard key={section.key} section={section} s={s} name={name} askingId={askingId} askedIds={askedIds} onAsk={onAsk} hasNextVisit={hasNextVisit} />
+          <SectionCard
+            key={section.key}
+            section={section}
+            s={s}
+            name={name}
+            owner={owner}
+            nextVisitDoctor={nextVisitDoctor}
+            askingId={askingId}
+            askedIds={askedIds}
+            onAsk={onAsk}
+            hasNextVisit={hasNextVisit}
+            promotedId={promotedId}
+          />
         ))}
       </RevealGroup>
       {report.boundary.length > 0 && (
@@ -161,21 +248,6 @@ export function ReportBody({
         </div>
       )}
     </div>
-  );
-}
-
-/** What Nura looked at this run (package 10, the blueprint's `looked()`): the real step labels
- *  the stream just reported, once, right under the headline — never re-said per section, and
- *  never shown at all for a report read back without a stream just having run (a loaded latest
- *  report, an earlier report opened from the list): there is nothing real to say there. */
-function LookedAt({ steps, title }: { steps: readonly { key: string; label: string }[]; title: string }): JSX.Element | null {
-  if (steps.length === 0) return null;
-  return (
-    <ChipRow testId="insights-looked-at" label={title}>
-      {steps.map((step) => (
-        <Chip key={step.key}>{step.label}</Chip>
-      ))}
-    </ChipRow>
   );
 }
 
@@ -195,12 +267,13 @@ export function InsightsScreen({ start }: { start?: boolean }): JSX.Element {
   const papers = profile.value;
   const owner = papers?.standing === "owner";
   const name = papers?.display_name ?? "";
+  const nextVisitDoctor = v.nextVisit?.doctor ?? null;
 
   const [state, dispatch] = useReducer(analystStreamReducer, ANALYST_STREAM_IDLE);
   const [checked, setChecked] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [streamError, setStreamError] = useState<unknown>(null);
-  const [steps, setSteps] = useState<{ key: string; label: string }[]>([]);
+  const [steps, setSteps] = useState<{ key: string; label: string; name: string }[]>([]);
   const [pastReports, setPastReports] = useState<InsightsReportSummaryOut[]>([]);
   const [askingId, setAskingId] = useState<string | null>(null);
   const [askedIds, setAskedIds] = useState<ReadonlySet<string>>(new Set());
@@ -259,9 +332,9 @@ export function InsightsScreen({ start }: { start?: boolean }): JSX.Element {
       const written = await nura.insightsStream(
         bearer,
         papers.profile_id,
-        (key, label) => {
+        (key, label, stepName) => {
           if (!mounted.current) return;
-          setSteps((was) => [...was, { key, label }]);
+          setSteps((was) => [...was, { key, label, name: stepName }]);
           dispatch({ type: "step", label });
         },
         control.signal,
@@ -348,12 +421,53 @@ export function InsightsScreen({ start }: { start?: boolean }): JSX.Element {
 
       {!working && report && (
         <>
-          {headline && <SoftText key={report.report_id} text={headline.text} as="h2" pace="body" className="analyst-headline" testId="insights-headline" />}
-          {/* "What Nura looked at": the same catalogue string `talk.lookedAt` already says
-           *  for Ask's own conversation trace — reused, never a second translation of the
-           *  same words (`make language`, "the same words every time"). */}
-          <LookedAt steps={steps} title={s.talk.lookedAt} />
-          <ReportBody key={report.report_id} report={report} s={s} name={name} askingId={askingId} askedIds={askedIds} onAsk={askThis} hasNextVisit={Boolean(v.nextVisit)} locale={locale} />
+          {/* The orb beside the headline, finished (not thinking) — the same treatment Ask
+           *  gives a settled turn (`Orb testId="ask-earlier-orb"`, no `thinking`). The
+           *  headline is the one insight promoted out of its section (`promotedId` below),
+           *  its own chip/why/ask row carried here instead of repeated in the list. */}
+          <div class="analyst-headline-row">
+            <Orb size="sm" testId="insights-orb-done" />
+            <div class="analyst-headline-body">
+              {headline && <SoftText key={report.report_id} text={headline.text} as="h2" pace="body" className="analyst-headline" testId="insights-headline" />}
+              {headline && (
+                <InsightActions
+                  insight={headline}
+                  s={s}
+                  owner={owner}
+                  name={name}
+                  nextVisitDoctor={nextVisitDoctor}
+                  asking={askingId === headline.insight_id}
+                  asked={askedIds.has(headline.insight_id)}
+                  onAsk={v.nextVisit ? askThis : undefined}
+                />
+              )}
+            </div>
+          </div>
+          {/* "What Nura looked at": the real stages' bare nouns, once, collapsed into the same
+           *  line Ask's own turns give (`feed.askLookedAt`, `LookedAt`) — never five chips
+           *  still standing after the report is assembled, and never shown for a report read
+           *  back without a stream having just run (nothing real to say there). */}
+          {steps.length > 0 && (
+            <LookedAt
+              summary={fill(s.feed.askLookedAt, { parts: lookedAtParts(steps) })}
+              steps={steps.map((step) => ({ key: step.key, text: step.label, done: true }))}
+              testId="insights-looked-at"
+            />
+          )}
+          <ReportBody
+            key={report.report_id}
+            report={report}
+            s={s}
+            name={name}
+            owner={owner}
+            nextVisitDoctor={nextVisitDoctor}
+            askingId={askingId}
+            askedIds={askedIds}
+            onAsk={askThis}
+            hasNextVisit={Boolean(v.nextVisit)}
+            locale={locale}
+            promotedId={headline?.insight_id ?? null}
+          />
         </>
       )}
 

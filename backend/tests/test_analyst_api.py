@@ -62,6 +62,16 @@ async def test_the_stream_yields_steps_in_order_then_a_report_which_get_then_rea
         "ledger",
         "coverage",
     ]
+    # The bare noun on each step (`STEP_NAME`), the same "What Nura looked at" collapse Ask's
+    # own `ASK_STEP_NAMES` already gives — this is what the report screen joins into its one
+    # quiet line once the stream settles, never five chips left standing.
+    assert [e["name"] for e in events[:-1]] == [
+        "what you have told Nura",
+        "blood pressure",
+        "medicines",
+        "what you paid",
+        "policies",
+    ]
     report = events[-1]["report"]
     assert set(report.keys()) == {
         "report_id",

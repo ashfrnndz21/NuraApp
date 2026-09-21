@@ -437,6 +437,9 @@ export interface InsightsStepEvent {
   type: "step";
   key: string;
   label: string;
+  /** The bare noun for the collapsed "What Nura looked at: {name}, {name}" line — the same
+   *  idea as `AskStepEvent.name` (`STEP_NAME`, package 10). */
+  name: string;
 }
 
 /** The stream's last event: the finished report, exactly `GET /profiles/{id}/insights` would

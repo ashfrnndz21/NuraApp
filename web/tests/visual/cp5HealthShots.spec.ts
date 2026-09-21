@@ -112,7 +112,36 @@ test("Health and the Health Analyst, at two sizes", async ({ browser, request })
     await analyst.waitForTimeout(400); // the reveal stagger settles, nothing still mid-transition
     await snap(analyst, `analyst-assembled-${size.name}`);
 
-    // A second report, so "Earlier reports" has something real in it.
+    // A named doctor ("Dr Tan", `seedHome`'s own next visit) in an "Ask … this" — never the
+    // broken "Ask doctor this" (package 10 review #4).
+    const namedAsk = analyst.getByTestId("insight-ask").filter({ hasText: "Dr Tan" }).first();
+    if (await namedAsk.count()) {
+      await namedAsk.scrollIntoViewIfNeeded();
+      await analyst.waitForTimeout(150);
+      await snap(analyst, `analyst-named-doctor-${size.name}`);
+    }
+
+    // Scrolled well past the headline: several findings' own tidy rows (chip + a secondary,
+    // content-width "Ask … this" — never a wall of full-width buttons, package 10 review #7).
+    await analyst.mouse.wheel(0, 1_400);
+    await analyst.waitForTimeout(150);
+    await snap(analyst, `analyst-findings-scrolled-${size.name}`);
+    await analyst.mouse.wheel(0, -2_000); // back to the top for what follows
+
+    // Health again, with a report now on file: the Health Analyst card leads with its
+    // headline, not the plain invitation (package 10 review #9). (The board top bar's own
+    // back button always opens Home, not "wherever this came from" — the tab is the way back
+    // to Health specifically.)
+    await analyst.getByTestId("tab-health").click();
+    await expect(analyst.getByTestId("health-screen")).toBeVisible();
+    await expect(analyst.getByTestId("insights-headline")).toBeVisible();
+    await analyst.waitForTimeout(200);
+    await snap(analyst, `health-with-report-${size.name}`);
+
+    // Back into the Health Analyst — a second report, so "Earlier reports" has something
+    // real in it.
+    await analyst.getByTestId("insights-generate").click();
+    await expect(analyst.getByTestId("insights-report")).toBeVisible({ timeout: 15_000 });
     await analyst.getByTestId("insights-generate").click();
     await expect(analyst.getByTestId("insights-thinking")).toBeVisible();
     await expect(analyst.getByTestId("insights-thinking")).toHaveCount(0, { timeout: 15_000 });

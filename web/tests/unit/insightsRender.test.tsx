@@ -22,7 +22,10 @@ function insight(overrides: Partial<InsightOut> = {}): InsightOut {
     insight_id: "i1",
     kind: "trend",
     text: "Your blood pressure has been a little higher this week.",
-    ask_who: "Dr Tan",
+    // `ask_who` is always one of `AskWho`'s three members on the wire — a role, never a
+    // literal name (package 10 review #4) — "doctor" is the fixture's own default; who it
+    // resolves to is composed by `askWhoLabel`, exercised in `insights.test.ts`.
+    ask_who: "doctor",
     evidence: [{ id: "e1", kind: "fact", label: "Your blood pressure book" }],
     why_plain: "It read higher on three of the last four mornings.",
     confidence: "sure",
@@ -61,13 +64,13 @@ describe("the weekly report screen, drawn from the backend's own words", () => {
     // Once the stream's last event lands, the screen swaps the trace for the finished report:
     // the same backend-shaped data, drawn by `ReportBody`, never both on screen together.
     const written = report([{ key: "what_changed", title: "What changed", insights: [insight()] }]);
-    const finished = render(<ReportBody report={written} s={en} name="Pa" askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit locale="en-SG" />);
+    const finished = render(<ReportBody report={written} s={en} name="Pa" owner nextVisitDoctor={null} askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit locale="en-SG" />);
     expect(text(finished)).toContain("Your blood pressure has been a little higher this week.");
   });
 
   it("a withheld section says so, by name, instead of vanishing off the report", () => {
     const tree = render(
-      <SectionCard section={{ key: "what_you_pay", state: "withheld" }} s={en} name="Pa" askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit />,
+      <SectionCard section={{ key: "what_you_pay", state: "withheld" }} s={en} name="Pa" owner nextVisitDoctor={null} askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit />,
     );
     expect(text(tree)).toContain("What you pay");
     expect(text(tree)).toContain("Pa");
@@ -80,6 +83,8 @@ describe("the weekly report screen, drawn from the backend's own words", () => {
         section={{ key: "screenings_due", state: "present", title: "Screenings due", insights: [] }}
         s={en}
         name="Pa"
+        owner
+        nextVisitDoctor={null}
         askingId={null}
         askedIds={new Set()}
         onAsk={() => {}}
@@ -89,34 +94,100 @@ describe("the weekly report screen, drawn from the backend's own words", () => {
     expect(text(tree)).toContain("There is nothing here this week.");
   });
 
+  it("a section whose only insight is promoted to the screen's headline says nothing itself — never 'nothing here' (it did find something) and never the sentence twice", () => {
+    const promoted = insight();
+    const tree = render(
+      <SectionCard
+        section={{ key: "what_changed", state: "present", title: "What changed", insights: [promoted] }}
+        s={en}
+        name="Pa"
+        owner
+        nextVisitDoctor={null}
+        askingId={null}
+        askedIds={new Set()}
+        onAsk={() => {}}
+        hasNextVisit
+        promotedId={promoted.insight_id}
+      />,
+    );
+    expect(text(tree)).not.toContain(promoted.text);
+    expect(text(tree)).not.toContain("There is nothing here this week.");
+  });
+
+  it("a section with a second insight beside the promoted one still shows that second one", () => {
+    const promoted = insight({ insight_id: "i1", text: "Promoted line." });
+    const other = insight({ insight_id: "i2", text: "Second line." });
+    const tree = render(
+      <SectionCard
+        section={{ key: "what_changed", state: "present", title: "What changed", insights: [promoted, other] }}
+        s={en}
+        name="Pa"
+        owner
+        nextVisitDoctor={null}
+        askingId={null}
+        askedIds={new Set()}
+        onAsk={() => {}}
+        hasNextVisit
+        promotedId={promoted.insight_id}
+      />,
+    );
+    expect(text(tree)).not.toContain("Promoted line.");
+    expect(text(tree)).toContain("Second line.");
+  });
+
   it("boundary lines end the report, after every section", () => {
     const written = report([{ key: "what_changed", title: "What changed", insights: [] }]);
-    const tree = render(<ReportBody report={written} s={en} name="Pa" askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit locale="en-SG" />);
+    const tree = render(<ReportBody report={written} s={en} name="Pa" owner nextVisitDoctor={null} askingId={null} askedIds={new Set()} onAsk={() => {}} hasNextVisit locale="en-SG" />);
     const boundary = all(tree, byTestId("insights-boundary"))[0]!;
     expect(text([boundary])).toContain("Ask your doctor.");
   });
 
-  it("'Ask this' files the insight's words through the visit-questions route; asking it again is disabled until it settles, and the kept line shows once it has", () => {
+  it("'Ask this' names the next visit's own doctor when one is known", () => {
     const onAsk = vi.fn();
-    const asking = render(<InsightRow insight={insight()} s={en} asking asked={false} onAsk={onAsk} />);
+    const asking = render(<InsightRow insight={insight()} s={en} owner name="Pa" nextVisitDoctor="Dr Tan" asking asked={false} onAsk={onAsk} />);
     const [askButton] = all(asking, byTestId("insight-ask"));
     expect(askButton!.props.disabled).toBe(true);
+    expect(text([askButton!])).toContain("Ask Dr Tan this");
 
-    const idle = render(<InsightRow insight={insight()} s={en} asking={false} asked={false} onAsk={onAsk} />);
+    const idle = render(<InsightRow insight={insight()} s={en} owner name="Pa" nextVisitDoctor="Dr Tan" asking={false} asked={false} onAsk={onAsk} />);
     const [idleButton] = all(idle, byTestId("insight-ask"));
     expect(idleButton!.props.disabled).toBe(false);
-    expect(text([idleButton!])).toContain("Ask Dr Tan this");
     (idleButton!.props.onClick as () => void)();
     expect(onAsk).toHaveBeenCalledWith(insight());
 
-    const done = render(<InsightRow insight={insight()} s={en} asking={false} asked={true} onAsk={onAsk} />);
+    const done = render(<InsightRow insight={insight()} s={en} owner name="Pa" nextVisitDoctor="Dr Tan" asking={false} asked={true} onAsk={onAsk} />);
     expect(text(all(done, byTestId("insight-asked")))).toContain("Nura kept this question for your visit.");
   });
 
+  it("'Ask this' falls back to the plain word, in the right voice, when no visit names a doctor", () => {
+    const his = render(<InsightRow insight={insight()} s={en} owner name="" nextVisitDoctor={null} asking={false} asked={false} onAsk={() => {}} />);
+    expect(text(all(his, byTestId("insight-ask")))).toContain("Ask your doctor this");
+
+    const hers = render(<InsightRow insight={insight()} s={en} owner={false} name="Pa" nextVisitDoctor={null} asking={false} asked={false} onAsk={() => {}} />);
+    expect(text(all(hers, byTestId("insight-ask")))).toContain("Ask Pa's doctor this");
+  });
+
   it("with no visit booked, the row says so instead of offering an action with nowhere to file it", () => {
-    const tree = render(<InsightRow insight={insight()} s={en} asking={false} asked={false} onAsk={undefined} />);
+    const tree = render(<InsightRow insight={insight()} s={en} owner name="Pa" nextVisitDoctor={null} asking={false} asked={false} onAsk={undefined} />);
     expect(all(tree, byTestId("insight-ask"))).toHaveLength(0);
     expect(text(all(tree, byTestId("insight-no-visit")))).toContain("There is no visit booked yet to take this to.");
+  });
+
+  it("'nobody' to ask shows no action at all — never 'Ask nobody this'", () => {
+    const tree = render(<InsightRow insight={insight({ ask_who: "nobody" })} s={en} owner name="Pa" nextVisitDoctor="Dr Tan" asking={false} asked={false} onAsk={() => {}} />);
+    expect(all(tree, byTestId("insight-ask"))).toHaveLength(0);
+    expect(all(tree, byTestId("insight-no-visit"))).toHaveLength(0);
+  });
+
+  it("'Why' is closed by default, has a chevron, and is not rendered at all with nothing to say", () => {
+    const withWhy = render(<InsightRow insight={insight()} s={en} owner name="Pa" nextVisitDoctor={null} asking={false} asked={false} onAsk={() => {}} />);
+    const [toggle] = all(withWhy, byTestId("insight-why"));
+    expect(toggle!.type).toBe("details");
+    expect(toggle!.props.open).toBeUndefined();
+    expect(all(withWhy, (el) => el.type === "svg")).not.toHaveLength(0);
+
+    const noWhy = render(<InsightRow insight={insight({ why_plain: "" })} s={en} owner name="Pa" nextVisitDoctor={null} asking={false} asked={false} onAsk={() => {}} />);
+    expect(all(noWhy, byTestId("insight-why"))).toHaveLength(0);
   });
 
   it("the Health card leads with the last time Nura looked and the headline of what it found", () => {

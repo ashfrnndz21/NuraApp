@@ -4,7 +4,7 @@ import * as nura from "../api/nura";
 import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, InsightsReportOut, MetricKind, ReviewCardOut } from "../api/types";
 import { useToday } from "../today/useToday";
 import { DoseSection, NextVisitTile } from "./Today";
-import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, papersWithheld, readingsWithheld, ringHasNothingToCount } from "../health/model";
+import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, metricRowsView, papersWithheld, readingsWithheld, ringHasNothingToCount } from "../health/model";
 import { headlineInsight } from "../health/insights";
 import { dateLine } from "../today/model";
 import { profile, token } from "../store/session";
@@ -82,21 +82,34 @@ function ThisWeek({ overview, locale, owner, name }: { overview: HealthOverviewO
           testId="health-ring"
         />
       )}
-      {overview?.metrics.map((row) => (
-        <MetricRow
-          key={row.kind}
-          icon={row.kind}
-          tint={METRIC_TINT[row.kind]}
-          label={row.label}
-          value={row.status === "logged" ? (row.value_words ?? "") : ""}
-          source={
-            row.status === "logged" && row.last_logged_at
-              ? fill(owner ? s.health.metricSource : s.health.metricSourceOther, { date: dateLine(new Date(row.last_logged_at), locale), name })
-              : row.status_words
-          }
-          testId={`metric-${row.kind}`}
-        />
-      ))}
+      {overview &&
+        (() => {
+          // A row with no value is not its own line — four "Not written down yet" rows in a
+          // column read as a wall of nothing (package 10 review). Only a metric that actually
+          // has a value gets its own grounded row; every metric with none is named, once, in
+          // a single quiet line underneath (`metricRowsView`).
+          const { logged, unloggedLabels } = metricRowsView(overview.metrics);
+          return (
+            <>
+              {logged.map((row) => (
+                <MetricRow
+                  key={row.kind}
+                  icon={row.kind}
+                  tint={METRIC_TINT[row.kind]}
+                  label={row.label}
+                  value={row.value_words ?? ""}
+                  source={fill(owner ? s.health.metricSource : s.health.metricSourceOther, { date: dateLine(new Date(row.last_logged_at ?? overview.ring.as_of), locale), name })}
+                  testId={`metric-${row.kind}`}
+                />
+              ))}
+              {unloggedLabels.length > 0 && (
+                <p class="caption" data-testid="metrics-not-logged">
+                  {fill(owner ? s.health.metricsNotLogged : s.health.metricsNotLoggedOther, { list: unloggedLabels.join(", "), name })}
+                </p>
+              )}
+            </>
+          );
+        })()}
     </TintCard>
   );
 }

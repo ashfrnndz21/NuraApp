@@ -1,4 +1,4 @@
-import type { FactOut, FoodCatalogItemOut, FoodEntryOut, Meal, RingOut } from "../api/types";
+import type { FactOut, FoodCatalogItemOut, FoodEntryOut, Meal, MetricRowOut, RingOut } from "../api/types";
 import { fill, type Strings } from "../strings";
 import { dayKey } from "../today/model";
 
@@ -29,6 +29,26 @@ export function readingsWithheld(scopes: readonly string[]): boolean {
  *  ring's empty-state branch is a unit, not only ever seen through a rendered screen. */
 export function ringHasNothingToCount(ring: Pick<RingOut, "total">): boolean {
   return !ring.total || ring.total <= 0;
+}
+
+/** "This week"'s four metric rows (package 10 review): a row that has no value is not its own
+ *  line — four "Not written down yet" rows in a column read as a wall of nothing. Only a
+ *  metric that actually has a value gets its own grounded `MetricRow`; every metric with none
+ *  is named, once, in a single quiet line under them ("Not written down yet: steps, heart
+ *  rate, sleep, water."). Pure, so which rows draw and what the one line names is a unit, not
+ *  only ever seen through a rendered screen. */
+export interface MetricRowsView {
+  logged: MetricRowOut[];
+  unloggedLabels: string[];
+}
+export function metricRowsView(metrics: readonly MetricRowOut[]): MetricRowsView {
+  const logged: MetricRowOut[] = [];
+  const unloggedLabels: string[] = [];
+  for (const row of metrics) {
+    if (row.status === "logged") logged.push(row);
+    else unloggedLabels.push(row.label);
+  }
+  return { logged, unloggedLabels };
 }
 
 /** His medicines today: shown to him always, and to a key whose scope opens his medicines. */

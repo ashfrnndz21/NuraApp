@@ -456,6 +456,10 @@ export const en = {
     ringEmpty: "No tablets to count yet this week.",
     // @patient
     ringEmptyOther: "No tablets to count yet for {name} this week.",
+    // @patient phrase
+    metricsNotLogged: "Not written down yet: {list}.",
+    // @patient phrase
+    metricsNotLoggedOther: "Not written down yet for {name}: {list}.",
   },
   insights: {
     // @patient headline
@@ -517,6 +521,14 @@ export const en = {
     pastTitle: "Earlier reports",
     // @patient phrase
     retryAfterError: "Try again",
+    // @patient phrase
+    yourDoctor: "your doctor",
+    // @patient phrase
+    yourDoctorOther: "{name}'s doctor",
+    // @patient phrase
+    yourPharmacist: "your pharmacist",
+    // @patient phrase
+    yourPharmacistOther: "{name}'s pharmacist",
   },
   signIn: {
     // @patient headline

@@ -456,6 +456,10 @@ export const ms = {
     ringEmpty: "Belum ada ubat untuk dikira minggu ini.",
     // @patient
     ringEmptyOther: "Belum ada ubat untuk dikira bagi {name} minggu ini.",
+    // @patient phrase
+    metricsNotLogged: "Belum ditulis: {list}.",
+    // @patient phrase
+    metricsNotLoggedOther: "Belum ditulis untuk {name}: {list}.",
   },
   insights: {
     // @patient headline
@@ -517,6 +521,14 @@ export const ms = {
     pastTitle: "Laporan lepas",
     // @patient phrase
     retryAfterError: "Cuba lagi",
+    // @patient phrase
+    yourDoctor: "doktor anda",
+    // @patient phrase
+    yourDoctorOther: "doktor {name}",
+    // @patient phrase
+    yourPharmacist: "ahli farmasi anda",
+    // @patient phrase
+    yourPharmacistOther: "ahli farmasi {name}",
   },
   signIn: {
     // @patient headline

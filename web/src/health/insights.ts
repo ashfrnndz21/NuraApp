@@ -1,4 +1,5 @@
 import type { InsightConfidence, InsightOut, InsightsReportOut, InsightsReportSummaryOut, InsightSectionKey } from "../api/types";
+import { fill, type Strings } from "../strings";
 import type { TraceStep } from "../ui/kit";
 
 /** The weekly report (W1, docs/design/nura-concept-board.html): the six sections, always in
@@ -59,6 +60,44 @@ export function confidenceWordKey(confidence: InsightConfidence): "sure" | "like
   return confidence === "worth_a_look" ? "worthALook" : confidence;
 }
 
+/** A section's insights with one already shown as the screen's own headline left out of the
+ *  list underneath it (package 10 review: "say it once") — never dropped, only not repeated;
+ *  its own chip/why/ask row still shows, attached under the headline instead
+ *  (`InsightActions`). `emptyBecausePromoted` tells the caller the section is not genuinely
+ *  empty (which would say `sectionEmpty`) — it only looks that way because its one finding
+ *  moved up top. Pure, so the "say it once" rule is a unit on its own. */
+export interface SectionRenderView {
+  insights: readonly InsightOut[];
+  emptyBecausePromoted: boolean;
+}
+export function sectionInsightsView(original: readonly InsightOut[], promotedId: string | null | undefined): SectionRenderView {
+  if (!promotedId) return { insights: original, emptyBecausePromoted: false };
+  const insights = original.filter((one) => one.insight_id !== promotedId);
+  return { insights, emptyBecausePromoted: insights.length === 0 && original.length > 0 };
+}
+
+/** Who an insight's "Ask … this" button names (package 10 review): the backend's `ask_who` is
+ *  always one of `AskWho`'s three members — `"doctor"`, `"pharmacist"`, `"nobody"` — never a
+ *  literal name (`app.reasoning.analyst.port.AskWho`), so `"Ask {ask_who} this"` read verbatim
+ *  ("Ask doctor this") is broken wording, not a real doctor's name Nura invented.
+ *
+ *  A real name is used only when the record already names one — the doctor of the next visit
+ *  (`AppointmentOut.doctor`), never guessed — else the plain, always-true word ("your doctor" /
+ *  "{name}'s doctor" in the caregiver's voice), the same fallback `doctor_to_ask` already picks
+ *  on the backend when no visit names one. `"nobody"` (an insight with no one worth asking)
+ *  returns `null`: no button, never "Ask nobody this". Pure, unit-testable on its own for the
+ *  named/unnamed × owner/caregiver matrix. */
+export function askWhoLabel(askWho: string | null, s: Strings, owner: boolean, name: string, nextVisitDoctor: string | null): string | null {
+  if (askWho === "doctor") {
+    if (nextVisitDoctor) return nextVisitDoctor;
+    return owner ? s.insights.yourDoctor : fill(s.insights.yourDoctorOther, { name });
+  }
+  if (askWho === "pharmacist") {
+    return owner ? s.insights.yourPharmacist : fill(s.insights.yourPharmacistOther, { name });
+  }
+  return null;
+}
+
 // --- the Health Analyst screen's own live stream (package 10) --------------------------------
 
 /** The screen while `POST …/insights/stream` is in flight, then settled — one state, never
@@ -105,6 +144,14 @@ export function analystStreamReducer(state: AnalystStreamState, action: AnalystS
     case "reset":
       return ANALYST_STREAM_IDLE;
   }
+}
+
+/** "What Nura looked at": the real stages' bare nouns, joined the same way Ask's own
+ *  `lookedAtParts` already joins them (`Ask.tsx`) — comma-and-space, never an invented "and".
+ *  Used to fill the SAME catalogue string Ask uses, `feed.askLookedAt`
+ *  ("What Nura looked at: {parts}"), never a second translation of the same words. */
+export function lookedAtParts(steps: readonly { name: string }[]): string {
+  return steps.map((step) => step.name).join(", ");
 }
 
 /** Every past report, newest first — the ordering "Health Analyst"'s own quiet list draws in

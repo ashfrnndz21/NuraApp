@@ -462,12 +462,12 @@ export const insightsById = (token: string, profileId: string, reportId: string)
  *  throws one. `signal`, left off by default: leaving the Health Analyst screen aborts a
  *  stream still in flight (`AbortController`) rather than let it keep running for a component
  *  that no longer reads its result. */
-export function insightsStream(token: string, profileId: string, onStep: (key: string, label: string) => void, signal?: AbortSignal): Promise<InsightsReportOut> {
+export function insightsStream(token: string, profileId: string, onStep: (key: string, label: string, name: string) => void, signal?: AbortSignal): Promise<InsightsReportOut> {
   return new Promise((resolve, reject) => {
     let settled = false;
     apiStream(`/profiles/${profileId}/insights/stream`, { method: "POST", token }, (event) => {
       const streamed = event as unknown as InsightsStreamEvent;
-      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
       else if (streamed.type === "report") {
         settled = true;
         resolve(streamed.report);

@@ -1,14 +1,29 @@
 import { describe, expect, it } from "vitest";
 import type { InsightOut, InsightsReportOut, InsightsReportSummaryOut } from "../../src/api/types";
-import { ANALYST_STREAM_IDLE, analystStreamReducer, confidenceWordKey, headlineInsight, insightsTraceSteps, pastReportsNewestFirst, sectionsFor, SECTION_ORDER } from "../../src/health/insights";
+import {
+  ANALYST_STREAM_IDLE,
+  analystStreamReducer,
+  askWhoLabel,
+  confidenceWordKey,
+  headlineInsight,
+  insightsTraceSteps,
+  lookedAtParts,
+  pastReportsNewestFirst,
+  sectionInsightsView,
+  sectionsFor,
+  SECTION_ORDER,
+} from "../../src/health/insights";
 import { ringHasNothingToCount } from "../../src/health/model";
+import { stringsFor } from "../../src/strings";
+
+const en = stringsFor("en");
 
 function insight(overrides: Partial<InsightOut> = {}): InsightOut {
   return {
     insight_id: "i1",
     kind: "trend",
     text: "Your blood pressure has been a little higher this week.",
-    ask_who: "Dr Tan",
+    ask_who: "doctor",
     evidence: [{ id: "e1", kind: "fact", label: "Your blood pressure book" }],
     why_plain: "It read higher on three of the last four mornings.",
     confidence: "sure",
@@ -178,5 +193,86 @@ describe("past reports, newest first (package 10)", () => {
     const original = [...rows];
     pastReportsNewestFirst(rows);
     expect(rows).toEqual(original);
+  });
+});
+
+// --- package 10 review: who "Ask … this" names (`ask_who` is a role, never a literal name) ----
+
+describe("askWhoLabel: who 'Ask … this' names, never the raw role word", () => {
+  it("a named doctor from the next visit is used verbatim, owner or caregiver alike", () => {
+    expect(askWhoLabel("doctor", en, true, "Pa", "Dr Tan")).toBe("Dr Tan");
+    expect(askWhoLabel("doctor", en, false, "Pa", "Dr Tan")).toBe("Dr Tan");
+  });
+
+  it("with no visit doctor named, the owner hears 'your doctor'", () => {
+    expect(askWhoLabel("doctor", en, true, "", null)).toBe("your doctor");
+  });
+
+  it("with no visit doctor named, a caregiver hears it about him by name", () => {
+    expect(askWhoLabel("doctor", en, false, "Pa", null)).toBe("Pa's doctor");
+  });
+
+  it("a pharmacist has no named form on the record — always the plain word, in each voice", () => {
+    expect(askWhoLabel("pharmacist", en, true, "", null)).toBe("your pharmacist");
+    expect(askWhoLabel("pharmacist", en, false, "Pa", null)).toBe("Pa's pharmacist");
+    // A next-visit doctor's name never leaks onto a pharmacist ask.
+    expect(askWhoLabel("pharmacist", en, true, "", "Dr Tan")).toBe("your pharmacist");
+  });
+
+  it("'nobody' (and anything else the wire might send) names no one — never 'Ask nobody this'", () => {
+    expect(askWhoLabel("nobody", en, true, "", "Dr Tan")).toBeNull();
+    expect(askWhoLabel(null, en, true, "", "Dr Tan")).toBeNull();
+    expect(askWhoLabel("something_unknown", en, true, "", "Dr Tan")).toBeNull();
+  });
+});
+
+// --- package 10 review: "say it once" — a section's own list never repeats the headline ------
+
+describe("sectionInsightsView: the headline's own insight is not repeated in its section", () => {
+  it("with no promoted id, every insight passes through unchanged", () => {
+    const rows = [insight({ insight_id: "a" }), insight({ insight_id: "b" })];
+    expect(sectionInsightsView(rows, null)).toEqual({ insights: rows, emptyBecausePromoted: false });
+  });
+
+  it("the promoted insight is filtered out of the list it came from", () => {
+    const a = insight({ insight_id: "a", text: "A" });
+    const b = insight({ insight_id: "b", text: "B" });
+    const view = sectionInsightsView([a, b], "a");
+    expect(view.insights).toEqual([b]);
+    expect(view.emptyBecausePromoted).toBe(false);
+  });
+
+  it("a section whose only insight was promoted is empty because of that, not because Nura found nothing", () => {
+    const a = insight({ insight_id: "a" });
+    const view = sectionInsightsView([a], "a");
+    expect(view).toEqual({ insights: [], emptyBecausePromoted: true });
+  });
+
+  it("a genuinely empty section is not marked as emptied by promotion", () => {
+    expect(sectionInsightsView([], "a")).toEqual({ insights: [], emptyBecausePromoted: false });
+  });
+});
+
+// --- package 10 review: "What Nura looked at" — the real stages' bare nouns, joined once ------
+
+describe("lookedAtParts: the same join Ask's own looked-at line already uses", () => {
+  it("joins bare nouns with a comma and a space, never an invented 'and'", () => {
+    expect(
+      lookedAtParts([
+        { name: "what you have told Nura" },
+        { name: "blood pressure" },
+        { name: "medicines" },
+        { name: "what you paid" },
+        { name: "policies" },
+      ]),
+    ).toBe("what you have told Nura, blood pressure, medicines, what you paid, policies");
+  });
+
+  it("one stage alone is just that one name", () => {
+    expect(lookedAtParts([{ name: "blood pressure" }])).toBe("blood pressure");
+  });
+
+  it("no stages is an empty string, never a dangling comma", () => {
+    expect(lookedAtParts([])).toBe("");
   });
 });
