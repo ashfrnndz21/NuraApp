@@ -300,19 +300,53 @@ export function systolics(facts: readonly FactOut[]): number[] {
 
 // --- the new Home's hero (P1's orb): the day's top item, and the one headline it earns -------
 
-/** The single item Home's hero speaks about: today's top-ranked card (`topThree`, less any
- *  flag — a flag has its own card and outranks the hero entirely, `homeState` below), else the
- *  feed's own first "for you" card. Never composed here, never re-ranked here: the backend's
- *  order, first item, or none. */
-export function topOfDay(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]): FeedItemOut | null {
-  return top[0] ?? forYou[0] ?? null;
+/** The day's one thing to say, as a closed set of real, already-known facts — never a generic
+ *  feed card's own title (the defect the owner found: "Your tablets *today*" said nothing).
+ *  Each variant carries only what its own template needs, and only from where that fact
+ *  already lives: the dose the backend marks due, the day's own reading, the next visit within
+ *  a week, a medicine nearing its reorder point, or a feed card the backend itself flagged an
+ *  insight (its own real headline, never re-composed). */
+export type HomeTopItem =
+  | { kind: "doseDue"; title: string; when: string }
+  | { kind: "allTaken" }
+  | { kind: "reading"; systolic: number; diastolic: number }
+  | { kind: "visit"; doctor: string | null; at: Date }
+  | { kind: "reorder"; title: string; days: number }
+  | { kind: "insight"; item: FeedItemOut };
+
+export interface HomeTopInputs {
+  dose: NowCard | null;
+  /** Today's own reading, or null with none written down today (a reading from another day
+   *  never drives the headline — that is not "today's" anything). */
+  reading: { systolic: number; diastolic: number } | null;
+  nextVisit: { scheduled_at: string; doctor: string | null } | null;
+  lines: readonly LineOut[];
+  /** The ranked feed's own first insight/alert card (`category`), if the backend raised one —
+   *  never a plain "today" or "now" listing card, which has no insight of its own to speak of. */
+  insight: FeedItemOut | null;
 }
 
-/** Whether today has something to say (`topOfDay` found a card) or is quiet — nothing ranked,
- *  nothing new, and (checked by the caller, `homeState` below) no flag and no act posture,
- *  both of which outrank a quiet greeting entirely. */
-export function isQuietDay(topItem: FeedItemOut | null): boolean {
-  return topItem === null;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The single fact Home's hero speaks about today, in priority order: the dose due right now,
+ *  else every dose already taken, else today's own reading, else a visit within the week, else
+ *  a medicine close enough to run out to reorder, else the feed's own flagged insight — else
+ *  none, which is a quiet day (`homeState` below), never a bare card title standing in. */
+export function homeTopItem(on: HomeTopInputs, now: Date, s: Strings): HomeTopItem | null {
+  if (on.dose?.kind === "due") return { kind: "doseDue", title: on.dose.title, when: on.dose.anchor };
+  if (on.dose?.kind === "allTaken") return { kind: "allTaken" };
+  if (on.reading) return { kind: "reading", systolic: on.reading.systolic, diastolic: on.reading.diastolic };
+  if (on.nextVisit) {
+    const at = new Date(on.nextVisit.scheduled_at);
+    const until = at.getTime() - now.getTime();
+    if (until >= 0 && until <= WEEK_MS) return { kind: "visit", doctor: on.nextVisit.doctor, at };
+  }
+  const nearest = nearestToRunOut(on.lines);
+  if (nearest?.count?.reorder_due && typeof nearest.count.days_left === "number") {
+    return { kind: "reorder", title: lineTitle(nearest, s), days: nearest.count.days_left };
+  }
+  if (on.insight) return { kind: "insight", item: on.insight };
+  return null;
 }
 
 export type HomeState = "safety" | "busy" | "quiet";
@@ -322,26 +356,102 @@ export type HomeState = "safety" | "busy" | "quiet";
  *  breathing orb nor a chip asking "what shall we look at" may sit over either, so this never
  *  reaches `busy`/`quiet` while one holds. Only once neither holds does the day's own top item
  *  decide busy from quiet. */
-export function homeState(on: { flagged: boolean; act: boolean; topItem: FeedItemOut | null }): HomeState {
+export function homeState(on: { flagged: boolean; act: boolean; topItem: HomeTopItem | null }): HomeState {
   if (on.flagged || on.act) return "safety";
-  return isQuietDay(on.topItem) ? "quiet" : "busy";
+  return on.topItem === null ? "quiet" : "busy";
 }
 
-/** The one italic accent a Home headline carries (`SoftText`'s `*word*`), picked by a rule kept
- *  the same for every card, of every type — never a free choice, never the model's: the last
- *  word of the item's own headline (the backend's real sentence, never invented here), the way
- *  every example in the blueprint accents its closing word ("...raise with your *doctor.*",
- *  "...for you: a 30-second *clip.*"). A headline with no words of its own is returned as is. */
-export function homeHeadline(item: Pick<FeedItemOut, "headline">): string {
-  const words = item.headline.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return item.headline;
+/** The one italic accent a Home headline carries (`SoftText`'s `*word*`): the sentence's own
+ *  last word, always — the way every example in the blueprint accents its closing word
+ *  ("...raise with your *doctor.*"). Never a free choice, and safe with a slot value that is
+ *  itself more than one word (a time, a name): the accent lands on the sentence's true last
+ *  word, not necessarily the whole filled phrase. A sentence with no words is returned as is. */
+export function accentLastWord(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return text;
   const last = words[words.length - 1]!;
   const match = last.match(/^(.*?)([.,!?;:]*)$/);
   const stem = match?.[1] || last;
   const punct = match?.[2] ?? "";
-  if (!stem) return item.headline;
+  if (!stem) return text;
   words[words.length - 1] = `*${stem}*${punct}`;
   return words.join(" ");
+}
+
+/** `lineTitle` reads the backend's own colloquial name for the class straight through
+ *  (`app/medicines/strings.py`), some of which carry a self-voiced possessive of their own —
+ *  English leading "your"/"the" ("your blood pressure tablet"), Malay a trailing "anda"
+ *  ("ubat tekanan darah anda"), Chinese a leading "您的" — the same word for every reader
+ *  (DoseSection's own cards show it verbatim to a caregiver too). A caregiver headline that
+ *  also names her by "{patient}'s" cannot repeat that word without contradicting it ("Pa's Your
+ *  blood pressure tablet"), so her templates use the bare noun phrase this strips to — never a
+ *  different name for the medicine, only the one word this reader's line never carries. */
+export function dropPossessive(title: string): string {
+  return title
+    .replace(/^(your|the)\s+/i, "")
+    .replace(/\s+anda$/i, "")
+    .replace(/^您的/, "");
+}
+
+/** `lineTitle` capitalises its first letter for a sentence that starts with it (a card's own
+ *  title). Embedded mid-sentence instead ("...of {title} are left"), that capital reads as a
+ *  mistake, so a template that does not open on `title` reads it back down first. */
+function lowerFirst(text: string): string {
+  return text.length ? text[0]!.toLowerCase() + text.slice(1) : text;
+}
+
+/** The catalogue template for each `HomeTopItem` kind, filled only from that item's own real
+ *  facts and accented on its own last word — never the model's free text. An `insight` card
+ *  keeps the backend's own real headline, accented the same way; every other kind is composed
+ *  from a whole-sentence template in `strings/*.ts` (`home.headline*`/`…Other`). */
+export function homeHeadlineFor(item: HomeTopItem, s: Strings, locale: string, self: boolean, patientName: string): string {
+  const h = s.home;
+  const slots = { patient: patientName } as Record<string, string | number>;
+  switch (item.kind) {
+    case "doseDue":
+      // Self opens the sentence with `title` (its own leading capital is correct there);
+      // the caregiver's puts it after "{patient}'s", so it reads back down first.
+      Object.assign(slots, { title: self ? item.title : lowerFirst(dropPossessive(item.title)), when: item.when });
+      return accentLastWord(fill(self ? h.headlineDoseDue : h.headlineDoseDueOther, slots));
+    case "allTaken":
+      return accentLastWord(self ? h.headlineAllTaken : fill(h.headlineAllTakenOther, slots));
+    case "reading":
+      Object.assign(slots, { systolic: item.systolic, diastolic: item.diastolic });
+      return accentLastWord(fill(self ? h.headlineReading : h.headlineReadingOther, slots));
+    case "visit": {
+      Object.assign(slots, { weekday: weekdayOf(item.at, locale), doctor: item.doctor ?? "" });
+      const template = item.doctor ? (self ? h.headlineVisit : h.headlineVisitOther) : self ? h.headlineVisitNoDoctor : h.headlineVisitNoDoctorOther;
+      return accentLastWord(fill(template, slots));
+    }
+    case "reorder":
+      // Neither template opens on `title` here ("About {days} days of {title}..."), so both
+      // read it back down first.
+      Object.assign(slots, { title: self ? lowerFirst(item.title) : lowerFirst(dropPossessive(item.title)), days: item.days });
+      return accentLastWord(fill(self ? h.headlineReorder : h.headlineReorderOther, slots));
+    case "insight":
+      return accentLastWord(item.item.headline);
+  }
+}
+
+/** The date the insight card's chip is about — never the feed row's own `created_at` (a
+ *  seeding or a generation timestamp, not what the card is *about*, the defect the owner found:
+ *  a card about today's tablets showing the day it happened to be written). Today for a dose or
+ *  a reading (both are always about today); the visit's own date for a visit; the reorder
+ *  read's own moment for a reorder (there is no other date to give it); the feed's own
+ *  `created_at` only for an `insight` card, which is genuinely about the day it was raised. */
+export function homeTopItemDate(item: HomeTopItem, now: Date): Date {
+  switch (item.kind) {
+    case "doseDue":
+    case "allTaken":
+    case "reading":
+      return now;
+    case "visit":
+      return item.at;
+    case "reorder":
+      return now;
+    case "insight":
+      return new Date(item.item.created_at);
+  }
 }
 
 /** "12 September" split for the insight card's date chip: the day, and the month short enough

@@ -247,6 +247,30 @@ export const ms = {
     chipWeekOther: "Macam mana minggu {patient}?",
     // @patient phrase
     askNura: "Tanya Nura apa-apa saja",
+    // @patient headline
+    headlineDoseDue: "{title} perlu diambil pada {when}.",
+    // @patient headline
+    headlineDoseDueOther: "{title} {patient} perlu diambil pada {when}.",
+    // @patient headline
+    headlineAllTaken: "Semua ubat untuk hari ini sudah diambil.",
+    // @patient headline
+    headlineAllTakenOther: "Semua ubat {patient} untuk hari ini sudah diambil.",
+    // @patient headline
+    headlineReading: "Tekanan darah anda hari ini ialah {systolic} per {diastolic}.",
+    // @patient headline
+    headlineReadingOther: "Tekanan darah {patient} hari ini ialah {systolic} per {diastolic}.",
+    // @patient headline
+    headlineVisit: "Anda jumpa {doctor} pada {weekday}.",
+    // @patient headline
+    headlineVisitOther: "{patient} jumpa {doctor} pada {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctor: "Anda ada lawatan pada {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctorOther: "{patient} ada lawatan pada {weekday}.",
+    // @patient headline
+    headlineReorder: "Baki {title} tinggal kira-kira {days} hari.",
+    // @patient headline
+    headlineReorderOther: "Baki {title} {patient} tinggal kira-kira {days} hari.",
   },
   activity: {
     // @patient headline

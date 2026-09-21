@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { EmergencyCard } from "./Emergency";
 import type { KeptCard } from "../offline/emergencyCache";
+import { emergencyOnly } from "../offline/emergencyCache";
 import { zoneOf } from "../offline/todayCache";
 import type { JSX } from "preact";
 import * as family from "../api/family";
@@ -10,7 +11,7 @@ import { batch } from "../capture/session";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
 import { DayOnToday, NotWellButton, TopThree } from "../day/TodayDay";
-import { go, openTab } from "../flow";
+import { go, openMe, openTab } from "../flow";
 import { speak } from "../speech/speak";
 import { density, isSelf, me, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
@@ -19,28 +20,33 @@ import {
   lineTitle,
   dateChip,
   dateLine,
+  dayKey,
+  dropPossessive,
   dueCards,
   feedLines,
   greeting,
   heroFurnitureAllowed,
-  homeHeadline,
+  homeHeadlineFor,
   homeHero,
   homeState,
+  homeTopItem,
+  homeTopItemDate,
   nearestToRunOut,
   readingLead,
   stateLines,
   systolics,
   timeLine,
   todayList,
-  topOfDay,
   weekdayOf,
   whyLine,
+  type HomeTopItem,
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
 import { Avatar, Chip, ChipRow, FeedCard, Glass, GlassTile, Icon, IconBadge, Orb, PanelList, PillButton, SectionLabel, SoftText, Sparkline, TintCard, toneOf } from "../ui/kit";
 import { AddReport, CheckInCard, DoGrid, HomeSkeleton, Upcoming } from "./HomeParts";
-import { Shell } from "./Shell";
+import { BellButton, Shell } from "./Shell";
+import { ProfileSwitcher } from "./Switcher";
 import { ChiefPanels } from "./ChiefPanels";
 
 /** Home (cp3-home, the living orb): his own Home in the patient's density, the chief's Home in
@@ -67,9 +73,16 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
   const showsBoundary = stateAt === "top" || stateAt === "now" || stateAt === "forYou";
+  const voice = homeVoice(v, name);
   return (
-    <Shell tab="home" testId="today-screen" topBar={{ variant: "home" }} ask={false} bottomBar={<HomeAskBar patientName={name} />}>
-      <HomeHero v={v} patientName={name} />
+    <Shell
+      tab="home"
+      testId="today-screen"
+      header={<HomeTopBar voice={voice} />}
+      ask={false}
+      bottomBar={<HomeAskBar patientName={name} />}
+    >
+      <HomeHero v={v} patientName={name} voice={voice} />
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       <Held v={v} />
@@ -144,10 +157,17 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
   const showsBoundary = stateAt === "top" || stateAt === "forYou";
   const patientName = papers?.display_name || "";
+  const voice = homeVoice(v, patientName);
   return (
-    <Shell tab="home" testId="home-screen" topBar={{ variant: "home" }} ask={false} bottomBar={<HomeAskBar patientName={patientName} />}>
+    <Shell
+      tab="home"
+      testId="home-screen"
+      header={<HomeTopBar voice={voice} />}
+      ask={false}
+      bottomBar={<HomeAskBar patientName={patientName} />}
+    >
       {page && <span data-testid="today-ready" hidden />}
-      <HomeHero v={v} patientName={patientName} />
+      <HomeHero v={v} patientName={patientName} voice={voice} />
       {/* Her Home's State word (docs/design/full-experience.html): shown whenever there is a
           current State to show (`homeHero`'s own flagged/kept rule — unchanged from before
           cp3-home), never gated on `stateAt`, which decides only where the *State card itself*
@@ -235,50 +255,138 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   );
 }
 
-/** Home's header, hero and docked ask bar (cp3-home): the one block both densities share, and
- *  the one place whose-voice is decided — `isSelf()` (store/session.ts), never `density()`.
- *  Either a patient-density screen or a caregiver-density one can be open for either standing
- *  (Me's own "Look" pills are not gated by who owns the papers), so both `DadToday` and
- *  `ChiefHome` read this the same way rather than each assuming which voice it is. */
-function HomeHero({ v, patientName }: { v: TodayView; patientName: string }): JSX.Element {
-  const { s, page, feed, act, top, now, nextVisit, papers, dose, busy, take } = v;
+/** Whose voice Home speaks in, and the greeting itself — computed once and shared by the
+ *  header (`HomeTopBar`) and the hero (`HomeHero`) below it, so the two can never drift apart.
+ *  `isSelf()` (store/session.ts) decides it, never `density()`. His own greeting names him;
+ *  hers names her — the person the greeting is *from* is always whoever is signed in, never
+ *  the papers' name on a caregiver's own Home. */
+export interface HomeVoice {
+  self: boolean;
+  greetName: string;
+  question: string;
+  hello: string;
+  date: string;
+}
+
+function homeVoice(v: TodayView, patientName: string): HomeVoice {
+  const { s, now } = v;
   const self = isSelf();
   const locale = LOCALE[language.value];
-  // His own greeting names him; hers names her — the person the greeting is *from* is always
-  // whoever is signed in, never the papers' name on a caregiver's own Home.
   const greetName = self ? patientName || me.value?.display_name || "" : me.value?.display_name || "";
-  const question = self ? s.hub.howFeeling : fill(s.hub.howFeelingOther, { patient: patientName });
+  return {
+    self,
+    greetName,
+    question: self ? s.hub.howFeeling : fill(s.hub.howFeelingOther, { patient: patientName }),
+    hello: greeting(now.getHours(), greetName, s),
+    date: dateLine(now, locale),
+  };
+}
+
+/** Home's own header (cp3-home): one row — the avatar IS the papers switcher (`whose`, its
+ *  existing behaviour and test id, unchanged), the greeting beside it, the bell and "Not well?"
+ *  at the end, and the menu still reachable at the start (`open-me`, the same sheet every other
+ *  screen's header opens it from). Replaces both the old global `ShellHeader` and the board's
+ *  own "home" topbar for this screen — neither drew whose-papers and the greeting in the same
+ *  row, so his own initial used to appear twice. */
+function HomeTopBar({ voice }: { voice: HomeVoice }): JSX.Element {
+  const s = t();
+  const papers = profile.value;
+  const bell = papers !== null && !emergencyOnly(papers);
+  return (
+    <header class="shell-head home-top-bar" data-testid="home-head">
+      <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+        <Icon name="menu" />
+      </button>
+      {papers && <ProfileSwitcher compact />}
+      <div class="home-head-text">
+        <p class="home-head-hello" data-testid="home-head-hello">{voice.hello}</p>
+        <h1 class="home-head-question" tabIndex={-1}>{voice.question}</h1>
+        <p class="home-head-date" data-testid="home-head-date">{voice.date}</p>
+      </div>
+      <span class="home-head-end">
+        {bell && <BellButton />}
+        {/* The way in when he feels unwell comes before anything ranked (red flags escalate
+            first): unchanged behaviour, unchanged test id, no animation on the red path — a
+            small pill here now, never the full-width rose button (that is the not-feeling-well
+            screen's own call button, `NotWell.tsx`). */}
+        <NotWellButton compact />
+      </span>
+    </header>
+  );
+}
+
+/** Today's own reading, read fresh (the same call `Readings()` below already makes, kept
+ *  separate so a stale or an old reading never drives the headline — "today's" means today). */
+function useTodayReading(now: Date): { systolic: number; diastolic: number } | null {
+  const bearer = token.value;
+  const papers = profile.value;
+  const [reading, setReading] = useState<{ systolic: number; diastolic: number } | null>(null);
+  useEffect(() => {
+    if (!bearer || !papers || !papers.scopes.includes("readings")) return setReading(null);
+    nura.facts(bearer, papers.profile_id, "blood_pressure").then((found) => {
+      const today = dayKey(now);
+      const latest = found
+        .filter((fact) => fact.subject === "blood_pressure" && fact.attribute === "reading" && dayKey(new Date(fact.valid_from)) === today)
+        .sort((a, b) => Date.parse(b.valid_from) - Date.parse(a.valid_from))[0];
+      const value = latest?.value as { systolic?: unknown; diastolic?: unknown } | null;
+      setReading(typeof value?.systolic === "number" && typeof value?.diastolic === "number" ? { systolic: value.systolic, diastolic: value.diastolic } : null);
+    }, () => setReading(null));
+  }, [bearer, papers?.profile_id, now.getTime()]);
+  return reading;
+}
+
+/** The ranked feed's own flagged insight, if it raised one today — never a plain "today"/"now"
+ *  listing card, which is not an insight about anything in particular. */
+function insightOf(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]): FeedItemOut | null {
+  return [...top, ...forYou].find((item) => item.category === "insight") ?? null;
+}
+
+/** Home's hero (cp3-home, the living orb): a busy day's one real headline and insight card, or
+ *  a quiet day's large orb and chips — never a generic feed card's own title standing in for
+ *  either (`homeTopItem`, today/model.ts). An act posture or a red flag pre-empts both entirely
+ *  (`homeState`); the header above (`HomeTopBar`) is unconditional and always there. */
+function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string; voice: HomeVoice }): JSX.Element {
+  const { s, page, feed, act, top, now, nextVisit, papers, dose, busy, take } = v;
+  const { self } = voice;
+  const locale = LOCALE[language.value];
   const flagged = feed.flags.length > 0;
-  const topItem = page ? topOfDay(top, feed.forYou) : null;
+  const reading = useTodayReading(now);
+  const topItem: HomeTopItem | null = page
+    ? homeTopItem(
+        {
+          dose: dose ?? null,
+          reading,
+          nextVisit: nextVisit ? { scheduled_at: nextVisit.scheduled_at, doctor: nextVisit.doctor ?? null } : null,
+          lines: page.lines,
+          insight: insightOf(top, feed.forYou),
+        },
+        now,
+        s,
+      )
+    : null;
   const state = homeState({ flagged, act, topItem });
-  const dueNow = dose?.kind === "due" ? dose : null;
-  const forYouItem = feed.forYou.find((item) => item.item_id !== topItem?.item_id) ?? null;
+  // The two rows under the insight card are a different, always-actionable fact each — never
+  // the same fact the headline already gave: the dose row only when the headline is not
+  // already that dose, the "for you" row only for a feed item the headline is not already
+  // showing as its own insight.
+  const dueNow = dose?.kind === "due" && topItem?.kind !== "doseDue" ? dose : null;
+  const shownInsightId = topItem?.kind === "insight" ? topItem.item.item_id : null;
+  const forYouItem = feed.forYou.find((item) => item.item_id !== shownInsightId) ?? null;
   return (
     <>
-      <div class="home-head" data-testid="home-head">
-        <Avatar name={greetName} />
-        <div class="home-head-text">
-          <p class="home-head-hello" data-testid="home-head-hello">{greeting(now.getHours(), greetName, s)}</p>
-          <h1 class="home-head-question">{question}</h1>
-          <p class="home-head-date" data-testid="home-head-date">{dateLine(now, locale)}</p>
-        </div>
-        {/* The way in when he feels unwell comes before anything ranked (red flags escalate
-            first): unchanged behaviour, unchanged test id, no animation on the red path. */}
-        <NotWellButton />
-      </div>
       {page && state === "busy" && topItem && (
         <div data-testid={self ? "today-hero" : "home-hero"}>
           <span class="home-kick">{s.home.todayKicker}</span>
-          <SoftText as="h2" pace="headline" className="home-headline" text={homeHeadline(topItem)} testId="home-headline" />
+          <SoftText as="h2" pace="headline" className="home-headline" text={homeHeadlineFor(topItem, s, locale, self, patientName)} testId="home-headline" />
           <Glass className="home-insight" testId="insight-card">
             <h3>{self ? s.home.insightTitle : fill(s.home.insightTitleOther, { patient: patientName })}</h3>
             <div class="home-insight-body">
               <div class="home-date-chip" aria-hidden="true">
-                <b>{dateChip(new Date(topItem.created_at), locale).day}</b>
-                <small>{dateChip(new Date(topItem.created_at), locale).month}</small>
+                <b>{dateChip(homeTopItemDate(topItem, now), locale).day}</b>
+                <small>{dateChip(homeTopItemDate(topItem, now), locale).month}</small>
               </div>
               <div class="home-insight-lines">
-                {feedLines(topItem).lines.slice(0, 2).map((line, at) => (
+                {insightLines(topItem, s, self, patientName).map((line, at) => (
                   <p key={at}>{line}</p>
                 ))}
               </div>
@@ -307,7 +415,7 @@ function HomeHero({ v, patientName }: { v: TodayView; patientName: string }): JS
       {page && state === "quiet" && (
         <div class="home-quiet" data-testid={self ? "today-hero" : "home-hero"}>
           <Orb size="lg" testId="home-orb-lg" />
-          <SoftText as="h2" pace="headline" className="home-quiet-greeting" text={greeting(now.getHours(), greetName, s)} testId="quiet-greeting" />
+          <SoftText as="h2" pace="headline" className="home-quiet-greeting" text={voice.hello} testId="quiet-greeting" />
           <SoftText
             as="p"
             pace="body"
@@ -339,6 +447,32 @@ function HomeHero({ v, patientName }: { v: TodayView; patientName: string }): JS
       )}
     </>
   );
+}
+
+/** The insight card's own two lines, per `HomeTopItem` kind — the same real facts and the same
+ *  self/caregiver voice the headline used (`homeHeadlineFor`), said again in full rather than a
+ *  card title repeating itself. An `insight` card keeps the feed's own body lines, the one
+ *  place free text from the backend is shown, unchanged. */
+function insightLines(item: HomeTopItem, s: Strings, self: boolean, patientName: string): string[] {
+  const locale = LOCALE[language.value];
+  const slots = { patient: patientName } as Record<string, string | number>;
+  switch (item.kind) {
+    case "doseDue":
+      return [fill(self ? s.home.headlineDoseDue : s.home.headlineDoseDueOther, { ...slots, title: self ? item.title : dropPossessive(item.title), when: item.when })];
+    case "allTaken":
+      return [self ? s.home.headlineAllTaken : fill(s.home.headlineAllTakenOther, slots)];
+    case "reading":
+      return [fill(self ? s.home.headlineReading : s.home.headlineReadingOther, { ...slots, systolic: item.systolic, diastolic: item.diastolic })];
+    case "visit": {
+      const weekday = weekdayOf(item.at, locale);
+      const template = item.doctor ? (self ? s.home.headlineVisit : s.home.headlineVisitOther) : self ? s.home.headlineVisitNoDoctor : s.home.headlineVisitNoDoctorOther;
+      return [fill(template, { ...slots, weekday, doctor: item.doctor ?? "" })];
+    }
+    case "reorder":
+      return [fill(self ? s.home.headlineReorder : s.home.headlineReorderOther, { ...slots, title: self ? item.title : dropPossessive(item.title), days: item.days })];
+    case "insight":
+      return feedLines(item.item).lines.slice(0, 2);
+  }
 }
 
 /** "Read a report", the quiet day's own chip: the same picker `AddReport` (HomeParts.tsx)

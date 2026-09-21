@@ -247,6 +247,30 @@ export const en = {
     chipWeekOther: "How was {patient}'s week?",
     // @patient phrase
     askNura: "Ask Nura anything",
+    // @patient headline
+    headlineDoseDue: "{title} is due at {when}.",
+    // @patient headline
+    headlineDoseDueOther: "{patient}'s {title} is due at {when}.",
+    // @patient headline
+    headlineAllTaken: "Every tablet for today is taken.",
+    // @patient headline
+    headlineAllTakenOther: "Every tablet for {patient} today is taken.",
+    // @patient headline
+    headlineReading: "Your blood pressure today was {systolic} over {diastolic}.",
+    // @patient headline
+    headlineReadingOther: "{patient}'s blood pressure today was {systolic} over {diastolic}.",
+    // @patient headline
+    headlineVisit: "You see {doctor} on {weekday}.",
+    // @patient headline
+    headlineVisitOther: "{patient} sees {doctor} on {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctor: "You have a visit on {weekday}.",
+    // @patient headline
+    headlineVisitNoDoctorOther: "{patient} has a visit on {weekday}.",
+    // @patient headline
+    headlineReorder: "About {days} days of {title} are left.",
+    // @patient headline
+    headlineReorderOther: "About {days} days of {patient}'s {title} are left.",
   },
   activity: {
     // @patient headline

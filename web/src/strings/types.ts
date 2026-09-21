@@ -103,6 +103,20 @@ export interface Strings {
      *  wording, kept apart from `shell.askNura` ("Ask Nura a question"), which every other
      *  screen's ask bar still uses. */
     askNura: string;
+    /** The busy day's one headline, a whole sentence per `HomeTopItem` kind (`today/model.ts`'s
+     *  `homeHeadlineFor`), filled only from that kind's own real facts. */
+    headlineDoseDue: string;
+    headlineDoseDueOther: string;
+    headlineAllTaken: string;
+    headlineAllTakenOther: string;
+    headlineReading: string;
+    headlineReadingOther: string;
+    headlineVisit: string;
+    headlineVisitOther: string;
+    headlineVisitNoDoctor: string;
+    headlineVisitNoDoctorOther: string;
+    headlineReorder: string;
+    headlineReorderOther: string;
   };
   /** Home's "Things to do" tile (docs/design/nura-concept-board.html): his day's activity —
    *  today's steps, water and meals, each a real write through PR #235's lifestyle logs

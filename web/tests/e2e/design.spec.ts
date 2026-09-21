@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { API, fixClock, nothingDrawnOverLines, openMe, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
+import { API, fixClock, nothingDrawnOverLines, openMe, seedOwner, signInThroughTheApp, TAB_SET, todayReady } from "./helpers";
 import { seedHome } from "./homeSeed";
 
 /** D1, the design pass: his Today and her Home as designed, on the patient's phone and a small
@@ -179,4 +179,93 @@ test("a red word typed into Ask or search: the red-flag path first, then what to
   await expect(page.getByTestId("what-to-do-screen")).toBeVisible();
   await expect(page.getByTestId("what-to-do-lines").locator("p").first()).toBeVisible();
   await expect(page.getByTestId("answer")).toHaveCount(0);
+});
+
+/** Fix #1 (owner review of PR #295): "Ask Nura anyth…" clipped was a bug — the whole word must
+ *  be readable, at 390px, in every language, for his own voice and the caregiver's longer
+ *  "Ask about {patient}". `scrollWidth <= clientWidth` is the same check the browser's own
+ *  overflow does: nothing of the label is cut off, whether it takes one line or wraps to two. */
+async function askWordFits(page: Page): Promise<void> {
+  const word = page.getByTestId("home-ask-open");
+  const box = await word.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+  expect(box.scrollWidth, (await word.textContent()) ?? "").toBeLessThanOrEqual(box.clientWidth + 1);
+}
+
+test("Home's ask bar label never clips: at 390px, in en, ms and zh, his own voice", async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const pa = await seedOwner(request, "Pa");
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  await askWordFits(page); // English, his own voice.
+  await openMe(page);
+  await page.getByTestId("lang-ms").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+  await openMe(page);
+  await page.getByTestId("lang-zh").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+});
+
+test("Home's ask bar label never clips: at 390px, in en, ms and zh, the caregiver's own voice", async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The caregiver's own, longer line ("Ask about {patient}"): a fresh page and a fresh sign-in
+  // (never a sign-out mid-test — the same isolation every other spec's own test already gets).
+  const family = await seedHome(request);
+  await signInThroughTheApp(page, family.meiPhone, "Mei");
+  await page.getByTestId("door-key").click();
+  await todayReady(page);
+  await askWordFits(page);
+  await openMe(page);
+  await page.getByTestId("lang-ms").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+  await openMe(page);
+  await page.getByTestId("lang-zh").click();
+  await page.keyboard.press("Escape");
+  await todayReady(page);
+  await askWordFits(page);
+});
+
+/** Fix #6 (owner review of PR #295): the quiet day the owner explicitly asked to see — nothing
+ *  due, nothing new, no visit soon, nothing near its reorder point, no insight raised — is the
+ *  large breathing orb, the greeting, and chips that each go somewhere real. No boilerplate
+ *  paragraph anywhere on it, and the safety line (his State's own boundary) appears once. */
+test("a quiet day: the large orb, the greeting, working chips, no boilerplate, the safety line once", async ({ page, request }) => {
+  const pa = await seedOwner(request, "Pa", []);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  const hero = page.getByTestId("today-hero");
+  await expect(hero.getByTestId("home-orb-lg")).toBeVisible();
+  await expect(hero.getByTestId("quiet-greeting")).toContainText("Pa");
+  await expect(page.getByTestId("home-headline")).toHaveCount(0);
+  await expect(page.getByTestId("insight-card")).toHaveCount(0);
+
+  // No boilerplate paragraph: the old fixed provenance line the redesign removed from the
+  // hero (it only ever belonged on a State card, and no State card is on a quiet day).
+  const shown = await page.getByTestId("shell-scroll").innerText();
+  expect(shown).not.toContain("Nura worked this out on");
+
+  // The safety line — the State's own real boundary sentence (not invented here: a quiet,
+  // stable day's own words, "Nura put your day in order...", `backend/app/safety/boundary.py`)
+  // — appears exactly once on the page. `SafetyNote` (Today.tsx) joins every boundary line
+  // into one line with a space, so the count is of that whole joined sentence, not of its
+  // first line alone (which never stands on its own in the DOM).
+  const state = (await (await request.get(`${API}/profiles/${pa.profileId}/state?language=en`, { headers: { Authorization: `Bearer ${pa.token}` } })).json()) as { boundary: string };
+  const wholeBoundary = state.boundary.split("\n").map((l) => l.trim()).filter(Boolean).join(" ");
+  if (wholeBoundary) {
+    const seen = shown.split(wholeBoundary).length - 1;
+    expect(seen, "the safety line must appear exactly once").toBe(1);
+  }
+
+  // Each chip goes somewhere real.
+  await expect(page.getByTestId("chip-report")).toBeVisible();
+  await expect(page.getByTestId("chip-week")).toBeVisible();
+  await page.getByTestId("chip-week").click();
+  await expect(page.getByTestId("tab-health")).toHaveAttribute("aria-current", "page");
 });

@@ -247,6 +247,30 @@ export const zh = {
     chipWeekOther: "{patient}这一周过得怎样？",
     // @patient phrase
     askNura: "随便问 Nura",
+    // @patient headline
+    headlineDoseDue: "{title}要在{when}吃。",
+    // @patient headline
+    headlineDoseDueOther: "{patient}的{title}要在{when}吃。",
+    // @patient headline
+    headlineAllTaken: "今天的药都吃了。",
+    // @patient headline
+    headlineAllTakenOther: "{patient}今天的药都吃了。",
+    // @patient headline
+    headlineReading: "你今天的血压是{systolic}over{diastolic}。",
+    // @patient headline
+    headlineReadingOther: "{patient}今天的血压是{systolic}over{diastolic}。",
+    // @patient headline
+    headlineVisit: "你{weekday}看{doctor}。",
+    // @patient headline
+    headlineVisitOther: "{patient}{weekday}看{doctor}。",
+    // @patient headline
+    headlineVisitNoDoctor: "你{weekday}有一个看诊。",
+    // @patient headline
+    headlineVisitNoDoctorOther: "{patient}{weekday}有一个看诊。",
+    // @patient headline
+    headlineReorder: "{title}大概还剩{days}天。",
+    // @patient headline
+    headlineReorderOther: "{patient}的{title}大概还剩{days}天。",
   },
   activity: {
     // @patient headline

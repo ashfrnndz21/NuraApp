@@ -5,20 +5,23 @@ import { ms } from "../../src/strings/ms";
 import { zh } from "../../src/strings/zh";
 import { fill } from "../../src/strings";
 import {
+  accentLastWord,
   boundaryOf,
   dateChip,
   dateLine,
   dayKey,
+  dropPossessive,
   feedCards,
   feedLines,
   greeting,
   dayMonthLine,
   heroFurnitureAllowed,
-  homeHeadline,
+  homeHeadlineFor,
   homeHero,
   homeHeroWords,
   homeState,
-  isQuietDay,
+  homeTopItem,
+  homeTopItemDate,
   lineTitle,
   medicinesCard,
   nowCard,
@@ -28,8 +31,8 @@ import {
   timeLine,
   todayList,
   tookLine,
-  topOfDay,
   whyLine,
+  type HomeTopItem,
 } from "../../src/today/model";
 
 const SOURCE = "This comes from the label you kept on Tuesday 1 September.";
@@ -353,42 +356,126 @@ describe("greeting without a name", () => {
 });
 
 describe("Home's new hero (cp3-home, the living orb): the day's top item", () => {
-  const flag = item("flag", "A fall");
-  const topThree = [item("today", "Your blood pressure today")];
-  const forYou = [item("today", "Running low"), item("now", "Your tablets today")];
+  const now = new Date(2026, 8, 14, 10, 0);
+  const doseDue = nowCard([slot("amlodipine", "breakfast", { due_now: true })], lines, en);
+  const allTaken = nowCard([slot("amlodipine", "breakfast", { taken: true })], lines, en);
+  const insightItem = item("today", "Four of five numbers are outside the range on your paper.", { category: "insight" });
+  const plainTodayItem = item("today", "Your tablets today");
+  const noInputs = { dose: null, reading: null, nextVisit: null, lines: [], insight: null };
 
-  it("is the ranked feed's own top item, else the feed's first 'for you' card, else none", () => {
-    expect(topOfDay(topThree, forYou)).toBe(topThree[0]);
-    expect(topOfDay([], forYou)).toBe(forYou[0]);
-    expect(topOfDay([], [])).toBeNull();
+  it("is the dose due right now, above everything else that could be said today", () => {
+    expect(homeTopItem({ ...noInputs, dose: doseDue, reading: { systolic: 138, diastolic: 84 } }, now, en)).toEqual({
+      kind: "doseDue",
+      title: "Your blood pressure tablet",
+      when: "breakfast",
+    });
   });
 
-  it("is quiet only once there is truly no top item", () => {
-    expect(isQuietDay(topThree[0]!)).toBe(false);
-    expect(isQuietDay(null)).toBe(true);
+  it("is every dose taken, once nothing is due, before today's own reading", () => {
+    expect(homeTopItem({ ...noInputs, dose: allTaken, reading: { systolic: 138, diastolic: 84 } }, now, en)).toEqual({ kind: "allTaken" });
+  });
+
+  it("is today's own reading, once no dose is due or newly all taken", () => {
+    expect(homeTopItem({ ...noInputs, reading: { systolic: 138, diastolic: 84 } }, now, en)).toEqual({ kind: "reading", systolic: 138, diastolic: 84 });
+  });
+
+  it("is a visit within the week, once there is no dose or reading to lead with — never a visit further off", () => {
+    const soon = new Date(now.getTime() + 3 * 86_400_000).toISOString();
+    expect(homeTopItem({ ...noInputs, nextVisit: { scheduled_at: soon, doctor: "Dr Lim" } }, now, en)).toEqual({
+      kind: "visit",
+      doctor: "Dr Lim",
+      at: new Date(soon),
+    });
+    const far = new Date(now.getTime() + 20 * 86_400_000).toISOString();
+    expect(homeTopItem({ ...noInputs, nextVisit: { scheduled_at: far, doctor: "Dr Lim" } }, now, en)).toBeNull();
+  });
+
+  it("is a medicine close enough to reorder, once there is no dose, reading or near visit", () => {
+    const dueSoon = line("warfarin", "the blood thinner tablet", { count: { ...count(4, ["4 tablets left."]), reorder_due: true } });
+    expect(homeTopItem({ ...noInputs, lines: [dueSoon] }, now, en)).toEqual({ kind: "reorder", title: "The blood thinner tablet", days: 4 });
+    // Not near its reorder point: no top item from it.
+    const plenty = line("warfarin", "the blood thinner tablet", { count: { ...count(60, ["60 tablets left."]), reorder_due: false } });
+    expect(homeTopItem({ ...noInputs, lines: [plenty] }, now, en)).toBeNull();
+  });
+
+  it("is the feed's own flagged insight, last — never a plain 'today'/'now' listing card, which is nobody's insight", () => {
+    expect(homeTopItem({ ...noInputs, insight: insightItem }, now, en)).toEqual({ kind: "insight", item: insightItem });
+    expect(homeTopItem(noInputs, now, en)).toBeNull();
+  });
+
+  it("falls back to none — a quiet day — when nothing of the above is real, never a bare card title standing in for it", () => {
+    expect(homeTopItem({ ...noInputs, insight: null }, now, en)).toBeNull();
   });
 
   it("a flag or an act posture outranks the quiet greeting and the busy headline both", () => {
+    const topItem: HomeTopItem = { kind: "allTaken" };
     expect(homeState({ flagged: true, act: false, topItem: null })).toBe("safety");
-    expect(homeState({ flagged: false, act: true, topItem: topThree[0]! })).toBe("safety");
-    expect(homeState({ flagged: true, act: true, topItem: topThree[0]! })).toBe("safety");
+    expect(homeState({ flagged: false, act: true, topItem })).toBe("safety");
+    expect(homeState({ flagged: true, act: true, topItem })).toBe("safety");
   });
 
   it("is busy once the day has a top item, quiet once it does not — neither over a flag or an act", () => {
-    expect(homeState({ flagged: false, act: false, topItem: topThree[0]! })).toBe("busy");
+    const topItem: HomeTopItem = { kind: "allTaken" };
+    expect(homeState({ flagged: false, act: false, topItem })).toBe("busy");
     expect(homeState({ flagged: false, act: false, topItem: null })).toBe("quiet");
   });
 
-  it("never reads a flag itself as a reason to be busy — a flag has its own card and outranks the headline", () => {
-    expect(homeState({ flagged: true, act: false, topItem: flag })).toBe("safety");
-  });
-
-  it("accents the headline's own last word, never a free choice: the backend's real sentence, marked once", () => {
+  it("accents a sentence's own last word, never a free choice — safe with a multi-word slot value", () => {
     // `*word*` with any trailing punctuation OUTSIDE the closing `*` (motion.ts's own
     // `ACCENT_WORD_RE`, the exact shape `SoftText` reads).
-    expect(homeHeadline({ headline: "Four numbers to raise with your doctor" })).toBe("Four numbers to raise with your *doctor*");
-    expect(homeHeadline({ headline: "For you: a 30-second clip." })).toBe("For you: a 30-second *clip*.");
-    expect(homeHeadline({ headline: "" })).toBe("");
+    expect(accentLastWord("Your evening tablet is due at 9 pm.")).toBe("Your evening tablet is due at 9 *pm*.");
+    expect(accentLastWord("Four of five numbers are outside the range on your paper.")).toBe("Four of five numbers are outside the range on your *paper*.");
+    expect(accentLastWord("")).toBe("");
+  });
+
+  it("strips a self-voiced leading or trailing possessive from a medicine's own name, in en, ms and zh", () => {
+    expect(dropPossessive("Your blood pressure tablet")).toBe("blood pressure tablet");
+    expect(dropPossessive("The blood thinner tablet")).toBe("blood thinner tablet");
+    expect(dropPossessive("ubat tekanan darah anda")).toBe("ubat tekanan darah");
+    expect(dropPossessive("您的血压药")).toBe("血压药");
+    expect(dropPossessive("ginseng")).toBe("ginseng");
+  });
+
+  it("builds every kind's own whole-sentence template, self and caregiver, filled only from real facts — never a judgement word", () => {
+    const doctor = "Dr Lim";
+    const at = new Date(2026, 8, 21, 10, 0); // Monday
+    const cases: [HomeTopItem, string, string][] = [
+      [{ kind: "doseDue", title: "Your evening tablet", when: "9 pm" }, "Your evening tablet is due at 9 *pm*.", "Pa's evening tablet is due at 9 *pm*."],
+      [{ kind: "allTaken" }, "Every tablet for today is *taken*.", "Every tablet for Pa today is *taken*."],
+      [{ kind: "reading", systolic: 138, diastolic: 84 }, "Your blood pressure today was 138 over *84*.", "Pa's blood pressure today was 138 over *84*."],
+      [{ kind: "visit", doctor, at }, "You see Dr Lim on *Monday*.", "Pa sees Dr Lim on *Monday*."],
+      [{ kind: "visit", doctor: null, at }, "You have a visit on *Monday*.", "Pa has a visit on *Monday*."],
+      [{ kind: "reorder", title: "Your blood pressure tablet", days: 5 }, "About 5 days of your blood pressure tablet are *left*.", "About 5 days of Pa's blood pressure tablet are *left*."],
+    ];
+    for (const [topItem, self, other] of cases) {
+      expect(homeHeadlineFor(topItem, en, "en-SG", true, "Pa")).toBe(self);
+      expect(homeHeadlineFor(topItem, en, "en-SG", false, "Pa")).toBe(other);
+    }
+    // The insight kind keeps the feed's own real headline, accented the same way — never a
+    // catalogue sentence composed here.
+    expect(homeHeadlineFor({ kind: "insight", item: insightItem }, en, "en-SG", true, "Pa")).toBe(accentLastWord(insightItem.headline));
+    for (const [topItem] of cases) {
+      const line = homeHeadlineFor(topItem, en, "en-SG", true, "Pa").toLowerCase();
+      for (const judgement of ["high", "low", "normal", "abnormal"]) expect(line).not.toContain(judgement);
+    }
+  });
+
+  it("never uses a generic feed card's own title as the fallback — an item type with no template is a quiet day, not this", () => {
+    // A plain "today"/"now" listing card carries no `category` of its own, so `insightOf`
+    // (Today.tsx) never hands it here as `insight` in the first place; passed anyway, it still
+    // is not composed into a headline — `HomeTopItem` has no case for it at all.
+    expect(plainTodayItem.category).toBeUndefined();
+    expect(homeTopItem(noInputs, now, en)).toBeNull();
+  });
+
+  it("gives the insight card's date chip the date the item is about, never a feed row's own created_at for anything but an insight", () => {
+    const visitAt = new Date(2026, 8, 21);
+    expect(homeTopItemDate({ kind: "doseDue", title: "x", when: "y" }, now)).toBe(now);
+    expect(homeTopItemDate({ kind: "allTaken" }, now)).toBe(now);
+    expect(homeTopItemDate({ kind: "reading", systolic: 138, diastolic: 84 }, now)).toBe(now);
+    expect(homeTopItemDate({ kind: "reorder", title: "x", days: 5 }, now)).toBe(now);
+    expect(homeTopItemDate({ kind: "visit", doctor: null, at: visitAt }, now)).toBe(visitAt);
+    expect(homeTopItemDate({ kind: "insight", item: insightItem }, now)).toEqual(new Date(insightItem.created_at));
   });
 
   it("splits a date into the day and a short month for the insight card's own chip", () => {

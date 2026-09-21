@@ -17,10 +17,15 @@ import { keepCards, keptCards, wantsCards } from "./offline";
 import { whenNotReached } from "./redPath";
 
 /** "I am not feeling well" (E13-02): on Today whatever else is or is not on the page — kept,
- *  offline, or blank — because it works with no network too (the offline card). */
-export function NotWellButton(): JSX.Element {
+ *  offline, or blank — because it works with no network too (the offline card).
+ *
+ *  `compact` (cp3-home): a small pill in Home's own header row, beside the greeting, rather
+ *  than the full-width rose button — that full-width rose style is the not-feeling-well
+ *  screen's own call button (`NotWell.tsx`), never this entry point into it. Same test id,
+ *  same behaviour, same red path with no animation either way. */
+export function NotWellButton({ compact }: { compact?: boolean } = {}): JSX.Element {
   return (
-    <Pill coral onClick={() => go({ name: "notWell" })} testId="not-well">
+    <Pill coral compact={compact} onClick={() => go({ name: "notWell" })} testId="not-well">
       {t().day.notWell}
     </Pill>
   );
