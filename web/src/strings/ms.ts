@@ -2026,6 +2026,8 @@ export const ms = {
     // @patient phrase
     seeAllPapers: "Lihat semua surat anda",
     // @patient phrase
+    seeAllPapersOther: "Lihat semua surat {patient}",
+    // @patient phrase
     paperChipOutside: "{n} luar julat",
     // @patient phrase
     paperChipInRange: "Semua dalam julat",

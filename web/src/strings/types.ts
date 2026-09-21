@@ -909,6 +909,7 @@ export interface Strings {
     paperOpen: string;
     /** "Your papers" full list (library part B #2): the way to it from Health's short list. */
     seeAllPapers: string;
+    seeAllPapersOther: string;
     /** A confirmed lab paper's state chip, from `rangeStatus`: how many results sit outside
      *  the paper's own printed range, or that none do. Never a bare count. */
     paperChipOutside: string;

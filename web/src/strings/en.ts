@@ -2028,6 +2028,8 @@ export const en = {
     // @patient phrase
     seeAllPapers: "See all your papers",
     // @patient phrase
+    seeAllPapersOther: "See all of {patient}'s papers",
+    // @patient phrase
     paperChipOutside: "{n} outside",
     // @patient phrase
     paperChipInRange: "All in range",

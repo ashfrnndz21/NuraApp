@@ -437,6 +437,9 @@ export function isResultRow(row: Pick<ReportRowView, "unit" | "geometry" | "rang
   return row.unit != null || row.geometry != null || row.rangeText != null;
 }
 
+/** The kinds of paper that are a table of results, where the rest is only about the paper. */
+const RESULTS_PAPERS: ReadonlySet<string> = new Set(["lab_report", "device_screen"]);
+
 export interface ReportSections {
   /** Results first, then any administrative row that still needs him — never hidden behind
    *  the disclosure, whatever it is (E02-07 library part A #4). */
@@ -449,7 +452,11 @@ export interface ReportSections {
  *  then any administrative row that needs him (`needs_confirm`/`unreadable`) — the "Check
  *  {c}" chip's count never changes because of this split — then, behind the fold, the
  *  administrative rows that need nothing from him at all. */
-export function reportSections(fields: readonly ReviewFieldOut[], s: Strings, locale = "en-SG"): ReportSections {
+export function reportSections(fields: readonly ReviewFieldOut[], s: Strings, locale = "en-SG", kind?: string): ReportSections {
+  // Only a paper of results has lines "about the paper" to fold away (a lab's name, a sample
+  // date). On a letter, a slip or a prescription the words ARE the paper — why he was in
+  // hospital, when the next visit is — so nothing is folded at all.
+  if (kind !== undefined && !RESULTS_PAPERS.has(kind)) return { open: [...fields], collapsed: [] };
   const open: ReviewFieldOut[] = [];
   const collapsed: ReviewFieldOut[] = [];
   for (const field of fields) {

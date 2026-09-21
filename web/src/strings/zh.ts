@@ -2026,6 +2026,8 @@ export const zh = {
     // @patient phrase
     seeAllPapers: "查看您所有的文件",
     // @patient phrase
+    seeAllPapersOther: "查看{patient}所有的文件",
+    // @patient phrase
     paperChipOutside: "{n}项超出范围",
     // @patient phrase
     paperChipInRange: "都在范围内",

@@ -557,6 +557,12 @@ describe("reportSections: results first, needs-him never hidden (library part A 
     expect(open.map((f) => f.field_id)).toEqual([blurry.field_id]);
     expect(collapsed).toHaveLength(0);
   });
+  it("a letter is never folded: its words are the paper, whatever rows it has", () => {
+    const reason = field("f-reason", "reason", "heart failure", false);
+    const { open, collapsed } = reportSections([reason, tg], en, "en-SG", "discharge_letter");
+    expect(open.map((f) => f.field_id)).toEqual([reason.field_id, tg.field_id]);
+    expect(collapsed).toEqual([]);
+  });
 });
 
 describe("effectiveValue: a confirmed card's own true value (library part B #3)", () => {

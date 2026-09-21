@@ -140,7 +140,7 @@ function useRecentPapers(scopes: readonly string[]): ReviewCardOut[] {
 /** "Your papers" (E02-07 library part B #2): the newest few, the same row the full list
  *  under the Record uses — or, for a key whose scope does not cover them, the block named
  *  and said withheld (never left off the screen in silence, the same rule `Readings` keeps). */
-function PapersSection({ scopes, name }: { scopes: readonly string[]; name: string }): JSX.Element {
+function PapersSection({ scopes, owner, name }: { scopes: readonly string[]; owner: boolean; name: string }): JSX.Element {
   const s = t();
   const dateOf = useDateOf();
   const cards = useRecentPapers(scopes);
@@ -154,13 +154,13 @@ function PapersSection({ scopes, name }: { scopes: readonly string[]; name: stri
   const recent = cards.slice(0, 3);
   return (
     <PaperTile testId="health-papers">
-      {recent.length === 0 && <p class="caption">{s.record.papersNone}</p>}
+      {recent.length === 0 && <p class="caption">{owner ? s.record.papersNone : fill(s.record.papersNoneOther, { patient: name })}</p>}
       {recent.map((card) => (
         <PaperRow key={card.card_id} card={card} dateOf={dateOf} onOpen={() => toRecord({ name: "paper", card })} />
       ))}
       {cards.length > 0 && (
         <button type="button" class="btn light" onClick={() => toRecord({ name: "papers" })} data-testid="health-papers-see-all">
-          {s.record.seeAllPapers}
+          {owner ? s.record.seeAllPapers : fill(s.record.seeAllPapersOther, { patient: name })}
         </button>
       )}
     </PaperTile>
@@ -313,8 +313,8 @@ export function HealthScreen(): JSX.Element {
       <SectionHeader title={s.health.readingsTitle} />
       <Readings scopes={scopes} owner={owner} name={name} />
 
-      <SectionHeader title={s.health.papersTitle} />
-      <PapersSection scopes={scopes} name={name} />
+      <SectionHeader title={owner ? s.health.papersTitle : fill(s.record.titleOther, { name })} />
+      <PapersSection scopes={scopes} owner={owner} name={name} />
 
       <DayLogs owner={owner} name={name} />
 

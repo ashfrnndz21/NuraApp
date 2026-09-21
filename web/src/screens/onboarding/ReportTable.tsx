@@ -73,7 +73,7 @@ export function ReportTable({ card, edits, onEdit, waiting, documentDateText, da
   const [aboutOpen, setAboutOpen] = useState(false);
   const facility = facilityField(card);
   const fields = [...card.fields].filter((field) => field.field_id !== facility?.field_id).sort((a, b) => a.position - b.position);
-  const { open: openRows, collapsed: collapsedRows } = reportSections(fields, s, locale);
+  const { open: openRows, collapsed: collapsedRows } = reportSections(fields, s, locale, card.document_kind);
   const openIndex = fields.findIndex((field) => field.field_id === openField);
   const open = openIndex >= 0 ? fields[openIndex]! : null;
   const proposal = pillProposalLine(card, s);
