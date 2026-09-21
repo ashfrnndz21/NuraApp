@@ -200,10 +200,10 @@ async def test_a_page_the_searcher_says_is_allowlisted_but_links_elsewhere_makes
     from dataclasses import replace
 
     class Elsewhere(FixtureSearcher):
-        def search(self, kind, terms, domains):  # type: ignore[no-untyped-def]
+        def search(self, kind, terms, domains, *, queries=None):  # type: ignore[no-untyped-def]
             return [
                 replace(page, url="https://supplement-shop.example/diabetes")
-                for page in super().search(kind, terms, domains)
+                for page in super().search(kind, terms, domains, queries=queries)
             ]
 
     context = await pa(sg, language="en")

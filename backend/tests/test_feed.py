@@ -524,7 +524,14 @@ class _TreatyFoodSearcher:
     medicine, so this is the case #231's routing must hold for the chief alone, no doctor
     question invented from a name it does not have."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if kind != "food" or "food.example.sg" not in domains:
             return []
         return [
@@ -834,7 +841,14 @@ class _TreatyNoticeSearcher:
     """A safety notice whose words would change treatment — never the fixture data other
     tests share, so this scenario cannot leak into theirs."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if kind != "safety" or "notices.example.sg" not in domains:
             return []
         return [
@@ -966,7 +980,14 @@ class _TreatyMedicineSearcher:
     """A page about a medicine he actually takes, found by a watch added by hand — the
     `add_search_job` shape (`reason={"asked": ..., "by": ...}`, no `"scope"` key at all)."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if kind != "explainer" or "medicine.example.sg" not in domains:
             return []
         return [
@@ -1581,7 +1602,14 @@ class _RotatingSearcher:
     def __init__(self) -> None:
         self.calls = 0
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         if "catchup.example.sg" not in domains:
             return []
         self.calls += 1
@@ -1642,7 +1670,7 @@ async def test_when_nothing_is_due_a_bounded_catch_up_still_runs_the_stale_job(
     # record names it): `_gaps`/`_broker_wanted` never propose it, so `_learning`'s own
     # "wanted" and "due" loops never touch it again after this — isolating the catch-up path.
     job = await create_job(
-        sg, context=context, kind=JobKind.EXPLAINER, terms=["a tip"], reason={"gap": "test"}
+        sg, context=context, kind=JobKind.EXPLAINER, terms=["blood pressure"], reason={"gap": "test"}
     )
     assert job.cadence == "on_change"
     first = await run_job(
@@ -1715,7 +1743,7 @@ async def test_a_job_that_ran_but_found_nothing_still_lets_the_catch_up_run(
     # A stale job (`on_change`, `_gaps`/`_broker_wanted` never propose it again): the one only
     # a catch-up can ever revive.
     stale = await create_job(
-        sg, context=context, kind=JobKind.EXPLAINER, terms=["a stale tip"], reason={"gap": "test"}
+        sg, context=context, kind=JobKind.EXPLAINER, terms=["cholesterol"], reason={"gap": "test"}
     )
     first = await run_job(
         sg,
@@ -1738,7 +1766,7 @@ async def test_a_job_that_ran_but_found_nothing_still_lets_the_catch_up_run(
         sg,
         context=context,
         kind=JobKind.SAFETY,
-        terms=["a checked tip"],
+        terms=["diabetes"],
         reason={"gap": "test"},
         source_ids=[],
         cadence="on_change",

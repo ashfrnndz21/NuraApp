@@ -146,6 +146,151 @@ FOOD_HELD_FOR: frozenset[str] = frozenset({"kidneys", "kidney_watched"})
 """The conditions whose food a dietitian sets: no general food card, and no season's card
 (festive food, breaking the fast with dates), is made for them."""
 
+INTENT_WORDS: Mapping[JobKind, str] = {
+    JobKind.EXPLAINER: "what it is for",
+    JobKind.SAFETY: "side effects to know",
+    JobKind.FOOD: "food",
+    JobKind.WORTH_KNOWING: "patient information",
+}
+"""The intent word a safe query adds to a term, by job kind (#302 live diagnosis: 22 of 30
+finished live jobs came back with nothing at all — no items and no rejections — and every one
+of those jobs' own `terms` was a bare generic drug name (`["amlodipine"]`, `["warfarin"]`,
+`["atorvastatin"]`) with no other context; the one job that found something searched
+`["cholesterol"]`, already a plain word. `_safe_query` below is what fixes that: it is never
+the fallback the query happens to answer with, it is what decides the query in the first
+place. `LOCAL`/`SEASONAL`/`PROVIDER` jobs already search a closed, human word (a hazard name, a
+season name — `app.delivery.feed.local.HAZARDS`/`SEASONS`), never a chemical name, so they
+carry no intent word here and `_safe_query` passes their term through unchanged."""
+
+
+def _closed_words() -> frozenset[str]:
+    """Every non-medicine word a job term may be: the plain words the planner itself writes for
+    a condition (`CONDITION_TERMS`, and a condition CODE said with spaces — the codes are the
+    closed onboarding graph, `app.onboarding.conditions.graph().conditions`, the same source
+    `compose._gaps` and `_topic_term` write a term from), a food topic (`FOOD_TERMS`), the one
+    reading it plans for ("blood pressure"), a hazard and a season's own search term. Imported
+    here, not at module level: `compose` imports this module."""
+    from app.delivery.feed.compose import CONDITION_TERMS, FOOD_TERMS
+    from app.delivery.feed.local import HAZARDS, SEASONS
+    from app.onboarding.conditions import graph
+
+    # NOT `app.safety.health_words.CONDITIONS`: that mapping is keyed by LANGUAGE, so iterating
+    # it gave "en", "ms", "zh" and 64 of the 67 condition words searched nothing, in silence
+    # (re-review of #310).
+    words = {code.replace("_", " ") for code in graph().conditions}
+    words |= set(CONDITION_TERMS.values()) | set(FOOD_TERMS.values()) | {"blood pressure"}
+    words |= set(HAZARDS) | {season.term for season in SEASONS} | {season.code for season in SEASONS}
+    return frozenset(word.strip().lower() for word in words)
+
+
+def _safe_query(term: str, kind: JobKind, registry: DrugRegistry, language: str) -> str | None:
+    """A safe, closed-vocabulary query for one job term, built for `ClaudeSearcher` — never
+    free text, never a word from a paper, a note, a transcript or anything unconfirmed, and
+    never anything identifying (his name, a phone number, a date, a doctor's or a facility's
+    name, a number from his record). Nothing here reads a fact's own free-text value: only the
+    job's own term (already one of a closed set — a generic name, a condition code's plain
+    word, a food or hazard or season word — `_gaps`/`FOOD_TERMS`/`HAZARDS`/`SEASONS`/
+    `CONDITION_TERMS`) and the licensed catalogue.
+
+    A term the licensed registry resolves as a medicine becomes his own catalogue word for it
+    (`app.medicines.strings.PLAIN_NAME`, the same word a card would use) plus its reviewed
+    purpose group (`Monograph.purpose_id`, in words: "blood pressure", "clots" — the same short
+    words `docs/health-feed-spec.md`'s own example, "blood pressure", already is), so the model
+    is handed the same closed vocabulary a card is built from — never the bare generic alone,
+    which is what every empty live job searched. A term that is not a medicine is used as it
+    stands, with only its intent word added, ONLY when it is one of the closed words above.
+
+    Fails closed (independent review of #308, blocker 1): a job's term is not always closed —
+    `compose._gaps` reads a medicine-name FACT's own value, which may be an extractor's unchecked
+    read of a label ("amlodipin 5mg <his name> <his id> dr … <hospital>" went out verbatim in
+    the reviewer's proof), and `POST …/search-jobs` takes a chief's typed terms. A term the
+    licensed registry does not resolve and that is not a closed word yields `None`: no query,
+    no call, nothing leaves the machine. The same for a resolved medicine whose catalogue has
+    no plain name in any language — never the raw term as a stand-in.
+    """
+    intent = INTENT_WORDS.get(kind)
+    try:
+        monograph = registry.monograph(term)
+    except UnknownDrug:
+        if term.strip().lower() not in _closed_words():
+            return None
+        word = term.strip().lower()
+        return f"{word} — {intent}" if intent else word
+    plain_name = (PLAIN_NAME.get(language) or {}).get(monograph.plain_name_id) or PLAIN_NAME["en"].get(
+        monograph.plain_name_id
+    )
+    if plain_name is None:
+        return None
+    purpose = monograph.purpose_id.replace("_", " ")
+    words = f"{plain_name}, for {purpose}"
+    return f"{words} — {intent}" if intent else words
+
+
+def _safe_queries(
+    job: SearchJob, registry: DrugRegistry, language: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """`_safe_query` for every term of this job, in order: the terms that HAVE a safe query and
+    those queries, pair for pair — what `search_and_compress` hands the searcher. A term with
+    no safe query is left out of both, so it is never asked about at all. `job.terms` itself is
+    unchanged everywhere else (dedupe keys, batch and medicine matching, hazard and season
+    checks all still read it) — only what is said to the model changes."""
+    kept = [(term, query) for term in job.terms if (query := _safe_query(term, job.kind, registry, language))]
+    return tuple(term for term, _ in kept), tuple(query for _, query in kept)
+
+
+EMPTY_BECAUSE = (
+    "no_search_issued",
+    "no_results",
+    "all_off_allowlist",
+    "fetch_failed",
+    "nothing_relevant",
+    "parse_failed",
+    "refused",
+    "max_uses_reached",
+    "term_not_in_vocabulary",
+)
+"""The closed set `search_and_compress` may write to `searched_detail["empty_because"]` when a
+job's search leaves nothing to make a card from — never free text, so a live check can read
+back exactly one of these without inspecting a log. `None` (not one of these) whenever the job
+did make something, or when the searcher in use carries no diagnostics at all (the fixture
+searcher — see `Searcher.last_search_detail` on `ClaudeSearcher`, read defensively)."""
+
+
+def _empty_because(detail: Mapping[str, Any]) -> str | None:
+    """Which of `EMPTY_BECAUSE` explains an empty result, from `ClaudeSearcher`'s own
+    diagnostics (`detail`) — checked in the order a request could actually fail in: refused
+    before anything else is knowable; no tool called at all; the search JSON itself unreadable;
+    a tool's own `max_uses` spent; no candidate URLs at all; candidates but none allowlisted;
+    allowlisted but none fetched; fetched but nothing survived compression or citation."""
+    if detail.get("refused"):
+        return "refused"
+    if not detail.get("web_search_uses") and not detail.get("web_fetch_uses"):
+        return "no_search_issued"
+    if detail.get("parse_failed"):
+        return "parse_failed"
+    if detail.get("max_uses_reached"):
+        return "max_uses_reached"
+    if not detail.get("candidate_urls"):
+        return "no_results"
+    if not detail.get("on_allowlist"):
+        return "all_off_allowlist"
+    if not detail.get("fetched_ok"):
+        return "fetch_failed"
+    return "nothing_relevant"
+
+
+def _read_search_detail(searcher: Searcher, queries: Sequence[str]) -> dict[str, Any] | None:
+    """`searcher.last_search_detail()`, read defensively (`getattr`) the same way
+    `external_processor` already is: `None` for the fixture searcher, which carries no such
+    method and never leaves the region to have anything to report, and for any other searcher
+    that predates this. A fresh `dict` copy each time, never the adapter's own live one, so
+    nothing here can be mutated by a later call on the same searcher."""
+    reader = getattr(searcher, "last_search_detail", None)
+    if reader is None:
+        return None
+    detail = reader(queries)
+    return dict(detail) if detail is not None else None
+
 
 @dataclass(frozen=True, slots=True)
 class Around:
@@ -463,6 +608,16 @@ class SearchOutcome:
     whether or not that call then succeeded: a failed call still left the bytes with the
     processor. `write_job_results` writes the one `EXTERNAL_MODEL_PROCESSOR` audit line for
     it, in its own short unit of work."""
+    searched_detail: dict[str, Any] | None = None
+    """Operational-only diagnostics of this job's own search (#302 live diagnosis: 22 of 30
+    finished jobs came back with no items and no rejections, and nobody could tell whether the
+    model searched at all, what it searched, whether fetch failed, or whether parsing dropped
+    everything). Never page text, never record content — the queries actually sent (built from
+    the safe terms `_safe_queries` made, capped at 120 chars each), the tool-use counts, how
+    many candidate URLs came back, how many were on the allowlist, how many were fetched, how
+    many survived compression and citation, the stop reasons, and — only when nothing survived
+    — one of `EMPTY_BECAUSE`. `None` for a fixture engine (`ClaudeSearcher.last_search_detail`
+    is read defensively, the same as `external_processor` above)."""
 
 
 async def search_and_compress(
@@ -505,6 +660,21 @@ async def search_and_compress(
     reached: str | None = None
     if domains and getattr(engine.searcher, "external_processor", None) is not None:
         reached = engine.searcher.external_processor
+    # #302: never the bare term (a generic drug name alone, live, found nothing 22 times out of
+    # 30) — a safe, closed-vocabulary query built from the licensed catalogue and an intent
+    # word for the job's kind. `job.terms` itself is untouched: every other check in this
+    # module (dedupe, batch and medicine matching, hazard and season checks) still reads it.
+    safe_terms, queries = _safe_queries(job, engine.registry, code)
+    if not safe_terms:
+        # Nothing about this job can be asked safely: no call is made at all.
+        return SearchOutcome(
+            candidates=(),
+            rejected=[],
+            domains=domains,
+            reasons=[],
+            external_processor=None,
+            searched_detail={"queries": 0, "empty_because": "term_not_in_vocabulary"},
+        )
     try:
         # `Searcher.search` is a synchronous port (the real adapter's own `messages.create`
         # call, `ClaudeSearcher._ask`), so awaiting it directly would block this event loop —
@@ -513,7 +683,9 @@ async def search_and_compress(
         # tests pays a thread hop for nothing, which is cheap next to never blocking the real
         # one.
         found_pages = list(
-            await asyncio.to_thread(engine.searcher.search, job.kind.value, job.terms, domains)
+            await asyncio.to_thread(
+                engine.searcher.search, job.kind.value, safe_terms, domains, queries=queries
+            )
         )
     except PortUnavailable as failed:
         return SearchOutcome(
@@ -523,6 +695,7 @@ async def search_and_compress(
             reasons=[],
             failed_because=f"search_failed:{failed}",
             external_processor=reached,
+            searched_detail=_read_search_detail(engine.searcher, queries),
         )
     reasons: list[str] = []
     if job.kind is JobKind.LOCAL:
@@ -593,6 +766,7 @@ async def search_and_compress(
                 reasons=reasons,
                 failed_because=f"compress_failed:{failed}",
                 external_processor=reached,
+                searched_detail=_read_search_detail(engine.searcher, queries),
             )
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
@@ -602,12 +776,23 @@ async def search_and_compress(
             continue
         seen.add(key)
         candidates.append(_Candidate(found=found, compressed=compressed, season=season, key=key))
+    detail = _read_search_detail(engine.searcher, queries)
+    if detail is not None:
+        # Operational counts only, never page text: what the searcher's own diagnostics
+        # already carry (queries sent, tool uses, candidate/allowlist/fetch counts, stop
+        # reasons), plus what this function itself learned once the found pages came back —
+        # how many were kept as a candidate for a card (`compressed`) — and, only when nothing
+        # survived at all, the one `EMPTY_BECAUSE` reason a live check can read straight off.
+        detail = {**detail, "fetched": len(found_pages), "compressed": len(candidates)}
+        if not candidates:
+            detail["empty_because"] = _empty_because(detail)
     return SearchOutcome(
         candidates=tuple(candidates),
         rejected=rejected,
         domains=domains,
         reasons=reasons,
         external_processor=reached,
+        searched_detail=detail,
     )
 
 
@@ -979,6 +1164,7 @@ async def write_job_results(
             "questions": [str(item.id) for item in questions],
             "rejected": rejected,
             "searched": outcome.domains,
+            "searched_detail": outcome.searched_detail,
             "failed_attempts": attempts,
             "failed_day": day.key,
             "because": outcome.failed_because,
@@ -991,6 +1177,7 @@ async def write_job_results(
             "questions": [str(item.id) for item in questions],
             "rejected": rejected,
             "searched": outcome.domains,
+            "searched_detail": outcome.searched_detail,
         }
     await session.flush()
     return [*made, *questions]

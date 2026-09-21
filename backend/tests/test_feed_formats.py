@@ -480,7 +480,14 @@ def test_only_a_licence_that_allows_reuse_lets_the_server_keep_an_excerpt() -> N
 class _Licensed(FixtureSearcher):
     """The fixture pages, with the heart centre's video under a licence that allows reuse."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         found = super().search(kind, terms, domains)
         return [
             Found(**{**_as_dict(page), "licence": "cc-by"}) if page.media == "video" else page
