@@ -404,7 +404,7 @@ class ClaudeSearcher:
         key = _checked_key(api_key=api_key, demo_mode=demo_mode, dev_run=dev_run, what="searcher")
         self._client = client if client is not None else _client(key)
         self._model = model
-        self._last_detail: dict[str, Any] | None = None
+        self._details: dict[int, dict[str, Any]] = {}
         """Operational diagnostics of this instance's own most recent `search()` call — see
         `last_search_detail`. Never page text, never the query or the terms' full words past
         120 characters each (#302: `search_and_compress` needs to know a job searched and what
@@ -427,7 +427,9 @@ class ClaudeSearcher:
             else ((term, f"{kind}: {term}") for term in terms)
         )
         detail: dict[str, Any] = {
-            "queries": [],
+            # How many were asked — never the words (independent review of #308: the query is
+            # record-derived, and a job's results are served whole to the watches view).
+            "queries": 0,
             "web_search_uses": 0,
             "web_fetch_uses": 0,
             "candidate_urls": 0,
@@ -438,7 +440,12 @@ class ClaudeSearcher:
             "parse_failed": False,
             "max_uses_reached": False,
         }
-        self._last_detail = detail
+        # Keyed by the caller's own `queries` object, never one slot on this process-wide
+        # instance: two profiles' runs overlap (each on its own worker thread), and with one
+        # slot profile A read back profile B's diagnostics into A's own job row (independent
+        # review of #308, blocker 2). A call without `queries` reports nothing.
+        if queries is not None:
+            self._details[id(queries)] = detail
         found: list[Found] = []
         for _term, query in pairs:
             found.extend(self._ask(query, domains, detail=detail))
@@ -452,11 +459,12 @@ class ClaudeSearcher:
             return results
         return [one for one in results if one.media == media]
 
-    def last_search_detail(self) -> Mapping[str, Any] | None:
-        """This instance's own most recent `search()` diagnostics — `None` before any call.
-        `app.delivery.feed.search._read_search_detail` reads this with `getattr`, defensively,
-        the same as `external_processor`: this method is not part of the `Searcher` port."""
-        return self._last_detail
+    def last_search_detail(self, queries: Sequence[str]) -> Mapping[str, Any] | None:
+        """The diagnostics of the `search()` call that was handed THIS `queries` object, taken
+        (so nothing accumulates) — `None` when there was none. `app.delivery.feed.search.
+        _read_search_detail` reads this with `getattr`, defensively, the same as
+        `external_processor`: this method is not part of the `Searcher` port."""
+        return self._details.pop(id(queries), None)
 
     def _ask(
         self,
@@ -479,7 +487,7 @@ class ClaudeSearcher:
             ' `media: "article"`.'
         )
         if detail is not None:
-            detail["queries"].append(query.strip()[:120])
+            detail["queries"] += 1
         try:
             record_call(Task.SEARCH, self._model)
             response = self._client.messages.create(
