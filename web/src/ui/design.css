@@ -1130,7 +1130,7 @@ html.shot-full .shell > .shell-scroll {
 }
 .ask-composer-hint {
   margin: 0;
-  padding: 0 4px;
+  padding: 0 4px 8px;
   opacity: 0.75;
 }
 

@@ -152,6 +152,11 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     setAnswer(null);
     setFound(null);
     setSentQuestion(text);
+    // Sent to the conversation: the words are in the thread now, so the composer is empty for
+    // the next question; a failed send puts them back (below) — he never types it twice. A
+    // search (web, providers, videos) keeps its words, as a search box does: she changes the
+    // filter and sends the same words again.
+    if (where === "records") setQuestion("");
     setSteps([]);
     setSentences([]);
     setAnnounce(s.feed.askThinking);
@@ -215,6 +220,7 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
       }
       setAnswer(null);
       setError(failure);
+      setQuestion((now) => now || text);
     } finally {
       setBusy(false);
     }
