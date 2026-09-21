@@ -5,6 +5,7 @@ import {
   countOf,
   dayInOrder,
   dayOf,
+  groupPapersByYear,
   hangingLines,
   hubEntries,
   labelFromCard,
@@ -13,6 +14,7 @@ import {
   numberText,
   onePage,
   outcomeLine,
+  paperStateChip,
   papersToPut,
   providerLines,
   pointRangeLine,
@@ -301,5 +303,64 @@ describe("the day", () => {
     expect(dayInOrder(day)).toBe(true);
     expect(dayInOrder(withTime(day, "lunch", "06:00"))).toBe(false);
     expect(dayInOrder(withTime(day, "bed", ""))).toBe(false);
+  });
+});
+
+// --- "Your papers" (E02-07 library part B): the list's own state chip and year grouping -------
+
+describe("paperStateChip: the list's own state chip per kind (library part B #2)", () => {
+  it("is 'Check' (the question flag) while the card still waits for his yes", () => {
+    const waiting = card({ confirmed_at: null });
+    expect(paperStateChip(waiting, en)).toEqual({ label: "Check", state: "question" });
+  });
+
+  it("counts what is outside the paper's own printed range on a confirmed lab report", () => {
+    const outside = card({
+      document_kind: "lab_report",
+      fields: [
+        field("ldl", 4.0, { unit: "mmol/L", range: { text: "< 3.4", low: null, high: 3.4 } }),
+        field("hdl", 1.2, { unit: "mmol/L", range: { text: "> 1.0", low: 1.0, high: null } }),
+      ],
+    });
+    expect(paperStateChip(outside, en)).toEqual({ label: "1 outside", state: "attention" });
+  });
+
+  it("says 'All in range' when a confirmed lab report's own ranges are every one inside", () => {
+    const inRange = card({
+      document_kind: "lab_report",
+      fields: [field("hdl", 1.2, { unit: "mmol/L", range: { text: "> 1.0", low: 1.0, high: null } })],
+    });
+    expect(paperStateChip(inRange, en)).toEqual({ label: "All in range", state: "ok" });
+  });
+
+  it("is the plain 'Read' for a confirmed kind that is not a lab report", () => {
+    const letter = card({ document_kind: "discharge_letter", fields: [field("reason", "heart failure")] });
+    expect(paperStateChip(letter, en)).toEqual({ label: "Read", state: null });
+  });
+
+  it("is 'Read' too for a confirmed lab report with nothing parsable on it", () => {
+    const noRanges = card({ document_kind: "lab_report", fields: [field("note", "see attached")] });
+    expect(paperStateChip(noRanges, en)).toEqual({ label: "Read", state: null });
+  });
+});
+
+describe("groupPapersByYear: only once there are enough to need it (library part B #2)", () => {
+  it("is empty — the caller renders the cards flat — at eight or fewer", () => {
+    const cards = Array.from({ length: 8 }, (_, n) => card({ card_id: `c${n}`, created_at: "2026-09-14T00:00:00Z" }));
+    expect(groupPapersByYear(cards)).toEqual([]);
+  });
+
+  it("groups by the paper's own printed date, falling back to when it came in, once there are more than eight", () => {
+    const cards = [
+      card({ card_id: "c0", document_date: "2026-01-05", created_at: "2026-01-05T00:00:00Z" }),
+      card({ card_id: "c1", document_date: null, created_at: "2025-12-20T00:00:00Z" }),
+      ...Array.from({ length: 7 }, (_, n) => card({ card_id: `c${n + 2}`, created_at: "2025-06-01T00:00:00Z" })),
+    ];
+    const groups = groupPapersByYear(cards);
+    expect(groups.map((g) => g.year)).toEqual([2026, 2025]);
+    expect(groups[0]!.cards.map((c) => c.card_id)).toEqual(["c0"]);
+    // c1 has no printed date, so it falls back to when it came in (2025) and joins the rest.
+    expect(groups[1]!.cards).toHaveLength(8);
+    expect(groups[1]!.cards[0]!.card_id).toBe("c1");
   });
 });

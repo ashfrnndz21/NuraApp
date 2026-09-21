@@ -275,6 +275,66 @@ async def test_a_key_without_the_record_sees_no_card(deployment: Deployment) -> 
     )
 
 
+async def test_the_paper_itself_is_read_back_through_its_own_route(deployment: Deployment) -> None:
+    """E02-07 library part B #3: "See the paper itself" on a card he has already checked, and
+    on one still waiting — read under the record's scope like the card, and refused for a key
+    without it or for a card that is not his."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    card = (
+        await deployment.client.post(
+            f"/profiles/{profile_id}/photos", json=_photo(LIPID_PANEL), headers=his
+        )
+    ).json()
+
+    # Before he has said yes to it, the paper itself still reads back the bytes he sent.
+    waiting = await deployment.client.get(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/artifact", headers=his
+    )
+    assert waiting.status_code == 200
+    assert waiting.headers["content-type"] == "image/png"
+    assert waiting.content == placeholder_png(LIPID_PANEL)
+
+    decisions = _decisions(card)
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={"subject": "review_card", "card_id": card["card_id"], "decisions": decisions},
+        headers=his,
+    )
+    await deployment.client.post(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/confirm",
+        json={"decisions": decisions, "confirmation_id": minted.json()["confirmation_id"]},
+        headers=his,
+    )
+
+    # Confirmed, reopened: the same bytes, read again.
+    again = await deployment.client.get(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/artifact", headers=his
+    )
+    assert again.status_code == 200
+    assert again.headers["content-type"] == "image/png"
+    assert again.content == placeholder_png(LIPID_PANEL)
+
+    # A key without the record's scope is refused it, like the card itself.
+    mei = await register_by_phone(deployment, MEI, "Mei")
+    await let_in(deployment, pa, profile_id, MEI, ["readings", "records"], role="caregiver")
+    await _key(deployment, pa, profile_id, MEI, ["readings"])
+    hers = bearer(mei["token"])
+    refused = await deployment.client.get(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/artifact", headers=hers
+    )
+    assert refused.status_code == 403
+    assert refused.json() == {"refusal": "OutOfScope", "scope": "records"}
+
+    # No such card at all: the same refusal the card route itself gives.
+    missing = await deployment.client.get(
+        f"/profiles/{profile_id}/review-cards/00000000-0000-0000-0000-000000000000/artifact",
+        headers=his,
+    )
+    assert missing.status_code == 404 and missing.json() == {"refusal": "NoSuchReviewCard"}
+
+
 async def test_the_photo_must_be_a_photo(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)

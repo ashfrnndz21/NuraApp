@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { fixClock, openMe, signInThroughTheApp, todayReady } from "./helpers";
+import { API, fixClock, openMe, paperPhoto, seedOwner, signInThroughTheApp, todayReady } from "./helpers";
 import { seedHome } from "./homeSeed";
 
 /** The phone frame (owner's scope change 2026-09-21, docs/design/README.md item 7): above 600px
@@ -69,3 +69,70 @@ test("a sheet opened above 600px lies inside the frame, not the full browser win
   expect(sheetBox.y).toBeGreaterThanOrEqual(frameBox.y - 1);
   expect(sheetBox.y + sheetBox.height).toBeLessThanOrEqual(frameBox.y + frameBox.height + 1);
 });
+
+/** E02-07 library part A #1: the owner's own screenshot showed a bright vertical line down the
+ *  left edge of the report table's panel, and every row's text touching it — a `<button>`
+ *  row's user-agent default border (`report-table-row` set only `border-top`, never resetting
+ *  the other three sides), and too little inner padding. Proved by computed style, not by eye,
+ *  at desktop width inside the frame and full-bleed on a real phone. */
+async function reportTableGeometry(page: import("@playwright/test").Page) {
+  const panel = page.getByTestId("report-rows");
+  await expect(panel).toBeVisible();
+  const row = panel.locator(".report-table-row").first();
+  await expect(row).toBeVisible();
+  return page.evaluate(
+    ([panelSel, rowSel]) => {
+      const panelEl = document.querySelector(`[data-testid="${panelSel}"]`)!;
+      const rowEl = panelEl.querySelector(rowSel)!;
+      const panelStyle = getComputedStyle(panelEl);
+      const panelRect = panelEl.getBoundingClientRect();
+      const rowRect = rowEl.getBoundingClientRect();
+      return {
+        borderLeft: panelStyle.borderLeftWidth,
+        borderRight: panelStyle.borderRightWidth,
+        rowBorderLeft: getComputedStyle(rowEl).borderLeftWidth,
+        rowBorderRight: getComputedStyle(rowEl).borderRightWidth,
+        leftInset: rowRect.left - panelRect.left,
+        rightInset: panelRect.right - rowRect.right,
+      };
+    },
+    ["report-rows", ".report-table-row"] as const,
+  );
+}
+
+for (const viewport of [
+  { name: "1280x900 (desktop, inside the frame)", width: 1280, height: 900 },
+  { name: "390x844 (full-bleed, a real phone)", width: 390, height: 844 },
+]) {
+  test(`the report table has no left border and its rows are inset >= 16px — ${viewport.name}`, async ({ page, request }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const pa = await seedOwner(request, "Pa", []);
+    const posted = await request.post(`${API}/profiles/${pa.profileId}/photos`, {
+      headers: { Authorization: `Bearer ${pa.token}` },
+      data: { data: paperPhoto("clinic-slip-2026-09-10").buffer.toString("base64"), content_type: "image/png", captured_at: "2026-09-10T09:00:00Z" },
+    });
+    expect(posted.status(), await posted.text()).toBe(201);
+    const card = (await posted.json()) as { card_id: string };
+
+    await signInThroughTheApp(page, pa.phone, "Pa");
+    await todayReady(page);
+    // The card above was made directly over the API: open it through the Record's own papers
+    // list, where every card — waiting or not — is listed (library part B #1).
+    await page.getByTestId("tab-health").click();
+    await page.getByTestId("health-record-hub").click();
+    await page.getByTestId("record-papers").click();
+    const row = page.getByTestId("waiting-paper");
+    await expect(row).toHaveAttribute("data-card-id", card.card_id);
+    await row.click();
+
+    const geometry = await reportTableGeometry(page);
+    // No user-agent default border on the sides `border-top` never touched.
+    expect(geometry.rowBorderLeft).toBe("0px");
+    expect(geometry.rowBorderRight).toBe("0px");
+    // The panel's own 1px glass border is even on both sides — never a heavier "line" on the left.
+    expect(geometry.borderLeft).toBe(geometry.borderRight);
+    // Inset from the panel's own edge, not just from the page: at least 16px either side.
+    expect(geometry.leftInset).toBeGreaterThanOrEqual(16);
+    expect(geometry.rightInset).toBeGreaterThanOrEqual(16);
+  });
+}

@@ -25,6 +25,12 @@ export function medicinesShown(owner: boolean, scopes: readonly string[]): boole
   return owner || scopes.includes("medicines");
 }
 
+/** A key without the records scope does not open his papers — "Your papers" is shown
+ *  withheld, named, never left off the screen in silence (E02-07 library part B #4). */
+export function papersWithheld(scopes: readonly string[]): boolean {
+  return !scopes.includes("records");
+}
+
 /** One blood pressure or blood sugar reading, read off its fact the way `systolics` reads a
  *  sparkline's numbers — the newest first, never worked out from more than the fact itself. */
 export interface ReadingRow {

@@ -70,7 +70,7 @@ export function ListRow({ lead, title, line, trailing, onClick, testId }: ListRo
 export function MetricRow({ icon, tint, label, value, unit, source, testId }: { icon: IconName; tint: Tint; label: string; value: string; unit?: string; source: string; testId?: string }): JSX.Element | null {
   if (!source.trim()) return null;
   return (
-    <div class="metric-row" data-testid={testId}>
+    <div class="metric-row grounded" data-testid={testId}>
       <IconBadge icon={icon} tint={tint} size="small" />
       <span class="metric-label">{label}</span>
       <span class="metric-value">

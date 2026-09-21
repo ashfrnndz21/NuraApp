@@ -99,7 +99,7 @@ function AskHeader({ title, onBack, backLabel, meLabel }: { title: string; onBac
  *  composer is docked above the tab bar (`Shell`'s `bottomBar`, the same flex-column seam
  *  Home's own ask bar already uses), so it is never covered and the thread never scrolls under
  *  it. The old top-of-screen question form and its duplicated header are gone. */
-export function AskScreen({ item, question: asked }: { item?: FeedItemOut; question?: string }): JSX.Element {
+export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut; question?: string; draft?: boolean }): JSX.Element {
   const s = t();
   const [question, setQuestion] = useState(asked ?? "");
   const [where, setWhere] = useState<Where>("records");
@@ -226,9 +226,11 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     }
   };
 
-  // A question typed into the ask bar is asked at once: the answer is what he came for.
+  // A question typed into the ask bar is asked at once: the answer is what he came for. A
+  // draft (`draft`, "Ask about this paper" — library part B #3) only names the paper in the
+  // box, in his own words to finish and send himself: never asked on its own.
   useEffect(() => {
-    if (asked && asked.trim()) void send();
+    if (!draft && asked && asked.trim()) void send();
   }, []);
 
   // His own "New conversation" (W2): close the open thread on the backend and start clean —

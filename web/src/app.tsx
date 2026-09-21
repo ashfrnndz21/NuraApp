@@ -93,7 +93,7 @@ function Route(): JSX.Element | null {
     case "feed":
       return <FeedScreen />;
     case "ask":
-      return <AskScreen item={current.item} question={current.question} />;
+      return <AskScreen item={current.item} question={current.question} draft={current.draft} />;
     case "reading":
       return <ReadingScreen />;
     case "health":

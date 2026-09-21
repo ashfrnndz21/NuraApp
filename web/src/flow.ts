@@ -35,7 +35,10 @@ export type Screen =
   /** Ask about one card, or ask or search from Today: E03's recall (`POST /profiles/{id}/ask`)
    *  and the ask bar's Web, Providers and Videos filters, shown as the backend wrote them.
    *  `question` is what was typed into the ask bar the shell puts on every screen (D1). */
-  | { name: "ask"; item?: FeedItemOut; question?: string }
+  /** `draft`: the question is only typed in, in his own words to finish and send himself
+   *  (library part B #3's "Ask about this paper") — never asked on its own, unlike a
+   *  question already typed into the ask bar, which is asked at once. */
+  | { name: "ask"; item?: FeedItemOut; question?: string; draft?: boolean }
   | { name: "reading" }
   /** The Health tab (docs/design/nura-concept-board.html): "This week", his readings, his
    *  day, his medicines and what is coming up — one screen, the same for every persona. */

@@ -19,13 +19,13 @@ test("crossing midnight in Singapore: Today reads the new day and still says no 
   // the greeting where the quiet state itself says it.
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await expect(page.getByTestId("home-head-date")).toHaveText("Monday 14 September");
-  await expect(page.getByTestId("quiet-greeting")).toHaveText("Good evening, Pa.");
+  await expect(page.getByTestId("quiet-greeting").locator(".sr-only")).toHaveText("Good evening, Pa.");
   await expect.poll(() => keptExpiry(page)).toBe("2026-09-14T16:00:00.000Z");
 
   // Just after it: no reload by hand.
   await page.clock.fastForward("01:30");
   await expect(page.getByTestId("home-head-date")).toHaveText("Tuesday 15 September");
-  await expect(page.getByTestId("quiet-greeting")).toHaveText("Good morning, Pa.");
+  await expect(page.getByTestId("quiet-greeting").locator(".sr-only")).toHaveText("Good morning, Pa.");
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await todayReady(page);
   await expect(page.locator("nav.tabbar")).toBeVisible();

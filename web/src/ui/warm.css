@@ -460,6 +460,20 @@ button.list-row {
   color: var(--ink-quiet);
 }
 
+/* A grounded reading: label and value share the first line, and the line saying where the
+   value came from sits under them at full width — left in the same line it squeezed the label
+   into the number on a phone. */
+.metric-row.grounded {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  padding: 6px 0;
+}
+.metric-row.grounded .metric-source {
+  flex: 1 0 100%;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+
 /* --- The round arrow button, the status pill -------------------------------------------------- */
 .arrow-button {
   flex: none;
