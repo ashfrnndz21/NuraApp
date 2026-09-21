@@ -530,6 +530,42 @@ export const zh = {
     // @patient phrase
     yourPharmacistOther: "{name}的药剂师",
   },
+  // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
+  // `insight`): right after "Looks right", the questions the paper raises for the doctor.
+  paperInsight: {
+    // @patient headline
+    screenTitle: "这对您意味着什么",
+    // @patient headline
+    screenTitleOther: "这对{patient}意味着什么",
+    // @patient phrase
+    lookedAt: "看过的",
+    // @patient phrase
+    forDoctorOn: "给{doctor}，{date}",
+    // @patient phrase
+    forNextVisit: "为了您的下一次门诊",
+    // @patient phrase
+    forNextVisitOther: "为了{patient}的下一次门诊",
+    // @patient
+    questionsNotAnswers: "这些是要问的问题，不是答案。",
+    // @patient phrase
+    keepForVisit: "为我的门诊留下这些",
+    // @patient phrase
+    keepForVisitOther: "为{patient}的门诊留下这些",
+    // @patient phrase
+    keeping: "留下中…",
+    // @patient phrase
+    kept: "已留下",
+    // @patient
+    keptForVisit: "已留给您的下一次门诊。",
+    // @patient
+    keptForVisitOther: "已留给{patient}的下一次门诊。",
+    // @patient
+    keepNoVisit: ["还没有预约门诊，所以Nura还没有留下这些问题。", "预约门诊后，再打开这份文件。"],
+    // @patient
+    keepNoVisitOther: ["还没有预约门诊，所以Nura还没有留下{patient}的这些问题。", "预约门诊后，再打开这份文件。"],
+    // @patient phrase
+    notNow: "现在不用",
+  },
   signIn: {
     // @patient headline
     title: "登录",
@@ -920,6 +956,8 @@ export const zh = {
     watchAgain: "再看一次",
     // @patient phrase
     watchWhole: "在{publisher}看完整的视频",
+    // @patient phrase
+    watchWholeShort: "看完整的视频",
     // @patient phrase
     askOrSearch: "提问或搜索",
     // @patient phrase

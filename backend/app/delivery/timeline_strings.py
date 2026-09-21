@@ -557,6 +557,28 @@ HONEST: Mapping[str, Lines] = {
 }
 """When nothing on the record answers the question: said plainly, never guessed."""
 
+# @patient — addressed to whoever is asking (the owner himself or a caregiver reading about
+# him), never "you/your" about the PATIENT, so it never needs a caregiver twin: it is a
+# question to the asker, not a line about him (W2, natural clarifying questions).
+CLARIFY: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "which_paper": "Which {what} is this about?",
+        "cost_for_what": "What is this cost for?",
+    },
+    "ms": {
+        "which_paper": "{what} yang mana ini?",
+        "cost_for_what": "Kos ini untuk apa?",
+    },
+    "zh": {
+        "which_paper": "这是哪一份{what}？",
+        "cost_for_what": "这笔费用是为了什么？",
+    },
+}
+"""One plain clarifying question — never a stall, only when the question genuinely cannot be
+answered without a choice he or a caregiver must make (`app.search.ask._clarify_for`,
+`app.llm.ask_agent`'s module docstring, fix 4). `{what}` is his own word for the kind of paper
+(`paper_word`)."""
+
 # @patient
 REROUTE: Mapping[str, Lines] = {
     "en": ("Ask {doctor} before you change any medicine.",),
@@ -627,6 +649,10 @@ def recall_line(key: str, language: str, **slots: str) -> str:
     return _fill(RECALL[language][key], language, slots)
 
 
+def clarify_line(key: str, language: str, **slots: str) -> str:
+    return _fill(CLARIFY[language][key], language, slots)
+
+
 def reading_lines(language: str, *, date: str, top_number: str, bottom_number: str) -> list[str]:
     slots = {"date": date, "top_number": top_number, "bottom_number": bottom_number}
     return [_fill(line, language, slots) for line in READING[language]]
@@ -653,7 +679,7 @@ def verified(line: str, language: str, kind: Kind = "line") -> bool:
 def catalogue() -> list[str]:
     """Every whole-line template here, in every language, for the tests."""
     found: list[str] = []
-    for table in (ANCHORS, CHANGED, WAITING, RECALL):
+    for table in (ANCHORS, CHANGED, WAITING, RECALL, CLARIFY):
         for by_key in table.values():
             found.extend(by_key.values())
     for lines in (READING, HONEST, REROUTE):
@@ -667,6 +693,7 @@ __all__ = [
     "ASK_STEPS",
     "ASK_STEP_NAMES",
     "CHANGED",
+    "CLARIFY",
     "DOCUMENT_KIND_WORD",
     "HONEST",
     "IMPORT_STEPS",
@@ -683,6 +710,7 @@ __all__ = [
     "anchor_line",
     "catalogue",
     "changed_line",
+    "clarify_line",
     "day_of",
     "honest_lines",
     "language_of",

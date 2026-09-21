@@ -44,7 +44,7 @@ from app.memory.models import (
 from app.memory.providers import Paper, ProviderHistory, ProviderSummary
 from app.memory.timeline import Anchor, EpisodeView, TimelineItem, TimelinePage
 from app.regions import Region
-from app.search.ask import Answer, Mode
+from app.search.ask import Answer, Clarify, Mode
 from app.search.transcripts import Search
 
 PHONE = r"^\+[1-9][0-9]{7,14}$"
@@ -122,6 +122,12 @@ class AskIn(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     mode: Mode = Mode.TEXT
     language: str | None = Field(default=None, min_length=2, max_length=16)
+    value: str | None = Field(default=None, max_length=200)
+    """A tap on a clarifying question's own option (W2): the chip's own opaque token, riding
+    along with `question` (the chip's label, sent as the words he typed). The backend resolves
+    it first, scoped to this same conversation and this same key — never shown, never trusted
+    on its own; a stale or foreign one is simply refused (`app.search.conversation.
+    resolve_clarify_value`), never an error the reader sees."""
 
 
 # --- what comes out --------------------------------------------------------------------------
@@ -635,6 +641,33 @@ class ProposalOut(BaseModel):
     label: str
 
 
+class ClarifyOptionOut(BaseModel):
+    """One choice on a clarifying question (W2): `label` is built by the backend alone, from
+    confirmed record data — never free text from an unconfirmed card, never a string the
+    model wrote. `value` is opaque: carried back unread on the next turn's `AskIn.value`."""
+
+    label: str
+    value: str
+
+
+class ClarifyOut(BaseModel):
+    """A clarifying question instead of an answer (W2) — never together with `lines`: one
+    plain sentence, streamed like any other (`answer_sentence`), and 2-4 choices, or none at
+    all when a free-text reply is expected (`allow_other`)."""
+
+    question: str
+    options: list[ClarifyOptionOut]
+    allow_other: bool
+
+    @classmethod
+    def of(cls, clarify: Clarify) -> ClarifyOut:
+        return cls(
+            question=clarify.question,
+            options=[ClarifyOptionOut(label=o.label, value=o.value) for o in clarify.options],
+            allow_other=clarify.allow_other,
+        )
+
+
 class AnswerOut(BaseModel):
     """An answer: the cited lines, the honest line when the record does not answer, the
     boundary last, and the whole as he hears it (`spoken`). The question is named by the
@@ -669,6 +702,9 @@ class AnswerOut(BaseModel):
     """A red flag heard in the question: the red-flag path it took, as the same word tapped on
     the feeling cloud (the moment written in his words, the flag raised, the family told), and
     nothing looked up after it. None when the question carries none."""
+    clarify: ClarifyOut | None = None
+    """One clarifying question instead of an answer (W2) — never together with `lines`. None
+    on every ordinary answer, exactly as today."""
 
     @classmethod
     def red_only(cls, red_flag: FeelingOut, mode: Mode) -> AnswerOut:
@@ -723,6 +759,7 @@ class AnswerOut(BaseModel):
             proposals=[
                 ProposalOut(kind=p.kind, label=p.label) for p in answer.proposals
             ],
+            clarify=None if answer.clarify is None else ClarifyOut.of(answer.clarify),
         )
 
 

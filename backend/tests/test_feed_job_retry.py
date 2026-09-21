@@ -64,7 +64,14 @@ class _AlwaysFails:
     """A `Searcher` whose call always fails — the 2026-09-18 incident: every call to the API
     itself refused, never a clean "nothing found"."""
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         raise PortUnavailable("the API refused every call")
 
     def find(
@@ -239,7 +246,14 @@ class _LabelledSearcher:
     def __init__(self, delegate: FixtureSearcher) -> None:
         self._delegate = delegate
 
-    def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+    def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
         return self._delegate.search(kind, terms, domains)
 
     def find(
@@ -291,7 +305,14 @@ async def test_a_failed_external_call_still_writes_the_audit_line(sg: AsyncSessi
     class _FailsButLabelled:
         external_processor: str | None = "anthropic"
 
-        def search(self, kind: str, terms: Sequence[str], domains: Sequence[str]) -> Sequence[Found]:
+        def search(
+        self,
+        kind: str,
+        terms: Sequence[str],
+        domains: Sequence[str],
+        *,
+        queries: Sequence[str] | None = None,
+    ) -> Sequence[Found]:
             raise PortUnavailable("the API refused every call")
 
         def find(

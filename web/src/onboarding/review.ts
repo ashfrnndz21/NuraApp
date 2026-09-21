@@ -93,6 +93,11 @@ export function rangeStatus(
 ): "above" | "below" | "in" | "unknown" {
   if (typeof value !== "number" || !range) return "unknown";
   const { low, high } = range;
+  // A backwards pair is a misread, not a range: the reader now keeps one as words with no
+  // bounds, but a card stored before that still carries the numbers — 4.0 came out "below"
+  // 5.5–3.5 and the bar drew a negative-width band (#303 final check, NEW-3). "unknown" also
+  // makes `rangeBarGeometry` draw nothing, and keeps it out of the "N outside" tally.
+  if (low != null && high != null && low > high) return "unknown";
   if (low != null && high != null) {
     if (value < low) return "below";
     return value > high ? "above" : "in";

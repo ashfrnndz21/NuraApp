@@ -254,6 +254,24 @@ export interface LookedAtOut {
   label: string;
 }
 
+/** One choice on a clarifying question (W2): `label` is built by the backend alone, from
+ *  confirmed record data — never free text from an unconfirmed card, never a string the model
+ *  wrote. `value` is opaque: carried back unread on the next turn's `value`, riding along with
+ *  the chip's own label as the words he "typed". */
+export interface ClarifyOptionOut {
+  label: string;
+  value: string;
+}
+
+/** A clarifying question instead of an answer (W2) — never together with `lines`: one plain
+ *  sentence, streamed like any other (`answer_sentence`), and 2-4 choices, or none at all when
+ *  a free-text reply is expected (`allow_other`). */
+export interface ClarifyOut {
+  question: string;
+  options: ClarifyOptionOut[];
+  allow_other: boolean;
+}
+
 export interface AnswerOut {
   /** The question as it was kept; null when a red word in it took the red-flag path instead. */
   question_artifact_id: string | null;
@@ -283,6 +301,9 @@ export interface AnswerOut {
    *  tapped on the feeling cloud would (the moment written, the flag raised, the family told).
    *  Null when the question carries none. */
   red_flag?: FeelingOut | null;
+  /** One clarifying question instead of an answer (W2) — never together with `lines`. Null on
+   *  every ordinary answer, exactly as today. */
+  clarify?: ClarifyOut | null;
 }
 
 /** One turn on a conversation thread (W2), read back from `GET
@@ -458,6 +479,62 @@ export interface InsightsReportSummaryOut {
   report_id: string;
   generated_at: string;
   week_of: string;
+}
+
+// --- checkpoint 3: the paper-scoped insight, right after "Looks right" ----------------------
+
+/** One real part of the record a paper-scoped insight actually read (`app.reasoning.analyst.
+ *  paper.LookedAt`): the paper itself, a count of medicines, or the next visit — never a fixed
+ *  list, and never present for a part this key's own scope does not open. */
+export interface PaperLookedAtOut {
+  kind: string;
+  id: string;
+  label: string;
+}
+
+/** The paper-scoped insight (checkpoint 3, `docs/design/experience-blueprint.html` scene
+ *  `insight`, `POST /profiles/{id}/papers/{artifactId}/insight/stream`'s final event): a
+ *  headline, what was actually read, and 1-4 questions for the doctor (`InsightOut`, reused
+ *  from the weekly report) — never a diagnosis, never advice. `questions` is empty exactly
+ *  when nothing on the paper looked worth asking about; `headline` still says so in words then
+ *  (`PAPER_NOTHING_LINE`). */
+export interface PaperInsightOut {
+  report_id: string;
+  generated_at: string;
+  boundary: string[];
+  headline: string;
+  looked_at: PaperLookedAtOut[];
+  questions: InsightOut[];
+  withheld: string[];
+}
+
+/** One real stage of building the paper-scoped insight, streamed the instant it finishes — the
+ *  same trace pattern as `InsightsStepEvent`. */
+export interface PaperInsightStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished insight, exactly as `PaperInsightOut` above. */
+export interface PaperInsightReportEvent {
+  type: "report";
+  report: PaperInsightOut;
+}
+
+export type PaperInsightStreamEvent = PaperInsightStepEvent | PaperInsightReportEvent | AskRefusalEvent;
+
+/** "Keep these for my visit" (`POST …/insight/keep`, no request body — every question on the
+ *  paper's own saved insight is filed, never a caller-chosen subset): where they landed.
+ *  `filed`: `"visit"` when an upcoming visit exists (`appointment_id` names it), `kept_count`
+ *  the number really filed (0 on a repeat call — keeping twice never duplicates a line); or
+ *  `"unfiled"` when there is none yet — the honest fallback (#303 review, B3): nothing at all
+ *  is kept, `kept_count` is always 0, and `appointment_id` is `null`. The screen says this
+ *  plainly (`paperInsight.keepNoVisit`) rather than ever claiming a keep that did not happen. */
+export interface PaperInsightKeepOut {
+  kept_count: number;
+  filed: "visit" | "unfiled";
+  appointment_id: string | null;
 }
 
 /** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step

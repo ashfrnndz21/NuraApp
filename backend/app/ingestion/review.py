@@ -1085,8 +1085,13 @@ async def _write_lab_readings(
         artifact_id=artifact.id,
         episode_id=episode_id,
     )
-    by_subject = {field.subject: field for field in reading_fields}
-    systolic, diastolic = by_subject.get("systolic"), by_subject.get("diastolic")
+    # Keyed by (subject, attribute), exactly as `_lab_reading_split` found the pair. Keyed by
+    # subject alone, both numbers of a blood pressure collapsed onto "blood_pressure", the pair
+    # was never found, and the loop below raised `KeyError: ('blood_pressure', 'systolic')` —
+    # confirming any lab report that prints a blood pressure was a 500 (#303 final check, NEW-4;
+    # no lab fixture carried one, so nothing caught it).
+    by_code = {(field.subject, field.attribute): field for field in reading_fields}
+    systolic, diastolic = by_code.get(SYSTOLIC), by_code.get(DIASTOLIC)
     if systolic is not None and diastolic is not None:
         fact = await _write_fact_for(
             session,

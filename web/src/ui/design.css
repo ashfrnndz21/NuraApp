@@ -1233,6 +1233,44 @@ html.shot-full .shell > .shell-scroll {
   line-height: var(--line-height);
 }
 
+/* A clarifying question's own choices (W2): compact choose-chips, never the onboarding word
+   cloud's big round bubbles (`.word`, `.cloud`) — same left edge as the question above them
+   (the answer text carries no side padding of its own here), a quiet glass fill with the 1px
+   border every other chip already uses (`.glass-chip`, size bumped up from its own caption
+   size to match the answer's own body text). Row-wrapped when every label is short enough to
+   read on one line; `.stacked` (added in script, when any label runs past ~22 characters — a
+   full sentence like "Your blood test of Thursday 10 September" never fits one line at a
+   sensible width) stands them one to a row instead, each still wrapping to at most two lines
+   of its own. */
+.ask-clarify-chips {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ask-clarify-chips.stacked {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.ask-clarify-chip {
+  font-size: 15px;
+  line-height: 1.25;
+  text-align: left;
+  min-height: var(--target);
+  max-width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  overflow-wrap: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.ask-clarify-chips.stacked .ask-clarify-chip {
+  width: 100%;
+}
+
 /* The trace is its own bubble shape (a card, not a message he sent), so it reads as Nura
    working rather than as a third thing said. */
 .ask-trace {

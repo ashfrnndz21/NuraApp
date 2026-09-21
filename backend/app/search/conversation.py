@@ -29,18 +29,25 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_read, audited_write
+from app.audit.models import Action, AuditEntry, Outcome
+from app.audit.trail import record as record_audit
 from app.db import utcnow
 from app.errors import Refusal
+from app.ingestion.models import ReviewCard
 from app.ingestion.objects import ObjectStore, sha256_of
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, OutOfScope
+from app.keys.repository import scoped_select
 from app.keys.scopes import Scope
-from app.memory.models import Artifact, ArtifactKind, SourceChannel
-from app.search.ask import Answer
+from app.medicines.models import MedicationLine
+from app.memory.models import Appointment, Artifact, ArtifactKind, Fact, SourceChannel
+from app.search.ask import Answer, Cite
 from app.search.models import Conversation, Turn
 
 
@@ -64,6 +71,10 @@ class TurnMemory:
     question: str
     answer_lines: tuple[str, ...]
     honest: tuple[str, ...]
+    was_clarify: bool = False
+    """Whether this turn's whole answer was a clarifying question (W2) — never two in a row
+    about the same thing: `ClaudeAsker` and the rule-based asker both read the newest turn's
+    own flag to decide whether this turn must answer instead of asking again."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +86,12 @@ class ConversationMemory:
     conversation_id: uuid.UUID
     recent: tuple[TurnMemory, ...]
     summary: str | None
+    resolved_focus: Cite | None = None
+    """A clarifying question's own option, already resolved this turn (W2,
+    `resolve_clarify_value`) — the referent the answer must now be about, never re-asked."""
+    resolved_focus_label: str | None = None
+    """The resolved option's own words (already backend-built, already safe) — handed to the
+    agent asker as plain context, never composed here."""
 
 
 async def current_conversation(session: AsyncSession, *, context: KeyContext) -> Conversation:
@@ -185,13 +202,32 @@ async def _keep_answer(
 ) -> Artifact:
     """The answer's own lines, kept as a MESSAGE artefact by reference, the same way the
     question already is (`app.search.ask._keep_question`): no row holds the words."""
-    payload = {
+    payload: dict[str, object] = {
         "lines": [
             {"text": line.text, "cite_kinds": [cite.kind for cite in line.cites]}
             for line in answer.lines
         ],
         "honest": list(answer.honest),
     }
+    if answer.clarify is not None:
+        # Persisted so the very next turn on this thread can resolve a tap (W2,
+        # `resolve_clarify_value`) — the same label the reader saw, and the cite it names,
+        # never anything wider. Single-use falls out of always resolving against the newest
+        # turn only: once a later turn is recorded, an older clarify's tokens are no longer
+        # reachable at all.
+        payload["clarify"] = {
+            "question": answer.clarify.question,
+            "allow_other": answer.clarify.allow_other,
+            "options": [
+                {
+                    "label": option.label,
+                    "value": option.value,
+                    "cite_kind": None if option.cite is None else option.cite.kind,
+                    "cite_id": None if option.cite is None else str(option.cite.id),
+                }
+                for option in answer.clarify.options
+            ],
+        }
     data = json.dumps(payload).encode("utf-8")
     digest = sha256_of(data)
     key = f"answers/{context.profile_id}/{digest}"
@@ -263,7 +299,7 @@ async def record_turn(
     pushed it out."""
     answer_artifact = (
         await _keep_answer(session, context=context, store=store, answer=answer)
-        if answer.lines or answer.honest
+        if answer.lines or answer.honest or answer.clarify is not None
         else None
     )
     turn = await audited_write(
@@ -331,6 +367,7 @@ async def memory_for(
         )
         lines: tuple[str, ...] = ()
         honest: tuple[str, ...] = ()
+        was_clarify = False
         if row.answer_artifact_id is not None:
             raw = await _artifact_text(
                 session, context=context, store=store, artifact_id=row.answer_artifact_id
@@ -341,13 +378,169 @@ async def memory_for(
                 payload = {}
             lines = tuple(entry.get("text", "") for entry in payload.get("lines", []))
             honest = tuple(payload.get("honest", []))
-        recent.append(TurnMemory(question=question_text, answer_lines=lines, honest=honest))
+            was_clarify = payload.get("clarify") is not None
+        recent.append(
+            TurnMemory(
+                question=question_text, answer_lines=lines, honest=honest, was_clarify=was_clarify
+            )
+        )
     return ConversationMemory(
         conversation_id=conversation.id, recent=tuple(recent), summary=conversation.summary
     )
 
 
+CLARIFY_TOKEN_TARGET = "clarify_token"
+"""The trail's name for resolving a clarifying question's own option (W2): a read like any
+other — audited and scoped — never a write, never a value beyond which reason class the
+attempt landed on."""
+
+
+_CLARIFY_RECHECK: dict[str, tuple[type, Scope]] = {
+    "paper_artifact": (Artifact, Scope.RECORDS),
+    "review_card": (ReviewCard, Scope.RECORDS),
+    "medication_line": (MedicationLine, Scope.MEDICINES),
+    "appointment": (Appointment, Scope.VISITS),
+    "fact": (Fact, Scope.RECORDS),
+}
+"""What to re-read, and under which scope, to check a resolved cite's own item still exists
+and is still offered to this key (review S2) — a `fact` may also live under `Scope.READINGS`
+instead; `_still_offered` tries that second, never a substitute for `RECORDS` failing outright
+(a withheld scope) rather than the row simply not being there under it."""
+
+
+async def _still_offered(session: AsyncSession, *, context: KeyContext, cite: Cite) -> bool:
+    """Whether `cite`'s own item still exists and this key still holds the scope it rests on
+    (review S2) — checked again at resolve time, not assumed from the fact that it was once
+    offered as a candidate: the record can change between the turn that offered it and the tap
+    that names it (the paper un-attached, the medicine line superseded, the scope itself
+    withdrawn by a grant that changed)."""
+    spec = _CLARIFY_RECHECK.get(cite.kind)
+    if spec is None:
+        return False
+    model, scope = spec
+    found: Sequence[Any]
+    try:
+        found = await audited_read(
+            session, model, context, scope, where=(model.id == cite.id,)  # type: ignore[attr-defined]
+        )
+    except OutOfScope:
+        found = []
+    if found:
+        return True
+    if cite.kind != "fact":
+        return False
+    try:
+        found_readings = await audited_read(
+            session, Fact, context, Scope.READINGS, where=(Fact.id == cite.id,)
+        )
+    except OutOfScope:
+        return False
+    return bool(found_readings)
+
+
+def _clarify_token_target_id(conversation_id: uuid.UUID, value: str) -> uuid.UUID:
+    """A deterministic id for this exact token, on this exact conversation, never the token
+    itself (review S3) — the audit trail already names `target_id`, a UUID column, so this is
+    where "has this one been spent already" is asked, without adding a table or a migration:
+    a `uuid5` of the conversation and the token, reproducible from the same two inputs, never
+    reversible back to the token."""
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"clarify-token:{conversation_id}:{value}")
+
+
+async def resolve_clarify_value(
+    session: AsyncSession, *, context: KeyContext, store: ObjectStore, conversation: Conversation, value: str
+) -> tuple[Cite, str] | None:
+    """A tap's own opaque `value`, resolved against the newest turn on THIS conversation alone
+    (W2) — the referent the answer must now be about, and the exact words the reader saw for
+    it. `None`, always audited, when the newest turn offered no clarifying question at all, or
+    none of its options carries this value: a stale token (the clarify it named is no longer
+    the newest turn), one from a different conversation, or one minted under a different
+    profile entirely (`conversation` is always already scoped to this key's own person and
+    profile by the caller — `current_conversation`/`conversation_by_id` — so a token minted
+    under someone else's thread can never even be looked up here).
+
+    Single-use (review S3): a second resolve of the very same token, even before any later
+    turn is recorded, is refused — checked against the trail itself
+    (`_clarify_token_target_id`, never a new table), which already names every successful
+    resolve. `None` too (review S2) when the item it names no longer exists, or the scope it
+    rests on is no longer offered to this key: re-checked here, not assumed from the fact that
+    it was once a real candidate."""
+    # A plain scoped read, never `audited_read`: the trail is not audited against itself, or
+    # every check here would leave another entry for the next check to find.
+    spent_statement = (
+        scoped_select(AuditEntry, context, Scope.ASK)
+        .where(
+            AuditEntry.target == CLARIFY_TOKEN_TARGET,
+            AuditEntry.target_id == _clarify_token_target_id(conversation.id, value),
+            AuditEntry.outcome == Outcome.ALLOWED,
+        )
+        .limit(1)
+    )
+    already_spent = (await session.execute(spent_statement)).scalars().first()
+    if already_spent is not None:
+        await record_audit(
+            session,
+            context=context,
+            action=Action.READ,
+            scope=Scope.ASK,
+            target=CLARIFY_TOKEN_TARGET,
+            target_id=conversation.id,
+            rows=0,
+            outcome=Outcome.REFUSED,
+            refused_because="StaleClarifyToken",
+        )
+        return None
+    newest = await audited_read(
+        session,
+        Turn,
+        context,
+        Scope.ASK,
+        where=(Turn.conversation_id == conversation.id,),
+        order_by=(Turn.seq.desc(),),
+        limit=1,
+    )
+    resolved: tuple[Cite, str] | None = None
+    if newest and newest[0].answer_artifact_id is not None:
+        raw = await _artifact_text(
+            session, context=context, store=store, artifact_id=newest[0].answer_artifact_id
+        )
+        try:
+            payload = json.loads(raw) if raw else {}
+        except ValueError:
+            payload = {}
+        clarify = payload.get("clarify") if isinstance(payload, dict) else None
+        if isinstance(clarify, dict):
+            for option in clarify.get("options", []):
+                if not isinstance(option, dict) or option.get("value") != value:
+                    continue
+                kind, raw_id = option.get("cite_kind"), option.get("cite_id")
+                if kind and raw_id:
+                    try:
+                        candidate = (
+                            Cite(kind=kind, id=uuid.UUID(str(raw_id))),
+                            str(option.get("label", "")),
+                        )
+                    except ValueError:
+                        candidate = None
+                    if candidate is not None and await _still_offered(
+                        session, context=context, cite=candidate[0]
+                    ):
+                        resolved = candidate
+                break
+    await record_audit(
+        session,
+        context=context,
+        action=Action.READ,
+        scope=Scope.ASK,
+        target=CLARIFY_TOKEN_TARGET,
+        target_id=_clarify_token_target_id(conversation.id, value) if resolved is not None else conversation.id,
+        rows=1 if resolved is not None else 0,
+    )
+    return resolved
+
+
 __all__ = [
+    "CLARIFY_TOKEN_TARGET",
     "KEPT_VERBATIM",
     "ConversationMemory",
     "NoSuchConversation",
@@ -356,6 +549,7 @@ __all__ = [
     "current_conversation",
     "memory_for",
     "record_turn",
+    "resolve_clarify_value",
     "start_new_conversation",
     "summarize_turn",
     "turn_view",

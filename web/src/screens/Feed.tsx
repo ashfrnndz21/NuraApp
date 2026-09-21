@@ -4,7 +4,7 @@ import * as nura from "../api/nura";
 import type { CardClipOut, FeedItemOut, LineOut, OrderPreviewOut } from "../api/types";
 import { ClipButton } from "../day/components";
 import { clipsOf } from "../day/model";
-import { go, openTab } from "../flow";
+import { go, openMe, openTab } from "../flow";
 import { cueAt, cuesFromCaptions, parseVtt, type Cue } from "../feed/captions";
 import { cardView, speechLanguage, statusLine, variantOf, type CardView, type ClipView, type SideAction } from "../feed/model";
 import { lineForCard, reorderActions } from "../record/model";
@@ -15,7 +15,7 @@ import { density, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { dateLine, timeLine } from "../today/model";
 import { Card, Notice, Pill, Tile } from "../ui/components";
-import { PillButton, SkeletonCard } from "../ui/kit";
+import { Icon, Orb, PillButton, SkeletonCard, StatusLine } from "../ui/kit";
 import { PlayerControls } from "../ui/Player";
 import { voice } from "../player/voice";
 import { Shell } from "./Shell";
@@ -36,6 +36,37 @@ export function FeedScreen(): JSX.Element | null {
   if (!bearer || !papers) return null;
   const open = feedFor(bearer, papers);
   return <FeedPager store={open.store} playback={open.playback} name={papers.display_name} />;
+}
+
+/** The feed's own compact header (layout fix, docs/design/experience-blueprint.html `head()`,
+ *  the same defect `AskHeader` already fixed on Ask: one row — the way back, "For you", the
+ *  menu — never the global menu/wordmark/switcher/bell row (the old global `ShellHeader`,
+ *  ~140px of chrome before a single card). Reuses the board's own compact top-bar grid
+ *  (`Shell.tsx`'s `BoardTopBar`, `.shell-head`'s 3-column grid in `warm.css`) the same way
+ *  `AskHeader` does, without taking over its own back-to-home behaviour: the feed always
+ *  opens from Today, so its back always goes there. `open-me` stays, in `head-end`: Me is
+ *  reachable from every screen (`ShellHeader`'s own rule, `AskHeader`'s own docstring), and
+ *  this compact header is the one thing that replaces `ShellHeader` here, so it is the one
+ *  place left to keep that door open. This `h1` is the screen's only one — the old hidden
+ *  `sr-only` title this replaces is gone, not duplicated. */
+function FeedHeader({ title, backLabel, meLabel }: { title: string; backLabel: string; meLabel: string }): JSX.Element {
+  return (
+    <header class="shell-head board-top-bar" data-testid="feed-top-bar">
+      <span class="head-start">
+        <button type="button" class="head-button" aria-label={backLabel} onClick={() => go({ name: "today" })} data-testid="feed-back">
+          <Icon name="back" />
+        </button>
+      </span>
+      <span class="head-mid">
+        <h1 class="title top-bar-title">{title}</h1>
+      </span>
+      <span class="head-end">
+        <button type="button" class="head-button" aria-label={meLabel} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+          <Icon name="menu" />
+        </button>
+      </span>
+    </header>
+  );
 }
 
 function FeedPager({ store, playback, name }: { store: FeedStore; playback: Playback; name: string }): JSX.Element {
@@ -245,10 +276,14 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
   const keptAt = store.keptAt.value;
 
   return (
-    <Shell tab="home" fill>
+    <Shell tab="home" fill header={<FeedHeader title={s.feed.title} backLabel={s.shell.back} meLabel={s.tabs.me} />}>
       <div class="feed-screen" data-density={density()} data-testid="feed-screen">
-      {/* The screen's name for a screen reader, and where focus starts when the feed opens. */}
-      <h1 class="sr-only">{s.feed.title}</h1>
+      {/* The header above (`FeedHeader`) carries the one visible, focusable `h1` — this is a
+          plain, non-heading echo of the same words for a screen reader reading down the
+          scroll region a card at a time, since the header itself sits outside it
+          (`Shell.tsx`, the same place `AskHeader`'s title already sits). Not a second
+          landmark title: no heading role, so "exactly one h1" still holds. */}
+      <p class="sr-only">{s.feed.title}</p>
       <div class="feed-strip">
         {store.offline.value && keptAt && shown.length > 0 && (
           <Tile glass testId="offline">
@@ -263,11 +298,15 @@ function FeedPager({ store, playback, name }: { store: FeedStore; playback: Play
         {/* The day's self-searches, still to run (`GET /feed/jobs/status`, a real read): shown
             until the live page lands, which is the same request that runs them inline
             (`app.delivery.feed.compose._learning`) — so the line disappears exactly when they
-            really finish, never on a timer of its own. */}
+            really finish, never on a timer of its own. The small orb beside it (blueprint
+            `feed` scene) is decorative only — the one real fact is the line's own words, from
+            a real signal; there is no per-job topic on this signal yet (only `looking`), so
+            the line stays the general one rather than naming a job this client cannot see. */}
         {!blank && looking && store.origin.value !== "live" && (
-          <p class="caption" role="status" data-testid="feed-jobs-looking">
-            {s.feed.lookingForToday}
-          </p>
+          <div class="feed-looking" role="status" data-testid="feed-jobs-looking">
+            <Orb size="sm" thinking testId="feed-looking-orb" />
+            <StatusLine text={s.feed.lookingForToday} testId="feed-looking-line" />
+          </div>
         )}
         {blank && (
           <>
@@ -446,11 +485,18 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
             than the space above the buttons; the buttons sit below it, never over it. */}
         <div class="feed-body" data-testid="card-body" tabIndex={0}>
         {section && <p class="feed-section">{section}</p>}
-        <h2 class="title">{view.headline}</h2>
+        <h2 class={index === 0 ? "title feed-title-first" : "title"}>{view.headline}</h2>
         {!declined && (
           <>
+            {/* A clip card's own lines are capped to the first two before the media (layout
+                fix: on a short phone, the media and its byline must never need a scroll to
+                reach — they used to sit after every line, why, source and the link, and could
+                be pushed clean off the card). The rest of the lines — same lines, same order,
+                still spoken, still read by every test that reads `lines` as a whole — carry on
+                right after the media, inside the same scrollable region. A card with no clip
+                is unaffected: every line renders together, as before. */}
             <div class="lines" data-testid="lines">
-              {view.lines.map((line, at) => {
+              {(view.clip ? view.lines.slice(0, 2) : view.lines).map((line, at) => {
                 const clip = clips.get(line);
                 if (!clip) return <p key={at}>{line}</p>;
                 return (
@@ -462,6 +508,42 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
               })}
             </div>
             {view.clip && <ClipPart itemId={item.item_id} clip={view.clip} playing={playing} onPlay={() => onHear(view)} s={s} />}
+            {view.clip && view.lines.length > 2 && (
+              <div class="lines" data-testid="lines-more">
+                {view.lines.slice(2).map((line, at) => {
+                  const clip = clips.get(line);
+                  if (!clip) return <p key={at}>{line}</p>;
+                  return (
+                    <div key={at} class="clip-line" data-testid="card-line">
+                      <p>{line}</p>
+                      <ClipButton clip={clip} playKey={`${entry.key}:${at}`} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* Why this is here, in his terms — the backend's own reason (RE-08's `why.plain`,
+                the same source the Why sheet reads), never invented here; only the treatment
+                (the quiet mark) is new. The publisher, then the link into the fuller Why sheet,
+                then the boundary last — the card's own closing line, after its context, not
+                buried under it (layout fix). */}
+            {view.why && (
+              <p class="feed-why" data-testid="why">
+                {view.why}
+              </p>
+            )}
+            {view.source && (
+              <p class="provenance source" data-testid="source">
+                <a href={view.source.url} target="_blank" rel="noopener noreferrer">
+                  {fill(s.feed.fromPublisher, { publisher: view.source.publisher })}
+                </a>
+              </p>
+            )}
+            {view.why && (
+              <button type="button" class="why-link" data-testid="why-link" onClick={onWhy}>
+                {s.feed.whyLink}
+              </button>
+            )}
             {view.boundary.length > 0 && (
               <div class="lines boundary" data-testid="boundary">
                 {view.boundary.map((line, at) => (
@@ -473,23 +555,6 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
               <p class="feed-status" data-testid="status">
                 {fill(s.feed[status], { name })}
               </p>
-            )}
-            {view.source && (
-              <p class="provenance source" data-testid="source">
-                <a href={view.source.url} target="_blank" rel="noopener noreferrer">
-                  {fill(s.feed.fromPublisher, { publisher: view.source.publisher })}
-                </a>
-              </p>
-            )}
-            {view.why && (
-              <p class="provenance" data-testid="why">
-                {view.why}
-              </p>
-            )}
-            {view.why && (
-              <button type="button" class="why-link" data-testid="why-link" onClick={onWhy}>
-                {s.feed.whyLink}
-              </button>
             )}
           </>
         )}
@@ -550,6 +615,25 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
           <button type="button" class="pill" onClick={() => go({ name: "today" })} data-testid="to-tablets">
             {s.feed.toTablets}
           </button>
+        )}
+        {/* The clip's one primary action, in `.feed-controls` — never inside the scrolling
+            `.feed-body` (layout fix: it used to sit at the very end of the clip's own content,
+            past the media, the byline, why, source and the boundary, and a short card could
+            push it clean off screen with no way to know it was there but to scroll for it). */}
+        {!declined && view.clip?.kind === "publisher" && view.clip.fullUrl && view.clip.publisher && (
+          <a
+            class="pill plum"
+            href={view.clip.fullUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="watch-whole"
+            aria-label={fill(s.feed.watchWhole, { publisher: view.clip.publisher })}
+          >
+            {/* The publisher is named in the byline right above the button; said again inside it,
+                a long name made a four-line button that pushed the clip off a small phone. The
+                whole sentence stays as the control's accessible name. */}
+            {s.feed.watchWholeShort}
+          </a>
         )}
         {playing && <PlayerControls />}
         <div class={actions.length === 1 ? "feed-actions one" : "feed-actions"} role="group" aria-label={view.headline}>
@@ -634,26 +718,31 @@ function PublisherClipPart({ itemId, clip, playing, onPlay, s }: { itemId: strin
   };
   return (
     <div class="clip" data-testid="clip">
-      {video ? (
-        <video ref={moving} src={video} poster={poster ?? undefined} muted playsInline preload="auto" style="max-width:100%" data-testid="clip-video" />
-      ) : (
-        poster && <img src={poster} alt="" style="max-width:100%" data-testid="clip-poster" />
-      )}
-      <Pill plum onClick={play} testId="clip-play">
-        {s.feed.play}
-      </Pill>
-      {said && (
-        <p class="caption" aria-live="polite" data-testid="clip-caption">
-          {said.text}
-        </p>
-      )}
-      {clip.fullUrl && clip.publisher && (
-        <p class="provenance source">
-          <a href={clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
-            {fill(s.feed.watchWhole, { publisher: clip.publisher })}
-          </a>
-        </p>
-      )}
+      {/* A proper 16:9 frame, 16px radius (layout fix: it used to inherit the card's own pill
+          radius, drawing as a giant lozenge, and Play sat next to it in plain flow rather than
+          over it). The still or the excerpt fills the frame (`object-fit: cover`); Play — the
+          icon alone, the blueprint's own `feed` scene, never the word "Play" — sits centred
+          over it, a round 56px target, always fully visible, never cropped by the frame's own
+          edge; the duration, when the item has one, is a small badge in the corner. */}
+      <div class="clip-media">
+        {video ? (
+          <video ref={moving} src={video} poster={poster ?? undefined} muted playsInline preload="auto" data-testid="clip-video" />
+        ) : (
+          poster && <img src={poster} alt="" data-testid="clip-poster" />
+        )}
+        <button type="button" class="clip-play" aria-label={s.feed.play} onClick={play} data-testid="clip-play">
+          <Icon name="play" />
+        </button>
+        {clip.durationMs !== null && <span class="clip-duration">{Math.round(clip.durationMs / 1000)}s</span>}
+        {said && (
+          <p class="caption clip-caption-overlay" aria-live="polite" data-testid="clip-caption">
+            {said.text}
+          </p>
+        )}
+      </div>
+      {/* The byline: the publisher's name alone — long enough to wrap on a narrow phone rather
+          than run under the media or the action row, never truncated. */}
+      {clip.publisher && <p class="clip-byline">{clip.publisher}</p>}
     </div>
   );
 }

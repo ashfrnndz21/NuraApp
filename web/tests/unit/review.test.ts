@@ -293,6 +293,16 @@ describe("where a number sits against the paper's own printed range (E02 defect 
     expect(rangeStatus(6.1, range)).toBe("above");
   });
 
+  it("says nothing about a backwards pair: no flag, no bar, not in the tally", () => {
+    // #303 final check, NEW-3: a card stored before the reader refused low > high still carries
+    // the numbers; 4.0 came out "below" 5.5–3.5 with a negative-width band.
+    const backwards = { low: 5.5, high: 3.5 };
+    expect(rangeStatus(4.0, backwards)).toBe("unknown");
+    expect(rangeStatus(6.0, backwards)).toBe("unknown");
+    expect(rangeBarGeometry(4.0, backwards)).toBeNull();
+    expect(rangeStatus(4.0, { low: 4.0, high: 4.0 })).toBe("in"); // equal bounds are a range
+  });
+
   it("reads an upper-only range as under, exclusive", () => {
     const range = { low: null, high: 150 };
     expect(rangeStatus(149, range)).toBe("in");

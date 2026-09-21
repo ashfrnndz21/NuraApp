@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 import { en } from "../../src/strings/en";
-import { API, apiToken, backendClock, captureSpeech, fixClock, freshPhone, nothingDrawnOverLines, seedVisit, signInThroughTheApp } from "./helpers";
+import { API, apiToken, backendClock, captureSpeech, fixClock, freshPhone, nothingDrawnOverLines, seedVisit, signInThroughTheApp, throughInsight } from "./helpers";
 
 /** Checkpoint 11 on a phone-sized screen: onboarding end to end against the real backend —
  *  E01's sitting, settings, word cloud and first week (#117), E02's photos, imports and review
@@ -247,6 +247,7 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await page.getByTestId("action-sheet-not-now").click();
   await expect(page.getByTestId("field-vldl")).toContainText("Nura will leave this one out.");
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(main).toHaveAttribute("data-stage", "records");
   await expect(page.getByTestId("saved")).toHaveText("Nura wrote it down.");
 
@@ -344,6 +345,7 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await expect(page.getByTestId("check-sheet")).toContainText(en.onboarding.records.leaveOut);
   await page.getByTestId("action-sheet-not-now").click();
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(main).toHaveAttribute("data-stage", "plan");
   await expect(gap).not.toHaveAttribute("data-gap", "medicines");
   expect((await week(request, pa)).prompts.find((each) => each.prompt === "medicines")?.status).toBe("done");
@@ -433,6 +435,7 @@ test("the caregiver density, for a chief setting up her father", async ({ page }
   await expect(page.getByTestId("field-triglycerides").getByTestId("hear")).toHaveCount(0);
   expect(await nothingDrawnOverLines(main)).toEqual([]);
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(page.getByTestId("saved")).toBeVisible();
 
   // The read-back as a list, each line with its own Yes and No — in her language, not his.
@@ -499,6 +502,7 @@ test("papers of every kind: a hospital letter as a PDF, a page that is not a hea
   await page.getByTestId("review-card").getByTestId("hear").click();
   expect((await spoken(page)).join(" | ")).toContain("Why you were in hospital | heart failure");
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(page.getByTestId("saved")).toHaveText("Nura wrote it down.");
 
   // A clinic slip with a line Nura could not read: never confirmed as read; he types it, from
@@ -518,6 +522,7 @@ test("papers of every kind: a hospital letter as a PDF, a page that is not a hea
   await page.getByTestId("action-sheet-cta").click();
   await expect(sheet).toHaveCount(0);
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(main).toHaveAttribute("data-stage", "records");
 
   // On the record: the letter's reason, and the frequency exactly as he typed it; both papers
@@ -612,6 +617,7 @@ test("a question kept with a visit booked goes on that visit's list at once (E05
   await page.getByTestId("photo-input").setInputFiles(photo("lipid-panel-2023-09-07"));
   await page.getByTestId("see-report").click();
   await page.getByTestId("looks-right").click();
+  await throughInsight(page);
   await expect(page.getByTestId("saved")).toBeVisible();
   await page.getByTestId("all-done").click();
   const line = page.getByTestId("readback-line");

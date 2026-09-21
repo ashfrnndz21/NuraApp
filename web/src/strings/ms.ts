@@ -530,6 +530,42 @@ export const ms = {
     // @patient phrase
     yourPharmacistOther: "ahli farmasi {name}",
   },
+  // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
+  // `insight`): right after "Looks right", the questions the paper raises for the doctor.
+  paperInsight: {
+    // @patient headline
+    screenTitle: "Apa maknanya untuk anda",
+    // @patient headline
+    screenTitleOther: "Apa maknanya untuk {patient}",
+    // @patient phrase
+    lookedAt: "Dilihat",
+    // @patient phrase
+    forDoctorOn: "Untuk {doctor} pada {date}",
+    // @patient phrase
+    forNextVisit: "Untuk lawatan anda seterusnya",
+    // @patient phrase
+    forNextVisitOther: "Untuk lawatan {patient} seterusnya",
+    // @patient
+    questionsNotAnswers: "Soalan untuk ditanya, bukan jawapan.",
+    // @patient phrase
+    keepForVisit: "Simpan untuk lawatan saya",
+    // @patient phrase
+    keepForVisitOther: "Simpan untuk lawatan {patient}",
+    // @patient phrase
+    keeping: "Menyimpan…",
+    // @patient phrase
+    kept: "Disimpan",
+    // @patient
+    keptForVisit: "Disimpan untuk lawatan anda seterusnya.",
+    // @patient
+    keptForVisitOther: "Disimpan untuk lawatan {patient} seterusnya.",
+    // @patient
+    keepNoVisit: ["Belum ada lawatan ditempah, jadi Nura belum simpan soalan-soalan ini.", "Tempah lawatan, kemudian buka surat ini semula."],
+    // @patient
+    keepNoVisitOther: ["Belum ada lawatan ditempah, jadi Nura belum simpan soalan-soalan {patient}.", "Tempah lawatan, kemudian buka surat ini semula."],
+    // @patient phrase
+    notNow: "Bukan sekarang",
+  },
   signIn: {
     // @patient headline
     title: "Daftar masuk",
@@ -920,6 +956,8 @@ export const ms = {
     watchAgain: "Tonton semula",
     // @patient phrase
     watchWhole: "Tonton seluruh video di {publisher}",
+    // @patient phrase
+    watchWholeShort: "Tonton seluruh video",
     // @patient phrase
     askOrSearch: "Tanya atau cari",
     // @patient phrase
