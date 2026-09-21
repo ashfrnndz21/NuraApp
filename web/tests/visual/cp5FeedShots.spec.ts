@@ -113,6 +113,38 @@ async function pageUntil(page: Page, type: string, limit = 25): Promise<void> {
   throw new Error(`no ${type} card within ${limit} cards`);
 }
 
+/** A clip card with a LONG title and a long publisher name — test tooling only (the same kind
+ *  of real-DOM, no-app-code-change technique `holdLookingTrue` above already uses), to check
+ *  wrapping on the card the fixture data alone cannot exercise (its own title and publisher
+ *  are both short). Overwrites only text nodes already on the real, rendered card — the
+ *  layout, the CSS and every element are exactly what a real long title/publisher would
+ *  produce; nothing about the app itself is touched. */
+async function longClipShot(page: Page, request: APIRequestContext, out: string, prefix: string): Promise<void> {
+  const pa = await seedFeed(request);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+  await openPager(page);
+  await pageUntil(page, "gate");
+  await page.getByTestId("keep-going").click();
+  let sawClip = false;
+  for (let n = 0; n < 30 && !sawClip; n++) {
+    if ((await onScreen(page)).type === "clip") sawClip = true;
+    else await wheelDown(page);
+  }
+  if (!sawClip) return;
+  const card = page.locator(`article.feed-card[data-index="${(await onScreen(page)).index}"]`);
+  await card.evaluate((article) => {
+    const title = article.querySelector("h2.title");
+    if (title) title.textContent = "Your blood pressure tablet and your kidneys, in thirty seconds";
+    const byline = article.querySelector(".clip-byline");
+    if (byline) byline.textContent = "National University Heart Centre Singapore, Cardiology";
+    const watch = article.querySelector('[data-testid="watch-whole"]');
+    if (watch) watch.textContent = "Watch the whole video at National University Heart Centre Singapore, Cardiology";
+  });
+  await ready(page);
+  await page.screenshot({ path: `${out}/${prefix}-clip-card-long.png`, animations: "disabled" });
+}
+
 /** Every capture but "a run in progress" and "quiet hours": the pager open on a freshly seeded
  *  Pa, one clip card and the why sheet along the way. Returns to the top before leaving, so a
  *  caller that wants "a run in progress" next opens a fresh page instead of reusing this one
@@ -267,6 +299,11 @@ test.describe("cp5 feed at 1280x900, clipped to the phone frame", () => {
     await fixClock(page);
     await meisViewShot(page, request, OUT, "wide");
   });
+
+  test("a clip card with a long title and a long publisher name", async ({ page, request }) => {
+    await fixClock(page);
+    await longClipShot(page, request, OUT, "wide");
+  });
 });
 
 test.describe("cp5 feed at 390x844, full-bleed", () => {
@@ -289,5 +326,38 @@ test.describe("cp5 feed at 390x844, full-bleed", () => {
   test("Mei's view", async ({ page, request }) => {
     await fixClock(page);
     await meisViewShot(page, request, OUT, "phone");
+  });
+
+  test("a clip card with a long title and a long publisher name", async ({ page, request }) => {
+    await fixClock(page);
+    await longClipShot(page, request, OUT, "phone");
+  });
+});
+
+test.describe("cp5 feed at 360x640, full-bleed, a small phone", () => {
+  test.use({ viewport: { width: 360, height: 640 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+
+  test("feed of the day, a clip card, the why sheet, nothing more, a run in progress, quiet hours, Mei's view", async ({ page, request }) => {
+    await fixClock(page);
+    await feedShots(page, request, OUT, "small");
+  });
+
+  test("a run in progress", async ({ page, request }) => {
+    await fixClock(page);
+    await runInProgressShot(page, request, OUT, "small");
+  });
+
+  test("quiet hours", async ({ page, request }) => {
+    await quietHoursShot(page, request, OUT, "small");
+  });
+
+  test("Mei's view", async ({ page, request }) => {
+    await fixClock(page);
+    await meisViewShot(page, request, OUT, "small");
+  });
+
+  test("a clip card with a long title and a long publisher name", async ({ page, request }) => {
+    await fixClock(page);
+    await longClipShot(page, request, OUT, "small");
   });
 });

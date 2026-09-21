@@ -957,6 +957,8 @@ export const en = {
     // @patient phrase
     watchWhole: "Watch the whole video at {publisher}",
     // @patient phrase
+    watchWholeShort: "Watch the whole video",
+    // @patient phrase
     askOrSearch: "Ask or search",
     // @patient phrase
     filterLabel: "Where to look",
