@@ -80,6 +80,10 @@ describe("onboarding's words", () => {
     for (const code of LANGUAGES) {
       for (const paper of papers) {
         for (const field of paper.fields) {
+          // `attribute === "other"` is the vocabulary's own escape hatch (E02 defect #1): a
+          // line genuinely outside it has no canonical label by design — `fieldLabel` falls
+          // back to the paper's own `label_on_paper` for it instead, never the catalogue.
+          if (field.attribute === "other") continue;
           expect(
             stringsFor(code).onboarding.fields[subjectWords(field.subject)]?.[field.attribute],
             `${code} ${field.subject}.${field.attribute}`,

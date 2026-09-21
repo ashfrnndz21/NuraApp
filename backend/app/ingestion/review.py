@@ -52,6 +52,7 @@ from app.ingestion.extract import (
     Extractor,
     Hints,
     check_value,
+    fold_legacy_reference_ranges,
 )
 from app.ingestion.models import (
     CONFIDENCE_THRESHOLD,
@@ -581,6 +582,14 @@ async def card_from(
     fields = [field.checked() for field in extraction.fields]
     if _nothing_to_take(extraction, asked_as):
         fields = []
+    else:
+        # The server-side normaliser (defect #3): a legacy `<analyte>_reference_range`
+        # sibling — the shape every extractor wrote before a result carried its own `range` —
+        # folded onto the result it describes and dropped, so an older extractor answer, and
+        # a fixture already written that way, show a range that belongs to its result rather
+        # than an unlabelled line of its own. A result already given its own `range` directly
+        # is left exactly as it is.
+        fields = list(fold_legacy_reference_ranges(fields))
     if extraction.document_kind is DocumentKind.PILL_PHOTO:
         fields = _capped_pill_fields(fields, registry)
     named = next(
@@ -614,6 +623,8 @@ async def card_from(
             unit=field.unit,
             confidence=field.confidence,
             span=None if field.span is None else field.span.as_json(),
+            range=None if field.range is None else field.range.as_json(),
+            label_on_paper=field.label_on_paper,
             state=FieldState.PROPOSED,
         )
     return card

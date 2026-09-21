@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.audit.models import Action, AuditEntry, Outcome
 from app.identity.service import create_own_profile, register_person
 from app.ingestion.claude_extract import ClaudeExtractor
-from app.ingestion.extract import DocumentKind, Extraction, FixtureExtractor, Hints
+from app.ingestion.extract import DocumentKind, Extraction, FixtureExtractor, Hints, PrintedRange
 from app.ingestion.extract_provider import (
     ClaudeExtractorOutsideDemo,
     NoExtractor,
@@ -523,6 +523,63 @@ def test_the_structured_output_schema_is_one_the_api_accepts() -> None:
         for name, prop in props.items():
             assert "type" in prop, name
             assert "minimum" not in prop and "maximum" not in prop, name
+
+
+def test_the_field_schema_carries_a_range_and_a_label_on_paper_both_optional() -> None:
+    """E02 defect #3 (a range belongs to its result) and the `other`/`label_on_paper` escape
+    hatch: both ride on the field schema, neither in `required` — a field with no printed
+    range, or no paper words worth keeping beyond its usual name, omits them entirely."""
+    from app.ingestion.claude_extract import _FIELD_SCHEMA
+
+    assert "range" not in _FIELD_SCHEMA["required"]
+    assert "label_on_paper" not in _FIELD_SCHEMA["required"]
+    range_schema = _FIELD_SCHEMA["properties"]["range"]
+    assert range_schema["type"] == "object"
+    assert set(range_schema["properties"]) == {"low", "high", "text"}
+    assert range_schema["properties"]["low"]["type"] == ["number", "null"]
+    assert range_schema["properties"]["high"]["type"] == ["number", "null"]
+    assert range_schema["properties"]["text"]["type"] == "string"
+    assert _FIELD_SCHEMA["properties"]["label_on_paper"]["type"] == ["string", "null"]
+
+
+async def test_a_result_carries_its_own_printed_range_and_a_line_carries_its_paper_words() -> None:
+    client = _client_answering(
+        {
+            "document_kind": "lab_report",
+            "fields": [
+                {
+                    **_field("lipid_panel", "ldl", 140, 0.95, unit="mg/dL"),
+                    "range": {"low": None, "high": 130.0, "text": "<130"},
+                },
+                {
+                    **_field("lipid_panel", "other", "0.9", 0.8),
+                    "label_on_paper": "Apo-B",
+                },
+            ],
+        }
+    )
+    extractor = ClaudeExtractor(client)  # type: ignore[arg-type]
+
+    extraction = await extractor.extract(b"%PDF-1.4", "application/pdf", HINTS)
+
+    by_attribute = {f.attribute: f for f in extraction.fields}
+    ldl = by_attribute["ldl"]
+    assert ldl.range == PrintedRange(low=None, high=130.0, text="<130")
+    other = by_attribute["other"]
+    assert other.label_on_paper == "Apo-B"
+
+
+async def test_a_field_with_no_range_or_paper_words_carries_neither() -> None:
+    client = _client_answering(
+        {"document_kind": "lab_report", "fields": [_field("lipid_panel", "hdl", 55, 0.9, unit="mg/dL")]}
+    )
+    extractor = ClaudeExtractor(client)  # type: ignore[arg-type]
+
+    extraction = await extractor.extract(b"%PDF-1.4", "application/pdf", HINTS)
+
+    got = extraction.fields[0]
+    assert got.range is None
+    assert got.label_on_paper is None
 
 
 @dataclass

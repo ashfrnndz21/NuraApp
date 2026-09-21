@@ -209,6 +209,19 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await expect(page.getByTestId("field-triglycerides").locator("input")).toHaveValue("64");
   await page.screenshot({ path: shot("review-card"), fullPage: true });
   expect(await nothingDrawnOverLines(page.locator("main.onboarding"), { minTarget: 56 })).toEqual([]);
+  // Every line of this lab report has its own words — never the generic fallback — and a
+  // readable value: no line is titled "Another line on the paper" and no line is blank
+  // (E02 defect #1 and defect #2).
+  const fieldTiles = page.locator('[data-testid^="field-"]');
+  const fieldCount = await fieldTiles.count();
+  expect(fieldCount).toBeGreaterThan(0);
+  for (let at = 0; at < fieldCount; at++) {
+    const tile = fieldTiles.nth(at);
+    await expect(tile.locator(".label")).not.toHaveText("Another line on the paper");
+    const input = tile.locator("input");
+    const text = (await input.count()) > 0 ? await input.inputValue() : ((await tile.locator("p.value").textContent()) ?? "");
+    expect(text.trim().length).toBeGreaterThan(0);
+  }
   // In the patient density every line has its spoken twin.
   await page.getByTestId("field-triglycerides").getByTestId("hear").click();
   expect(await spoken(page)).toEqual(["The blood fats", "64 mg/dL", "Please check this one."]);

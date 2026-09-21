@@ -1503,6 +1503,8 @@ export const ms = {
       fromPhoto: "Daripada gambar yang anda tambah pada {date}.",
       // @patient phrase
       otherLine: "Satu lagi baris pada surat",
+      // @patient
+      valueUnreadable: "Nura tidak dapat membaca baris ini.",
     },
     questions: {
       // @patient headline
@@ -1601,6 +1603,29 @@ export const ms = {
         vldl: "Satu lagi nombor lemak darah",
         tc_hdl_ratio: "Nisbah kolesterol",
         non_hdl_cholesterol: "Kolesterol tanpa bahagian baik",
+      },
+      blood_test: {
+        hba1c: "Ujian gula anda",
+        haemoglobin: "Kiraan darah anda",
+        tsh: "Ujian tiroid anda",
+        uric_acid: "Nombor asid urik anda",
+        white_cells: "Nombor sel darah putih anda",
+        platelets: "Nombor platelet anda",
+      },
+      kidney_panel: {
+        creatinine: "Nombor buah pinggang anda",
+        egfr: "Penapis buah pinggang anda",
+        potassium: "Garam badan anda",
+        urea: "Nombor sisa daripada buah pinggang anda",
+        sodium: "Nombor garam dalam darah anda",
+      },
+      liver_panel: {
+        alt: "Salah satu nombor hati anda",
+        ast: "Satu lagi nombor hati anda",
+        alp: "Nombor hati dan tulang",
+        ggt: "Nombor hati dan alkohol",
+        bilirubin: "Nombor warna kuning",
+        albumin: "Nombor protein dalam darah anda",
       },
       full_blood_count: { hemoglobin: "Nombor kiraan darah" },
       device: { kind: "Mesin itu" },

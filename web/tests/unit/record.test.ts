@@ -83,6 +83,8 @@ const field = (attribute: string, value: unknown, over: Partial<ReviewFieldOut> 
   unreadable: false,
   prompt: null,
   page: null,
+  range: null,
+  label_on_paper: null,
   state: "proposed",
   corrected_value: null,
   fact_id: null,

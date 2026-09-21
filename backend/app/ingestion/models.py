@@ -140,6 +140,16 @@ class ReviewField(ProfileScoped, Base):
     span: Mapped[dict[str, float | int] | None] = mapped_column(
         JSON(none_as_null=True), default=None
     )
+    range: Mapped[dict[str, float | str | None] | None] = mapped_column(
+        JSON(none_as_null=True), default=None
+    )
+    """The result's own printed reference range, when the row on the paper carried one: `low`,
+    `high` (numbers or null) and `text` (the range exactly as printed). Defect #3: a range
+    belongs to its result, never a line of its own."""
+    label_on_paper: Mapped[str | None] = mapped_column(String(120), default=None)
+    """The words printed on the paper for this line, when the extractor named them — always
+    present when `attribute` is `"other"`, optional otherwise. What `fieldLabel` in the web
+    client falls back to ahead of its own generic line name."""
     state: Mapped[FieldState] = mapped_column(
         enum_column(FieldState, "review_field_state"), default=FieldState.PROPOSED
     )
