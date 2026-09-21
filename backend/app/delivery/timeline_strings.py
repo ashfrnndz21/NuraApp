@@ -276,6 +276,8 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_from": "{doctor} gave you {name}.",
         "medicine_listed": "{name} is on your list of medicines.",
         "paper": "Your {what} from {date} is in your papers.",
+        "paper_waiting": "A {what} dated {date} is waiting for you to check.",
+        "paper_waiting_no_date": "A {what} is waiting for you to check.",
         "consult_said": "{doctor} talked about this on {date}.",
         "consult_waiting": "What {doctor} said on {date} is waiting for your yes.",
         "note_yours": "You left a note on {date}.",
@@ -288,6 +290,8 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_from": "{doctor} memberi anda {name}.",
         "medicine_listed": "{name} ada dalam senarai ubat anda.",
         "paper": "{what} anda dari {date} ada dalam surat-surat anda.",
+        "paper_waiting": "Satu {what} bertarikh {date} menunggu anda semak.",
+        "paper_waiting_no_date": "Satu {what} menunggu anda semak.",
         "consult_said": "{doctor} bercakap tentang perkara ini pada {date}.",
         "consult_waiting": "Apa yang {doctor} kata pada {date} menunggu jawapan ya daripada anda.",
         "note_yours": "Anda meninggalkan nota pada {date}.",
@@ -300,6 +304,8 @@ RECALL: Mapping[str, Mapping[str, str]] = {
         "medicine_from": "{doctor}给了您{name}。",
         "medicine_listed": "{name}在您的药单上。",
         "paper": "您{date}的{what}在您的文件里。",
+        "paper_waiting": "一份{date}的{what}在等您检查。",
+        "paper_waiting_no_date": "一份{what}在等您检查。",
         "consult_said": "{doctor}在{date}讲过这件事。",
         "consult_waiting": "{doctor}在{date}说的话，在等您说好。",
         "note_yours": "您在{date}留了一条笔记。",
@@ -314,7 +320,11 @@ the doctor said it, which the phone plays on a tap — once he has confirmed the
 `consult_waiting` says the card is waiting for his yes, and cites the card only. `note_yours`
 and `note_theirs` are a note on one of his moments (E02-06), cited with the note and its event;
 the words heard in it are the note's own and played from it. `transcript_said` heads a
-sentence found in a confirmed visit's transcript (E02-05), which is the room's words, quoted."""
+sentence found in a confirmed visit's transcript (E02-05), which is the room's words, quoted.
+`paper_waiting`/`paper_waiting_no_date` (W2, `app.search.ask.waiting_papers`) say a paper is
+waiting for his own yes before it can answer anything — cited to the review card alone, never
+naming or hinting at a value nobody has confirmed yet; the `_no_date` twin is for a card whose
+paper carried no printed date."""
 
 # @patient
 ASK_STEPS: Mapping[str, Mapping[str, str]] = {
@@ -328,6 +338,7 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "insurance": "Checking your insurance.",
         "costs": "Looking at what this usually costs.",
         "plan": "Looking at what is coming up.",
+        "waiting_papers": "Looking at what is waiting for you to check.",
     },
     "ms": {
         "visits": "Menyemak lawatan anda.",
@@ -339,6 +350,7 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "insurance": "Menyemak insurans anda.",
         "costs": "Melihat kos biasa untuk ini.",
         "plan": "Melihat apa yang akan datang.",
+        "waiting_papers": "Melihat apa yang menunggu anda semak.",
     },
     "zh": {
         "visits": "正在查看您看医生的记录。",
@@ -350,6 +362,7 @@ ASK_STEPS: Mapping[str, Mapping[str, str]] = {
         "insurance": "正在查看您的保险。",
         "costs": "正在查看一般的费用。",
         "plan": "正在查看接下来的安排。",
+        "waiting_papers": "正在查看还有什么在等您检查。",
     },
 }
 """What Ask's trace says while it works (spec 'Conversation, waiting and thinking'), one line
@@ -373,6 +386,7 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "insurance": "insurance",
         "costs": "costs",
         "plan": "what's coming up",
+        "waiting_papers": "papers waiting to be checked",
     },
     "ms": {
         "visits": "lawatan",
@@ -384,6 +398,7 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "insurance": "insurans",
         "costs": "kos",
         "plan": "akan datang",
+        "waiting_papers": "surat menunggu disemak",
     },
     "zh": {
         "visits": "看医生的记录",
@@ -395,6 +410,7 @@ ASK_STEP_NAMES: Mapping[str, Mapping[str, str]] = {
         "insurance": "保险",
         "costs": "费用",
         "plan": "接下来的安排",
+        "waiting_papers": "等待检查的文件",
     },
 }
 """The short name for each part `ASK_STEPS` reads — a bare noun, not "your" or "his" and not a
@@ -741,6 +757,7 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "insurance": "Checking {patient}'s insurance.",
         "costs": "Looking at what this usually costs {patient}.",
         "plan": "Looking at what is coming up for {patient}.",
+        "waiting_papers": "Looking at what is waiting for {patient} to check.",
     },
     "ms": {
         "visits": "Menyemak lawatan {patient}.",
@@ -752,6 +769,7 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "insurance": "Menyemak insurans {patient}.",
         "costs": "Melihat kos biasa untuk {patient}.",
         "plan": "Melihat apa yang akan datang untuk {patient}.",
+        "waiting_papers": "Melihat apa yang menunggu {patient} semak.",
     },
     "zh": {
         "visits": "正在查看{patient}看医生的记录。",
@@ -763,6 +781,7 @@ ASK_STEPS_THEIRS: Mapping[str, Mapping[str, str]] = {
         "insurance": "正在查看{patient}的保险。",
         "costs": "正在查看{patient}一般的费用。",
         "plan": "正在查看{patient}接下来的安排。",
+        "waiting_papers": "正在查看还有什么在等{patient}检查。",
     },
 }
 """`ASK_STEPS`, said about him by name, for a key that is not his."""

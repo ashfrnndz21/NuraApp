@@ -127,6 +127,7 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (analyst_words.COVERAGE_LINE, analyst_words.COVERAGE_LINE_THEIRS),
         (analyst_words.COVERAGE_WHY, analyst_words.COVERAGE_WHY_THEIRS),
         (analyst_words.STEP_LABEL, analyst_words.STEP_LABEL_THEIRS),
+        (analyst_words.STEP_NAME, analyst_words.STEP_NAME_THEIRS),
         (analyst_words.ASK_THE_DOCTOR_LINE, analyst_words.ASK_THE_DOCTOR_LINE_THEIRS),
         (analyst_words.WITHHELD_LINE, analyst_words.WITHHELD_LINE_THEIRS),
         # Checkpoint 3's paper-scoped insight (`app.reasoning.analyst.paper`): the headline

@@ -422,9 +422,15 @@ export interface StreamEvent {
  *  No single deadline covers the whole stream — a real answer may legitimately take longer
  *  than one request — but the connection is under the same `CALL_DEADLINE_MS` as an *idle*
  *  timeout, reset on every event received: a stream that stalls (nothing arrives, ever) still
- *  ends in `Unreachable` within the deadline rather than spinning for ever (#193). */
-export function apiStream(path: string, call: Call, onEvent: (event: StreamEvent) => void): Promise<void> {
-  return enqueue((signal) => sendStream(path, call, onEvent, signal), call.urgent, true);
+ *  ends in `Unreachable` within the deadline rather than spinning for ever (#193).
+ *
+ *  `external`, left off by default: a screen's own `AbortController`, aborted when it is left
+ *  before the stream settles (a "Health Analyst" report generating in the background while the
+ *  person taps away, package 10) — the connection is torn down the same way the queue's own
+ *  preemption already tears one down for an urgent call, never left running for a caller that
+ *  can no longer read its result. */
+export function apiStream(path: string, call: Call, onEvent: (event: StreamEvent) => void, external?: AbortSignal): Promise<void> {
+  return enqueue((signal) => sendStream(path, call, onEvent, signal, external), call.urgent, true);
 }
 
 async function sendStream(
@@ -432,19 +438,17 @@ async function sendStream(
   call: Call,
   onEvent: (event: StreamEvent) => void,
   signal: AbortSignal,
+  external?: AbortSignal,
 ): Promise<void> {
   const headers: Record<string, string> = { Accept: "text/event-stream" };
   if (call.body !== undefined) headers["Content-Type"] = "application/json";
   if (call.token) headers.Authorization = `Bearer ${call.token}`;
   const control = new AbortController();
   const stop = () => control.abort();
-  if (signal.aborted) stop();
-  else signal.addEventListener("abort", stop, { once: true });
-  // The caller's own signal (leaving the screen mid-stream), chained the same way: whichever
-  // aborts first — the queue's or the caller's — stops the one underlying fetch.
-  if (call.signal) {
-    if (call.signal.aborted) stop();
-    else call.signal.addEventListener("abort", stop, { once: true });
+  if (signal.aborted || external?.aborted) stop();
+  else {
+    signal.addEventListener("abort", stop, { once: true });
+    external?.addEventListener("abort", stop, { once: true });
   }
   let idle: ReturnType<typeof setTimeout> | undefined;
   const resetIdle = () => {
@@ -505,7 +509,7 @@ async function sendStream(
   } finally {
     clearTimeout(idle);
     signal.removeEventListener("abort", stop);
-    call.signal?.removeEventListener("abort", stop);
+    external?.removeEventListener("abort", stop);
   }
 }
 

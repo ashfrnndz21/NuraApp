@@ -437,6 +437,9 @@ export interface InsightsStepEvent {
   type: "step";
   key: string;
   label: string;
+  /** The bare noun for the collapsed "What Nura looked at: {name}, {name}" line — the same
+   *  idea as `AskStepEvent.name` (`STEP_NAME`, package 10). */
+  name: string;
 }
 
 /** The stream's last event: the finished report, exactly `GET /profiles/{id}/insights` would
@@ -447,6 +450,15 @@ export interface InsightsReportEvent {
 }
 
 export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
+
+/** One past report in "Health Analyst"'s own quiet list (`GET /profiles/{id}/insights/list`,
+ *  package 10): a date to open, never the sections themselves — those stay behind `GET
+ *  /profiles/{id}/insights/{report_id}`. */
+export interface InsightsReportSummaryOut {
+  report_id: string;
+  generated_at: string;
+  week_of: string;
+}
 
 // --- checkpoint 3: the paper-scoped insight, right after "Looks right" ----------------------
 
@@ -491,12 +503,13 @@ export interface PaperInsightReportEvent {
 
 export type PaperInsightStreamEvent = PaperInsightStepEvent | PaperInsightReportEvent | AskRefusalEvent;
 
-/** "Keep these questions" (`POST …/insight/keep`, no request body — every question on the
+/** "Keep these for my visit" (`POST …/insight/keep`, no request body — every question on the
  *  paper's own saved insight is filed, never a caller-chosen subset): where they landed.
- *  `filed`: `"visit"` when an upcoming visit exists (`appointment_id` names it); `"unfiled"`
- *  when there is none yet — a standing memo instead, moved onto the next visit once one is
- *  booked. `kept_count` is what THIS call actually filed — 0 on a repeat call, since keeping
- *  the same questions twice never duplicates a line. */
+ *  `filed`: `"visit"` when an upcoming visit exists (`appointment_id` names it), `kept_count`
+ *  the number really filed (0 on a repeat call — keeping twice never duplicates a line); or
+ *  `"unfiled"` when there is none yet — the honest fallback (#303 review, B3): nothing at all
+ *  is kept, `kept_count` is always 0, and `appointment_id` is `null`. The screen says this
+ *  plainly (`paperInsight.keepNoVisit`) rather than ever claiming a keep that did not happen. */
 export interface PaperInsightKeepOut {
   kept_count: number;
   filed: "visit" | "unfiled";

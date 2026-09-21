@@ -92,7 +92,8 @@ async def finalize(candidate: Candidate, *, language: str, reroute: Reroute = dr
 
     1. No evidence, no insight — an insight that cites nothing is not shown, whichever
        adapter built it.
-    2. Plain words and the blocklist. A medicine or supplement candidate that fails either is
+    2. Plain words and the blocklist — the blocklist on the "why" line too. A medicine or
+       supplement candidate that fails either is
        rerouted as a question for the doctor and its own words are never printed; any other
        kind that fails is dropped outright — there is no doctor question for a cost line or a
        screening that happened to use a blocked word.
@@ -100,7 +101,13 @@ async def finalize(candidate: Candidate, *, language: str, reroute: Reroute = dr
     """
     if not candidate.evidence:
         return None
-    if not verified(candidate.text, language) or blocked(candidate.text, language):
+    # The "why" is printed beside the line, and on the Claude path it is the model's own words
+    # as much as `text` is — so it meets the same blocklist. (Independent review of #303: a
+    # clean text with the why "Ask the doctor to double the dose today." was printed, because
+    # only `text` was ever checked.) A blocked why fails the candidate exactly as a blocked
+    # text does: a medicine is rerouted to a real doctor question, anything else is dropped.
+    why_blocked = bool(candidate.why_plain.strip()) and blocked(candidate.why_plain, language)
+    if not verified(candidate.text, language) or blocked(candidate.text, language) or why_blocked:
         if candidate.kind in (InsightKind.MEDICINE, InsightKind.SUPPLEMENT):
             return await reroute(candidate)
         return None

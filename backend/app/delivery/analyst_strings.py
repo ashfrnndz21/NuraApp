@@ -312,6 +312,67 @@ STEP_LABEL: Mapping[str, Mapping[str, str]] = {
 finishes (`POST /profiles/{id}/insights/stream`'s own `step` event) — the same "real work
 already happened" discipline `app.search.ask.STEP_KEYS` holds its own labels to."""
 
+# @patient phrase
+STEP_NAME: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "records": "what you have told Nura",
+        "series": "blood pressure",
+        "medicines": "medicines",
+        "ledger": "what you paid",
+        "coverage": "policies",
+    },
+    "ms": {
+        "records": "apa yang anda beritahu Nura",
+        "series": "tekanan darah",
+        "medicines": "ubat",
+        "ledger": "apa yang anda bayar",
+        "coverage": "polisi",
+    },
+    "zh": {
+        "records": "您告诉Nura的资料",
+        "series": "血压",
+        "medicines": "药物",
+        "ledger": "您付的钱",
+        "coverage": "保单",
+    },
+}
+"""The bare noun for each `StepKey`, the same idea as `app.delivery.timeline_strings.
+ASK_STEP_NAMES` (Ask's own "What Nura looked at: {parts}" line) — carried on the `step`
+event's `name` field (`InsightsStepEvent.name`, web) so the Health Analyst screen can collapse
+five real reads into one quiet line once the report lands, instead of five chips that outlive
+the stream they described. Two of the five ("records", "ledger") do speak to him ("what YOU
+have told Nura", "what YOU paid") and need `STEP_NAME_THEIRS`'s own twin, caught by a
+caregiver-voice e2e sweep the first time this shipped without one (package 10 review #1); the
+other three name no one and need none, the same as `LOOKED_AT_LABEL`'s own "paper" key."""
+
+# @patient phrase
+STEP_NAME_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "records": "what has been told to Nura",
+        "series": "blood pressure",
+        "medicines": "medicines",
+        "ledger": "what {patient} paid",
+        "coverage": "policies",
+    },
+    "ms": {
+        "records": "apa yang diberitahu kepada Nura",
+        "series": "tekanan darah",
+        "medicines": "ubat",
+        "ledger": "apa yang {patient} bayar",
+        "coverage": "polisi",
+    },
+    "zh": {
+        "records": "告诉Nura的资料",
+        "series": "血压",
+        "medicines": "药物",
+        "ledger": "{patient}付的钱",
+        "coverage": "保单",
+    },
+}
+"""`STEP_NAME`'s own caregiver twin — read by `app.channels.about_him.Reader.says()` the same
+way every other twin in this file is, matched against `STEP_NAME`'s own template and filled
+with the same slots and his name."""
+
 # @patient
 STEP_LABEL_THEIRS: Mapping[str, Mapping[str, str]] = {
     "en": {
@@ -711,6 +772,8 @@ __all__ = [
     "STATUS_WORDS",
     "STEP_LABEL",
     "STEP_LABEL_THEIRS",
+    "STEP_NAME",
+    "STEP_NAME_THEIRS",
     "SUPPLEMENT_LINE",
     "SUPPLEMENT_LINE_THEIRS",
     "SUPPLEMENT_WHY",
