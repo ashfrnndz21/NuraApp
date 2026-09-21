@@ -51,23 +51,96 @@ export function prefersReducedMotion(): boolean {
   return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** `*word*` — the one italic serif accent a headline may carry (blueprint `.ser`): stripped for
- *  the plain-text reading (aria-label, reduced motion), matched for the styled span. */
-export const ACCENT_WORD_RE = /^\*(.+)\*([.,?!:;]?)$/;
+/** `*...*` — the one italic serif accent a line may carry (blueprint `.ser`): stripped for the
+ *  plain-text reading (`.sr-only`, reduced motion), matched for the styled span(s). Parsed
+ *  across the WHOLE line first (#303 review, S6), never per space-split word: a per-word
+ *  match missed a Chinese line (no spaces at all — the token never starts with `*` to begin
+ *  with) and a multi-word accent like `*Mei Ling.*` (neither `*Mei` nor `Ling.*` closes on
+ *  its own), both of which rendered their asterisks as literal text. A stray, unmatched
+ *  asterisk (no closing partner on the same line) is left as ordinary text. */
+const ACCENT_SPAN_RE = /\*([^*]+)\*/;
 
-/** Split text into words the way the blueprint's own `stream()` does, so `SoftText` and a plain
- *  accessible label agree on what a "word" is (split on a single space). */
+interface AccentSpan {
+  text: string;
+  accent: boolean;
+}
+
+function parseAccentSpans(text: string): AccentSpan[] {
+  const spans: AccentSpan[] = [];
+  let rest = text;
+  for (;;) {
+    const m = rest.match(ACCENT_SPAN_RE);
+    if (!m || m.index === undefined) {
+      if (rest.length > 0) spans.push({ text: rest, accent: false });
+      return spans;
+    }
+    if (m.index > 0) spans.push({ text: rest.slice(0, m.index), accent: false });
+    spans.push({ text: m[1]!, accent: true });
+    rest = rest.slice(m.index + m[0].length);
+  }
+}
+
+const CJK_RE = /[㐀-䶿一-鿿豈-﫿]/;
+
+/** Whether `text` is CJK script — no spaces between words at all, so `SoftText`'s own per-word
+ *  stagger needs a different "word" (`textUnits`) and its rendered spans need no inter-word
+ *  gap (`web/src/ui/kit/kit.css` `.soft-word-tight`, unlike the Latin/Malay `margin-right` a
+ *  space itself would otherwise be). */
+export function isCJK(text: string): boolean {
+  return CJK_RE.test(text);
+}
+
+function segmentForDisplay(text: string, tight: boolean): string[] {
+  if (!tight) return text.split(" ").filter((w) => w.length > 0);
+  // `Intl.Segmenter`'s own `"word"` granularity where the runtime has it (groups a multi-
+  // character Chinese word as one stagger step, punctuation as its own); a plain per-
+  // character fallback otherwise (`Array.from` — spreading a string — already reads by code
+  // point, so a rare surrogate-pair character is never split in two either way).
+  const SegmenterCtor = (Intl as unknown as { Segmenter?: new (locale?: string, options?: { granularity?: string }) => { segment(input: string): Iterable<{ segment: string }> } }).Segmenter;
+  if (SegmenterCtor) {
+    const segmenter = new SegmenterCtor(undefined, { granularity: "word" });
+    return [...segmenter.segment(text)].map((piece) => piece.segment).filter((piece) => piece.length > 0);
+  }
+  return [...text];
+}
+
+/** One display unit for `SoftText`'s own per-word stagger: its shown text, whether the line's
+ *  own `*...*` accent covers it, and whether it joins the next unit tight (CJK, no
+ *  `margin-right` gap) or with the ordinary word gap (Latin/Malay). */
+export interface TextUnit {
+  text: string;
+  accent: boolean;
+  tight: boolean;
+}
+
+/** Split text into the units `SoftText` animates one at a time (`textUnits`) — accent spans
+ *  parsed first, across the whole line, then each span segmented for display: Latin/Malay
+ *  text on spaces (the blueprint's own `stream()` "word"), Chinese text (no spaces) by
+ *  `Intl.Segmenter`/character (`segmentForDisplay`). */
+export function textUnits(text: string): TextUnit[] {
+  const tight = isCJK(text);
+  const units: TextUnit[] = [];
+  for (const span of parseAccentSpans(text)) {
+    for (const piece of segmentForDisplay(span.text, tight)) {
+      units.push({ text: piece, accent: span.accent, tight });
+    }
+  }
+  return units;
+}
+
+/** Split text into words the way the blueprint's own `stream()` does (Latin/Malay only — see
+ *  `textUnits` for the general, CJK-aware split `SoftText` itself now uses). Kept for any
+ *  caller that only ever sees Latin/Malay text and wants the plain per-space word. */
 export function splitWords(text: string): string[] {
   return text.split(" ").filter((w) => w.length > 0);
 }
 
-/** The plain-text reading of a line that may carry `*word*` accents: for `aria-label`, and for
- *  the reduced-motion / non-JS fallback render. */
+/** The plain-text reading of a line that may carry `*...*` accents: for the `.sr-only` span,
+ *  and for the reduced-motion / non-JS fallback render. Reconstructs the original line
+ *  exactly, asterisks stripped — never word-joined-with-a-space, which would wrongly insert
+ *  spaces into a Chinese line that has none. */
 export function plainWords(text: string): string {
-  return splitWords(text)
-    .map((w) => {
-      const m = w.match(ACCENT_WORD_RE);
-      return m ? `${m[1]}${m[2]}` : w;
-    })
-    .join(" ");
+  return parseAccentSpans(text)
+    .map((span) => span.text)
+    .join("");
 }

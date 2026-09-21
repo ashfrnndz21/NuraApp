@@ -530,6 +530,42 @@ export const en = {
     // @patient phrase
     yourPharmacistOther: "{name}'s pharmacist",
   },
+  // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
+  // `insight`): right after "Looks right", the questions the paper raises for the doctor.
+  paperInsight: {
+    // @patient headline
+    screenTitle: "What it means for you",
+    // @patient headline
+    screenTitleOther: "What it means for {patient}",
+    // @patient phrase
+    lookedAt: "Looked at",
+    // @patient phrase
+    forDoctorOn: "For {doctor} on {date}",
+    // @patient phrase
+    forNextVisit: "For your next visit",
+    // @patient phrase
+    forNextVisitOther: "For {patient}'s next visit",
+    // @patient
+    questionsNotAnswers: "Questions to ask, never answers.",
+    // @patient phrase
+    keepForVisit: "Keep these for my visit",
+    // @patient phrase
+    keepForVisitOther: "Keep these for {patient}'s visit",
+    // @patient phrase
+    keeping: "Keeping…",
+    // @patient phrase
+    kept: "Kept",
+    // @patient
+    keptForVisit: "Kept for your next visit.",
+    // @patient
+    keptForVisitOther: "Kept for {patient}'s next visit.",
+    // @patient
+    keepNoVisit: ["There is no visit booked yet, so Nura has not kept these.", "Book a visit, then open this paper again."],
+    // @patient
+    keepNoVisitOther: ["There is no visit booked yet, so Nura has not kept these for {patient}.", "Book a visit, then open this paper again."],
+    // @patient phrase
+    notNow: "Not now",
+  },
   signIn: {
     // @patient headline
     title: "Sign in",
