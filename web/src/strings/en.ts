@@ -1505,6 +1505,50 @@ export const en = {
       otherLine: "Another line on the paper",
       // @patient
       valueUnreadable: "Nura could not read this line.",
+      // @patient headline
+      readingSomeOutside: "{n} of {m} are outside the range on the *paper.*",
+      // @patient headline
+      readingAllInRange: "All {m} are inside the range on the *paper.*",
+      // @patient headline
+      readingLinesRead: "Nura read {m} lines from your *paper.*",
+      // @patient phrase
+      chipOutside: "Outside range {n}",
+      // @patient phrase
+      chipInRange: "In range {n}",
+      // @patient phrase
+      chipCheck: "Check {n}",
+      // @patient phrase
+      flagAbove: "Above",
+      // @patient phrase
+      flagBelow: "Below",
+      // @patient phrase
+      flagInRange: "In range",
+      // @patient phrase
+      checkThisOne: "Check this one",
+      // @patient phrase
+      seeFullTable: "See the full table",
+      // @patient
+      fixHint: "Tap any value to change it.",
+      // @patient phrase
+      fixNumber: "Fix a number",
+      // @patient
+      nuraRead: "Nura read {value} from the paper.",
+      // @patient headline
+      checkSheetTitle: "Is this right?",
+      // @patient phrase
+      checkSheetConfirm: "That's right",
+      // @patient phrase
+      checkSheetConfirming: "Saving…",
+      // @patient phrase
+      checkSheetConfirmed: "Saved",
+      // @patient
+      safetyRanges: "Ranges are the ones printed on your paper.",
+      // @patient
+      safetyNotAdvice: "This is not a doctor's advice.",
+      // @patient
+      fromPageAndDate: "Nura read this from page {page}, added on {date}.",
+      // @patient
+      fromPaperOn: "Nura read this from the paper you added on {date}.",
     },
     questions: {
       // @patient headline

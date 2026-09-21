@@ -102,6 +102,10 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   expect(sent).toEqual([]);
   await page.getByTestId("report-send").click();
 
+  // The reading screen first — his paper as a bubble, what Nura found — then the full table.
+  await expect(page.getByTestId("reading-result")).toBeVisible();
+  await page.getByTestId("see-report").click();
+
   // A report Nura can read: its review card, the same as every paper's.
   await expect(page.getByTestId("review-card")).toContainText("This is a hospital letter.");
   expect(sent).toEqual(["imports"]);

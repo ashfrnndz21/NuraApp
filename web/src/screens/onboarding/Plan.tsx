@@ -10,7 +10,7 @@ import { closed, finish, plan, planNote, returnTo, to, whose } from "../../onboa
 import { density, profile } from "../../store/session";
 import { fill, language, LOCALE, t } from "../../strings";
 import { Hear, Notice, Pill } from "../../ui/components";
-import { StepTrace } from "../../ui/kit";
+import { ReadingProgress } from "./PaperReading";
 import { usePaperTrace } from "./paperTrace";
 import { Capture, Sheet, Status, StepTitle } from "./parts";
 
@@ -120,7 +120,7 @@ export function PlanStep(): JSX.Element {
         </p>
       )}
       {plan.value && shown.length === 0 && <Sheet lines={[p.nothing]} testId="plan-nothing" />}
-      {paper.sending && <StepTrace steps={paper.trace} working={r.looking} testId="plan-looking" />}
+      {paper.sending && <ReadingProgress status={paper.trace.length > 0 ? paper.trace[paper.trace.length - 1]!.text : r.looking} testId="plan-looking" />}
       <Status text={status} testId="plan-status" />
       <Notice error={error} />
       <Pill plum={!patient} onClick={finish} disabled={busy} testId="open-nura">

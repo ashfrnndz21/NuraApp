@@ -1505,6 +1505,50 @@ export const zh = {
       otherLine: "文件上的另一行",
       // @patient
       valueUnreadable: "这一行 Nura 读不出来。",
+      // @patient headline
+      readingSomeOutside: "在*文件*上，{m} 项中有 {n} 项超出范围。",
+      // @patient headline
+      readingAllInRange: "全部 {m} 项都在*文件*的范围内。",
+      // @patient headline
+      readingLinesRead: "Nura 从您的*文件*读到了 {m} 行。",
+      // @patient phrase
+      chipOutside: "超出范围 {n}",
+      // @patient phrase
+      chipInRange: "范围内 {n}",
+      // @patient phrase
+      chipCheck: "请核对 {n}",
+      // @patient phrase
+      flagAbove: "偏高",
+      // @patient phrase
+      flagBelow: "偏低",
+      // @patient phrase
+      flagInRange: "范围内",
+      // @patient phrase
+      checkThisOne: "核对这一条",
+      // @patient phrase
+      seeFullTable: "查看完整表格",
+      // @patient
+      fixHint: "点一下任何数值即可修改。",
+      // @patient phrase
+      fixNumber: "改一个数字",
+      // @patient
+      nuraRead: "Nura 从文件上读到 {value}。",
+      // @patient headline
+      checkSheetTitle: "这样对吗？",
+      // @patient phrase
+      checkSheetConfirm: "对，没错",
+      // @patient phrase
+      checkSheetConfirming: "正在保存…",
+      // @patient phrase
+      checkSheetConfirmed: "已保存",
+      // @patient
+      safetyRanges: "这些范围是您文件上印的。",
+      // @patient
+      safetyNotAdvice: "这不是医生的意见。",
+      // @patient
+      fromPageAndDate: "这一条来自第 {page} 页，文件是您在 {date} 加的。",
+      // @patient
+      fromPaperOn: "这一条来自您在 {date} 加的文件。",
     },
     questions: {
       // @patient headline

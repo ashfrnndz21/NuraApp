@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import { batch, sendPaperStream } from "../../capture/session";
 import { PaperBatchView } from "../PaperBatch";
@@ -7,14 +7,31 @@ import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
-import { canCorrect, confidenceLine, decisionsFor, fieldLabel, kindLine, pillProposalLine, provenanceLine, readable, readableValueText, spokenLine, startingEdits, type FieldEdit } from "../../onboarding/review";
+import { decisionsFor, kindLine, readable, startingEdits, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
-import { fill, language, LOCALE, t } from "../../strings";
+import { language, LOCALE, t } from "../../strings";
 import { density } from "../../store/session";
-import { Hear, Notice, Pill } from "../../ui/components";
-import { StepTrace } from "../../ui/kit";
+import { Notice, Pill } from "../../ui/components";
+import { ThreeStateButton } from "../../ui/kit";
+import { PaperBubble, ReadingProgress, ReadingResult } from "./PaperReading";
 import { usePaperTrace } from "./paperTrace";
+import { ReportTable } from "./ReportTable";
 import { Capture, Sheet, Status, StepTitle } from "./parts";
+
+/** A file picked for the reading screen: its name for the bubble, and a thumbnail only for a
+ *  photo — revoked the moment it is no longer shown (papers.spec.ts: nothing of a photo stays
+ *  on the phone). */
+function useFileBubble(): { file: { name: string; thumb: string | null } | null; show: (file: File) => void; clear: () => void } {
+  const [file, setFile] = useState<{ name: string; thumb: string | null } | null>(null);
+  useEffect(() => () => {
+    if (file?.thumb) URL.revokeObjectURL(file.thumb);
+  }, [file]);
+  return {
+    file,
+    show: (picked: File) => setFile({ name: picked.name, thumb: picked.type.startsWith("image/") ? URL.createObjectURL(picked) : null }),
+    clear: () => setFile(null),
+  };
+}
 
 /** The assistant-led records step (E01-02): the backend's next prompt, shown with its
  *  spoken twin; a photo or a file; the review card; one yes; what Nura learned; the next
@@ -26,18 +43,30 @@ export function RecordsStep(): JSX.Element {
   const bio = biography.value;
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState<ReviewCardOut | null>(null);
   const paper = usePaperTrace();
+  const bubble = useFileBubble();
 
   const upload = async (file: File) => {
+    bubble.show(file);
     setBusy(true);
     setError(null);
     try {
       returnTo.value = "records";
       paper.start();
       const card = await sendPaperStream(file, paper.onStep);
-      to({ name: "review", card });
+      // A refusal that already happened — a page that is not a health paper, or one Nura could
+      // not read at all — has nothing to show a reading screen over: no headline, no rows, no
+      // thinking animation for a thing that is already done. Straight to the honest word for it.
+      if (!readable(card)) {
+        bubble.clear();
+        to({ name: "review", card });
+        return;
+      }
+      setReading(card);
     } catch (failure) {
       setError(failure);
+      bubble.clear();
     } finally {
       setBusy(false);
     }
@@ -60,6 +89,16 @@ export function RecordsStep(): JSX.Element {
     }
   };
 
+  if (bubble.file && (busy || reading)) {
+    return (
+      <main class="screen onboarding" data-stage="reading">
+        <PaperBubble name={bubble.file.name} thumb={bubble.file.thumb} testId="paper-bubble" />
+        {!reading && <ReadingProgress status={paper.trace.length > 0 ? paper.trace[paper.trace.length - 1]!.text : r.looking} testId="looking" />}
+        {reading && <ReadingResult card={reading} onContinue={() => to({ name: "review", card: reading })} testId="reading-result" />}
+      </main>
+    );
+  }
+
   // The sitting's own words for the step address him; a chief reads the app's.
   const inPapers = whose().self && bio?.step === "papers";
   return (
@@ -67,7 +106,6 @@ export function RecordsStep(): JSX.Element {
       <StepTitle title={inPapers ? bio.prompt.headline : say(r.titleSelf, r.titleOther)} />
       <Status text={lastPaper.value ? r.saved : null} testId="saved" />
       {inPapers && bio.prompt.lines.length > 0 && <Sheet lines={bio.prompt.lines} testId="prompt" />}
-      {busy && <StepTrace steps={paper.trace} working={r.looking} testId="looking" />}
       <Notice error={error} />
       <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
       <Pill onClick={() => to({ name: "batch" })} disabled={busy} testId="choose-many">
@@ -131,6 +169,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [fixHint, setFixHint] = useState(false);
   const paper = usePaperTrace();
   const back = onBack ?? (() => to({ name: returnTo.value }));
 
@@ -155,7 +194,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
       <main class="screen onboarding" data-stage="review">
         <StepTitle title={r.reviewTitle} />
         <Sheet lines={card.notice?.length ? card.notice : [kindLine(card.document_kind, s), r.unknownHint]} testId="review-unreadable" />
-        {busy && <StepTrace steps={paper.trace} working={r.looking} testId="looking-again" />}
+        {busy && <ReadingProgress status={paper.trace.length > 0 ? paper.trace[paper.trace.length - 1]!.text : r.looking} testId="looking-again" />}
         <Notice error={error} />
         <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
         <Pill quiet onClick={back}>
@@ -173,7 +212,9 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
   const looksRight = async () => {
     const { decisions, waiting: still } = decisionsFor(card, edits);
     setWaiting(still);
-    if (still.length > 0) return;
+    // Waits for him rather than resolving: a `ThreeStateButton` that "finished" while a line is
+    // still open for correction would say "Saved" over a decision that never went anywhere.
+    if (still.length > 0) throw new Error("waiting on a decision");
     setBusy(true);
     setError(null);
     try {
@@ -200,96 +241,45 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
       to({ name: returnTo.value });
     } catch (failure) {
       setError(failure);
+      throw failure;
     } finally {
       setBusy(false);
     }
   };
 
-  const proposal = pillProposalLine(card, s);
-  const head = [
-    kindLine(card.document_kind, s),
-    ...(card.document_date ? [fill(r.dated, { date: paperDate(card.document_date, locale) })] : []),
-    ...(card.high_risk_class ? [r.highRisk] : []),
-    ...(proposal ? [proposal] : []),
-  ];
-  const fields = [...card.fields].sort((a, b) => a.position - b.position);
   const patient = density() === "patient";
   return (
     <main class="screen onboarding" data-stage="review" data-card-id={card.card_id}>
       <StepTitle title={r.reviewTitle} />
-      <Sheet
-        lines={[...head, r.reviewLead, r.reviewLead2]}
-        source={fill(r.fromPhoto, { date: paperDate(card.created_at, locale) })}
+      {card.notice && card.notice.length > 0 && <Sheet glass lines={card.notice} testId="review-notice" />}
+      <ReportTable
+        card={card}
+        edits={edits}
+        onEdit={edit}
+        waiting={waiting}
+        documentDateText={card.document_date ? paperDate(card.document_date, locale) : null}
+        dateText={paperDate(card.created_at, locale)}
+        patient={patient}
         testId="review-card"
       />
-      {card.notice && card.notice.length > 0 && <Sheet glass lines={card.notice} testId="review-notice" />}
-      {fields.map((field) => {
-        const current = edits[field.field_id]!;
-        const label = fieldLabel(field, s);
-        const sure = !field.needs_confirm && !field.unreadable;
-        return (
-          <section
-            key={field.field_id}
-            class={`tile paper${current.leftOut ? " left-out" : ""}`}
-            data-testid={`field-${field.attribute}`}
-            data-needs-confirm={field.needs_confirm}
-          >
-            {current.leftOut ? (
-              <>
-                <p class="label">{label}</p>
-                <p>{r.leftOut}</p>
-              </>
-            ) : canCorrect(field) ? (
-              <label class="read">
-                <span class="label">{label}</span>
-                {field.unreadable && (
-                  <span class="lines" data-testid="prompt">
-                    {(field.prompt ?? [r.typeIt]).map((line, index) => (
-                      <p key={index}>{line}</p>
-                    ))}
-                  </span>
-                )}
-                <span class="value-row">
-                  <input
-                    class={`field ${sure ? "sure" : "unsure"}`}
-                    name={`field-${field.attribute}`}
-                    aria-label={`${label}: ${r.changeLabel}`}
-                    inputMode={typeof field.value === "number" ? "decimal" : "text"}
-                    data-unreadable={field.unreadable || undefined}
-                    value={current.text}
-                    onInput={(event) => edit(field.field_id, { text: (event.target as HTMLInputElement).value })}
-                  />
-                  {field.unit && <span class="unit">{field.unit}</span>}
-                </span>
-              </label>
-            ) : (
-              <>
-                <p class="label">{label}</p>
-                <p class={`value ${sure ? "sure" : "unsure"}`}>{readableValueText(field.value, s)}</p>
-                <p class="caption">{r.cannotChange}</p>
-              </>
-            )}
-            {!current.leftOut && <p class="caption" data-testid="confidence">{confidenceLine(field, s)}</p>}
-            {!current.leftOut && provenanceLine(field, s) && (
-              <p class="caption" data-testid="provenance">{provenanceLine(field, s)}</p>
-            )}
-            {waiting.includes(field.field_id) && (
-              <p role="alert" data-testid="not-a-number">
-                {field.unreadable ? r.typeIt : r.notANumber}
-              </p>
-            )}
-            <Pill quiet onClick={() => edit(field.field_id, { leftOut: !current.leftOut })} testId="leave-out">
-              {current.leftOut ? r.keepIn : r.leaveOut}
-            </Pill>
-            {patient && <Hear lines={current.leftOut ? [label, r.leftOut] : spokenLine(field, s)} />}
-          </section>
-        );
-      })}
+      {waiting.length > 0 && (
+        <p role="alert" data-testid="not-a-number">
+          {card.fields.find((field) => field.field_id === waiting[0])?.unreadable ? r.typeIt : r.notANumber}
+        </p>
+      )}
+      {fixHint && (
+        <p class="caption" role="status" data-testid="fix-hint">
+          {r.fixHint}
+        </p>
+      )}
       {busy && <Status text={s.onboarding.saving} />}
       <Notice error={error} />
-      <Pill plum onClick={() => void looksRight()} disabled={busy} testId="looks-right">
-        {r.looksRight}
-      </Pill>
+      <div class="acts">
+        <ThreeStateButton label={r.looksRight} busyLabel={s.onboarding.saving} doneLabel={r.saved} onAct={looksRight} testId="looks-right" />
+        <Pill quiet onClick={() => setFixHint(true)} testId="fix-number">
+          {r.fixNumber}
+        </Pill>
+      </div>
     </main>
   );
 }

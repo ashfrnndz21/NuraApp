@@ -141,8 +141,8 @@ for (const look of LOOKS) {
     await readable(page, look);
     await page.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });
     await expect(page.getByTestId("review-card")).toContainText("This is the screen of a machine.");
-    await expect(page.locator('input[name="field-systolic"]')).toHaveValue("138");
-    await expect(page.locator('input[name="field-diastolic"]')).toHaveValue("84");
+    await expect(page.getByTestId("field-systolic")).toContainText("138");
+    await expect(page.getByTestId("field-diastolic")).toContainText("84");
     await readable(page, look);
     await page.getByTestId("looks-right").click();
     // Back where the reading was begun from: his Today with its blood pressure card, her Home (D1).

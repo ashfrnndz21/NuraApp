@@ -695,6 +695,28 @@ export interface Strings {
       unreadable: string;
       typeIt: string;
       fromPage: string;
+      readingSomeOutside: string;
+      readingAllInRange: string;
+      readingLinesRead: string;
+      chipOutside: string;
+      chipInRange: string;
+      chipCheck: string;
+      flagAbove: string;
+      flagBelow: string;
+      flagInRange: string;
+      checkThisOne: string;
+      seeFullTable: string;
+      fixHint: string;
+      fixNumber: string;
+      nuraRead: string;
+      checkSheetTitle: string;
+      checkSheetConfirm: string;
+      checkSheetConfirming: string;
+      checkSheetConfirmed: string;
+      safetyRanges: string;
+      safetyNotAdvice: string;
+      fromPageAndDate: string;
+      fromPaperOn: string;
     };
     questions: {
       titleSelf: string;
