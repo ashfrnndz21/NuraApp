@@ -5,10 +5,12 @@ import {
   confidenceLine,
   decide,
   decisionsFor,
+  facilityField,
   fieldLabel,
   flagTone,
   flagWord,
   kindLine,
+  kindTitle,
   parseNumber,
   pillProposalLine,
   rangeBarGeometry,
@@ -452,5 +454,21 @@ describe("the once-only provenance line under the table", () => {
   it("says nothing at all when the fields came from different pages — the caller falls back to a per-row line", () => {
     const c = card([{ ...tg, page: 1 }, { ...tc, page: 2 }]);
     expect(sharedProvenance(c, "14 September 2026", en)).toBeNull();
+  });
+});
+
+describe("the report table's own short title and header facility (checkpoint 2)", () => {
+  it("names the kind, not the sentence kindLine reads out loud", () => {
+    expect(kindTitle("lab_report", en)).toBe("Blood test");
+    expect(kindTitle("medicine_label", en)).toBe("Medicine label");
+    expect(kindTitle("lab_report", en)).not.toBe(kindLine("lab_report", en));
+  });
+
+  it("finds the lab_report.facility (or .lab) field to show in the header, once, never as an ordinary row", () => {
+    const facility = { ...field("f-fac", "facility", "Sunrise Medical Laboratory", false), subject: "lab_report" };
+    expect(facilityField(card([tg, facility]))?.field_id).toBe("f-fac");
+    expect(facilityField(card([tg, tc]))).toBeNull();
+    const lab = { ...field("f-lab", "lab", "Bukit Lab", false), subject: "lab_report" };
+    expect(facilityField(card([lab]))?.field_id).toBe("f-lab");
   });
 });

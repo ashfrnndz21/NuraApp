@@ -96,6 +96,15 @@
   }
 }
 
+/* --- The conversation headline: light, not a heavy default <h1>/<h2> (blueprint `.head`) ------ */
+.conversation-head {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.17;
+  font-weight: 300;
+  letter-spacing: -0.015em;
+}
+
 /* --- SoftText: words arrive one by one, blurred to sharp (motion.ts WORD_*) ------------------- */
 .soft-word {
   display: inline-block;
@@ -413,11 +422,44 @@
   flex-shrink: 0;
 }
 
-/* --- The report table: one row's name, value and range bar ---------------------------------- */
+/* --- The report table: ONE glass panel, compact hairline-separated rows --------------------- */
+/* Two classes so specificity beats `.glass-card`'s own `gap`/`padding` with no `!important`:
+   rows manage their own spacing (padding + a hairline), not the panel's flex gap. */
+.glass-card.report-panel {
+  gap: 0;
+  padding: 4px 16px;
+}
+.report-table-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 9px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+button.report-table-row {
+  cursor: pointer;
+}
+.report-table-row:first-child {
+  border-top: none;
+}
+.report-table-row:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: -2px;
+}
 .report-row-top {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-height: 32px;
 }
 .report-row-name {
   flex: 1 1 auto;
@@ -431,57 +473,17 @@
   font-weight: 500;
 }
 .report-row-name small {
-  font-size: 11.5px;
+  font-size: 12.5px;
   opacity: 0.74;
 }
-.report-row-value {
+.report-value-num {
   flex-shrink: 0;
-  min-height: var(--target);
-  min-width: var(--target);
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  padding: 4px 6px;
-  border-radius: 10px;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-span.report-row-value {
-  /* Not a button (a structured value cannot be retyped): no target size to meet. */
-  min-height: 0;
-  min-width: 0;
-}
-.report-row-check {
-  flex-shrink: 0;
-  min-height: var(--target);
-  min-width: var(--target);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 12px;
-  border: 0;
-  background: none;
-  font: inherit;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-.report-row-value:focus-visible {
-  outline: 3px solid var(--plum);
-  outline-offset: 2px;
-}
-.report-row-value .report-value-num {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
-.report-row-value .report-value-num small {
+.report-value-num small {
   font-size: 11px;
   font-weight: 400;
   opacity: 0.75;

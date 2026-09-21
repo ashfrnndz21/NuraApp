@@ -96,7 +96,7 @@ test("papers from his photos: many at once, a grid he confirms, nothing sent bef
 
   // One card checked: its lines, one yes, the facts written.
   await results.nth(0).getByTestId("check-paper").click();
-  await expect(page.getByTestId("review-card")).toContainText("This is a blood test.");
+  await expect(page.getByTestId("review-card")).toContainText("Blood test");
   await page.getByTestId("looks-right").click();
   await expect(page.getByTestId("paper-result").nth(0).getByTestId("paper-checked")).toHaveText("Nura wrote it down.");
   const facts = (await (await request.get(`${API}/profiles/${pa.profileId}/facts?subject=lipid_panel`, auth(pa.token))).json()) as unknown[];

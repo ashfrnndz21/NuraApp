@@ -1549,6 +1549,34 @@ export const zh = {
       fromPageAndDate: "这一条来自第 {page} 页，文件是您在 {date} 加的。",
       // @patient
       fromPaperOn: "这一条来自您在 {date} 加的文件。",
+      // @patient phrase
+      dateAndFacility: "{date} · {facility}",
+      // @patient phrase
+      titleLabReport: "验血报告",
+      // @patient phrase
+      titleMedicineLabel: "药盒标签",
+      // @patient phrase
+      titleDischargeLetter: "出院信",
+      // @patient phrase
+      titleClinicSlip: "预约卡",
+      // @patient phrase
+      titleHandwritten: "医生手写单",
+      // @patient phrase
+      titleInsuranceLetter: "保险信",
+      // @patient phrase
+      titleInsurancePolicy: "保险保单",
+      // @patient phrase
+      titleInsuranceClaim: "保险理赔",
+      // @patient phrase
+      titleDeviceScreen: "机器屏幕",
+      // @patient phrase
+      titleOtherKind: "健康文件",
+      // @patient phrase
+      titlePillPhoto: "药丸照片",
+      // @patient phrase
+      titlePharmacyReceipt: "药房收据",
+      // @patient phrase
+      titleUnknown: "页面",
     },
     questions: {
       // @patient headline

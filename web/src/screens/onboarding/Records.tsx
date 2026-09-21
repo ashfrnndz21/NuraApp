@@ -10,7 +10,6 @@ import { paperDate } from "../../onboarding/dates";
 import { decisionsFor, kindLine, readable, startingEdits, type FieldEdit } from "../../onboarding/review";
 import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { language, LOCALE, t } from "../../strings";
-import { density } from "../../store/session";
 import { Notice, Pill } from "../../ui/components";
 import { ThreeStateButton } from "../../ui/kit";
 import { PaperBubble, ReadingProgress, ReadingResult } from "./PaperReading";
@@ -247,10 +246,10 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
     }
   };
 
-  const patient = density() === "patient";
   return (
     <main class="screen onboarding" data-stage="review" data-card-id={card.card_id}>
-      <StepTitle title={r.reviewTitle} />
+      {/* The header is the report table's own (kind, date, facility) — not a separate "What
+          Nura read" title over three more sentences saying the same thing again. */}
       {card.notice && card.notice.length > 0 && <Sheet glass lines={card.notice} testId="review-notice" />}
       <ReportTable
         card={card}
@@ -259,7 +258,6 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
         waiting={waiting}
         documentDateText={card.document_date ? paperDate(card.document_date, locale) : null}
         dateText={paperDate(card.created_at, locale)}
-        patient={patient}
         testId="review-card"
       />
       {waiting.length > 0 && (

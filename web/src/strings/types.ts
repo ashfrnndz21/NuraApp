@@ -717,6 +717,20 @@ export interface Strings {
       safetyNotAdvice: string;
       fromPageAndDate: string;
       fromPaperOn: string;
+      dateAndFacility: string;
+      titleLabReport: string;
+      titleMedicineLabel: string;
+      titleDischargeLetter: string;
+      titleClinicSlip: string;
+      titleHandwritten: string;
+      titleInsuranceLetter: string;
+      titleInsurancePolicy: string;
+      titleInsuranceClaim: string;
+      titleDeviceScreen: string;
+      titleOtherKind: string;
+      titlePillPhoto: string;
+      titlePharmacyReceipt: string;
+      titleUnknown: string;
     };
     questions: {
       titleSelf: string;

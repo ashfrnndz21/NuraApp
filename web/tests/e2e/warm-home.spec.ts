@@ -107,7 +107,7 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   await page.getByTestId("see-report").click();
 
   // A report Nura can read: its review card, the same as every paper's.
-  await expect(page.getByTestId("review-card")).toContainText("This is a hospital letter.");
+  await expect(page.getByTestId("review-card")).toContainText("Hospital letter");
   expect(sent).toEqual(["imports"]);
   await page.getByTestId("looks-right").click();
   await expect(page.getByTestId("paper-checked")).toHaveText("Nura wrote it down.");
@@ -121,6 +121,39 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   await expect(result).toHaveAttribute("data-outcome", "notHealth");
   await expect(result.getByTestId("paper-not-health")).not.toBeEmpty();
   await expect(page.getByTestId("review-card")).toHaveCount(0);
+});
+
+test("the reading screen is really on screen while the real upload is still in flight: the orb and ONE status line, no fake delay in the app itself", async ({ page, request }) => {
+  const pa = await seedOwner(request, "Pa", []);
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  // Nothing in the app is slowed down: only this test's own network layer holds the streamed
+  // route's response for a moment, then hands the browser exactly what the real server sent —
+  // fetched through `route.fetch()`, never invented here. On the fixture extractor's own
+  // fixtures this route normally answers in well under 100ms, too fast for a screen capture to
+  // ever catch the reading screen mid-read; held for 1.5s, there is a real window to see it.
+  await page.route("**/photos/stream", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const response = await route.fetch();
+    await route.fulfill({ response });
+  });
+
+  await page.getByTestId("report-input").setInputFiles(paperPhoto("lipid-panel-2023-09-07"));
+  await expect(page.getByTestId("report-confirm-name")).toBeVisible();
+  await page.getByTestId("report-send").click();
+
+  // The reading screen, genuinely mid-read: the paper bubble, and the orb beside ONE status
+  // line — not a card, not a headline, because the server truly has not answered yet.
+  await expect(page.getByTestId("paper-bubble")).toBeVisible();
+  const status = page.getByTestId("reading-status");
+  await expect(status).toBeVisible();
+  await expect(status).toHaveCount(1);
+  await expect(page.getByTestId("reading-result")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/reading-mid-read-proof.png" });
+
+  // The hold ends, the real card lands, and the flow carries on exactly as it does unheld.
+  await expect(page.getByTestId("reading-result")).toBeVisible({ timeout: 5_000 });
 });
 
 test("her Home says his check-in and her places about him by name", async ({ page, request }) => {

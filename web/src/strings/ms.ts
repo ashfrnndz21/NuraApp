@@ -1549,6 +1549,34 @@ export const ms = {
       fromPageAndDate: "Nura membaca ini daripada muka surat {page}, ditambah pada {date}.",
       // @patient
       fromPaperOn: "Nura membaca ini daripada surat yang anda tambah pada {date}.",
+      // @patient phrase
+      dateAndFacility: "{date} · {facility}",
+      // @patient phrase
+      titleLabReport: "Ujian darah",
+      // @patient phrase
+      titleMedicineLabel: "Label ubat",
+      // @patient phrase
+      titleDischargeLetter: "Surat hospital",
+      // @patient phrase
+      titleClinicSlip: "Kad temu janji",
+      // @patient phrase
+      titleHandwritten: "Nota doktor",
+      // @patient phrase
+      titleInsuranceLetter: "Surat insurans",
+      // @patient phrase
+      titleInsurancePolicy: "Polisi insurans",
+      // @patient phrase
+      titleInsuranceClaim: "Tuntutan insurans",
+      // @patient phrase
+      titleDeviceScreen: "Skrin mesin",
+      // @patient phrase
+      titleOtherKind: "Surat kesihatan",
+      // @patient phrase
+      titlePillPhoto: "Gambar pil",
+      // @patient phrase
+      titlePharmacyReceipt: "Resit farmasi",
+      // @patient phrase
+      titleUnknown: "Halaman",
     },
     questions: {
       // @patient headline

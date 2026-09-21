@@ -140,7 +140,7 @@ for (const look of LOOKS) {
     await expect(page.getByTestId("reading-photo")).toBeVisible();
     await readable(page, look);
     await page.getByTestId("photo-input").setInputFiles({ name: "cuff.png", mimeType: "image/png", buffer: placeholderPng("bp-cuff-2026-09-14") });
-    await expect(page.getByTestId("review-card")).toContainText("This is the screen of a machine.");
+    await expect(page.getByTestId("review-card")).toContainText("Machine screen");
     await expect(page.getByTestId("field-systolic")).toContainText("138");
     await expect(page.getByTestId("field-diastolic")).toContainText("84");
     await readable(page, look);

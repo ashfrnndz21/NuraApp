@@ -201,6 +201,50 @@ export function kindLine(kind: ReviewCardOut["document_kind"], s: Strings): stri
   }
 }
 
+/** The report table's own short title for the kind of paper (blueprint `report`'s `head('Blood
+ *  test', ...)`): a name, not the sentence `kindLine` reads out loud ("This is a blood
+ *  test."). */
+export function kindTitle(kind: ReviewCardOut["document_kind"], s: Strings): string {
+  const r = s.onboarding.records;
+  switch (kind) {
+    case "lab_report":
+      return r.titleLabReport;
+    case "medicine_label":
+      return r.titleMedicineLabel;
+    case "discharge_letter":
+      return r.titleDischargeLetter;
+    case "clinic_slip":
+      return r.titleClinicSlip;
+    case "handwritten_prescription":
+      return r.titleHandwritten;
+    case "insurance_letter":
+      return r.titleInsuranceLetter;
+    case "insurance_policy":
+      return r.titleInsurancePolicy;
+    case "insurance_claim":
+      return r.titleInsuranceClaim;
+    case "device_screen":
+      return r.titleDeviceScreen;
+    case "pill_photo":
+      return r.titlePillPhoto;
+    case "pharmacy_receipt":
+      return r.titlePharmacyReceipt;
+    case "other":
+      return r.titleOtherKind;
+    case "not_health":
+    case "unknown":
+    case "unsupported_file_type":
+      return r.titleUnknown;
+  }
+}
+
+/** The header field a lab-style report's facility line is on, when the card has one — kept out
+ *  of the ordinary rows once it is shown in the report's own header (blueprint `report`'s
+ *  "12 September 2026 · Sunrise Medical Laboratory"), never shown twice. */
+export function facilityField(card: ReviewCardOut): ReviewFieldOut | null {
+  return card.fields.find((field) => field.subject === "lab_report" && (field.attribute === "facility" || field.attribute === "lab")) ?? null;
+}
+
 export interface RangeBarGeometry {
   bandStart: number;
   bandWidth: number;

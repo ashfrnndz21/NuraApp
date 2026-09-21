@@ -53,7 +53,7 @@ export function ReadingResult({ card, onContinue, testId }: ReadingResultProps):
   const rows = [...card.fields].sort((a, b) => a.position - b.position).map((field) => reportRow(field, s));
   return (
     <div data-testid={testId}>
-      <SoftText as="h2" text={headline} pace="headline" testId="reading-headline" />
+      <SoftText as="h2" className="conversation-head" text={headline} pace="headline" testId="reading-headline" />
       {chips.length > 0 && (
         <ChipRow testId="reading-chips">
           {chips.map((chip) => (
@@ -68,11 +68,9 @@ export function ReadingResult({ card, onContinue, testId }: ReadingResultProps):
               <div class="report-row-name">
                 <b>{row.label}</b>
               </div>
-              <span class="report-row-value">
-                <span class="report-value-num">
-                  {row.valueText}
-                  {row.unit && <small>{row.unit}</small>}
-                </span>
+              <span class="report-value-num">
+                {row.valueText}
+                {row.unit && <small>{row.unit}</small>}
               </span>
               {row.flagWord && <Flag state={row.tone === "ok" ? "ok" : "attention"}>{row.flagWord}</Flag>}
             </div>

@@ -1549,6 +1549,34 @@ export const en = {
       fromPageAndDate: "Nura read this from page {page}, added on {date}.",
       // @patient
       fromPaperOn: "Nura read this from the paper you added on {date}.",
+      // @patient phrase
+      dateAndFacility: "{date} · {facility}",
+      // @patient phrase
+      titleLabReport: "Blood test",
+      // @patient phrase
+      titleMedicineLabel: "Medicine label",
+      // @patient phrase
+      titleDischargeLetter: "Hospital letter",
+      // @patient phrase
+      titleClinicSlip: "Appointment card",
+      // @patient phrase
+      titleHandwritten: "Doctor's note",
+      // @patient phrase
+      titleInsuranceLetter: "Insurance letter",
+      // @patient phrase
+      titleInsurancePolicy: "Insurance policy",
+      // @patient phrase
+      titleInsuranceClaim: "Insurance claim",
+      // @patient phrase
+      titleDeviceScreen: "Machine screen",
+      // @patient phrase
+      titleOtherKind: "Health paper",
+      // @patient phrase
+      titlePillPhoto: "Pill photo",
+      // @patient phrase
+      titlePharmacyReceipt: "Pharmacy receipt",
+      // @patient phrase
+      titleUnknown: "Page",
     },
     questions: {
       // @patient headline

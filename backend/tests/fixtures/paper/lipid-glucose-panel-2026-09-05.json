@@ -1,0 +1,87 @@
+{
+  "placeholder": "lipid-glucose-panel-2026-09-05",
+  "sha256": "3eed7ce0c973a2a1605204ee0be4e3e17675a44b75986d1c14a40bceaff9a7eb",
+  "note": "Synthetic fixture (no real patient): a lipid and glucose panel exercising the report table's own visual language (checkpoint 2) — a result's own printed range in every shape the parser handles (\"<5.2\", \">1.0\", \"3.9 - 6.0\"), several results above their range, one below, one inside it, and one whose printed range is sex-specific and deliberately left unparsed (low/high both null, the text kept exactly as printed) rather than guessed at.",
+  "document_kind": "lab_report",
+  "document_date": "2026-09-05",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "facility",
+      "value": "Sunrise Medical Laboratory",
+      "unit": null,
+      "confidence": 0.95,
+      "span": { "x0": 0.1, "y0": 0.05, "x1": 0.6, "y1": 0.1 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 6.1,
+      "unit": "mmol/L",
+      "confidence": 0.97,
+      "range": { "low": null, "high": 5.2, "text": "<5.2" },
+      "label_on_paper": "Total Cholesterol",
+      "span": { "x0": 0.1, "y0": 0.2, "x1": 0.5, "y1": 0.24 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl",
+      "value": 4.0,
+      "unit": "mmol/L",
+      "confidence": 0.94,
+      "range": { "low": null, "high": 3.4, "text": "<3.4" },
+      "label_on_paper": "LDL Cholesterol",
+      "span": { "x0": 0.1, "y0": 0.26, "x1": 0.5, "y1": 0.3 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "hdl",
+      "value": 0.9,
+      "unit": "mmol/L",
+      "confidence": 0.96,
+      "range": { "low": 1.0, "high": null, "text": ">1.0" },
+      "label_on_paper": "HDL Cholesterol",
+      "span": { "x0": 0.1, "y0": 0.32, "x1": 0.5, "y1": 0.36 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "triglycerides",
+      "value": 2.2,
+      "unit": "mmol/L",
+      "confidence": 0.93,
+      "range": { "low": null, "high": 1.7, "text": "<1.7" },
+      "label_on_paper": "Triglycerides",
+      "span": { "x0": 0.1, "y0": 0.38, "x1": 0.5, "y1": 0.42 }
+    },
+    {
+      "subject": "blood_sugar",
+      "attribute": "glucose",
+      "value": 6.4,
+      "unit": "mmol/L",
+      "confidence": 0.95,
+      "range": { "low": 3.9, "high": 6.0, "text": "3.9 - 6.0" },
+      "label_on_paper": "Fasting Glucose",
+      "span": { "x0": 0.1, "y0": 0.44, "x1": 0.5, "y1": 0.48 }
+    },
+    {
+      "subject": "kidney_panel",
+      "attribute": "potassium",
+      "value": 4.2,
+      "unit": "mmol/L",
+      "confidence": 0.92,
+      "range": { "low": 3.5, "high": 5.2, "text": "3.5 - 5.2" },
+      "label_on_paper": "Potassium (K+)",
+      "span": { "x0": 0.1, "y0": 0.5, "x1": 0.5, "y1": 0.54 }
+    },
+    {
+      "subject": "blood_test",
+      "attribute": "haemoglobin",
+      "value": 14.2,
+      "unit": "g/dL",
+      "confidence": 0.9,
+      "range": { "low": null, "high": null, "text": "13.0-17.0 (M) / 12.0-15.0 (F)" },
+      "label_on_paper": "Haemoglobin (Hb)",
+      "span": { "x0": 0.1, "y0": 0.56, "x1": 0.5, "y1": 0.6 }
+    }
+  ]
+}

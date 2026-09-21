@@ -59,6 +59,13 @@ METABOLIC_PANEL = "metabolic-panel-2026-09-18"
 and one line outside the vocabulary read as `other` with `label_on_paper` (defect #1's escape
 hatch)."""
 
+LIPID_GLUCOSE_PANEL = "lipid-glucose-panel-2026-09-05"
+"""A lipid and glucose panel, 5 September 2026, for the report table's own visual language
+(checkpoint 2, web/src/screens/onboarding/ReportTable.tsx): every printed-range shape the
+parser handles ("<5.2", ">1.0", "3.9 - 6.0"), several results above their range, one below,
+one inside it, and one (haemoglobin) whose printed range is sex-specific and deliberately
+left unparsed — the row shows its printed text, never a guessed bound, no bar and no flag."""
+
 CLINIC_LETTER_HYPERTENSION = "clinic-letter-hypertension-2026-09-12"
 """A clinic slip naming a condition in the clinician's own words, 12 September 2026."""
 

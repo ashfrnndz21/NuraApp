@@ -205,8 +205,8 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await page.getByTestId("see-report").click();
 
   const card = page.getByTestId("review-card");
-  await expect(card).toContainText("This is a blood test.");
-  await expect(card).toContainText(/The paper is dated Thursday,? 7 September 2023\./);
+  await expect(card).toContainText("Blood test");
+  await expect(page.getByTestId("report-subtitle")).toContainText(/Thursday,? 7 September 2023/);
   await expect(page.getByTestId("field-total_cholesterol")).not.toHaveAttribute("data-needs-confirm", "true");
   await expect(page.getByTestId("field-triglycerides")).toHaveAttribute("data-needs-confirm", "true");
   await expect(page.getByTestId("field-triglycerides")).toContainText("The blood fats");
@@ -225,9 +225,10 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
     const value = (await tile.locator(".report-value-num").textContent()) ?? "";
     expect(value.trim().length).toBeGreaterThan(0);
   }
-  // In the patient density every line has its spoken twin.
-  await page.getByTestId("field-triglycerides").getByTestId("hear").click();
-  expect(await spoken(page)).toEqual(["The blood fats", "64 mg/dL", "Please check this one."]);
+  // In the patient density ONE control reads the whole report, in order — not one per row.
+  await page.getByTestId("review-card").getByTestId("hear").click();
+  const wholeReport = await spoken(page);
+  expect(wholeReport.join(" | ")).toContain("The blood fats | 64 mg/dL | Please check this one.");
 
   // Correct the misread blood fats to what the paper says, from the correction sheet; a word
   // is caught first.
@@ -241,7 +242,7 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await fats.fill("54");
   await page.getByTestId("action-sheet-cta").click();
   await expect(sheet).toHaveCount(0);
-  await page.getByTestId("field-vldl").getByTestId("row-value").click();
+  await page.getByTestId("field-vldl").click();
   await page.getByTestId("leave-out").click();
   await page.getByTestId("action-sheet-not-now").click();
   await expect(page.getByTestId("field-vldl")).toContainText("Nura will leave this one out.");
@@ -335,7 +336,7 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   // Do it now on the tablets: the camera, the card, the yes, and back here with that gap closed.
   await laterUntil(gap, "medicines");
   await gap.getByTestId("photo-input").setInputFiles(photo("warfarin-label-2024-03-12"));
-  await expect(page.getByTestId("review-card")).toContainText("This is a medicine label.");
+  await expect(page.getByTestId("review-card")).toContainText("Medicine label");
   // A structured line (the dose) still needs him, but cannot be retyped: the sheet offers only
   // what Nura read and "Leave this one out".
   await page.getByTestId("field-dose").getByTestId("check-this-one").click();
@@ -492,11 +493,11 @@ test("papers of every kind: a hospital letter as a PDF, a page that is not a hea
   await page.getByTestId("file-input").setInputFiles({ name: "letter.pdf", mimeType: "application/pdf", buffer: placeholderPdf("discharge-letter-2026-08-20") });
   await expect(page.getByTestId("reading-result")).toBeVisible();
   await page.getByTestId("see-report").click();
-  await expect(page.getByTestId("review-card")).toContainText("This is a hospital letter.");
+  await expect(page.getByTestId("review-card")).toContainText("Hospital letter");
   await expect(page.getByTestId("field-reason")).toContainText("Why you were in hospital");
   await spoken(page); // what the cloud's tap said earlier
-  await page.getByTestId("field-reason").getByTestId("hear").click();
-  expect((await spoken(page)).slice(0, 2)).toEqual(["Why you were in hospital", "heart failure"]);
+  await page.getByTestId("review-card").getByTestId("hear").click();
+  expect((await spoken(page)).join(" | ")).toContain("Why you were in hospital | heart failure");
   await page.getByTestId("looks-right").click();
   await expect(page.getByTestId("saved")).toHaveText("Nura wrote it down.");
 

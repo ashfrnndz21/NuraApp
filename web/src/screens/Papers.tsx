@@ -7,7 +7,8 @@ import { readable } from "../onboarding/review";
 import { t } from "../strings";
 import { Header, Pill } from "../ui/components";
 import { focusHeading } from "../ui/focus";
-import { PaperBubble, ReadingResult } from "./onboarding/PaperReading";
+import { PillButton } from "../ui/kit";
+import { PaperBubble, ReadingProgress, ReadingResult } from "./onboarding/PaperReading";
 import { ReviewStep } from "./onboarding/Records";
 import { PaperBatchView } from "./PaperBatch";
 import { Shell } from "./Shell";
@@ -33,6 +34,10 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
   const [opened, setOpened] = useState(false);
   const items = batch.items.value;
   const reportPicked = report && batch.stage.value === "choosing" && items.length === 1 ? items[0]! : null;
+  // While the one real upload is in flight: the same paper bubble the sitting's own reading
+  // screen shows, so a screen capture (and a person) can see it genuinely mid-read rather than
+  // jumping straight from "Send it" to the finished card.
+  const sendingSingle = report && batch.stage.value === "sending" && items.length === 1 ? items[0]! : null;
   const done = batch.stage.value === "done";
   useEffect(() => {
     if (!report || opened || !done) return;
@@ -48,7 +53,13 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
     const picked = items[0]!;
     return (
       <Shell tab={null} testId="papers-screen" attrs={{ "data-stage": "reading" }}>
-        <Header title={s.papers.title} onBack={() => go({ name: "today" })} />
+        {/* The reading screen has just the back control and the paper bubble (blueprint
+            `reading`): no screen title sitting over a single paper's own bubble. */}
+        <header class="screen-head reading-head">
+          <PillButton variant="quiet" compact icon="back" onClick={() => go({ name: "today" })} testId="reading-back">
+            {s.onboarding.back}
+          </PillButton>
+        </header>
         <PaperBubble name={picked.name} thumb={picked.thumb} testId="paper-bubble" />
         <ReadingResult
           card={reading}
@@ -58,6 +69,20 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
           }}
           testId="reading-result"
         />
+      </Shell>
+    );
+  }
+  if (sendingSingle) {
+    const latest = batch.trace.value;
+    return (
+      <Shell tab={null} testId="papers-screen" attrs={{ "data-stage": "reading" }}>
+        <header class="screen-head reading-head">
+          <PillButton variant="quiet" compact icon="back" onClick={() => go({ name: "today" })} testId="reading-back">
+            {s.onboarding.back}
+          </PillButton>
+        </header>
+        <PaperBubble name={sendingSingle.name} thumb={sendingSingle.thumb} testId="paper-bubble" />
+        <ReadingProgress status={latest.length > 0 ? latest[latest.length - 1]!.text : s.papers.working} testId="papers-trace" />
       </Shell>
     );
   }
