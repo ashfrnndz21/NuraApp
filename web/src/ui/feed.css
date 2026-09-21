@@ -82,7 +82,11 @@
   padding: var(--space-2) var(--space-3);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  /* Layout fix: this was `flex-end`, bottom-aligning a shorter-than-the-page tile and leaving
+     an empty band (as tall as the shortfall — ~150px on the "Now" card at 390x844) between the
+     header and the card itself. The card sits under the header with the page's own gap now;
+     any spare height in a short card's page goes below it. */
+  justify-content: flex-start;
   outline: none;
 }
 .feed-card:focus-visible > .tile {
@@ -278,26 +282,30 @@
   margin-bottom: 2px;
 }
 
-/* The clip card's own still (layout fix: the still used to sit at its natural size, Play next
-   to it in plain flow rather than over it, so on a short phone it read as squashed against the
-   action row below). A proper 16:9 frame, the still or excerpt filling it (never distorted —
-   `object-fit: cover`), Play centred over it and always fully visible, radius matched to the
-   tile it sits in. `.feed-card` scopes every rule here to the feed's own clip card, never
+/* The clip card's own still (layout fix, round 2: the frame first drew at the card's own pill
+   radius — a giant lozenge — and its Play read as the word "Play" in a circle, never the
+   blueprint's plain icon; the byline and the one primary action after it could be pushed clean
+   off a short card with no visible way to reach them). A proper 16:9 frame at a flat 16px
+   radius (never the tile's own pill-family radius), capped at 28% of the viewport's height so
+   it never dominates a short phone; the still or excerpt fills it (never distorted —
+   `object-fit: cover`). `.feed-card` scopes every rule here to the feed's own clip card, never
    `tabs.tsx`'s unrelated `clip-player` (the thread's own clip, a different screen, sharing only
    the base `.clip`/`.scene` classes from `ui/base.css`). */
 .feed-card .clip {
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 .feed-card .clip-media {
   position: relative;
   aspect-ratio: 16 / 9;
   width: 100%;
-  border-radius: var(--radius-chip);
+  max-height: 28vh;
+  border-radius: 16px;
   overflow: hidden;
   background: rgba(0, 0, 0, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: none;
 }
 .feed-card .clip-media img,
 .feed-card .clip-media video {
@@ -307,13 +315,52 @@
   height: 100%;
   object-fit: cover;
 }
-.feed-card .clip-media .pill.clip-play {
+/* Play: the icon alone, in a round 56px target (the blueprint's own `feed` scene — an icon
+   button with an accessible name, never the word "Play" set inside a shape). */
+.feed-card .clip-media .clip-play {
   position: relative;
   z-index: 1;
-  width: auto;
-  min-width: var(--target);
-  padding: 0 var(--space-2);
+  width: var(--target);
+  height: var(--target);
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 50%;
+  border: none;
+  background: var(--paper-bg);
+  color: var(--ink-on-light);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   box-shadow: var(--glass-highlight), 0 4px 18px rgba(15, 10, 25, 0.45);
+}
+.feed-card .clip-media .clip-play:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.feed-card .clip-media .clip-play .icon {
+  width: 22px;
+  height: 22px;
+  /* The play triangle (a filled shape, unlike the outline icons elsewhere on the card) sits a
+     hair off-centre visually; nudge it, never the button itself. */
+  margin-left: 3px;
+  fill: currentColor;
+}
+.feed-card .clip-media .clip-duration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 1;
+  padding: 2px 8px;
+  border-radius: var(--radius-chip);
+  background: rgba(21, 16, 31, 0.72);
+  color: var(--white);
+  font-size: var(--text-caption);
+  line-height: 1.3;
 }
 .feed-card .clip-media .clip-caption-overlay {
   position: absolute;
@@ -331,6 +378,8 @@
   margin: 0;
   font-size: var(--text-caption);
   color: var(--ink-soft);
+  /* Never clipped: a long publisher name wraps here, same as any other line on the card. */
+  overflow-wrap: anywhere;
 }
 .feed-card .scene {
   margin-top: 0;

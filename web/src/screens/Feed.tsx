@@ -488,8 +488,15 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
         <h2 class={index === 0 ? "title feed-title-first" : "title"}>{view.headline}</h2>
         {!declined && (
           <>
+            {/* A clip card's own lines are capped to the first two before the media (layout
+                fix: on a short phone, the media and its byline must never need a scroll to
+                reach — they used to sit after every line, why, source and the link, and could
+                be pushed clean off the card). The rest of the lines — same lines, same order,
+                still spoken, still read by every test that reads `lines` as a whole — carry on
+                right after the media, inside the same scrollable region. A card with no clip
+                is unaffected: every line renders together, as before. */}
             <div class="lines" data-testid="lines">
-              {view.lines.map((line, at) => {
+              {(view.clip ? view.lines.slice(0, 2) : view.lines).map((line, at) => {
                 const clip = clips.get(line);
                 if (!clip) return <p key={at}>{line}</p>;
                 return (
@@ -501,6 +508,20 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
               })}
             </div>
             {view.clip && <ClipPart itemId={item.item_id} clip={view.clip} playing={playing} onPlay={() => onHear(view)} s={s} />}
+            {view.clip && view.lines.length > 2 && (
+              <div class="lines" data-testid="lines-more">
+                {view.lines.slice(2).map((line, at) => {
+                  const clip = clips.get(line);
+                  if (!clip) return <p key={at}>{line}</p>;
+                  return (
+                    <div key={at} class="clip-line" data-testid="card-line">
+                      <p>{line}</p>
+                      <ClipButton clip={clip} playKey={`${entry.key}:${at}`} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {/* Why this is here, in his terms — the backend's own reason (RE-08's `why.plain`,
                 the same source the Why sheet reads), never invented here; only the treatment
                 (the quiet mark) is new. The publisher, then the link into the fuller Why sheet,
@@ -595,6 +616,15 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
             {s.feed.toTablets}
           </button>
         )}
+        {/* The clip's one primary action, in `.feed-controls` — never inside the scrolling
+            `.feed-body` (layout fix: it used to sit at the very end of the clip's own content,
+            past the media, the byline, why, source and the boundary, and a short card could
+            push it clean off screen with no way to know it was there but to scroll for it). */}
+        {!declined && view.clip?.kind === "publisher" && view.clip.fullUrl && view.clip.publisher && (
+          <a class="pill plum" href={view.clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
+            {fill(s.feed.watchWhole, { publisher: view.clip.publisher })}
+          </a>
+        )}
         {playing && <PlayerControls />}
         <div class={actions.length === 1 ? "feed-actions one" : "feed-actions"} role="group" aria-label={view.headline}>
           {actions.map((action) => (
@@ -678,36 +708,31 @@ function PublisherClipPart({ itemId, clip, playing, onPlay, s }: { itemId: strin
   };
   return (
     <div class="clip" data-testid="clip">
-      {/* A proper 16:9 frame (layout fix: the still used to sit at its own natural size, with
-          Play next in flow rather than over it — squashed against the action row below on a
-          short phone). The still or the excerpt fills the frame (`object-fit: cover`); Play
-          sits centred over it, always fully visible, never cropped by the frame's own edge. */}
+      {/* A proper 16:9 frame, 16px radius (layout fix: it used to inherit the card's own pill
+          radius, drawing as a giant lozenge, and Play sat next to it in plain flow rather than
+          over it). The still or the excerpt fills the frame (`object-fit: cover`); Play — the
+          icon alone, the blueprint's own `feed` scene, never the word "Play" — sits centred
+          over it, a round 56px target, always fully visible, never cropped by the frame's own
+          edge; the duration, when the item has one, is a small badge in the corner. */}
       <div class="clip-media">
         {video ? (
           <video ref={moving} src={video} poster={poster ?? undefined} muted playsInline preload="auto" data-testid="clip-video" />
         ) : (
           poster && <img src={poster} alt="" data-testid="clip-poster" />
         )}
-        <Pill plum onClick={play} testId="clip-play" extraClass="clip-play">
-          {s.feed.play}
-        </Pill>
+        <button type="button" class="clip-play" aria-label={s.feed.play} onClick={play} data-testid="clip-play">
+          <Icon name="play" />
+        </button>
+        {clip.durationMs !== null && <span class="clip-duration">{Math.round(clip.durationMs / 1000)}s</span>}
         {said && (
           <p class="caption clip-caption-overlay" aria-live="polite" data-testid="clip-caption">
             {said.text}
           </p>
         )}
       </div>
-      {clip.publisher && (
-        <p class="clip-byline">
-          {clip.publisher}
-          {clip.durationMs !== null && ` · ${Math.round(clip.durationMs / 1000)}s`}
-        </p>
-      )}
-      {clip.fullUrl && clip.publisher && (
-        <a class="pill plum" href={clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
-          {fill(s.feed.watchWhole, { publisher: clip.publisher })}
-        </a>
-      )}
+      {/* The byline: the publisher's name alone — long enough to wrap on a narrow phone rather
+          than run under the media or the action row, never truncated. */}
+      {clip.publisher && <p class="clip-byline">{clip.publisher}</p>}
     </div>
   );
 }
