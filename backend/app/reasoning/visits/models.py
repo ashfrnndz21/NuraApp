@@ -85,6 +85,13 @@ class QuestionSource(StrEnum):
     """A cloud tap read against the record (`app.reasoning.feelings.models.FeelingNote`,
     `NoteOutcome.FOR_THE_DOCTOR`), on its own appointment: the note genuinely reaches the
     visit it named (RE-02), instead of being kept and never read."""
+    ANALYST = "analyst"
+    """A Health Analyst insight the person chose to keep for a visit (checkpoint 3, "What it
+    means for you", `app.reasoning.analyst.paper`): already the analyst's own words, already
+    through `app.reasoning.analyst.pipeline.finalize`, so it is written straight through
+    `_write` rather than typed and confirmed the way a `PERSON` question is — the one tap on
+    "Keep these for my visit" is his yes for keeping exactly what was shown, not a fresh claim
+    in his own words. Stored as plain `VARCHAR` (`enum_column`), so this needed no migration."""
 
 
 class Question(RenderedFromState, ProfileScoped, RowScoped, Base):

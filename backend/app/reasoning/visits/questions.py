@@ -18,7 +18,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from sqlalchemy import or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -725,6 +725,80 @@ async def change_questions(
     return new
 
 
+PRIORITY_ANALYST = PRIORITY_MEMO
+"""Where a kept paper-scoped insight sits in the card (checkpoint 3): alongside a memo's own
+questions, ahead of nothing this loop itself proposed — it is the analyst's own finding, not
+a gap the record raised."""
+
+
+class _Keepable(Protocol):
+    """What `keep_paper_insight_questions` needs from each offered insight: duck-typed
+    against `app.reasoning.analyst.port.Insight`, rather than imported, so this module never
+    needs to import the analyst's own package to know its shape. Read-only (`@property`), so
+    a frozen dataclass such as `Insight` structurally satisfies it."""
+
+    @property
+    def insight_id(self) -> str: ...
+
+    @property
+    def text(self) -> str: ...
+
+
+async def keep_paper_insight_questions(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    appointment_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    insights: Sequence[_Keepable],
+) -> list[Question]:
+    """"Keep these for my visit" (checkpoint 3, `app.reasoning.analyst.paper`): file the
+    Health Analyst's own already-cited, already-verified questions on one visit, through this
+    module's own write path (`_write`) — the one write path a question here is ever filed
+    through, whoever proposed it.
+
+    Idempotent: an insight already kept for this visit (its `insight_id`, prefixed with the
+    artifact it came from, already in some current question's `source_ids`) is skipped, so
+    keeping the same offered questions twice never duplicates a line on the card. Every kept
+    question is written under `Scope.VISITS`, the scope `_write` gives every question but a
+    feeling note's.
+    """
+    may_change_visits(context)
+    visit = await require_visit(session, context=context, appointment_id=appointment_id)
+    state = await current_state(session, context=context)
+    current = _current(await _rows(session, context=context, appointment_id=appointment_id))
+    already_kept = {
+        source_id
+        for question in current
+        if question.source is QuestionSource.ANALYST
+        for source_id in question.source_ids
+    }
+    kept: list[Question] = []
+    for insight in insights:
+        marker = f"{artifact_id}:{insight.insight_id}"
+        if marker in already_kept:
+            continue
+        proposed = Proposed(
+            key="analyst_question",
+            slots={},
+            source=QuestionSource.ANALYST,
+            source_kind="paper_insight",
+            source_ids=(marker,),
+            priority=PRIORITY_ANALYST,
+        )
+        kept.append(
+            await _write(
+                session,
+                context=context,
+                visit=visit,
+                state=state,
+                proposed=proposed,
+                text=insight.text,
+            )
+        )
+    return kept
+
+
 @audited(Action.READ, Scope.VISITS, QUESTION)
 async def patient_card(
     session: AsyncSession, *, context: KeyContext, appointment_id: uuid.UUID
@@ -756,6 +830,7 @@ __all__ = [
     "change_questions",
     "current_questions",
     "feeling_notes_for",
+    "keep_paper_insight_questions",
     "patient_card",
     "propose_questions",
     "question_draft_for",

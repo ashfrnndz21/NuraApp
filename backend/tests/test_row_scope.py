@@ -973,6 +973,12 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("POST", f"{P}/insights/stream", json={}, stream=True),
     Walk("GET", f"{P}/insights"),
     Walk("GET", f"{P}/insights/{{report_id}}"),
+    # Checkpoint 3's paper-scoped insight (`app.reasoning.analyst.paper`): the same mix of
+    # scopes as the weekly report above, over one paper instead of the whole week. The one
+    # seeded artifact is never a confirmed paper, so every holder is refused (`NotAConfirmedPaper`,
+    # a walk this suite already skips on, `_walk`'s own reasoning) — registered here so no
+    # route under `/profiles/{id}/` is left out of both registries.
+    Walk("POST", f"{P}/papers/{{artifact_id}}/insight/stream", json={}, stream=True),
     Walk("GET", f"{P}/medication-reminder"),
     Walk("GET", f"{P}/metrics/{{kind}}"),
     Walk("GET", f"{P}/food"),
@@ -1025,6 +1031,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("POST", f"{P}/photos/stream"): "keeps a photo, streamed; returns its card (see /photos)",
     ("POST", f"{P}/imports"): "keeps a PDF; returns its card",
     ("POST", f"{P}/imports/stream"): "keeps a PDF, streamed; returns its card (see /imports)",
+    (
+        "POST",
+        f"{P}/papers/{{artifact_id}}/insight/keep",
+    ): "files a paper-scoped insight's questions on the next visit; returns where they were kept",
     ("POST", f"{P}/readings/photo"): "keeps a photo of a machine; returns its card",
     (
         "POST",
