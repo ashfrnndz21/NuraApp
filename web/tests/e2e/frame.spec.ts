@@ -109,7 +109,7 @@ for (const viewport of [
     const pa = await seedOwner(request, "Pa", []);
     const posted = await request.post(`${API}/profiles/${pa.profileId}/photos`, {
       headers: { Authorization: `Bearer ${pa.token}` },
-      data: { data: paperPhoto("discharge-letter-2026-08-20").buffer.toString("base64"), content_type: "image/png", captured_at: "2026-08-20T09:00:00Z" },
+      data: { data: paperPhoto("clinic-slip-2026-09-10").buffer.toString("base64"), content_type: "image/png", captured_at: "2026-09-10T09:00:00Z" },
     });
     expect(posted.status(), await posted.text()).toBe(201);
     const card = (await posted.json()) as { card_id: string };
