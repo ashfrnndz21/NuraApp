@@ -272,6 +272,18 @@ export const en = {
     // @patient headline
     headlineReorderOther: "About {days} days of {patient}'s {title} are left.",
     // @patient headline
+    headlinePaperOutside: "{n} of {m} numbers on your {kind} from {date} are outside range on the paper.",
+    // @patient headline
+    headlinePaperOutsideOther: "{n} of {m} numbers on {patient}'s {kind} from {date} are outside range on the paper.",
+    // @patient headline
+    headlinePaperAllIn: "Every number on your {kind} from {date} is inside the range on the paper.",
+    // @patient headline
+    headlinePaperAllInOther: "Every number on {patient}'s {kind} from {date} is inside the range on the paper.",
+    // @patient headline
+    headlinePaperNoRange: "Your {kind} from {date} is in your papers.",
+    // @patient headline
+    headlinePaperNoRangeOther: "{patient}'s {kind} from {date} is in the papers.",
+    // @patient headline
     tookCount: "You took {done} of {total} today.",
     // @patient headline
     tookCountOther: "{patient} took {done} of {total} today.",

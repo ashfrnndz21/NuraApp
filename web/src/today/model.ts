@@ -1,4 +1,5 @@
-import type { FactOut, FeedItemOut, LineOut, NowOut, Posture, SlotOut, StateDriverOut, StateOut } from "../api/types";
+import type { DocumentKind, FactOut, FeedItemOut, LineOut, NowOut, Posture, SlotOut, StateDriverOut, StateOut } from "../api/types";
+import { kindTitle } from "../onboarding/review";
 import { fill, type Language, type Strings } from "../strings";
 
 /** The Today page, built only from what the backend already says in his words: today's dose
@@ -306,13 +307,28 @@ export function systolics(facts: readonly FactOut[]): number[] {
  *  already lives: the dose the backend marks due, the day's own reading, the next visit within
  *  a week, a medicine nearing its reorder point, or a feed card the backend itself flagged an
  *  insight (its own real headline, never re-composed). */
+/** A newly confirmed paper's own range summary (owner review round 3, fix #2): the review
+ *  card's own fields, each against its own printed range (`rangeStatus`, onboarding/review.ts —
+ *  reused, never a second reckoning of the same question). `outside`/`total` are both `null`
+ *  with no field on the paper carrying a printed range at all — the honest "no ranges" case,
+ *  never a "0 of 0" pretending to be a real count. */
+export interface PaperSummary {
+  item: FeedItemOut;
+  documentKind: DocumentKind;
+  /** The date printed on the paper (fix #3) — never `created_at`, the day it happened to be
+   *  confirmed. */
+  date: Date;
+  outside: number | null;
+  total: number | null;
+}
+
 export type HomeTopItem =
   | { kind: "doseDue"; title: string; when: string }
   | { kind: "allTaken" }
   | { kind: "reading"; systolic: number; diastolic: number }
   | { kind: "visit"; doctor: string | null; at: Date }
   | { kind: "reorder"; title: string; days: number }
-  | { kind: "insight"; item: FeedItemOut };
+  | ({ kind: "paper" } & PaperSummary);
 
 export interface HomeTopInputs {
   dose: NowCard | null;
@@ -321,9 +337,14 @@ export interface HomeTopInputs {
   reading: { systolic: number; diastolic: number } | null;
   nextVisit: { scheduled_at: string; doctor: string | null } | null;
   lines: readonly LineOut[];
-  /** The ranked feed's own first insight/alert card (`category`), if the backend raised one —
-   *  never a plain "today" or "now" listing card, which has no insight of its own to speak of. */
-  insight: FeedItemOut | null;
+  /** A newly confirmed paper's own range summary, read for the feed's own top insight/alert
+   *  card (`category`) — `null` with no such card, or with one whose own summary has not
+   *  finished loading yet (`usePaperInsight`, screens/Today.tsx: the caller holds this at `null`
+   *  until it knows one way or the other, never guesses). No other feed card type earns a
+   *  headline here (owner review round 3): a card type with no template of its own is a quiet
+   *  day, never a bare title standing in for one (the defect the owner found, "From your
+   *  papers"). */
+  paper: PaperSummary | null;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -345,7 +366,7 @@ export function homeTopItem(on: HomeTopInputs, now: Date, s: Strings): HomeTopIt
   if (nearest?.count?.reorder_due && typeof nearest.count.days_left === "number") {
     return { kind: "reorder", title: lineTitle(nearest, s), days: nearest.count.days_left };
   }
-  if (on.insight) return { kind: "insight", item: on.insight };
+  if (on.paper) return { kind: "paper", ...on.paper };
   return null;
 }
 
@@ -428,8 +449,23 @@ export function homeHeadlineFor(item: HomeTopItem, s: Strings, locale: string, s
       // read it back down first.
       Object.assign(slots, { title: self ? lowerFirst(item.title) : lowerFirst(dropPossessive(item.title)), days: item.days });
       return accentLastWord(fill(self ? h.headlineReorder : h.headlineReorderOther, slots));
-    case "insight":
-      return accentLastWord(item.item.headline);
+    case "paper": {
+      // `kindTitle` capitalises its first letter for a title ("Blood test"); no template here
+      // opens on `{kind}`, so it reads back down first, the same reasoning `lowerFirst` already
+      // carries elsewhere in this file.
+      const kind = lowerFirst(kindTitle(item.documentKind, s));
+      const date = dayMonthLine(item.date, locale);
+      if (item.total !== null && item.total > 0) {
+        if (item.outside !== null && item.outside > 0) {
+          Object.assign(slots, { n: item.outside, m: item.total, kind, date });
+          return accentLastWord(fill(self ? h.headlinePaperOutside : h.headlinePaperOutsideOther, slots));
+        }
+        Object.assign(slots, { kind, date });
+        return accentLastWord(fill(self ? h.headlinePaperAllIn : h.headlinePaperAllInOther, slots));
+      }
+      Object.assign(slots, { kind, date });
+      return accentLastWord(fill(self ? h.headlinePaperNoRange : h.headlinePaperNoRangeOther, slots));
+    }
   }
 }
 
@@ -481,7 +517,7 @@ export function insightExtraLines(item: HomeTopItem, on: InsightExtraContext, s:
       return on.visitAbout.length > 0 ? on.visitAbout.slice(0, 2) : null;
     case "reorder":
       return on.reorderLine ? [on.reorderLine] : null;
-    case "insight": {
+    case "paper": {
       const lines = feedLines(item.item).lines.slice(0, 2);
       return lines.length > 0 ? lines : null;
     }
@@ -492,8 +528,9 @@ export function insightExtraLines(item: HomeTopItem, on: InsightExtraContext, s:
  *  seeding or a generation timestamp, not what the card is *about*, the defect the owner found:
  *  a card about today's tablets showing the day it happened to be written). Today for a dose or
  *  a reading (both are always about today); the visit's own date for a visit; the reorder
- *  read's own moment for a reorder (there is no other date to give it); the feed's own
- *  `created_at` only for an `insight` card, which is genuinely about the day it was raised. */
+ *  read's own moment for a reorder (there is no other date to give it); a paper's own printed
+ *  date for a paper (owner review round 3, fix #3 — the defect the owner found: a paper dated
+ *  22 January showing "18 Sep", the day it happened to be confirmed, never the day it is about). */
 export function homeTopItemDate(item: HomeTopItem, now: Date): Date {
   switch (item.kind) {
     case "doseDue":
@@ -504,8 +541,8 @@ export function homeTopItemDate(item: HomeTopItem, now: Date): Date {
       return item.at;
     case "reorder":
       return now;
-    case "insight":
-      return new Date(item.item.created_at);
+    case "paper":
+      return item.date;
   }
 }
 

@@ -272,6 +272,18 @@ export const ms = {
     // @patient headline
     headlineReorderOther: "Baki {title} {patient} tinggal kira-kira {days} hari.",
     // @patient headline
+    headlinePaperOutside: "{n} daripada {m} nombor pada {kind} anda dari {date} berada di luar julat surat itu.",
+    // @patient headline
+    headlinePaperOutsideOther: "{n} daripada {m} nombor pada {kind} {patient} dari {date} berada di luar julat surat itu.",
+    // @patient headline
+    headlinePaperAllIn: "Setiap nombor pada {kind} anda dari {date} berada dalam julat pada surat itu.",
+    // @patient headline
+    headlinePaperAllInOther: "Setiap nombor pada {kind} {patient} dari {date} berada dalam julat pada surat itu.",
+    // @patient headline
+    headlinePaperNoRange: "{kind} anda dari {date} ada dalam surat-surat anda.",
+    // @patient headline
+    headlinePaperNoRangeOther: "{kind} {patient} dari {date} ada dalam surat-surat itu.",
+    // @patient headline
     tookCount: "Anda mengambil {done} daripada {total} hari ini.",
     // @patient headline
     tookCountOther: "{patient} mengambil {done} daripada {total} hari ini.",

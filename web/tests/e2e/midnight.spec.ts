@@ -13,16 +13,19 @@ test("crossing midnight in Singapore: Today reads the new day and still says no 
   // Onboarding comes next (W3); this test is Today's, so set up later.
   await page.getByTestId("set-up-later").click();
 
-  // Just before midnight.
+  // Just before midnight. A fresh owner with nothing yet is the quiet state (owner review
+  // round 3, fix #5): the header's own greeting/question drop out then — the large one under
+  // the orb (`quiet-greeting`) is the only one — so the date is what's checked in the header,
+  // the greeting where the quiet state itself says it.
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await expect(page.getByTestId("home-head-date")).toHaveText("Monday 14 September");
-  await expect(page.getByTestId("home-head-hello")).toHaveText("Good evening, Pa.");
+  await expect(page.getByTestId("quiet-greeting")).toHaveText("Good evening, Pa.");
   await expect.poll(() => keptExpiry(page)).toBe("2026-09-14T16:00:00.000Z");
 
   // Just after it: no reload by hand.
   await page.clock.fastForward("01:30");
   await expect(page.getByTestId("home-head-date")).toHaveText("Tuesday 15 September");
-  await expect(page.getByTestId("home-head-hello")).toHaveText("Good morning, Pa.");
+  await expect(page.getByTestId("quiet-greeting")).toHaveText("Good morning, Pa.");
   await expect(page.getByTestId("no-medicines")).toContainText("Nura has no medicines for you yet.");
   await todayReady(page);
   await expect(page.locator("nav.tabbar")).toBeVisible();

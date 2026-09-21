@@ -272,6 +272,18 @@ export const zh = {
     // @patient headline
     headlineReorderOther: "{patient}的{title}大概还剩{days}天。",
     // @patient headline
+    headlinePaperOutside: "您{date}的{kind}有{m}个数字中的{n}个超出范围。",
+    // @patient headline
+    headlinePaperOutsideOther: "{patient}{date}的{kind}有{m}个数字中的{n}个超出范围。",
+    // @patient headline
+    headlinePaperAllIn: "您{date}的{kind}所有数字都在范围内。",
+    // @patient headline
+    headlinePaperAllInOther: "{patient}{date}的{kind}所有数字都在范围内。",
+    // @patient headline
+    headlinePaperNoRange: "您{date}的{kind}在您的文件里。",
+    // @patient headline
+    headlinePaperNoRangeOther: "{patient}{date}的{kind}在文件里。",
+    // @patient headline
     tookCount: "您今天已经吃了{total}次中的{done}次。",
     // @patient headline
     tookCountOther: "{patient}今天已经吃了{total}次中的{done}次。",

@@ -117,6 +117,15 @@ export interface Strings {
     headlineVisitNoDoctorOther: string;
     headlineReorder: string;
     headlineReorderOther: string;
+    /** A newly confirmed paper (owner review round 3, fix #2): filled only from the paper's own
+     *  real fields — `{kind}` its plain-word document kind, `{date}` the date printed on it,
+     *  `{n}`/`{m}` a real count of numbers outside/on the paper. Never a bare title. */
+    headlinePaperOutside: string;
+    headlinePaperOutsideOther: string;
+    headlinePaperAllIn: string;
+    headlinePaperAllInOther: string;
+    headlinePaperNoRange: string;
+    headlinePaperNoRangeOther: string;
     /** The insight card's own extra fact (owner review round 2): a real thing the headline did
      *  not already say, per `HomeTopItem` kind — never the headline's own sentence again. Where
      *  there is no such fact yet (`today/model.ts`'s `insightExtra`), the card itself does not
