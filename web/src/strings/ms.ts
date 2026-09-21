@@ -921,6 +921,8 @@ export const ms = {
     // @patient phrase
     watchWhole: "Tonton seluruh video di {publisher}",
     // @patient phrase
+    watchWholeShort: "Tonton seluruh video",
+    // @patient phrase
     askOrSearch: "Tanya atau cari",
     // @patient phrase
     filterLabel: "Cari di mana",

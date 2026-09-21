@@ -621,8 +621,18 @@ function FeedCard({ entry, index, view, clips, note, status, patient, owner, nam
             past the media, the byline, why, source and the boundary, and a short card could
             push it clean off screen with no way to know it was there but to scroll for it). */}
         {!declined && view.clip?.kind === "publisher" && view.clip.fullUrl && view.clip.publisher && (
-          <a class="pill plum" href={view.clip.fullUrl} target="_blank" rel="noopener noreferrer" data-testid="watch-whole">
-            {fill(s.feed.watchWhole, { publisher: view.clip.publisher })}
+          <a
+            class="pill plum"
+            href={view.clip.fullUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="watch-whole"
+            aria-label={fill(s.feed.watchWhole, { publisher: view.clip.publisher })}
+          >
+            {/* The publisher is named in the byline right above the button; said again inside it,
+                a long name made a four-line button that pushed the clip off a small phone. The
+                whole sentence stays as the control's accessible name. */}
+            {s.feed.watchWholeShort}
           </a>
         )}
         {playing && <PlayerControls />}

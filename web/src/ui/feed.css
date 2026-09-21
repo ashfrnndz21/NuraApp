@@ -124,6 +124,12 @@
   flex-direction: column;
   gap: var(--space-1);
   outline: none;
+  /* Where the lines run on under the controls they fade out, never end in a line sliced in
+     half: the last 28px dissolve, and the same 28px of padding keeps a card that does NOT
+     scroll from losing its own last line to the fade. */
+  padding-bottom: 28px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
   background:
     radial-gradient(farthest-side at 50% 0, rgba(78, 58, 120, 0.22), rgba(78, 58, 120, 0)) center top / 100% 14px no-repeat scroll,
     radial-gradient(farthest-side at 50% 100%, rgba(78, 58, 120, 0.3), rgba(78, 58, 120, 0)) center bottom / 100% 16px no-repeat scroll;
