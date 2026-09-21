@@ -120,6 +120,25 @@ def test_safe_query_fails_closed_on_a_term_that_is_neither_a_medicine_nor_a_clos
     )
 
 
+def test_every_condition_the_planner_can_write_as_a_term_has_a_query() -> None:
+    """Re-review of #310: the closed words first iterated a LANGUAGE-keyed mapping, so they held
+    "en", "ms", "zh" and only three conditions (by accident, via `FOOD_TERMS`) — 64 of 67
+    condition jobs searched nothing, written DONE, never retried, and no test noticed because
+    every condition the suite used was one of the three. Every code of the onboarding graph,
+    said the way `compose._gaps` says it, must yield a query — and a language code must not."""
+    from app.delivery.feed.compose import CONDITION_TERMS
+    from app.onboarding.conditions import graph
+
+    codes = list(graph().conditions)
+    assert len(codes) > 50 and {"stroke", "kidneys", "thyroid"} <= set(codes)
+    for code in codes:
+        term = CONDITION_TERMS.get(code, code.replace("_", " "))
+        query = _safe_query(term, JobKind.EXPLAINER, REGISTRY, "en")
+        assert query == f"{term} — what it is for", code
+    for not_a_word in ("en", "ms", "zh"):
+        assert _safe_query(not_a_word, JobKind.EXPLAINER, REGISTRY, "en") is None
+
+
 def test_safe_queries_leaves_an_unsafe_term_out_of_both_the_terms_and_the_queries() -> None:
     class _Job:
         kind = JobKind.EXPLAINER

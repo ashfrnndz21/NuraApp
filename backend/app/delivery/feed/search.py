@@ -166,14 +166,18 @@ carry no intent word here and `_safe_query` passes their term through unchanged.
 def _closed_words() -> frozenset[str]:
     """Every non-medicine word a job term may be: the plain words the planner itself writes for
     a condition (`CONDITION_TERMS`, and a condition CODE said with spaces — the codes are the
-    closed set `app.safety.health_words.CONDITIONS`), a food topic (`FOOD_TERMS`), the one
+    closed onboarding graph, `app.onboarding.conditions.graph().conditions`, the same source
+    `compose._gaps` and `_topic_term` write a term from), a food topic (`FOOD_TERMS`), the one
     reading it plans for ("blood pressure"), a hazard and a season's own search term. Imported
     here, not at module level: `compose` imports this module."""
     from app.delivery.feed.compose import CONDITION_TERMS, FOOD_TERMS
     from app.delivery.feed.local import HAZARDS, SEASONS
-    from app.safety.health_words import CONDITIONS
+    from app.onboarding.conditions import graph
 
-    words = {code.replace("_", " ") for code in CONDITIONS}
+    # NOT `app.safety.health_words.CONDITIONS`: that mapping is keyed by LANGUAGE, so iterating
+    # it gave "en", "ms", "zh" and 64 of the 67 condition words searched nothing, in silence
+    # (re-review of #310).
+    words = {code.replace("_", " ") for code in graph().conditions}
     words |= set(CONDITION_TERMS.values()) | set(FOOD_TERMS.values()) | {"blood pressure"}
     words |= set(HAZARDS) | {season.term for season in SEASONS} | {season.code for season in SEASONS}
     return frozenset(word.strip().lower() for word in words)
