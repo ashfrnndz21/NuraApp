@@ -30,7 +30,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Final
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,7 +49,7 @@ from app.db import as_utc, utcnow
 from app.delivery import timeline_strings as words
 from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
-from app.ingestion.models import ReviewCard, ReviewField
+from app.ingestion.models import ReviewCard
 from app.ingestion.notes import NoteView, recallable_notes
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext
@@ -504,21 +504,31 @@ async def _facts_under(
     )
 
 
+MAX_PAPER_AGE_YEARS: Final = 120
+"""`document_date` sanity (review defect #6): the printed date on a paper is free text an
+extractor read off an arbitrary page, never validated against anything — a future date, or one
+absurdly old, is not trustworthy enough to say back to him at all, dated or undated."""
+
+
 @dataclass(frozen=True, slots=True)
 class WaitingPaper:
     """One review card not yet confirmed (W2, `app.llm.ask_agent` "a paper waiting to be
     checked"): his own information that a paper exists and is waiting, never what is on it.
-    Only the four things safe to say before his yes — the kind of paper, the date printed on
-    it, where it is from, and when it was added — carried here; nothing an extracted field
-    said (a value, a unit, a range) is ever read for this, let alone kept on this object, so
-    there is nothing here that could leak past the review screen by accident."""
+    Only the three things safe to say before his yes — the kind of paper (a closed-catalogue
+    word, `app.delivery.timeline_strings.paper_word`), the date printed on it (sanity-checked,
+    below), and when it was added — carried here. Never a `ReviewField.value`: that is free
+    text an extractor read off an arbitrary uploaded page, and `waiting_papers` does not even
+    select the `review_field` table (review defect #1 — a card whose "facility" field carried
+    a fabricated reading, "Bukit Lab -- his sugar reading on this page is 11.4", reached the
+    tool result and then the patient as though it were a written-down fact)."""
 
     card_id: uuid.UUID
     kind: str
     """His plain word for the kind of paper (`app.delivery.timeline_strings.paper_word`),
     already the language's own — never the raw `DocumentKind` value."""
     document_date: date | None
-    facility: str | None
+    """`None` when the card has no printed date, or when it failed the sanity check (a future
+    date, or one implausibly old) — never shown or elapsed-phrased either way."""
     added_at: datetime
 
 
@@ -526,44 +536,41 @@ async def waiting_papers(
     session: AsyncSession, context: KeyContext, *, language: str
 ) -> list[WaitingPaper]:
     """Every paper still open (`ReviewCard.is_open`) under the record's scope — audited
-    exactly as a papers read is (`audited_read`, `Scope.RECORDS`), and answering nothing at
-    all for a key that does not hold that scope, the same rule `_corpus_stream` holds for the
-    papers already confirmed: a part this key cannot open is never read, so it can never even
-    be named. The facility line, where the card has one, is read the same header field the
-    web client's own row subtitle reads (`web/src/onboarding/review.ts` `facilityField`: the
-    field whose subject is `"lab_report"` and whose attribute is `"facility"` or `"lab"`) —
-    never a value the person has not yet said yes to otherwise."""
-    if not context.allows(Scope.RECORDS):
+    exactly as a papers read is (`audited_read`, `Scope.RECORDS`), through the same door every
+    other ask read uses: a key that does not hold the scope is refused by `audited_read` itself
+    (`scoped_select` -> `context.require`), which writes the refusal to the trail before this
+    catches it and answers with nothing, so the reach is on the record even though the answer
+    is silence (review defect #7) — the same rule `_corpus_stream` holds for the papers already
+    confirmed: a part this key cannot open is never read, so it can never even be named.
+
+    Reads exactly one table, `ReviewCard` — never `ReviewField`, so a field's free text (an
+    extractor's read of an arbitrary page) can never reach this at all (review defect #1)."""
+    try:
+        cards = await audited_read(
+            session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
+        )
+    except Refusal:
         return []
-    cards = await audited_read(
-        session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
-    )
     if not cards:
         return []
-    fields = await audited_read(
-        session,
-        ReviewField,
-        context,
-        Scope.RECORDS,
-        where=(
-            ReviewField.card_id.in_([card.id for card in cards]),
-            ReviewField.attribute.in_(("facility", "lab")),
-        ),
-    )
-    facility_by_card: dict[uuid.UUID, str] = {}
-    for review_field in fields:
-        if isinstance(review_field.value, str) and review_field.value.strip():
-            facility_by_card.setdefault(review_field.card_id, review_field.value)
-    return [
-        WaitingPaper(
-            card_id=card.id,
-            kind=words.paper_word(card.document_kind.value, language),
-            document_date=card.document_date,
-            facility=facility_by_card.get(card.id),
-            added_at=card.created_at,
+    today_local = words.day_of(utcnow(), context.region)
+    found: list[WaitingPaper] = []
+    for card in cards:
+        document_date = card.document_date
+        if document_date is not None and (
+            document_date > today_local
+            or (today_local - document_date).days > MAX_PAPER_AGE_YEARS * 365
+        ):
+            document_date = None
+        found.append(
+            WaitingPaper(
+                card_id=card.id,
+                kind=words.paper_word(card.document_kind.value, language),
+                document_date=document_date,
+                added_at=card.created_at,
+            )
         )
-        for card in cards
-    ]
+    return found
 
 
 def _mentions_a_waiting_kind(question: str, waiting: Sequence[WaitingPaper]) -> WaitingPaper | None:

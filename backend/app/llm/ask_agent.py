@@ -13,8 +13,9 @@ The tools are the same audited, scope-checked reads `recall_stream`'s own corpus
 `read_records`, `read_feelings`, plus `search_online` (the allowlisted web,
 `app.delivery.feed.claude_adapters.ClaudeSearcher`) — and `read_waiting_papers`
 (`app.search.ask.waiting_papers`): a paper he has added but not yet said yes to is his own
-information too — its kind, the date printed on it, where it is from, and when he added it —
-never a value on it, which stays behind the review screen until his own yes closes the card.
+information too — its kind, the date printed on it, and when he added it — never a value on
+it (never even a `ReviewField`, so there is no free text to leak in the first place), which
+stays behind the review screen until his own yes closes the card.
 A tool for a scope this key does not hold is never offered to the model at all: a withheld
 part cannot even be named, the same rule `_corpus_stream` holds by never reading it. Every
 tool's result is plain lines already in his own words, each carrying its own id — never a row,
@@ -33,9 +34,12 @@ language, whatever the model wrote (`app.safety.boundary.boundary_lines`) — th
 trusted with that line itself. Every surviving line also passes the same conclusion-and-advice
 blocklist `app.llm.narrate.ClaudeNarrator` holds every rephrase to, is checked for caregiver
 voice the same way (`app.channels.about_him.Reader`), and is checked for an elapsed phrase the
-model invented rather than copied (`_invented_elapsed_phrase`). A line that fails any of these,
-and cannot be repaired (below), is dropped; a cite outside this ask's own tool results is
-dropped from its line; a line with nothing left to cite is dropped.
+model invented or reached for vaguely rather than copied (`_elapsed_claim`). A line whose only
+cites are an unconfirmed review card, but which states a value anyway, is dropped too
+(`_claims_a_value_from_an_unconfirmed_card`) — a second, independent layer over
+`WaitingPaper`'s own refusal to carry one at all. A line that fails any of these, and cannot be
+repaired (below), is dropped; a cite outside this ask's own tool results is dropped from its
+line; a line with nothing left to cite is dropped.
 
 A dropped line is never just silently missing from the middle of the answer, either: if the
 model's own first (lead) line is the one dropped, or a surviving line opens as though
@@ -210,10 +214,9 @@ _TOOL_DEFS: Final[dict[str, dict[str, Any]]] = {
     "read_waiting_papers": {
         "name": "read_waiting_papers",
         "description": "Papers he has added but not yet checked and said yes to — never what "
-        "is on them, only that one exists: its kind, the date printed on it, where it is "
-        "from, and when it was added. Use this when a question could be about a paper that "
-        "may still be waiting, so you can say it is waiting instead of saying nothing is "
-        "written down.",
+        "is on them, only that one exists: its kind, the date printed on it, and when it was "
+        "added. Use this when a question could be about a paper that may still be waiting, "
+        "so you can say it is waiting instead of saying nothing is written down.",
         "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "read_feelings": {
@@ -376,11 +379,22 @@ class _TokenCounter:
         return f"{prefix}{n}"
 
 
+_CONTROL_CHARS: Final = re.compile(r"[\r\n\t\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
+"""A tool line is data about his record read back to the model, never an instruction — but a
+free-text field (a note, a provider's name, a label typed on a review card) is his or a
+family member's words, or an extractor's read of an arbitrary uploaded page, not a value this
+adapter controls (review defect #2: a hostile page's text carrying a newline could forge what
+looked like a second "r2: ..." tool line, or a line that reads like a new instruction). Every
+line goes through `_register`, the one place a tool result is built, so this is stripped once,
+for every tool, not per field."""
+
+
 def _register(
     lines: list[_ToolLine], counter: _TokenCounter, kind: str, id_: uuid.UUID, text: str
 ) -> str:
     token = counter.next(kind)
-    lines.append(_ToolLine(token=token, text=f"{token}: {text}", cite=Cite(kind=kind, id=id_)))
+    clean = _CONTROL_CHARS.sub(" ", text).strip()
+    lines.append(_ToolLine(token=token, text=f"{token}: {clean}", cite=Cite(kind=kind, id=id_)))
     return token
 
 
@@ -421,7 +435,7 @@ async def _read_medicines(
     for line in found:
         name = _plain_name(registry, line.generic, language)
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
-        started_on = line.started_at.date()
+        started_on = day_of(line.started_at, context.region)
         elapsed = _elapsed(context, language, started_on, elapsed_seen)
         _register(
             lines,
@@ -443,7 +457,7 @@ async def _read_readings(
     facts = await _facts_under(session, context, Scope.READINGS)
     lines: list[_ToolLine] = []
     for fact in facts:
-        on = fact.valid_from.date()
+        on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
         if _is_reading(fact):
             value = fact.value
@@ -467,7 +481,7 @@ async def _read_visits(
     for visit in visits:
         provider = providers.get(visit.provider_id)
         who = provider.name if provider is not None else "an unnamed provider"
-        when = visit.scheduled_at.date()
+        when = day_of(visit.scheduled_at, context.region)
         elapsed = _elapsed(context, language, when, elapsed_seen)
         text = f"with {who} on {when.isoformat()} ({elapsed}), status {visit.status.value}"
         _register(lines, counter, "appointment", visit.id, text)
@@ -484,7 +498,7 @@ async def _read_records(
     facts = await _facts_under(session, context, Scope.RECORDS)
     lines: list[_ToolLine] = []
     for fact in facts:
-        on = fact.valid_from.date()
+        on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
         _register(
             lines,
@@ -504,23 +518,21 @@ async def _read_waiting_papers(
     elapsed_seen: set[str],
 ) -> tuple[list[_ToolLine], int]:
     """A paper he has added but not yet checked (fix 2, this module's docstring): only the
-    four things safe to say before his yes — never an extracted value, unit or range, which
-    stays behind the review screen (`app.search.ask.WaitingPaper` carries nothing else to
-    leak)."""
+    three things safe to say before his yes — the closed-catalogue kind word, the sanity-
+    checked printed date (`app.search.ask.MAX_PAPER_AGE_YEARS`), and when it was added — never
+    an extracted value, unit, range or facility name (review defect #1: `WaitingPaper` reads
+    no `ReviewField` at all, so there is no free text left here to leak in the first place)."""
     found = await waiting_papers(session, context, language=language)
     lines: list[_ToolLine] = []
     for paper in found:
-        when = (
-            "no date written on it"
-            if paper.document_date is None
-            else (
-                f"dated {paper.document_date.isoformat()} "
-                f"({_elapsed(context, language, paper.document_date, elapsed_seen)})"
-            )
+        dated = (
+            f", dated {paper.document_date.isoformat()} "
+            f"({_elapsed(context, language, paper.document_date, elapsed_seen)})"
+            if paper.document_date is not None
+            else ""
         )
-        added = _elapsed(context, language, paper.added_at.date(), elapsed_seen)
-        facility = f", from {paper.facility}" if paper.facility else ""
-        text = f"{paper.kind}, {when}{facility}, added {added}, not yet checked"
+        added = _elapsed(context, language, day_of(paper.added_at, context.region), elapsed_seen)
+        text = f"{paper.kind}{dated}, added {added}, not yet checked"
         _register(lines, counter, "review_card", paper.card_id, text)
     return lines, len(found)
 
@@ -531,7 +543,7 @@ async def _read_feelings(
     notes, _withheld = await recent_notes(session, context=context)
     lines: list[_ToolLine] = []
     for note in notes:
-        date = note.created_at.date().isoformat()
+        date = day_of(note.created_at, context.region).isoformat()
         said = " ".join(note.lines) if note.lines else note.headline
         _register(
             lines,
@@ -611,7 +623,7 @@ async def _read_plan(
     for proposal in proposed.proposals:
         synthetic = uuid.uuid5(uuid.NAMESPACE_URL, f"visit-proposal:{proposal.proposal_id}")
         when = (
-            proposal.suggested_at.date().isoformat()
+            day_of(proposal.suggested_at, context.region).isoformat()
             if proposal.suggested_at is not None
             else "no date written down"
         )
@@ -955,6 +967,25 @@ class ClaudeAsker:
                     for block in tool_uses:
                         name = _block_get(block, "name")
                         tool_id = _block_get(block, "id")
+                        if name not in tool_names:
+                            # Review defect #8: a scope this key does not hold offers no tool
+                            # for it (`_tools_for`) — but nothing stopped the model naming one
+                            # anyway, and the call ran regardless, its step and "Looked at"
+                            # entry reaching the wire as if a withheld part had been read.
+                            # Refused here, before anything runs: no step, no result but a
+                            # refusal, the same rule a withheld part is never even named by.
+                            log.warning(
+                                "claude asker: the model named a tool never offered to it: %s",
+                                name,
+                            )
+                            results.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_id,
+                                    "content": "that tool is not available",
+                                }
+                            )
+                            continue
                         args = _block_get(block, "input") or {}
                         step_lines, count = await self._run_tool(
                             name,
@@ -1170,16 +1201,50 @@ def _plain_words_findings(text: str, language: str) -> list[Finding]:
 
 
 _DANGLING_OPENERS: Final[dict[str, tuple[str, ...]]] = {
-    "en": ("however", "but", "instead", "that", "it also", "so", "this"),
-    "ms": ("walau bagaimanapun", "tetapi", "tapi", "sebaliknya", "itu", "ia juga"),
-    "zh": ("然而", "但是", "但", "反而", "相反", "那", "这也", "它也"),
+    "en": (
+        "however",
+        "but",
+        "instead",
+        "it also",
+        "so",
+        "still",
+        "on the other hand",
+        "apart from that",
+        "also",
+    ),
+    "ms": (
+        "walau bagaimanapun",
+        "tetapi",
+        "tapi",
+        "sebaliknya",
+        "ia juga",
+        "jadi",
+        "selain itu",
+    ),
+    "zh": ("然而", "但是", "但", "反而", "相反", "这也", "它也", "所以", "此外"),
 }
-"""A small, named list (fix 1d, this module's docstring) of contrastive or anaphoric openers
-that only make sense right after the line they answer back to — "What your papers DO hold…"
-after a dropped lead is the live defect this catches. The prompt (`ask_agent.txt`) forbids
-every one of these outright; this is the cheap backstop for when the model writes one anyway.
-Never a ban on the word itself mid-sentence — only as how a surviving line *opens* when the
-line before it, in the model's own original order, did not survive."""
+"""A small, named list (fix 1d, this module's docstring; review defect #9) of contrastive or
+anaphoric openers that only make sense right after the line they answer back to — "What your
+papers DO hold…" after a dropped lead is the live defect this catches. The prompt
+(`ask_agent.txt`) forbids every one of these outright; this is the cheap backstop for when the
+model writes one anyway. Never "that"/"this" — a review defect: bare "that"/"this" matched an
+ordinary sentence that happens to start with the word ("That tablet is your water pill.",
+"This is written down in your papers.") far more often than a real dangling reference — and
+never a ban on any of these words mid-sentence, or naked (no punctuation after), which is why
+`_DANGLING_PATTERN` requires the opener be followed by a comma: "So the tablet was late." does
+not open on its own the way "So, the tablet was late." does. Word-boundaried too (`\\b`), so
+"so" never matches inside "Something"/"Soon"/"Sometimes" — the other review defect."""
+
+
+def _dangling_pattern(openers: tuple[str, ...]) -> re.Pattern[str]:
+    longest_first = sorted(openers, key=len, reverse=True)
+    body = "|".join(re.escape(word) for word in longest_first)
+    return re.compile(rf"^(?:{body})\b\s*[,，]", re.IGNORECASE)
+
+
+_DANGLING_PATTERN: Final[dict[str, re.Pattern[str]]] = {
+    language: _dangling_pattern(openers) for language, openers in _DANGLING_OPENERS.items()
+}
 
 _WHAT_DO_HOLD: Final[dict[str, re.Pattern[str]]] = {
     "en": re.compile(r"^what\b.{0,40}\bdo(?:es)?\s+hold\b", re.IGNORECASE),
@@ -1191,46 +1256,132 @@ even where a bare "what"/"apa" alone would be too broad to flag on its own."""
 
 
 def _starts_with_dangling_opener(text: str, language: str) -> bool:
-    openers = _DANGLING_OPENERS.get(language, _DANGLING_OPENERS["en"])
-    lowered = text.strip().lower()
-    if any(lowered.startswith(opener) for opener in openers):
+    stripped = text.strip()
+    pattern = _DANGLING_PATTERN.get(language, _DANGLING_PATTERN["en"])
+    if pattern.match(stripped):
         return True
-    pattern = _WHAT_DO_HOLD.get(language, _WHAT_DO_HOLD["en"])
-    return bool(pattern.match(text.strip()))
+    what_do_hold = _WHAT_DO_HOLD.get(language, _WHAT_DO_HOLD["en"])
+    return bool(what_do_hold.match(stripped))
 
 
-_ELAPSED_PATTERN: Final[dict[str, re.Pattern[str]]] = {
+_ELAPSED_CLAIM: Final[dict[str, re.Pattern[str]]] = {
     "en": re.compile(
-        r"\b(?:today|yesterday|tomorrow|in about \d+ (?:weeks?|months?|years?)"
-        r"|about \d+ (?:weeks?|months?|years?) ago|in \d+ days?|\d+ days? ago)\b",
+        r"\b(?:yesterday|\d+\s+days?\s+ago|about\s+\d+\s+(?:weeks?|months?|years?)\s+ago"
+        r"|in\s+about\s+\d+\s+(?:weeks?|months?|years?))\b",
         re.IGNORECASE,
     ),
     "ms": re.compile(
-        r"\b(?:hari ini|semalam|esok|dalam kira-kira \d+ (?:minggu|bulan|tahun)"
-        r"|kira-kira \d+ (?:minggu|bulan|tahun) lalu|dalam \d+ hari|\d+ hari lalu)\b",
+        r"\b(?:semalam|\d+\s+hari\s+lalu|kira-kira\s+\d+\s+(?:minggu|bulan|tahun)\s+lalu"
+        r"|dalam\s+kira-kira\s+\d+\s+(?:minggu|bulan|tahun))\b",
         re.IGNORECASE,
     ),
-    "zh": re.compile(
-        r"(?:今天|昨天|明天|大约\d+(?:周|个月|年)前|大约\d+(?:周|个月|年)后|\d+天前|\d+天后)"
-    ),
+    "zh": re.compile(r"(?:昨天|\d+天前|大约\d+(?:周|个月|年)前|大约\d+(?:周|个月|年)后)"),
 }
-"""The shape of an elapsed phrase (fix 3, this module's docstring): the model is told to copy
-one given beside a date, never work it out itself. A line whose elapsed-shaped words do not
-match one this ask actually handed it (`elapsed_given`) is treated like an uncited claim —
-repaired or dropped, never shown as though it were read off the record."""
+"""The shape of a *computed* elapsed claim (fix 3, this module's docstring; review defect #4):
+deliberately narrow — "N days/weeks/months/years ago", "about N … ago", "in about N …", and
+"yesterday" — never the bare, ordinary words "today", "tomorrow" or "in N days" on their own,
+which turned up in perfectly innocent lines with no date claim at all ("Ask Dr Tan about the
+water pill today.") and were wrongly dropped. A line whose elapsed-shaped words do not match
+one this ask actually handed it (`elapsed_given`) is treated like an uncited claim — repaired
+or dropped, never shown as though it were read off the record."""
+
+_VAGUE_ELAPSED: Final[dict[str, tuple[str, ...]]] = {
+    "en": (
+        "over a year ago",
+        "a couple of years ago",
+        "a few months ago",
+        "some time ago",
+        "not long ago",
+        "a while ago",
+        "last year",
+        "recently",
+    ),
+    "ms": (
+        "lebih setahun lalu",
+        "beberapa tahun lalu",
+        "beberapa bulan lalu",
+        "sekian lama",
+        "tidak lama dahulu",
+        "seketika dahulu",
+        "tahun lepas",
+        "baru-baru ini",
+    ),
+    "zh": ("一年多前", "好几年前", "好几个月前", "一段时间前", "不久前", "前阵子", "去年", "最近"),
+}
+"""Review defect #5: the computed-shape check above under-fires on a vague elapsed claim with
+no number at all ("last year", "recently", "a while ago") — this app's own `elapsed_phrase`
+never produces one of these, so any occurrence is always wrong, never checked against
+`elapsed_given`. Kept as its own small, named constant, per language, so the list stays
+auditable rather than folded into the regex above. The bare, unnumbered forms of "months ago"
+("bulan lalu") are handled separately, by `_BARE_UNIT_AGO` below: as a *literal* string each
+would also match inside a perfectly legitimate computed phrase this ask really gave
+("20 months ago" contains the substring "months ago"), so they need the negative lookbehind a
+plain substring check cannot express."""
+
+_BARE_UNIT_AGO: Final[dict[str, re.Pattern[str]]] = {
+    "en": re.compile(r"(?<!\d )(?<!\d)months? ago\b", re.IGNORECASE),
+    "ms": re.compile(r"(?<!\d )(?<!\d)bulan lalu\b", re.IGNORECASE),
+    "zh": re.compile(r"(?<!\d)个月前"),
+}
+""""Months ago" (or its ms/zh equivalent) with no number in front of it at all — always vague,
+always wrong — but excluded, by the lookbehind, from matching inside a legitimate "20 months
+ago" this ask actually gave."""
 
 
-def _invented_elapsed_phrase(text: str, language: str, elapsed_given: frozenset[str]) -> str | None:
-    """The first elapsed-shaped phrase in `text` that is not, case-insensitively, one of
-    `elapsed_given` — the phrases the tools actually computed and handed the model this ask.
-    `None` when every elapsed-shaped phrase in the line was one it was actually given, or when
-    the line has none at all."""
-    pattern = _ELAPSED_PATTERN.get(language, _ELAPSED_PATTERN["en"])
+def _elapsed_claim(text: str, language: str, elapsed_given: frozenset[str]) -> str | None:
+    """The first elapsed-shaped phrase `text` claims that this ask never actually gave it —
+    a computed shape ("about 3 weeks ago") not, case-insensitively, in `elapsed_given`, or any
+    vague phrase at all (`_VAGUE_ELAPSED`/`_BARE_UNIT_AGO`, always wrong). `None` when the line
+    makes no such claim, or every one it makes was really given."""
+    for vague in _VAGUE_ELAPSED.get(language, _VAGUE_ELAPSED["en"]):
+        if vague in text.lower():
+            return vague
+    bare_unit = _BARE_UNIT_AGO.get(language, _BARE_UNIT_AGO["en"])
+    bare_match = bare_unit.search(text)
+    if bare_match is not None:
+        return bare_match.group()
+    pattern = _ELAPSED_CLAIM.get(language, _ELAPSED_CLAIM["en"])
     given_lower = {phrase.lower() for phrase in elapsed_given}
     for match in pattern.finditer(text):
         if match.group().lower() not in given_lower:
             return match.group()
     return None
+
+
+_ELAPSED_RULE: Final = 90
+"""Never a real `docs/plain-words.md` rule number (those run 1-14): a pseudo-rule so an
+invented or vague elapsed claim can still ride the same `Finding`-based repair-hint machinery
+every other broken rule does (review defect #4 — the drop used to record no `Finding` at all,
+so it could never trigger a repair round)."""
+
+
+def _elapsed_claim_finding(phrase: str, language: str) -> Finding:
+    return Finding(
+        rule=_ELAPSED_RULE,
+        problem=f'"{phrase}" is not one of the elapsed times this ask actually gave you',
+        rewrite="use the elapsed words given beside the date exactly, word for word",
+        text=phrase,
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_VALUE_SHAPED: Final = re.compile(r"\b\d+\.\d+\b|\b\d{3,}\b")
+"""A decimal number, or an integer of three digits or more — never a day-of-month (1-31), so
+never mistaken for a legitimate dated waiting-paper line, but exactly the shape of a lab value
+or a reading (review defect #1: a hostile card's facility field, "Bukit Lab -- his sugar
+reading on this page is 11.4", if it ever reached a tool result, could still be copied into an
+answer that cites the card and nothing else). `WaitingPaper` no longer reads any free text at
+all, closing the leak at its source; this is the second, independent layer: a line whose only
+cites are the review card itself structurally can never carry a value, so one that does is
+dropped regardless of where the number came from."""
+
+
+def _claims_a_value_from_an_unconfirmed_card(text: str, cites: Sequence[Cite]) -> bool:
+    return bool(cites) and all(cite.kind == "review_card" for cite in cites) and bool(
+        _VALUE_SHAPED.search(text)
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1297,10 +1448,16 @@ def _parse_answer(
         if _has_conclusion_language(text, language):
             _drop("conclusion_language")
             continue
-        invented = _invented_elapsed_phrase(text, language, elapsed_given)
-        if invented is not None:
-            # Fix 3: the model did its own date arithmetic instead of using an elapsed phrase
-            # this ask actually gave it — treated like an uncited claim, never shown.
+        elapsed_problem = _elapsed_claim(text, language, elapsed_given)
+        if elapsed_problem is not None:
+            # Fix 3 / review defect #4: the model did its own date arithmetic, or reached for
+            # a vague phrase this app never produces, instead of using an elapsed phrase this
+            # ask actually gave it — treated like an uncited claim, never shown. Recorded as a
+            # `Finding` (a pseudo-rule, `_ELAPSED_RULE`) so it can still trigger a repair round
+            # the same way a broken plain-words rule does.
+            if failed_findings is not None:
+                finding = _elapsed_claim_finding(elapsed_problem, language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("invented_elapsed_phrase")
             continue
         heard = reader.says(text)
@@ -1316,6 +1473,12 @@ def _parse_answer(
         )
         if not cites:
             _drop("no_cite_matched")
+            continue
+        if _claims_a_value_from_an_unconfirmed_card(heard, cites):
+            # Review defect #1, second layer: a line citing only an unconfirmed review card
+            # structurally has no value to say — `WaitingPaper` carries none — so a line that
+            # says one anyway is dropped, whatever put it there.
+            _drop("value_from_unconfirmed_card")
             continue
         lines.append(AnswerLine(text=heard, cites=cites))
         origins.append(index)

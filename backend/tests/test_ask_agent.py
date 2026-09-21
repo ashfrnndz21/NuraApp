@@ -12,9 +12,10 @@ inputs, no network.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,8 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
 from app.channels.about_him import Reader
+from app.clock import FrozenClock
+from app.db import utcnow
 from app.delivery.feed.compress import Found
-from app.delivery.timeline_strings import honest_lines
+from app.delivery.timeline_strings import day_of, honest_lines
 from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.photos import store_photo
@@ -42,8 +45,9 @@ from app.llm.ask_agent import (
 from app.memory.models import SourceChannel
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_lines
-from app.search.ask import Answer, AskStep, Mode, recall
+from app.search.ask import Answer, AskStep, Mode, recall, waiting_papers
 from app.search.asker import AnswerDelta
+from app.search.elapsed import elapsed_phrase
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import REGISTRY, let_in
 from tests.paper import LAB_REPORT_VITALS, PAPER, placeholder_png
@@ -57,17 +61,20 @@ class FakeMessage:
 
 
 class FakeMessages:
-    def __init__(self, responses: list[FakeMessage]) -> None:
-        self._responses = list(responses)
+    def __init__(self, responses: list[FakeMessage | BaseException]) -> None:
+        self._responses: list[FakeMessage | BaseException] = list(responses)
         self.calls: list[dict[str, Any]] = []
 
     async def create(self, **kwargs: Any) -> FakeMessage:
         self.calls.append(kwargs)
-        return self._responses.pop(0)
+        item = self._responses.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
 
 
 class FakeClient:
-    def __init__(self, responses: list[FakeMessage]) -> None:
+    def __init__(self, responses: list[FakeMessage | BaseException]) -> None:
         self.messages = FakeMessages(responses)
 
 
@@ -93,6 +100,12 @@ def _tool_call(tool_id: str, name: str, args: dict[str, Any] | None = None) -> F
         stop_reason="tool_use",
         content=[{"type": "tool_use", "id": tool_id, "name": name, "input": args or {}}],
     )
+
+
+def _unparsable() -> FakeMessage:
+    """A final answer that is not JSON at all (`_structured_json` returns `None` for it) —
+    the model answered something that does not parse."""
+    return FakeMessage(stop_reason="end_turn", content=[{"type": "text", "text": "not json{{{"}])
 
 
 async def _drive(
@@ -846,12 +859,27 @@ def test_a_line_inventing_its_own_elapsed_phrase_is_dropped() -> None:
     assert parsed.answer is None
 
 
-# --- fix 2: a paper waiting to be checked reaches the model, four fields only --------------
+# --- fix 2: a paper waiting to be checked reaches the model, three fields only, never a
+# value even if one is planted -------------------------------------------------------------
+#
+# Independent safety review, first pass: the "facility" field this file originally hung the
+# waiting line's "where it is from" on is `ReviewField.value` — free text an extractor wrote
+# from an arbitrary uploaded page — and a hostile value there reached both the tool result and
+# the patient-facing line as fact. `waiting_papers` no longer reads `review_field` at all
+# (`app.search.ask`); `HostileExtractor` (`tests.test_waiting_papers`) proves it here, at the
+# full `ClaudeAsker` level, and a model that tries to repeat the hostile value anyway (citing
+# only the review card) is still caught by `_claims_a_value_from_an_unconfirmed_card`.
 
 SEPT_18 = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
 
+_WAITING_LINE_SHAPE = re.compile(
+    r"^r\d+: [a-z ]+(, dated \d{4}-\d{2}-\d{2} \([^()]+\))?, added [^,()]+, not yet checked$"
+)
 
-async def _open_review_card(sg: AsyncSession, context: Any, store: LocalObjectStore) -> uuid.UUID:
+
+async def _open_review_card(
+    sg: AsyncSession, context: Any, store: LocalObjectStore, *, extractor: Any = None
+) -> uuid.UUID:
     photo = await store_photo(
         sg,
         context=context,
@@ -866,13 +894,67 @@ async def _open_review_card(sg: AsyncSession, context: Any, store: LocalObjectSt
         context=context,
         artifact_id=photo.id,
         store=store,
-        extractor=FixtureExtractor(PAPER),
+        extractor=extractor or FixtureExtractor(PAPER),
         language="en",
     )
     return card.id
 
 
-async def test_waiting_papers_reach_the_model_with_only_the_four_allowed_fields(
+async def test_a_hostile_facility_value_never_reaches_the_tool_result_or_the_answer(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The blocker, closed and proven at the full `ClaudeAsker` level: a card whose "facility"
+    field carried a fabricated reading, a forged "r2:" line and a planted instruction — the
+    reviewer's own proof-of-concept — produces a tool result matching a fixed, closed shape
+    with none of it, and a model that still tries to state the fabricated value as fact (citing
+    the card alone) does not survive either."""
+    from tests.test_waiting_papers import HOSTILE_FACILITY_VALUE, HostileExtractor
+
+    rec = await record(sg)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    await _open_review_card(sg, rec.owner, store, extractor=HostileExtractor())
+
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_waiting_papers"),
+            _final(
+                [
+                    {"text": "Your sugar was 11.4 on Sunday 30 August.", "cites": ["r1"]},
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, deltas, answer = await _drive(
+        asker, sg, rec.owner, "when was my last blood test done", tmp_path
+    )
+
+    tool_result = client.messages.calls[1]["messages"][-1]["content"][0]["content"]
+    for line in tool_result.splitlines():
+        assert _WAITING_LINE_SHAPE.match(line), line
+    for leaked in ("Bukit", "11.4", "sugar", "r2:", "ignore previous instructions"):
+        assert leaked not in tool_result
+    assert HOSTILE_FACILITY_VALUE  # imported for the leak-check above; unused otherwise
+    # The model's own attempt to state the fabricated value as fact, citing the card alone,
+    # is caught (`_claims_a_value_from_an_unconfirmed_card`) — plain words alone would have let
+    # it through, confirmed by `test_plain_words_alone_would_have_let_the_hostile_line_through`
+    # below: this new check is the thing standing between the model and the patient here.
+    assert "11.4" not in " ".join(answer.spoken)
+    assert deltas == []
+
+
+def test_plain_words_alone_would_have_let_the_hostile_line_through() -> None:
+    """Proves the new check (`_claims_a_value_from_an_unconfirmed_card`) is load-bearing: the
+    hostile line above is a well-formed sentence, no red word, no long word, one number — every
+    existing gate passes it. Something specific to an unconfirmed-card-only cite has to be
+    what stops it."""
+    from app.safety.plain_words import verify
+
+    findings = verify("Your sugar was 11.4 on Sunday 30 August.", "en", "ask")
+    assert not any(f.severity == "fail" for f in findings)
+
+
+async def test_waiting_papers_reach_the_model_with_only_the_three_allowed_fields(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     rec = await record(sg)
@@ -901,10 +983,11 @@ async def test_waiting_papers_reach_the_model_with_only_the_four_allowed_fields(
 
     assert steps == ["waiting_papers"]
     tool_result = client.messages.calls[1]["messages"][-1]["content"][0]["content"]
-    assert "Bukit Lab" in tool_result  # the facility: allowed
+    for line in tool_result.splitlines():
+        assert _WAITING_LINE_SHAPE.match(line), line
     assert "blood test" in tool_result  # the kind: allowed
-    # Never an extracted value, unit or range from the fixture's own numbers.
-    for leaked in ("5.6", "140", "<130", "glucose", "ldl", "mmol"):
+    # Never an extracted value, unit, range or facility name from the fixture's own numbers.
+    for leaked in ("5.6", "140", "<130", "glucose", "ldl", "mmol", "Bukit"):
         assert leaked not in tool_result
     assert str(card_id) not in tool_result  # the id given back is the short token, never a uuid
     assert answer.lines
@@ -923,3 +1006,199 @@ async def test_a_key_without_records_scope_is_never_offered_the_waiting_papers_t
         scopes={Scope.PROFILE, Scope.ASK, Scope.VISITS, Scope.EMERGENCY},
     )
     assert "read_waiting_papers" not in _tools_for(narrow)
+
+
+async def test_a_tool_the_model_names_but_was_never_offered_is_refused_no_step_no_looked_at(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Review defect #8: `_run_tool` dispatched by name alone — a model that named
+    `read_waiting_papers` anyway, for a key with no records scope, still got a real read, a
+    step and a "Looked at" entry, as though a withheld part had been opened. The offered set
+    is now checked before anything runs."""
+    rec = await record(sg)
+    narrow = await let_in(
+        sg,
+        rec.owner,
+        phone="+6588880004",
+        name="Aminah",
+        role=KeyRole.HELPER,
+        scopes={Scope.PROFILE, Scope.ASK, Scope.VISITS, Scope.EMERGENCY},
+    )
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_waiting_papers"),  # never offered to this key
+            _final([{"text": "Your next visit with Dr Tan is written down.", "cites": ["v1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, _deltas, _answer = await _drive(asker, sg, narrow, "what is written down", tmp_path)
+    assert "waiting_papers" not in steps
+    assert steps == []
+    tool_result = client.messages.calls[1]["messages"][-1]["content"][0]["content"]
+    assert "not available" in tool_result
+
+
+# --- review defect #3: elapsed dates are computed on the profile's local day, never a naive
+# UTC `.date()` ------------------------------------------------------------------------------
+
+
+async def test_elapsed_dates_use_the_profiles_local_day_not_a_naive_utc_date(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """The clock at 2026-09-03 17:00 UTC is 2026-09-04 01:00 in Singapore. A card added one
+    minute before that, and a reading taken half an hour before that, both fall on the SAME
+    Singapore calendar day as "now" — 4 September, not 3 September, which is what a naive
+    `moment.date()` on the UTC instant would have said. Both askers read the day the same way
+    (`app.delivery.timeline_strings.day_of`), so they can never disagree."""
+    rec = await record(sg)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    clock.set(datetime(2026, 9, 3, 16, 59, tzinfo=UTC))
+    photo = await store_photo(
+        sg,
+        context=rec.owner,
+        store=store,
+        data=placeholder_png(LAB_REPORT_VITALS),
+        content_type="image/png",
+        captured_at=datetime(2026, 9, 3, 16, 59, tzinfo=UTC),
+        source_channel=SourceChannel.APP,
+    )
+    await review_photo(
+        sg,
+        context=rec.owner,
+        artifact_id=photo.id,
+        store=store,
+        extractor=FixtureExtractor(PAPER),
+        language="en",
+    )
+    clock.set(datetime(2026, 9, 3, 17, 0, tzinfo=UTC))
+
+    found = await waiting_papers(sg, rec.owner, language="en")
+    assert len(found) == 1
+    added_at = found[0].added_at
+    # The naive bug this closes: a bare `.date()` on the UTC instant says 3 September.
+    assert added_at.date() == date(2026, 9, 3)
+    added_local = day_of(added_at, Region.SG)
+    today_local = day_of(utcnow(), Region.SG)
+    assert added_local == today_local == date(2026, 9, 4)
+    assert elapsed_phrase(today_local, added_local, "en") == "today"
+
+    reading_at = datetime(2026, 9, 3, 16, 30, tzinfo=UTC)
+    assert reading_at.date() == date(2026, 9, 3)  # the naive bug, again
+    assert day_of(reading_at, Region.SG) == date(2026, 9, 4)  # the correct, shared answer
+
+
+# --- review defect #9: the dangling-opener detector, table-driven, per language ------------
+#
+# The first six of each language's table are ordinary sentences a false positive once caught:
+# a word containing an opener as a mere prefix with no boundary ("Something", "Soon",
+# "Sometimes"), a bare "that"/"this" opening an unrelated sentence, and an opener with no
+# punctuation after it. The last three are real dangling openers, still caught.
+
+_DANGLING_TABLE: dict[str, list[tuple[str, bool]]] = {
+    "en": [
+        ("Something new was written down on Wednesday.", False),
+        ("Soon you will see Dr Tan again.", False),
+        ("Sometimes your blood pressure changes.", False),
+        ("That tablet is your water pill.", False),
+        ("This is written down in your papers.", False),
+        ("So far nothing new is written down.", False),
+        ("However, your next visit with Dr Tan is written down.", True),
+        ("Instead, ask Dr Tan about the water pill.", True),
+        ("What your papers do hold are notes from his hospital stay.", True),
+    ],
+    "ms": [
+        ("Sesuatu yang baru ditulis pada Rabu.", False),
+        ("Tapinya ubat itu tidak berubah.", False),
+        ("Jadinya begitulah keadaannya.", False),
+        ("Itu ubat tekanan darah anda.", False),
+        ("Ini sudah ditulis dalam surat anda.", False),
+        ("Selalunya tekanan darah anda stabil.", False),
+        ("Walau bagaimanapun, lawatan anda yang seterusnya sudah ditulis.", True),
+        ("Sebaliknya, tanya Dr Tan tentang ubat itu.", True),
+        ("Apa yang surat anda ada ialah nota dari hospital.", True),
+    ],
+    "zh": [
+        ("有新的东西在星期三写下了。", False),
+        ("所有的记录都在您的文件里。", False),
+        ("这些是您的血压记录。", False),
+        ("那是您的血压药。", False),
+        ("这是写在您文件里的。", False),
+        ("所有药都没有改变。", False),
+        ("然而，您下一次看Dr Tan的预约已经写下了。", True),
+        ("反而，问一问Dr Tan关于那个药。", True),
+        ("这些文件里有的是您住院的笔记。", True),
+    ],
+}
+
+
+def test_dangling_opener_table_per_language() -> None:
+    for language, rows in _DANGLING_TABLE.items():
+        for text, expected in rows:
+            assert _starts_with_dangling_opener(text, language) is expected, (language, text)
+
+
+# --- review defect #12: every never-partial path, strengthened -----------------------------
+
+
+async def test_when_the_repair_round_itself_raises_the_fallback_answers(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),  # triggers a repair round
+            RuntimeError("the repair round's own call blew up"),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+    assert len(client.messages.calls) == 3
+    assert answer.answered or answer.honest
+    assert _TOO_LONG_LINE not in " ".join(answer.spoken)
+    assert deltas == []
+
+
+async def test_when_the_repair_round_itself_times_out_the_fallback_answers(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _TOO_LONG_LINE, "cites": ["m1"]}]),
+            TimeoutError("the repair round's own call timed out"),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+    assert len(client.messages.calls) == 3
+    assert answer.answered or answer.honest
+    assert deltas == []
+
+
+async def test_an_unparsable_final_answer_falls_back_never_a_partial(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    rec = await record(sg)
+    client = FakeClient([_tool_call("toolu_1", "read_medicines"), _unparsable()])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+    assert len(client.messages.calls) == 2
+    assert answer.answered or answer.honest
+    assert deltas == []
+
+
+async def test_max_rounds_exhausted_before_any_repair_completes_falls_back(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Six tool-use rounds in a row, never a final answer at all — `MAX_ROUNDS` is exhausted
+    before the model ever gets to a repair round, let alone finishes one. Still never nothing,
+    and never a partial: the rule-based answer says it instead."""
+    rec = await record(sg)
+    client = FakeClient([_tool_call(f"toolu_{i}", "read_medicines") for i in range(6)])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, deltas, answer = await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+    assert len(client.messages.calls) == 6
+    assert answer.answered or answer.honest
+    assert deltas == []

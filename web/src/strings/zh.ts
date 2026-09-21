@@ -849,6 +849,8 @@ export const zh = {
     // @patient
     sourceVisits: "这来自您看医生的安排。",
     // @patient
+    sourceReviewCard: "这份文件还在等您检查。",
+    // @patient
     askWithheld: "有些文件没有对您开放。",
     // @patient
     askThinking: "Nura 正在找。",
