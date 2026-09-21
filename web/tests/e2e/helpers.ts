@@ -747,6 +747,17 @@ export async function todayReady(page: Page): Promise<void> {
   await expect(page.getByTestId("today-ready")).toBeAttached();
 }
 
+/** Checkpoint 3, "What it means for you" (package 7): every "Looks right" now opens this
+ *  screen first, streamed, before whatever came next before — the questions section only once
+ *  the real report has landed (`insight-headline`), and one way on either way
+ *  (`insight-leave`, its label the caller's own "Next"/"Back to your papers"). Every onboarding
+ *  walk that used to land straight on the next stage now calls this once, right after
+ *  `looks-right`, before asserting where it landed. */
+export async function throughInsight(page: Page): Promise<void> {
+  await expect(page.getByTestId("insight-headline").or(page.getByTestId("notice"))).toBeVisible();
+  await page.getByTestId("insight-leave").click();
+}
+
 /** Open the Me sheet from the header's avatar. By testid, not its accessible name: the Profile
  *  tab is named "Me" too now (plain words), so "Me" alone no longer picks out one button. */
 export async function openMe(page: Page): Promise<void> {

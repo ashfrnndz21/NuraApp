@@ -250,6 +250,29 @@ export interface Strings {
     asked: string;
     noVisit: string;
   };
+  /** Checkpoint 3, "What it means for you" (`docs/design/experience-blueprint.html` scene
+   *  `insight`): the screen right after a paper is confirmed — what stands out on it, the
+   *  questions it raises for the doctor, and where "Keep these questions" filed them. */
+  paperInsight: {
+    screenTitle: string;
+    screenTitleOther: string;
+    standsOutTitle: string;
+    /** "Ranges are the ones printed on your/{patient}'s paper." — the report table's own line
+     *  (`onboarding.records.safetyRanges`) has no `…Other` twin (it is never shown to a
+     *  caregiver reopening a paper any other way today); this screen's own caregiver walk
+     *  needs one, so it carries its own rather than saying "your" about his paper to her. */
+    standoutSafety: string;
+    standoutSafetyOther: string;
+    questionsTitle: string;
+    questionsTitleOther: string;
+    keepQuestions: string;
+    keeping: string;
+    kept: string;
+    keptForVisit: string;
+    keptForVisitOther: string;
+    keptUnfiled: readonly string[];
+    keptUnfiledOther: readonly string[];
+  };
   signIn: {
     title: string;
     phoneLead: string;

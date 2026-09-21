@@ -506,6 +506,39 @@ export const en = {
     // @patient
     noVisit: "There is no visit booked yet to take this to.",
   },
+  // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
+  // `insight`): right after "Looks right", what stands out on the paper and the questions it
+  // raises for the doctor.
+  paperInsight: {
+    // @patient headline
+    screenTitle: "What it means for you",
+    // @patient headline
+    screenTitleOther: "What it means for {patient}",
+    // @patient headline
+    standsOutTitle: "What stands out on this paper",
+    // @patient
+    standoutSafety: "Ranges are the ones printed on your paper.",
+    // @patient
+    standoutSafetyOther: "Ranges are the ones printed on {patient}'s paper.",
+    // @patient headline
+    questionsTitle: "Questions for your doctor",
+    // @patient headline
+    questionsTitleOther: "Questions for {patient}'s doctor",
+    // @patient phrase
+    keepQuestions: "Keep these questions",
+    // @patient phrase
+    keeping: "Keeping…",
+    // @patient phrase
+    kept: "Kept",
+    // @patient
+    keptForVisit: "Kept for your next visit.",
+    // @patient
+    keptForVisitOther: "Kept for {patient}'s next visit.",
+    // @patient
+    keptUnfiled: ["Nura kept your questions.", "Nura will add them once a visit is booked."],
+    // @patient
+    keptUnfiledOther: ["Nura kept {patient}'s questions.", "Nura will add them once {patient}'s next visit is booked."],
+  },
   signIn: {
     // @patient headline
     title: "Sign in",

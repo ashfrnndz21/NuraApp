@@ -72,6 +72,9 @@ import type {
   OfflineCardsOut,
   OrderPreviewOut,
   PaperAddedOut,
+  PaperInsightKeepOut,
+  PaperInsightOut,
+  PaperInsightStreamEvent,
   PlaceNoteOut,
   PlanOut,
   PolicyOut,
@@ -466,6 +469,50 @@ export function insightsStream(token: string, profileId: string, onStep: (key: s
       .catch(reject);
   });
 }
+
+// --- checkpoint 3: the paper-scoped insight, right after "Looks right" ----------------------
+
+/** The insight for one confirmed paper, streamed (`POST …/papers/{artifactId}/insight/stream`):
+ *  `onStep` for each real part of the record Nura read beside this paper — the paper itself, his
+ *  medicines, its own history, his next visit — as it happens, resolving with the finished
+ *  insight, the same shape `insightsStream` resolves with its report. `signal`: aborts the
+ *  connection at once if the screen is left before it finishes (leaving the screen aborts the
+ *  stream — no event, and no state update from one, ever reaches a caller after that). A refusal
+ *  (a scope this key does not hold, a closing account, an unconfirmed card) throws `Refused`, as
+ *  `apiStream` always throws one. */
+export function paperInsightStream(
+  token: string,
+  profileId: string,
+  artifactId: string,
+  onStep: (key: string, label: string) => void,
+  signal?: AbortSignal,
+): Promise<PaperInsightOut> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    apiStream(`/profiles/${profileId}/papers/${artifactId}/insight/stream`, { method: "POST", token, signal }, (event) => {
+      const streamed = event as unknown as PaperInsightStreamEvent;
+      if (streamed.type === "step") onStep(streamed.key, streamed.label);
+      else if (streamed.type === "report") {
+        settled = true;
+        resolve(streamed.report);
+      }
+      // A "refusal" event is thrown by `apiStream` itself before it ever reaches `onEvent`.
+    })
+      .then(() => {
+        if (!settled) reject(new Error("the stream ended with no insight"));
+      })
+      .catch(reject);
+  });
+}
+
+/** "Keep these questions": file every question on the paper's own saved insight onto the next
+ *  visit (or a standing memo with none yet — `PaperInsightKeepOut.filed`). No request body: the
+ *  route keeps the whole saved insight, never a caller-chosen subset (`app.channels.api.analyst.
+ *  keep_paper_insight`). Idempotent — a repeat call keeps `kept_count: 0`, never a duplicate
+ *  line. A viewer, a helper or a clinic key — none of which may change the visits — is refused
+ *  (`Refused("NotTheirsToChangeVisits")`, `app.reasoning.visits.guard.may_change_visits`). */
+export const keepPaperInsight = (token: string, profileId: string, artifactId: string) =>
+  api<PaperInsightKeepOut>(`/profiles/${profileId}/papers/${artifactId}/insight/keep`, { method: "POST", token });
 
 /** The keys on the profile with their holders' names: the owner reads whom to call. */
 export const keys = (token: string, profileId: string) =>

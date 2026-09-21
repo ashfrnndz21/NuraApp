@@ -23,6 +23,9 @@ export type Stage =
   | { name: "readBack" }
   | { name: "records" }
   | { name: "review"; card: ReviewCardOut }
+  /** Checkpoint 3, "What it means for you" (package 7): right after "Looks right", before the
+   *  sitting takes the paper in — `card` is the freshly confirmed one, corrections merged. */
+  | { name: "insight"; card: ReviewCardOut }
   | { name: "questions" }
   | { name: "plan" }
   | { name: "invite" }

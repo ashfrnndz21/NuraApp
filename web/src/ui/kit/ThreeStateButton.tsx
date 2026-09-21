@@ -15,13 +15,17 @@ interface ThreeStateButtonProps {
    *  resolved. A rejection returns the button to `idle` rather than pretending to have finished. */
   onAct: () => Promise<void>;
   variant?: "light" | "dark" | "plain";
+  /** Disabled in the `idle` state only — a caller's own gate (checkpoint 3's "Keep these
+   *  questions", stopped while nothing is selected) — never overrides `busy`/`done`, which stay
+   *  disabled regardless. */
+  disabled?: boolean;
   testId?: string;
 }
 
 /** A button that goes through three real states — label, busy, done with a check
  *  (docs/design/experience-blueprint.html `openSheet()`'s own CTA) — never further than the
  *  action it names has actually reached. */
-export function ThreeStateButton({ label, busyLabel, doneLabel, onAct, variant = "light", testId }: ThreeStateButtonProps): JSX.Element {
+export function ThreeStateButton({ label, busyLabel, doneLabel, onAct, variant = "light", disabled = false, testId }: ThreeStateButtonProps): JSX.Element {
   const [state, setState] = useState<ThreeState>("idle");
   // A ref, not the state above, guards against a real double-tap: Preact's state update from the
   // first click is not yet committed when a second click fires in the same tick (both would
@@ -44,7 +48,7 @@ export function ThreeStateButton({ label, busyLabel, doneLabel, onAct, variant =
 
   const cls = ["btn", variant !== "plain" && variant, state === "busy" && "busy", state === "done" && "done"].filter(Boolean).join(" ");
   return (
-    <button type="button" class={cls} onClick={handleClick} disabled={state !== "idle"} aria-live="polite" data-testid={testId} data-state={state}>
+    <button type="button" class={cls} onClick={handleClick} disabled={state !== "idle" || disabled} aria-live="polite" data-testid={testId} data-state={state}>
       {state === "done" && <Icon name="check" />}
       {state === "idle" ? label : state === "busy" ? busyLabel : doneLabel}
     </button>

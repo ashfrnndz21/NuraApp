@@ -448,6 +448,61 @@ export interface InsightsReportEvent {
 
 export type InsightsStreamEvent = InsightsStepEvent | InsightsReportEvent | AskRefusalEvent;
 
+// --- checkpoint 3: the paper-scoped insight, right after "Looks right" ----------------------
+
+/** One real part of the record a paper-scoped insight actually read (`app.reasoning.analyst.
+ *  paper.LookedAt`): the paper itself, a count of medicines, or the next visit — never a fixed
+ *  list, and never present for a part this key's own scope does not open. */
+export interface PaperLookedAtOut {
+  kind: string;
+  id: string;
+  label: string;
+}
+
+/** The paper-scoped insight (checkpoint 3, `docs/design/experience-blueprint.html` scene
+ *  `insight`, `POST /profiles/{id}/papers/{artifactId}/insight/stream`'s final event): a
+ *  headline, what was actually read, and 1-4 questions for the doctor (`InsightOut`, reused
+ *  from the weekly report) — never a diagnosis, never advice. `questions` is empty exactly
+ *  when nothing on the paper looked worth asking about; `headline` still says so in words then
+ *  (`PAPER_NOTHING_LINE`). */
+export interface PaperInsightOut {
+  report_id: string;
+  generated_at: string;
+  boundary: string[];
+  headline: string;
+  looked_at: PaperLookedAtOut[];
+  questions: InsightOut[];
+  withheld: string[];
+}
+
+/** One real stage of building the paper-scoped insight, streamed the instant it finishes — the
+ *  same trace pattern as `InsightsStepEvent`. */
+export interface PaperInsightStepEvent {
+  type: "step";
+  key: string;
+  label: string;
+}
+
+/** The stream's last event: the finished insight, exactly as `PaperInsightOut` above. */
+export interface PaperInsightReportEvent {
+  type: "report";
+  report: PaperInsightOut;
+}
+
+export type PaperInsightStreamEvent = PaperInsightStepEvent | PaperInsightReportEvent | AskRefusalEvent;
+
+/** "Keep these questions" (`POST …/insight/keep`, no request body — every question on the
+ *  paper's own saved insight is filed, never a caller-chosen subset): where they landed.
+ *  `filed`: `"visit"` when an upcoming visit exists (`appointment_id` names it); `"unfiled"`
+ *  when there is none yet — a standing memo instead, moved onto the next visit once one is
+ *  booked. `kept_count` is what THIS call actually filed — 0 on a repeat call, since keeping
+ *  the same questions twice never duplicates a line. */
+export interface PaperInsightKeepOut {
+  kept_count: number;
+  filed: "visit" | "unfiled";
+  appointment_id: string | null;
+}
+
 /** The Add flow's trace (`POST /profiles/{id}/photos/stream`, `/imports/stream`): one step
  *  the instant each real stage of turning a stored photo or PDF into a review card finishes
  *  — stored, reading, what it found, the red-flag check where one runs, a real link to a

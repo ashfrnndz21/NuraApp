@@ -506,6 +506,39 @@ export const ms = {
     // @patient
     noVisit: "Belum ada lawatan ditempah untuk bawa soalan ini.",
   },
+  // Checkpoint 3, "What it means for you" (docs/design/experience-blueprint.html scene
+  // `insight`): right after "Looks right", what stands out on the paper and the questions it
+  // raises for the doctor.
+  paperInsight: {
+    // @patient headline
+    screenTitle: "Apa maknanya untuk anda",
+    // @patient headline
+    screenTitleOther: "Apa maknanya untuk {patient}",
+    // @patient headline
+    standsOutTitle: "Apa yang menonjol dalam surat ini",
+    // @patient
+    standoutSafety: "Julat yang ditunjukkan ialah yang tertulis pada surat anda.",
+    // @patient
+    standoutSafetyOther: "Julat yang ditunjukkan ialah yang tertulis pada surat {patient}.",
+    // @patient headline
+    questionsTitle: "Soalan untuk doktor anda",
+    // @patient headline
+    questionsTitleOther: "Soalan untuk doktor {patient}",
+    // @patient phrase
+    keepQuestions: "Simpan soalan ini",
+    // @patient phrase
+    keeping: "Menyimpan…",
+    // @patient phrase
+    kept: "Disimpan",
+    // @patient
+    keptForVisit: "Disimpan untuk lawatan anda seterusnya.",
+    // @patient
+    keptForVisitOther: "Disimpan untuk lawatan {patient} seterusnya.",
+    // @patient
+    keptUnfiled: ["Nura menyimpan soalan anda.", "Nura akan menambahnya sebaik sahaja lawatan ditempah."],
+    // @patient
+    keptUnfiledOther: ["Nura menyimpan soalan {patient}.", "Nura akan menambahnya sebaik sahaja lawatan {patient} seterusnya ditempah."],
+  },
   signIn: {
     // @patient headline
     title: "Daftar masuk",

@@ -3,7 +3,7 @@ import type { Tab } from "./nav";
 import { Refused } from "./api/client";
 import * as nura from "./api/nura";
 import { resolveOpen, takeOpen } from "./push/open";
-import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut } from "./api/types";
+import type { ClaimableOut, DoorsOut, FeedItemOut, FeelingOut, ProfileOut, ReviewCardOut } from "./api/types";
 import { forgetFeed } from "./feed/session";
 import { forgetKnown } from "./store/profiles";
 import type { RecordAt } from "./record/places";
@@ -65,6 +65,12 @@ export type Screen =
    *  `report`: one report chosen from Home's "Add a health report" — the choice is the yes, so it
    *  goes at once and a readable one opens straight on its review card. */
   | { name: "papers"; report?: boolean }
+  /** Checkpoint 3, "What it means for you" (package 7): right after a paper is confirmed from
+   *  the Record's own Papers list (`screens/record/Papers.tsx`'s `PaperScreen`) — `card` is the
+   *  freshly confirmed one, corrections merged. Onboarding reaches the same content through its
+   *  own `Stage` instead (`onboarding/state.ts`), never through this screen: it has no tab bar
+   *  to sit under until the sitting itself is done. */
+  | { name: "insight"; card: ReviewCardOut }
   /** The Profile tab: what the Me sheet holds, as a screen of its own. */
   | { name: "profile" }
   /** Profile's Insurance row (E13-03): his policies, in plain words. */
