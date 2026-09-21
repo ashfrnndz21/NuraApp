@@ -5,41 +5,85 @@ import { afterSignIn, go } from "../flow";
 import { setToken } from "../store/session";
 import { language, t } from "../strings";
 import { Field, Header, Notice, Pill, Tile } from "../ui/components";
+import { Orb, SoftText, ThreeStateButton } from "../ui/kit";
+import { classifySignInError, shouldOfferResend, validCode, validPhone } from "../signin";
 
-/** Phone number → code → signed in. One thing per screen; the code never travels back. */
+/** One line Nura says, beside the small orb (docs/design/experience-blueprint.html `signin`:
+ *  "What number can I reach you on?" — one status line, not a form caption). */
+function Says({ text, testId }: { text: string; testId?: string }): JSX.Element {
+  return (
+    <div class="signin-say">
+      <Orb size="sm" />
+      <SoftText text={text} pace="headline" as="p" className="signin-say-line" testId={testId} />
+    </div>
+  );
+}
+
+/** Phone number → code → signed in, as one conversation step (`signin` scene): Nura's line,
+ *  the field, a button that goes through its three real states. Every label and test id a spec
+ *  elsewhere already reads (`getByLabel("Your phone number")`, `send-code`) is unchanged — only
+ *  how the step is framed changes. */
 export function PhoneScreen(): JSX.Element {
   const s = t();
   const [phone, setPhone] = useState("+65");
   const [name, setName] = useState("");
   const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
 
   const send = async () => {
-    setBusy(true);
+    // A number too short to be real is never sent — the same floor the field's own `disabled`
+    // used to hold, kept here now that `ThreeStateButton` has no `disabled` prop of its own.
+    // Thrown, not returned: a plain return would resolve the promise `ThreeStateButton` is
+    // waiting on and flip it to "done" for nothing sent at all. Nothing is shown for it — a box
+    // he has simply not finished typing into yet is not an error.
+    if (!validPhone(phone)) throw new Error("phone too short");
     setError(null);
-    try {
-      await nura.startPhone(phone.replace(/\s+/g, ""), name.trim() || null, language.value);
-      go({ name: "code", phone: phone.replace(/\s+/g, "") });
-    } catch (failure) {
-      setError(failure);
-    } finally {
-      setBusy(false);
-    }
+    await nura.startPhone(phone.replace(/\s+/g, ""), name.trim() || null, language.value).then(
+      () => go({ name: "code", phone: phone.replace(/\s+/g, "") }),
+      (failure: unknown) => {
+        setError(failure);
+        throw failure;
+      },
+    );
   };
 
   return (
     <main class="screen">
       <Header title={s.signIn.title} />
       <Tile paper>
-        <p>{s.signIn.phoneLead}</p>
-        <p class="caption">{s.signIn.phoneHint}</p>
-        <Field name="phone" label={s.signIn.phoneLabel} value={phone} onInput={setPhone} type="tel" inputMode="tel" autoComplete="tel" />
-        <Field name="name" label={s.signIn.nameLabel} value={name} onInput={setName} autoComplete="given-name" />
-        <Pill plum onClick={send} disabled={busy || phone.replace(/\D/g, "").length < 8} testId="send-code">
-          {s.signIn.sendCode}
-        </Pill>
+        <div class="signin-step">
+          <Says text={s.signIn.phoneLead} testId="signin-say" />
+          <p class="caption">{s.signIn.phoneHint}</p>
+          <Field
+            name="phone"
+            label={s.signIn.phoneLabel}
+            value={phone}
+            onInput={(value) => {
+              setPhone(value);
+              // Clears the moment he types again — the refusal was about the number he already
+              // sent, not the one he is now editing (operator review: keep the error tied to
+              // the field it is about, and gone the instant that changes).
+              if (error) setError(null);
+            }}
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            ariaInvalid={Boolean(error)}
+            ariaDescribedBy={error ? "phone-error" : undefined}
+          />
+          {/* Right under the field it is about, not a separate card below the whole form
+              (operator review) — one `role="alert"` region, tied to the input by
+              `aria-describedby` above. */}
+          <Notice error={error} id="phone-error" />
+          <Field name="name" label={s.signIn.nameLabel} value={name} onInput={setName} autoComplete="given-name" />
+          <ThreeStateButton
+            label={s.signIn.sendCode}
+            busyLabel={s.signIn.sending}
+            doneLabel={s.signIn.sent}
+            onAct={send}
+            testId="send-code"
+          />
+        </div>
       </Tile>
-      <Notice error={error} />
       <Pill quiet onClick={() => go({ name: "email" })}>
         {s.signIn.useEmail}
       </Pill>
@@ -51,36 +95,93 @@ export function CodeScreen({ phone }: { phone: string }): JSX.Element {
   const s = t();
   const [code, setCode] = useState("");
   const [error, setError] = useState<unknown>(null);
-  const [busy, setBusy] = useState(false);
+  const [resent, setResent] = useState(false);
 
   const verify = async () => {
-    setBusy(true);
+    if (!validCode(code)) throw new Error("code not 6 digits yet");
     setError(null);
-    try {
-      const session = await nura.verifyPhone(phone, code.trim());
-      await setToken(session.token);
-      await afterSignIn();
-    } catch (failure) {
-      setError(failure);
-    } finally {
-      setBusy(false);
-    }
+    await nura.verifyPhone(phone, code.trim()).then(
+      async (session) => {
+        await setToken(session.token);
+        await afterSignIn();
+      },
+      (failure: unknown) => {
+        setError(failure);
+        throw failure;
+      },
+    );
+  };
+  const errorKind = error ? classifySignInError(error) : null;
+
+  // A real resend: it asks the backend for a fresh code exactly as the first send did, and
+  // shows whatever the backend says — a rate limit included (`ChallengeLocked`) — rather than
+  // a client-side countdown of its own (the API gives no cooldown figure to count down from,
+  // only `expires_in_seconds` for the code just sent).
+  const resend = async () => {
+    setError(null);
+    setResent(false);
+    await nura.startPhone(phone, null, language.value).then(
+      () => setResent(true),
+      (failure: unknown) => {
+        setError(failure);
+        throw failure;
+      },
+    );
   };
 
   return (
     <main class="screen">
       <Header title={s.signIn.title} onBack={() => go({ name: "signin" })} />
       <Tile paper>
-        <p>{s.signIn.codeLead}</p>
-        <p>{s.signIn.codeHint}</p>
-        <Field name="code" label={s.signIn.codeLabel} value={code} onInput={setCode} inputMode="numeric" autoComplete="one-time-code" big maxLength={6} />
-        <Pill plum onClick={verify} disabled={busy || !/^\d{6}$/.test(code.trim())} testId="verify-code">
-          {s.signIn.signInButton}
-        </Pill>
-        <p class="caption">{s.signIn.codeWorks}</p>
-        <p class="caption">{s.signIn.never}</p>
+        <div class="signin-step">
+          <Says text={s.signIn.codeLead} testId="signin-say" />
+          <p>{s.signIn.codeHint}</p>
+          <Field
+            name="code"
+            label={s.signIn.codeLabel}
+            value={code}
+            onInput={(value) => {
+              setCode(value);
+              // The old code he just typed is what the refusal was about; typing again is a
+              // fresh try, so the error clears the instant he does (operator review).
+              if (error) setError(null);
+            }}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            big
+            maxLength={6}
+            ariaInvalid={Boolean(error)}
+            ariaDescribedBy={error ? "code-error" : undefined}
+          />
+          {/* Right under the code field, not a separate card far below it (operator review):
+              `role="alert"` announces it once, and `aria-describedby` above ties it to the
+              input a screen reader is already on. */}
+          <Notice error={error} errorKind={errorKind ?? undefined} id="code-error" />
+          <ThreeStateButton
+            label={s.signIn.signInButton}
+            busyLabel={s.signIn.checking}
+            doneLabel={s.signIn.signedIn}
+            onAct={verify}
+            testId="verify-code"
+          />
+          <p class="caption">{s.signIn.codeWorks}</p>
+          <p class="caption">{s.signIn.never}</p>
+          <Pill
+            quiet={!(errorKind && shouldOfferResend(errorKind))}
+            plum={Boolean(errorKind && shouldOfferResend(errorKind))}
+            onClick={() => void resend()}
+            testId="resend-code"
+            extraClass="signin-resend"
+          >
+            {s.signIn.resend}
+          </Pill>
+          {resent && (
+            <p class="caption" role="status" data-testid="resend-done">
+              {s.signIn.resendDone}
+            </p>
+          )}
+        </div>
       </Tile>
-      <Notice error={error} />
     </main>
   );
 }

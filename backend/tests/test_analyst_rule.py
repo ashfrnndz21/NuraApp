@@ -307,6 +307,38 @@ async def test_a_candidate_with_no_evidence_at_all_is_dropped() -> None:
     assert await finalize(candidate, language="en", reroute=drop_reroute) is None
 
 
+async def test_a_blocked_why_line_fails_the_candidate_exactly_as_blocked_text_does() -> None:
+    """Independent review of #303: only `text` met the blocklist, so a clean line whose "why"
+    said "Ask the doctor to double the dose today." was printed — and on the Claude path the
+    why is the model's own words. A clean text with a clean why still passes."""
+    poisoned = Candidate(
+        insight_id="x",
+        kind=InsightKind.CHECK,
+        text="A screening has not been written down.",
+        ask_who=AskWho.DOCTOR,
+        evidence=(Evidence(kind="policy", id="1", label="GE"),),
+        why_plain="Ask the doctor to double the dose today.",
+        confidence=Confidence.SURE,
+    )
+    assert await finalize(poisoned, language="en", reroute=drop_reroute) is None
+    rerouted: list[Candidate] = []
+
+    async def note(candidate: Candidate) -> None:
+        rerouted.append(candidate)
+
+    medicine = Candidate(
+        insight_id="m",
+        kind=InsightKind.MEDICINE,
+        text="Your water pill is written down.",
+        ask_who=AskWho.DOCTOR,
+        evidence=(Evidence(kind="policy", id="1", label="GE"),),
+        why_plain="You should stop taking it.",
+        confidence=Confidence.SURE,
+    )
+    assert await finalize(medicine, language="en", reroute=note) is None
+    assert [c.insight_id for c in rerouted] == ["m"]  # rerouted, its words never printed
+
+
 async def test_a_blocked_medicine_candidate_is_rerouted_never_printed() -> None:
     seen: list[Candidate] = []
 

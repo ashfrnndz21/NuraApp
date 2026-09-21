@@ -225,6 +225,13 @@ export interface Strings {
      *  line for a key without the records scope — named, never left off the screen blank. */
     papersTitle: string;
     papersWithheld: string;
+    // --- package 10: the week ring's calm empty state (a fresh profile, no medicines yet) ---
+    ringEmpty: string;
+    ringEmptyOther: string;
+    // --- package 10 review: one quiet line for every metric with nothing written down, never
+    //     a separate empty row each ---
+    metricsNotLogged: string;
+    metricsNotLoggedOther: string;
   };
   /** The weekly report (W1, docs/design/nura-concept-board.html): the Health card, the live
    *  trace while it builds, the report itself, and the bell's row that opens it. */
@@ -249,6 +256,25 @@ export interface Strings {
     askThis: string;
     asked: string;
     noVisit: string;
+    // --- package 10: the Health Analyst screen, in the blueprint's language --------------
+    /** "Look again": the same `generate()` call as `generate` ("Generate now"), offered once
+     *  a report is already on screen rather than before the first one ever exists. */
+    lookAgain: string;
+    /** The quiet list of every earlier report, opened one at a time. */
+    pastTitle: string;
+    /** A connection that dropped mid-stream, or the stream's own refusal: what already
+     *  arrived stays on screen (`Notice` already says the refusal's own sentence); this is
+     *  the way to try again. */
+    retryAfterError: string;
+    /** Who "Ask … this" names when `ask_who` is `"doctor"` and no visit names one — the same
+     *  fallback word the backend's own `doctor_to_ask`/`YOUR_DOCTOR` already picks. A real
+     *  name (the next visit's own doctor) is used instead when the record has one. */
+    yourDoctor: string;
+    yourDoctorOther: string;
+    /** The same fallback for `ask_who === "pharmacist"` — there is no "named pharmacist" on
+     *  the record, so this is always the word used. */
+    yourPharmacist: string;
+    yourPharmacistOther: string;
   };
   signIn: {
     title: string;
@@ -258,6 +284,8 @@ export interface Strings {
     phoneLabel: string;
     nameLabel: string;
     sendCode: string;
+    sending: string;
+    sent: string;
     useEmail: string;
     usePhone: string;
     codeLead: string;
@@ -265,6 +293,10 @@ export interface Strings {
     codeWorks: string;
     codeLabel: string;
     signInButton: string;
+    checking: string;
+    signedIn: string;
+    resend: string;
+    resendDone: string;
     emailLead: string;
     emailLabel: string;
     sendLink: string;
@@ -276,6 +308,7 @@ export interface Strings {
   };
   doors: {
     title: string;
+    greeting: string;
     forMe: string;
     forMeLine: string;
     forSomeone: string;
@@ -702,6 +735,9 @@ export interface Strings {
       term: string;
       countNone: string;
       count: string;
+      ackSelf: string;
+      ackOther: string;
+      and: string;
       tellMe: string;
       tellMeLead: string;
       tellMeLabel: string;

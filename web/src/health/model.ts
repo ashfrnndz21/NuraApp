@@ -1,4 +1,4 @@
-import type { FactOut, FoodCatalogItemOut, FoodEntryOut, Meal } from "../api/types";
+import type { FactOut, FoodCatalogItemOut, FoodEntryOut, Meal, MetricRowOut, RingOut } from "../api/types";
 import { fill, type Strings } from "../strings";
 import { dayKey } from "../today/model";
 
@@ -18,6 +18,37 @@ export function healthTitle(owner: boolean, name: string, s: Strings): string {
  *  shown withheld, named, never left off the screen in silence. */
 export function readingsWithheld(scopes: readonly string[]): boolean {
   return !scopes.includes("readings");
+}
+
+/** The week ring (`ThisWeek`, package 10): a fresh profile with no active medicines has
+ *  nothing for "doses taken this week" to count — `total` is `0` — and the backend's own words
+ *  for that count are literally "0 of 0" (`ring_words`, `app.channels.health_strings`), which
+ *  read as a broken score, not a calm nothing-yet. `total` of `null` (`check_ins`, a ring kind
+ *  this screen does not use today) counts as nothing to show either, the same caution
+ *  `ProgressRing`'s own "required, never optional" `source` rule already keeps. Pure so the
+ *  ring's empty-state branch is a unit, not only ever seen through a rendered screen. */
+export function ringHasNothingToCount(ring: Pick<RingOut, "total">): boolean {
+  return !ring.total || ring.total <= 0;
+}
+
+/** "This week"'s four metric rows (package 10 review): a row that has no value is not its own
+ *  line — four "Not written down yet" rows in a column read as a wall of nothing. Only a
+ *  metric that actually has a value gets its own grounded `MetricRow`; every metric with none
+ *  is named, once, in a single quiet line under them ("Not written down yet: steps, heart
+ *  rate, sleep, water."). Pure, so which rows draw and what the one line names is a unit, not
+ *  only ever seen through a rendered screen. */
+export interface MetricRowsView {
+  logged: MetricRowOut[];
+  unloggedLabels: string[];
+}
+export function metricRowsView(metrics: readonly MetricRowOut[]): MetricRowsView {
+  const logged: MetricRowOut[] = [];
+  const unloggedLabels: string[] = [];
+  for (const row of metrics) {
+    if (row.status === "logged") logged.push(row);
+    else unloggedLabels.push(row.label);
+  }
+  return { logged, unloggedLabels };
 }
 
 /** His medicines today: shown to him always, and to a key whose scope opens his medicines. */

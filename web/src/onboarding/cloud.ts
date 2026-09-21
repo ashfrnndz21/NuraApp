@@ -1,4 +1,5 @@
 import type { ConditionOut } from "../api/types";
+import { fill } from "../strings";
 
 /** The word cloud's behaviour, apart from any screen: which words are showing, how big each
  *  one is, and in what order. Pure, so it is unit-tested (`tests/unit/cloud.test.ts`).
@@ -119,4 +120,70 @@ export function foldTold(picked: readonly string[], told: readonly string[]): st
   const next = [...picked];
   for (const code of told) if (!next.includes(code)) next.push(code);
   return next;
+}
+
+/** A small, deterministic 0–1 value from a word's own code (FNV-ish string hash) — used only to
+ *  vary each bubble's drift phase and duration a little in `Cloud.tsx`, so neighbours never
+ *  move in lockstep like a table's rows. Not random: the same word always gets the same phase,
+ *  so a re-render (a re-picked word, a re-fetch of the same graph) never makes the cloud
+ *  visibly "jump" to a new arrangement. */
+export function phaseOf(code: string): number {
+  let hash = 0;
+  for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) >>> 0;
+  return (hash % 1000) / 1000;
+}
+
+/** "A and B", "A, B and C" — the plain join every language reads the same way here (no serial
+ *  comma). `and` is the whole connector as that language writes it, spaces included where it
+ *  wants them (English " and ", Chinese bare "和" with none) — carried by the caller's own
+ *  string, never added here, so the join stays correct however a language spaces it.
+ *
+ *  A name that already carries its own comma ("In hospital, last year") breaks the ", "/" and "
+ *  list grammar — "A, B and In hospital, last year" reads as four things, not three. Operator
+ *  review: rather than a clever nested-clause template (fragile across three languages), when
+ *  ANY picked name has a comma in it the whole list falls back to semicolons throughout
+ *  ("high blood pressure; high cholesterol; in hospital, last year") — plain, unambiguous, the
+ *  same shape in every language. Pure and tiny on purpose: it never touches a word's own
+ *  translation, only how the already-translated names are strung together
+ *  (`tests/unit/cloud.test.ts`). */
+export function joinNames(names: readonly string[], and: string): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  if (names.some((name) => name.includes(","))) return names.join("; ");
+  return `${names.slice(0, -1).join(", ")}${and}${names[names.length - 1]}`;
+}
+
+/** A name read back mid-sentence, not at its own start, reads oddly capitalised ("You told me
+ *  about High blood pressure and High cholesterol.") — every picked name in
+ *  `acknowledgementLine`'s two templates sits after "about "/"wrote down ", never at the very
+ *  start of the rendered sentence, so every one of them gets this. Left alone for a genuine
+ *  acronym (2+ letters, entirely upper-case: "TB", "CPR") — lower-casing "Tb" would be wrong —
+ *  and left alone entirely outside en/ms (zh has no letter case to change). No "proper noun"
+ *  flag exists on `CloudWord` today; if the graph ever adds one, check it here first, before
+ *  the acronym check. */
+export function lowerFirst(name: string): string {
+  if (!name) return name;
+  const firstWord = name.split(/\s+/, 1)[0] ?? "";
+  const isAcronym = firstWord.length >= 2 && firstWord === firstWord.toUpperCase() && firstWord !== firstWord.toLowerCase();
+  if (isAcronym) return name;
+  return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/** Nura's one-line acknowledgement under the cloud (docs/design/experience-blueprint.html
+ *  `cloud` scene note: never a diagnosis, only what he picked, read back in plain words — "You
+ *  told me about your blood pressure and your sugar," never "You have hypertension"). Built
+ *  from the same `CloudWord.name` every bubble already shows (never a code, never the clinic's
+ *  own term), in the order he picked them; `null` when nothing is picked yet, so the caller
+ *  shows nothing rather than an empty sentence. `lowercase`: en/ms only (`language.value !==
+ *  "zh"`, `Cloud.tsx`) — see `lowerFirst`. */
+export function acknowledgementLine(
+  pickedWords: readonly CloudWord[],
+  template: string,
+  and: string,
+  options: { slots?: Record<string, string>; lowercase?: boolean } = {},
+): string | null {
+  if (pickedWords.length === 0) return null;
+  const names = pickedWords.map((word) => (options.lowercase ? lowerFirst(word.name) : word.name));
+  const list = joinNames(names, and);
+  return fill(template, { ...options.slots, list });
 }
