@@ -893,9 +893,19 @@ export const addMore = (token: string, profileId: string, lineId: string, quanti
     body: { quantity, confirmation_id: confirmationId, artifact_id: artifactId },
   });
 
-/** The review cards, newest first; `open` for the ones still waiting for a yes (E02-04). */
+/** The review cards, newest first; `open` for the ones still waiting for a yes (E02-04). With
+ *  `open` left off, every card comes back — confirmed ones too — which is what "Your papers"
+ *  (the Record's full list, library part B #1) reads: nothing new was needed on this route. */
 export const reviewCards = (token: string, profileId: string, openOnly: boolean) =>
   api<ReviewCardOut[]>(`/profiles/${profileId}/review-cards`, { token, query: { open: openOnly ? "true" : undefined } });
+
+/** "See the paper itself" on a confirmed card, reopened read-only (library part B #3): the
+ *  photo or PDF exactly as it was kept, through the one small additive route this library adds
+ *  (`GET /profiles/{id}/review-cards/{card}/artifact`) — everything else the reopened screen
+ *  needs was already there (`reviewCards`, `reviewCard`). Accepts whatever content type the
+ *  artifact was kept as; the caller reads the blob's own `type` to draw it as an image or a PDF. */
+export const reviewCardArtifact = (token: string, profileId: string, cardId: string) =>
+  apiBlob(`/profiles/${profileId}/review-cards/${cardId}/artifact`, { token, accept: "image/*,application/pdf" });
 
 /** A photo of a machine's screen, read into a review card with no typing (E02-08). */
 export const addScreenPhoto = (token: string, profileId: string, data: string, content_type: string, captured_at: string) =>

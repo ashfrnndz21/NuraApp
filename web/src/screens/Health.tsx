@@ -1,10 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, InsightsReportOut, MetricKind } from "../api/types";
+import type { FactOut, FoodCatalogItemOut, FoodEntryOut, HealthOverviewOut, InsightsReportOut, MetricKind, ReviewCardOut } from "../api/types";
 import { useToday } from "../today/useToday";
 import { DoseSection, NextVisitTile } from "./Today";
-import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, readingsWithheld } from "../health/model";
+import { bloodPressureRows, bloodSugarRows, foodWords, healthTitle, MEALS, mealsToday, medicinesShown, papersWithheld, readingsWithheld } from "../health/model";
 import { headlineInsight } from "../health/insights";
 import { dateLine } from "../today/model";
 import { profile, token } from "../store/session";
@@ -12,7 +12,8 @@ import { fill, language, LOCALE, t, type Strings } from "../strings";
 import { Icon, IconBadge, MetricRow, PaperTile, PillButton, ProgressRing, SectionHeader, type Tint, TintCard } from "../ui/kit";
 import { Notice } from "../ui/components";
 import { go } from "../flow";
-import { session, toRecord, useRead } from "./record/parts";
+import { PaperRow } from "./record/Papers";
+import { session, toRecord, useDateOf, useRead } from "./record/parts";
 import { Shell } from "./Shell";
 import { VisitSuggestions } from "./VisitSuggest";
 
@@ -121,6 +122,48 @@ function Readings({ scopes, owner, name }: { scopes: readonly string[]; owner: b
         <MetricRow icon="gauge" tint="coral" label={s.health.bloodSugar} value={sugarRows[0].words} unit="mmol/L" source={fill(owner ? s.health.readingSource : s.health.readingSourceOther, { date: dateLine(new Date(sugarRows[0].at), locale), name })} testId="reading-sugar" />
       )}
     </TintCard>
+  );
+}
+
+function useRecentPapers(scopes: readonly string[]): ReviewCardOut[] {
+  const bearer = token.value;
+  const papers = profile.value;
+  const [cards, setCards] = useState<ReviewCardOut[]>([]);
+  useEffect(() => {
+    if (!bearer || !papers || papersWithheld(scopes)) return setCards([]);
+    nura.reviewCards(bearer, papers.profile_id, false).then(setCards, () => setCards([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bearer, papers?.profile_id, scopes.join(",")]);
+  return cards;
+}
+
+/** "Your papers" (E02-07 library part B #2): the newest few, the same row the full list
+ *  under the Record uses — or, for a key whose scope does not cover them, the block named
+ *  and said withheld (never left off the screen in silence, the same rule `Readings` keeps). */
+function PapersSection({ scopes, name }: { scopes: readonly string[]; name: string }): JSX.Element {
+  const s = t();
+  const dateOf = useDateOf();
+  const cards = useRecentPapers(scopes);
+  if (papersWithheld(scopes)) {
+    return (
+      <TintCard tint="paper" testId="papers-withheld">
+        <p>{fill(s.health.papersWithheld, { name })}</p>
+      </TintCard>
+    );
+  }
+  const recent = cards.slice(0, 3);
+  return (
+    <PaperTile testId="health-papers">
+      {recent.length === 0 && <p class="caption">{s.record.papersNone}</p>}
+      {recent.map((card) => (
+        <PaperRow key={card.card_id} card={card} dateOf={dateOf} onOpen={() => toRecord({ name: "paper", card })} />
+      ))}
+      {cards.length > 0 && (
+        <button type="button" class="btn light" onClick={() => toRecord({ name: "papers" })} data-testid="health-papers-see-all">
+          {s.record.seeAllPapers}
+        </button>
+      )}
+    </PaperTile>
   );
 }
 
@@ -269,6 +312,9 @@ export function HealthScreen(): JSX.Element {
 
       <SectionHeader title={s.health.readingsTitle} />
       <Readings scopes={scopes} owner={owner} name={name} />
+
+      <SectionHeader title={s.health.papersTitle} />
+      <PapersSection scopes={scopes} name={name} />
 
       <DayLogs owner={owner} name={name} />
 

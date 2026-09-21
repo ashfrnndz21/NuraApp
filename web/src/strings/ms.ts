@@ -367,6 +367,10 @@ export const ms = {
     comingUpTitle: "Akan datang",
     // @patient phrase
     addReading: "Tulis tekanan darah",
+    // @patient headline
+    papersTitle: "Surat anda",
+    // @patient
+    papersWithheld: "Kunci ini tidak meliputi surat {name}.",
   },
   insights: {
     // @patient headline
@@ -1453,6 +1457,18 @@ export const ms = {
       keepIn: "Simpan yang ini",
       // @patient
       leftOut: "Nura akan tinggalkan yang ini.",
+      // @patient
+      leftOutByYou: "Anda tinggalkan yang ini.",
+      // @patient phrase
+      aboutThisPaper: "Tentang surat ini",
+      // @patient
+      checkedOn: "Anda semak ini pada {date}.",
+      // @patient
+      checkedOnOther: "{patient} semak ini pada {date}.",
+      // @patient phrase
+      seePaperItself: "Lihat surat asal",
+      // @patient phrase
+      askAboutPaper: "Tanya tentang surat ini",
       // @patient phrase
       looksRight: "Nampak betul",
       // @patient
@@ -1777,9 +1793,9 @@ export const ms = {
     // @patient headline
     medicinesOther: "Ubat {patient}",
     // @patient headline
-    papers: "Surat yang menunggu ya anda",
+    papers: "Surat anda",
     // @patient headline
-    papersOther: "Surat yang menunggu ya",
+    papersOther: "Surat {patient}",
     // @patient headline
     routine: "Hari anda",
     // @patient headline
@@ -1916,13 +1932,27 @@ export const ms = {
     // @patient phrase
     orderNo: "Bukan sekarang",
     // @patient
-    papersNone: "Tiada surat yang menunggu ya anda.",
+    papersNone: "Nura belum ada surat untuk anda.",
     // @patient
-    papersNoneOther: "Tiada surat yang menunggu ya.",
+    papersNoneOther: "Nura belum ada surat untuk {patient}.",
     // @patient
     paperFrom: "Ini sampai pada {date}.",
     // @patient phrase
     paperOpen: "Lihat surat ini",
+    // @patient phrase
+    seeAllPapers: "Lihat semua surat anda",
+    // @patient phrase
+    paperChipOutside: "{n} luar julat",
+    // @patient phrase
+    paperChipInRange: "Semua dalam julat",
+    // @patient phrase
+    paperChipCheck: "Semak",
+    // @patient phrase
+    paperChipRead: "Baca",
+    // @patient phrase
+    paperYearGroup: "Pada {year}",
+    // @patient phrase
+    paperAskPrefill: "Tentang {paper} saya dari {date} — ",
     // @patient phrase
     older: "Tunjuk lawatan lama",
     // @patient

@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewCardOut, ReviewFieldOut } from "../../src/api/types";
+import { fieldValueDate } from "../../src/onboarding/dates";
 import {
   canCorrect,
   confidenceLine,
   decide,
   decisionsFor,
+  effectiveValue,
   facilityField,
   fieldLabel,
   flagTone,
   flagWord,
+  isResultRow,
   kindLine,
   kindTitle,
   parseNumber,
@@ -20,6 +23,7 @@ import {
   readingHeadline,
   readingTally,
   reportRow,
+  reportSections,
   sharedProvenance,
   spokenLine,
   startingEdits,
@@ -470,5 +474,103 @@ describe("the report table's own short title and header facility (checkpoint 2)"
     expect(facilityField(card([tg, tc]))).toBeNull();
     const lab = { ...field("f-lab", "lab", "Bukit Lab", false), subject: "lab_report" };
     expect(facilityField(card([lab]))?.field_id).toBe("f-lab");
+  });
+});
+
+// --- E02-07 library part A: the polished report table -----------------------------------------
+
+describe("fieldValueDate: a field's own printed date, read as one (library part A #3)", () => {
+  it("reads a bare date in his language, no weekday, no time", () => {
+    expect(fieldValueDate("2025-01-21", "en-SG")).toBe("21 January 2025");
+  });
+
+  it("reads a date and time together — the owner's own screenshot, 'Collected On 2025-01-21T21:16'", () => {
+    expect(fieldValueDate("2025-01-21T21:16", "en-SG")).toBe("21 January 2025, 9:16 pm");
+  });
+
+  it("reads a date with seconds and a timezone offset too", () => {
+    expect(fieldValueDate("2026-08-20T08:00:00+08:00", "en-SG")).toBe("20 August 2026, 8:00 am");
+  });
+
+  it("is null for anything that is not a valid ISO date — left exactly as printed", () => {
+    expect(fieldValueDate("heart failure", "en-SG")).toBeNull();
+    expect(fieldValueDate("Dr Tan", "en-SG")).toBeNull();
+    expect(fieldValueDate("2025-02-30", "en-SG")).toBeNull(); // no such calendar day
+    expect(fieldValueDate("", "en-SG")).toBeNull();
+  });
+});
+
+describe("reportRow: a date value reads as a date, other values are untouched (library part A #3)", () => {
+  it("formats a field whose value is an ISO date", () => {
+    const admitted = field("f-admit", "admitted_on", "2026-08-16");
+    expect(reportRow(admitted, en, "en-SG").valueText).toBe("16 August 2026");
+  });
+
+  it("leaves a plain word value exactly as printed", () => {
+    const reason = field("f-reason", "reason", "heart failure");
+    expect(reportRow(reason, en, "en-SG").valueText).toBe("heart failure");
+  });
+
+  it("prefers the locale it is given, in Malay", () => {
+    const admitted = field("f-admit", "admitted_on", "2026-08-16");
+    expect(reportRow(admitted, en, "ms-MY").valueText).toContain("Ogos");
+  });
+});
+
+describe("isResultRow: a measured result vs an administrative line (library part A #4)", () => {
+  it("is a result when the row has a unit", () => {
+    expect(isResultRow(reportRow(tg, en))).toBe(true);
+  });
+
+  it("is a result when the row has a printed range but no unit", () => {
+    const withRange = field("f-r", "ldl", 4.0, false);
+    const row = reportRow({ ...withRange, unit: null, range: { text: "< 3.4", low: null, high: 3.4 } }, en);
+    expect(isResultRow(row)).toBe(true);
+  });
+
+  it("is never a result for a plain administrative line", () => {
+    const doctor = field("f-doc", "doctor", "Dr Tan");
+    expect(isResultRow(reportRow(doctor, en))).toBe(false);
+  });
+});
+
+describe("reportSections: results first, needs-him never hidden (library part A #4)", () => {
+  it("puts every result row, and any administrative row that needs him, in the open section", () => {
+    const result = tg; // has a unit
+    const doctor = field("f-doc", "doctor", "Dr Tan", true); // needs_confirm, no unit
+    const reason = field("f-reason", "reason", "heart failure", false); // administrative, sure
+    const { open, collapsed } = reportSections([reason, result, doctor], en);
+    expect(open.map((f) => f.field_id)).toEqual([result.field_id, doctor.field_id]);
+    expect(collapsed.map((f) => f.field_id)).toEqual([reason.field_id]);
+  });
+
+  it("collapses nothing when every row is a result or needs him", () => {
+    const doctor = field("f-doc", "doctor", "Dr Tan", true);
+    const { open, collapsed } = reportSections([tg, doctor], en);
+    expect(open).toHaveLength(2);
+    expect(collapsed).toHaveLength(0);
+  });
+
+  it("an unreadable administrative row is never hidden either", () => {
+    const blurry = { ...field("f-b", "reason", null, false), unreadable: true };
+    const { open, collapsed } = reportSections([blurry], en);
+    expect(open.map((f) => f.field_id)).toEqual([blurry.field_id]);
+    expect(collapsed).toHaveLength(0);
+  });
+});
+
+describe("effectiveValue: a confirmed card's own true value (library part B #3)", () => {
+  it("is the read value while a field is only proposed", () => {
+    expect(effectiveValue(tg)).toBe(tg.value);
+  });
+
+  it("is the corrected value once the field is corrected", () => {
+    const corrected = { ...tg, state: "corrected" as const, corrected_value: 999 };
+    expect(effectiveValue(corrected)).toBe(999);
+  });
+
+  it("falls back to the read value if corrected but nothing was kept", () => {
+    const odd = { ...tg, state: "corrected" as const, corrected_value: null };
+    expect(effectiveValue(odd)).toBe(tg.value);
   });
 });

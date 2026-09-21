@@ -16,6 +16,7 @@ import type {
   TrendPointOut,
 } from "../api/types";
 import type { Density } from "../store/session";
+import { readingTally } from "../onboarding/review";
 import { fill, type Strings } from "../strings";
 import { timeLine } from "../today/model";
 import type { HubEntry } from "./places";
@@ -207,6 +208,58 @@ export function artifactLine(artifact: Pick<ArtifactRefOut, "kind">, date: strin
 export function momentLine(kind: string, date: string, s: Strings): string {
   const known = s.record.moments as Record<string, string>;
   return fill(known[kind] ?? s.record.moments.other, { date });
+}
+
+// --- "Your papers" (library part B #2): the full list, under Health and under the Record ----
+
+export interface PaperStateChip {
+  label: string;
+  /** `Flag`'s own state, or `null` for plain text — "Read" is never a judgement, so it never
+   *  wears the amber/sage/question chip the other three states do. */
+  state: "ok" | "attention" | "question" | null;
+}
+
+/** One paper's state chip: "Check" (the question flag) while it waits for his yes — the same
+ *  meaning as the review card's own "Check this one", in the list's shorter word; a
+ *  confirmed lab report with any of its own printed ranges to compare against, "{n} outside"
+ *  (amber) or "All in range" (sage), from `rangeStatus` alone, never a re-judgement of ours;
+ *  any other confirmed kind, or a lab report with nothing parsable on it, the plain "Read" —
+ *  never re-checked once he has said yes to it. */
+export function paperStateChip(card: Pick<ReviewCardOut, "confirmed_at" | "document_kind" | "fields">, s: Strings): PaperStateChip {
+  if (!card.confirmed_at) return { label: s.record.paperChipCheck, state: "question" };
+  if (card.document_kind === "lab_report") {
+    const { outside, parsable } = readingTally(card as ReviewCardOut);
+    if (parsable > 0) {
+      return outside > 0 ? { label: fill(s.record.paperChipOutside, { n: outside }), state: "attention" } : { label: s.record.paperChipInRange, state: "ok" };
+    }
+  }
+  return { label: s.record.paperChipRead, state: null };
+}
+
+export interface PaperYearGroup {
+  year: number;
+  cards: ReviewCardOut[];
+}
+
+/** The year the full list groups a paper under: the paper's own printed date when there is
+ *  one, else the day it came in — never a guess. */
+export function paperYearOf(card: Pick<ReviewCardOut, "document_date" | "created_at">): number {
+  return new Date(card.document_date ?? card.created_at).getFullYear();
+}
+
+/** The full list, grouped by year once there are enough papers to need it (more than a
+ *  screenful, eight) — an empty array below that, so the caller renders the same cards flat.
+ *  The caller's own order (newest first) is kept inside each group. */
+export function groupPapersByYear(cards: readonly ReviewCardOut[]): PaperYearGroup[] {
+  if (cards.length <= 8) return [];
+  const groups: PaperYearGroup[] = [];
+  for (const card of cards) {
+    const year = paperYearOf(card);
+    const last = groups[groups.length - 1];
+    if (last && last.year === year) last.cards.push(card);
+    else groups.push({ year, cards: [card] });
+  }
+  return groups;
 }
 
 /** The confirmed papers that are not with this illness yet: what the chief may put with it. */

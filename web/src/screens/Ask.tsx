@@ -50,7 +50,7 @@ const WHERES: readonly Where[] = ["records", "web", "providers", "videos"];
  *  the boundary last. Hear reads it out on tap, never by itself. A refusal is said in one plain
  *  sentence. In the caregiver's density the ask bar has its filters: Records, Web, Providers,
  *  Videos. The patient's has one thing: his records. */
-export function AskScreen({ item, question: asked }: { item?: FeedItemOut; question?: string }): JSX.Element {
+export function AskScreen({ item, question: asked, draft }: { item?: FeedItemOut; question?: string; draft?: boolean }): JSX.Element {
   const s = t();
   const [question, setQuestion] = useState(asked ?? "");
   const [where, setWhere] = useState<Where>("records");
@@ -167,9 +167,11 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     }
   };
 
-  // A question typed into the ask bar is asked at once: the answer is what he came for.
+  // A question typed into the ask bar is asked at once: the answer is what he came for. A
+  // draft (`draft`, "Ask about this paper" — library part B #3) only names the paper in the
+  // box, in his own words to finish and send himself: never asked on its own.
   useEffect(() => {
-    if (asked && asked.trim()) void send();
+    if (!draft && asked && asked.trim()) void send();
   }, []);
 
   // His own "New conversation" (W2): close the open thread on the backend and start clean —

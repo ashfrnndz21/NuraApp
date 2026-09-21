@@ -2,7 +2,7 @@ import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 import type { ReviewCardOut } from "../../api/types";
 import { readingChips, readingHeadline, reportRow } from "../../onboarding/review";
-import { t } from "../../strings";
+import { language, LOCALE, t } from "../../strings";
 import { Chip, ChipRow, Flag, Glass, Icon, Orb, RevealGroup, SoftText, StatusLine } from "../../ui/kit";
 
 /** The reading screen (E02, docs/design/experience-blueprint.html `firstpaper`/`reading`): the
@@ -53,9 +53,10 @@ interface ReadingResultProps {
 export function ReadingResult({ card, onContinue, testId }: ReadingResultProps): JSX.Element {
   const s = t();
   const r = s.onboarding.records;
+  const locale = LOCALE[language.value];
   const headline = readingHeadline(card, s);
   const chips = readingChips(card, s);
-  const rows = [...card.fields].sort((a, b) => a.position - b.position).map((field) => reportRow(field, s));
+  const rows = [...card.fields].sort((a, b) => a.position - b.position).map((field) => reportRow(field, s, locale));
   return (
     <div data-testid={testId}>
       <SoftText as="h2" className="conversation-head" text={headline} pace="headline" testId="reading-headline" />

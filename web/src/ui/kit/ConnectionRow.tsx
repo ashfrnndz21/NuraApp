@@ -9,12 +9,15 @@ interface ConnectionRowProps {
   trailing?: ComponentChildren;
   onClick?: () => void;
   testId?: string;
+  /** Any other attribute a caller needs on the row itself — a `data-*` flag a spec reads
+   *  (`data-card-id`), never a full escape hatch for behaviour (`Glass`'s own `attrs`). */
+  attrs?: Record<string, string | boolean | undefined>;
 }
 
 /** A person or a place, one row (docs/design/experience-blueprint.html `.row`/the family and
  *  services scenes): a lead, the name and a line under it, and a trailing slot. A real
  *  `<button>` when it goes anywhere, plain glass otherwise. */
-export function ConnectionRow({ name, line, lead, trailing, onClick, testId }: ConnectionRowProps): JSX.Element {
+export function ConnectionRow({ name, line, lead, trailing, onClick, testId, attrs }: ConnectionRowProps): JSX.Element {
   const body = (
     <>
       {lead}
@@ -27,13 +30,13 @@ export function ConnectionRow({ name, line, lead, trailing, onClick, testId }: C
   );
   if (onClick) {
     return (
-      <button type="button" class="connection-row" onClick={onClick} data-testid={testId}>
+      <button type="button" class="connection-row" onClick={onClick} data-testid={testId} {...attrs}>
         {body}
       </button>
     );
   }
   return (
-    <div class="connection-row" data-testid={testId}>
+    <div class="connection-row" data-testid={testId} {...attrs}>
       {body}
     </div>
   );
