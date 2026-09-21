@@ -1,7 +1,9 @@
 """Ranking: the order he sees, the caps, the quiet hours, and the cursor.
 
 The supply is walked in one order — a flag, then now, then today's cards, then the gate,
-then his story, then learning — and inside each section by priority, then by age. Two rules
+then his story and learning — and inside each section by priority, then by age. Past the gate
+his story and what Nura found for him take turns (`_mixed`), a learning card first, one card
+of each kind before a second of any; a story made again this week is told once. Two rules
 sit on top of the order for the patient. The caps: one card of each kind a day, two new cards
 a day in all; what the caps hold back is counted and shown to the caregiver as held, never
 dropped in silence. The quiet hours: nothing between 21:00 and 07:00 on his wall clock,
@@ -21,8 +23,9 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import re
 import uuid
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, time
@@ -229,6 +232,69 @@ async def _without_photos_taken_back(
     return [item for item in items if str(item.why.get("photo_id") or "") not in gone]
 
 
+RULE_DID_YOU_KNOW = "did_you_know"
+"""`recommend.rules.RULE_DID_YOU_KNOW`, said again here: that module cannot be imported from
+this one (it reaches `channels.api`, which imports this). `tests/test_feed_order_mix.py` holds
+the two to one spelling."""
+
+_MADE_AGAIN = re.compile(r":\d{4}-(?:W\d{2}|\d{2}-\d{2})$")
+"""The week (or day) a story card's key ends in: `story:reading:<fact>:2026-W39`."""
+
+
+def _told_once(items: Sequence[FeedItem]) -> list[FeedItem]:
+    """A story card is made again each week and lives seven days (`STORY_LIFETIME`), so for
+    most of a week last week's card and this week's are both alive: the same reading, the same
+    paper, said twice. He hears each one once — the newest; nothing is deleted."""
+    newest: dict[str, FeedItem] = {}
+    for item in items:
+        if item.supply is not Supply.STORY:
+            continue
+        key = _MADE_AGAIN.sub("", item.dedupe_key)
+        kept = newest.get(key)
+        if kept is None or as_utc(item.created_at) > as_utc(kept.created_at):
+            newest[key] = item
+    keep = {item.id for item in newest.values()}
+    return [item for item in items if item.supply is not Supply.STORY or item.id in keep]
+
+
+def _a_turn_each(items: Sequence[FeedItem]) -> list[FeedItem]:
+    """One card per kind of card (its type and headline) before a second of any: six "From
+    your blood pressure book" cards never sit in a row while something else is waiting."""
+    kinds: dict[tuple[str, str], deque[FeedItem]] = {}
+    for item in items:
+        kinds.setdefault((item.type.value, item.headline), deque()).append(item)
+    turns: list[FeedItem] = []
+    while kinds:
+        for kind in list(kinds):
+            turns.append(kinds[kind].popleft())
+            if not kinds[kind]:
+                del kinds[kind]
+    return turns
+
+
+def _mixed(ordered: Sequence[FeedItem]) -> list[FeedItem]:
+    """Past the gate, what Nura found for him and his own story take turns, a learning card
+    first. Section by section (every story card, then every learning card) a full week of
+    story stood in front of the first clip or article — measured on the owner's test copy,
+    22 Sep 2026: 26 story cards before the first of 8 learning cards. Everything before the
+    gate keeps its order."""
+    rest = [item for item in ordered if item.supply in (Supply.STORY, Supply.LEARNING)]
+    if not rest:
+        return list(ordered)
+    learning = deque(_a_turn_each([item for item in rest if item.supply is Supply.LEARNING]))
+    story = deque(_a_turn_each([item for item in rest if item.supply is Supply.STORY]))
+    turns: list[FeedItem] = []
+    while learning or story:
+        if learning:
+            turns.append(learning.popleft())
+        if story:
+            turns.append(story.popleft())
+    mixed = iter(turns)
+    return [
+        next(mixed) if item.supply in (Supply.STORY, Supply.LEARNING) else item for item in ordered
+    ]
+
+
 def _patient_supply(
     items: Sequence[FeedItem], *, day: Day, declined: set[str], quiet: bool
 ) -> tuple[list[FeedItem], Counter[str]]:
@@ -236,8 +302,9 @@ def _patient_supply(
     held: Counter[str] = Counter()
     chosen: list[FeedItem] = []
     per_type: Counter[str] = Counter()
+    said_today: set[str] = set()
     new_today = 0
-    for item in sorted(items, key=_order_key):
+    for item in sorted(_told_once(items), key=_order_key):
         if item.deliver_to is not DeliverTo.PATIENT or item.supply is Supply.HELD:
             continue
         if item.caps_class is CapsClass.FLAG:
@@ -249,6 +316,14 @@ def _patient_supply(
         if item.type.value in declined:
             held[item.type.value] += 1
             continue
+        if item.why.get("rule") == RULE_DID_YOU_KNOW:
+            # "One small, true fact a day" (`recommend.rules`): one pick can come back as an
+            # article and a clip of the same page — he is shown the first, the other is held.
+            # Section order used to hide this: the second card sat behind his whole story.
+            if item.day in said_today:
+                held[item.type.value] += 1
+                continue
+            said_today.add(item.day)
         if item.caps_class is CapsClass.ONE:
             if per_type[item.type.value] >= 1 or new_today >= DAILY_CAP:
                 held[item.type.value] += 1
@@ -256,7 +331,7 @@ def _patient_supply(
             per_type[item.type.value] += 1
             new_today += 1
         chosen.append(item)
-    return chosen, held
+    return _mixed(chosen), held
 
 
 def _caregiver_supply(items: Sequence[FeedItem]) -> list[FeedItem]:
