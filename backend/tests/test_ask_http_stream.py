@@ -37,8 +37,15 @@ async def test_his_own_key_hears_the_steps_in_order_then_the_same_answer_ask_giv
     )
     assert streamed.status_code == 200
     events = _events(streamed.text)
-    assert [e["type"] for e in events] == ["step", "step", "step", "step", "answer"]
-    assert [e["key"] for e in events[:-1]] == ["visits", "readings", "medicines", "records"]
+    # Four steps, then one `answer_sentence` per line of the answer (P1: the rule-based asker
+    # replays its own already-composed lines the same contract the agent asker streams its
+    # own by), then the answer.
+    types = [e["type"] for e in events]
+    assert types[:4] == ["step", "step", "step", "step"]
+    assert types[-1] == "answer"
+    assert len(types[4:-1]) >= 1
+    assert all(t == "answer_sentence" for t in types[4:-1])
+    assert [e["key"] for e in events[:4]] == ["visits", "readings", "medicines", "records"]
     assert events[1] == {"type": "step", "key": "readings", "label": "Looking at your blood pressure book.", "name": "blood pressure book"}
 
     plain = await deployment.client.post(
@@ -47,6 +54,13 @@ async def test_his_own_key_hears_the_steps_in_order_then_the_same_answer_ask_giv
         headers=his,
     )
     assert events[-1]["answer"]["lines"] == plain.json()["lines"]
+    # Every `answer_sentence`, in order, matches the final answer's own lines exactly — the
+    # same sentence-by-sentence contract the rule asker and the agent asker both hold.
+    sentences = [e["text"] for e in events if e["type"] == "answer_sentence"]
+    assert sentences == [line["text"] for line in events[-1]["answer"]["lines"]]
+    # "Looked at" (P1): the parts of the record this turn really read, in the order the steps
+    # streamed — never a fixed list.
+    assert [each["kind"] for each in events[-1]["answer"]["looked_at"]] == ["visits", "readings", "medicines", "records"]
 
 
 async def test_a_caregivers_step_names_him_not_her(deployment: Deployment) -> None:
@@ -74,6 +88,11 @@ async def test_a_caregivers_step_names_him_not_her(deployment: Deployment) -> No
     step = next(e for e in events if e["type"] == "step")
     assert "Pa's" in str(step["label"]) and "your" not in str(step["label"])
     assert events[-1]["type"] == "answer"
+    # "Looked at" names only the one part her narrow key actually opened — never visits,
+    # readings or records, not even to say they were withheld.
+    answer_event = events[-1]["answer"]
+    assert isinstance(answer_event, dict)
+    assert [each["kind"] for each in answer_event["looked_at"]] == ["medicines"]
 
 
 async def test_a_red_flag_in_the_question_streams_no_step_at_all(deployment: Deployment) -> None:

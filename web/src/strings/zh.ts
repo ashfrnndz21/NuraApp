@@ -831,6 +831,18 @@ export const zh = {
     // @patient
     askLead: "打字，或者点键盘上的麦克风。",
     // @patient
+    askSample1: "我的血压是多少？",
+    // @patient
+    askSample1Theirs: "{name}的血压是多少？",
+    // @patient
+    askSample2: "我下次看诊是什么时候？",
+    // @patient
+    askSample2Theirs: "{name}下次看诊是什么时候？",
+    // @patient
+    askSample3: "我的药是做什么用的？",
+    // @patient
+    askSample3Theirs: "{name}的药是做什么用的？",
+    // @patient
     sourcePapers: "这来自您的文件。",
     // @patient
     sourceMedicines: "这来自您的药单。",

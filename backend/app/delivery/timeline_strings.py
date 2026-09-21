@@ -21,7 +21,7 @@ from datetime import date, datetime
 from app.db import as_utc
 from app.medicines.strings import say_date
 from app.regions import REGION_TZ, Region
-from app.safety.plain_words import verify
+from app.safety.plain_words import Kind, verify
 
 LANGUAGES = ("en", "ms", "zh")
 DEFAULT_LANGUAGE = "en"
@@ -624,10 +624,14 @@ def reroute_lines(language: str, doctor: str | None) -> list[str]:
     return [_fill(line, language, {"doctor": doctor or ""}) for line in REROUTE[language]]
 
 
-def verified(line: str, language: str) -> bool:
+def verified(line: str, language: str, kind: Kind = "line") -> bool:
     """Whether a filled line passes docs/plain-words.md. A note (an eleven-word line) is not
-    a failure; any failure keeps the line from leaving."""
-    return not any(finding.severity == "fail" for finding in verify(line, language, "line"))
+    a failure; any failure keeps the line from leaving. `kind` picks the profile
+    (`app.safety.plain_words.Kind`) — `"line"` (default) for every template here, `"ask"` for
+    Ask's own natural, conversational reply (`app.llm.ask_agent`), which relaxes only the
+    one-idea rule and the length ceiling; every other rule, the boundary (14) included, is
+    unchanged."""
+    return not any(finding.severity == "fail" for finding in verify(line, language, kind))
 
 
 def catalogue() -> list[str]:

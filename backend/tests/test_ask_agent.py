@@ -403,11 +403,12 @@ async def test_when_even_the_fallback_has_nothing_the_catalogue_honest_line_is_s
     assert answer.boundary
 
 
-# A line that fails rule 3 (`docs/plain-words.md`: short words, short lines) — over fifteen
-# words, otherwise clean — the same string `test_over_fifteen_words_fail_and_over_ten_is_a_note`
-# in `test_plain_words.py` pins to rule 3 alone.
+# A line that fails rule 3 (`docs/plain-words.md`: short words, short lines) — over Ask's own
+# twenty-word ceiling (`kind="ask"`, docs/plain-words.md "1a. Profiles"; the agent's answer is
+# verified at that profile, not the fifteen-word `kind="line"` every other surface uses),
+# otherwise clean.
 _TOO_LONG_LINE = (
-    "Nura will ask you to say yes again the next time you open the app on your phone at home."
+    "Nura will ask you to say yes again the next time you open the app on your phone at home tonight."
 )
 _SHORT_LINE = "Your blood pressure tablet is on your list of medicines."
 
@@ -438,7 +439,7 @@ async def test_a_line_that_fails_plain_words_is_repaired_and_then_shown(
     assert repair_ask["role"] == "user"
     # The verifier's own problem and rewrite for the rule are named; the line that broke it
     # is not.
-    assert "20 words on one line" in repair_ask["content"]
+    assert "21 words on one line" in repair_ask["content"]
     assert "cut it into two lines, one idea each" in repair_ask["content"]
     assert _TOO_LONG_LINE not in repair_ask["content"]
     assert [line.text for line in answer.lines] == [_SHORT_LINE]

@@ -395,6 +395,12 @@ export interface Strings {
     askAbout: string;
     askLabel: string;
     askLead: string;
+    askSample1: string;
+    askSample1Theirs: string;
+    askSample2: string;
+    askSample2Theirs: string;
+    askSample3: string;
+    askSample3Theirs: string;
     sourcePapers: string;
     sourceMedicines: string;
     sourceVisits: string;

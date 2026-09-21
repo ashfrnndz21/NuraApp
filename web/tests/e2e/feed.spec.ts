@@ -405,15 +405,28 @@ test("Family sends a reading to the family thread by reference; a card it cannot
   ]);
   expect(asked.postDataJSON()).toEqual({ question: "What was my blood pressure?", mode: "voice", language: "en" });
   const events = streamedEvents(await answered.text());
-  expect(events.map((event) => event.type)).toEqual(["step", "step", "step", "step", "answer"]);
+  const types = events.map((event) => event.type);
+  // Four steps, then one `answer_sentence` per sentence of the answer (P1: sentence-gated
+  // streaming — text and cites together, the moment each one is safe to say), then the answer.
+  expect(types.slice(0, 4)).toEqual(["step", "step", "step", "step"]);
+  expect(types.at(-1)).toBe("answer");
+  expect(types.slice(4, -1).every((type) => type === "answer_sentence")).toBe(true);
   const answerEvent = events.find((event) => event.type === "answer");
   const reply = answerEvent!.answer as { lines: { text: string }[]; honest: string[]; boundary: string[]; spoken: string[] };
+  expect(reply.lines.length).toBeGreaterThan(0);
+  const sentenceTexts = events.filter((event) => event.type === "answer_sentence").map((event) => event.text as string);
+  expect(sentenceTexts).toEqual(reply.lines.map((line) => line.text));
   const shown = asking.getByTestId("answer");
   await expect(shown.getByTestId("ask-looked-at")).toContainText("What Nura looked at");
-  expect(reply.lines.length).toBeGreaterThan(0);
-  await expect(shown.getByTestId("answer-line").locator("p:not(.provenance)")).toHaveText(reply.lines.map((line) => line.text));
-  await expect(shown.getByTestId("answer-source").first()).toHaveText("This comes from your papers.");
-  await expect(shown.getByTestId("boundary")).toHaveText(reply.boundary.join(""));
+  // Every sentence arrives as its own flowing paragraph — never a per-sentence "This comes
+  // from your papers." caption (P1): "Looked at", above, says the source once.
+  await expect(shown.getByTestId("answer-line")).toHaveCount(reply.lines.length);
+  // SoftText keeps the whole line as real text in its `.sr-only` span; the word spans beside it
+  // are the drawn copy, so the line is read there, once.
+  await expect(shown.getByTestId("answer-line-text").locator(".sr-only")).toHaveText(reply.lines.map((line) => line.text));
+  expect(await shown.locator(".provenance").count()).toBe(0);
+  // The safety line, once, as one line rather than stacked captions.
+  await expect(shown.getByTestId("boundary")).toHaveText(reply.boundary.join(" "));
   // The boundary is last: below every answer line.
   const lastLine = (await shown.getByTestId("answer-lines").boundingBox())!;
   const boundaryBox = (await shown.getByTestId("boundary").boundingBox())!;

@@ -95,8 +95,14 @@ from functools import cache
 from pathlib import Path
 from typing import Literal
 
-Kind = Literal["line", "phrase", "headline", "action"]
-KINDS: tuple[Kind, ...] = ("line", "phrase", "headline", "action")
+Kind = Literal["line", "phrase", "headline", "action", "ask"]
+KINDS: tuple[Kind, ...] = ("line", "phrase", "headline", "action", "ask")
+"""`ask` is Ask's own profile (docs/plain-words.md "Profiles"): a whole sentence he reads,
+exactly like `line`, but two rules alone are relaxed for a natural, conversational reply — the
+one-idea rule (2, `_check_one_idea` skipped) and the length ceiling (3, raised from fifteen
+words to twenty, `_check_length`). Every other rule runs exactly as `line` does, rule 14 (the
+boundary) included — a warm sentence is never an excuse to say more than is written down, or
+to slip a medicine's start, stop or change past the gate."""
 LANGUAGE_CODES = ("en", "ms", "zh", "ta")
 RULES_FILE = Path(".claude/rules/patient-strings.md")
 
@@ -1183,9 +1189,10 @@ def _check_length(line: _Line) -> None:
     if line.language == "zh":
         return
     count = len(_words(line.text))
-    if count > 15:
+    limit = 20 if line.kind == "ask" else 15
+    if count > limit:
         line.add(3, f"{count} words on one line", "cut it into two lines, one idea each")
-    elif count > 10 and line.kind != "headline":
+    elif count > 10 and line.kind not in ("headline", "ask"):
         line.add(
             3,
             f"{count} words; under ten where it can be done",
@@ -1404,6 +1411,7 @@ def verify(text: str, language: str = "en", kind: Kind = "line") -> list[Finding
         _check_numbers(line)
         if line.kind in ("line", "action"):
             _check_one_idea(line)
+        if line.kind in ("line", "action", "ask"):
             _check_whole_sentence(line)
         if line.kind != "phrase":
             _check_length(line)
@@ -1975,7 +1983,9 @@ plain-words checks every patient string against docs/plain-words.md. By the doc'
   14 The boundary: no line starts, stops or changes a medicine — a treatment verb beside a
      medicine noun fails unless the line asks the doctor, or says "Do not stop {medicine}
      yourself." and nothing more (en, ms and zh alike).
-Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), headline, action.
+Kinds: line (default), phrase (fills a slot: rules 1-3 line checks skipped), headline, action,
+ask (Ask's own profile: rule 2 off, rule 3's ceiling twenty words instead of fifteen — every
+other rule, 14 included, unchanged).
 Languages: en gets every rule; ms and zh get the glossary's chemical names, dates and times,
 abbreviations, units, identifiers, one idea per line and the line's ending.
 Tags: `# @patient [kind]` before a statement or at the end of its line; `\"\"\"@patient [kind] ...\"\"\"`

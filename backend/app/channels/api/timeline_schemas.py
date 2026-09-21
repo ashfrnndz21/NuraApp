@@ -612,6 +612,20 @@ class AnswerLineOut(BaseModel):
     clip: ClipOut | None = None
 
 
+class LookedAtOut(BaseModel):
+    """One part of his record Ask really read for this answer (W2/P1): `kind` is the same
+    key `AskStep`/the SSE `step` event already carries (`visits`, `readings`, `medicines`,
+    `records`, or a `ClaudeAsker` tool's own step key — `search_online`, `insurance`, `costs`,
+    `plan`), `label` the bare noun the collapsed trace already names it by
+    (`app.delivery.timeline_strings.ASK_STEP_NAMES`, his language, the caregiver's voice
+    already applied). Built server-side from the steps that actually streamed for this turn —
+    never a fixed list, and never naming a part a withheld scope kept closed — so the client
+    shows "Looked at" once from data, not from a guess at what usually runs."""
+
+    kind: str
+    label: str
+
+
 class ProposalOut(BaseModel):
     """A next step offered alongside an answer (W2): the pill the web screen shows. Never a
     write, a booking or a send by itself — it still needs a yes through the existing confirm
@@ -638,6 +652,12 @@ class AnswerOut(BaseModel):
     voice_script: VoiceScriptOut
     """`spoken` as it is said (E22-03), the longer pause before the boundary."""
     withheld: list[Scope]
+    looked_at: list[LookedAtOut] = []
+    """The parts of his record this turn actually read (P1), in the order they were read —
+    set only by the streaming ask routes (`app.channels.api.timeline._stream_turn`), from the
+    real `step` events that turn sent; empty from the plain, non-streaming `POST .../ask`,
+    which streams no steps to build it from, and from the red-flag path, which reads nothing.
+    The client's one "Looked at" line is built from this, once, never per sentence."""
     proposals: list[ProposalOut] = []
     """Zero or more next steps offered alongside this answer (W2) — always empty for the
     rule-based asker, which never proposes."""

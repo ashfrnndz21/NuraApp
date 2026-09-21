@@ -196,6 +196,49 @@ def test_a_long_word_he_would_ask_about_fails_but_his_long_words_do_not() -> Non
     assert not failures("Gleneagles is on your insurance.")
 
 
+# --- Ask's own profile (kind="ask"): rule 2 off, rule 3's ceiling twenty words -----------------
+
+
+def test_ask_kind_relaxes_the_one_idea_rule() -> None:
+    """docs/plain-words.md "1a. Profiles": a natural, conversational reply may carry the
+    connective words a whole thought needs — `kind="line"` still holds every other surface to
+    one idea per line."""
+    two_ideas = "Nura looked at your last paper. It found nothing new to say."
+    assert 2 in rules(two_ideas, kind="line")
+    assert not failures(two_ideas, kind="ask")
+
+
+def test_ask_kind_raises_the_length_ceiling_to_twenty_words_not_fifteen() -> None:
+    eighteen = "Nura read your last paper and your visits and found nothing new to tell you about it here."
+    assert len(eighteen.split()) == 18
+    assert 3 in rules(eighteen, kind="line")
+    assert not failures(eighteen, kind="ask")
+    twenty_three = "Nura read your last paper and your visits and found nothing new to tell you about it here again now still once more."
+    assert len(twenty_three.split()) == 23
+    assert 3 in rules(twenty_three, kind="ask")
+
+
+def test_ask_kind_still_enforces_rule_14_exactly_as_strictly_as_line() -> None:
+    """A warm, longer sentence is never an excuse to slip a medicine's start, stop or change
+    past the boundary — the one rule Ask's profile never relaxes."""
+
+    def rule_14(text: str, kind: str) -> bool:
+        return any(f.rule == 14 for f in verify(text, "en", kind))  # type: ignore[arg-type]
+
+    changing = "Your doctor said to stop the water pill on Monday, so there is nothing more to check here."
+    assert rule_14(changing, "line")
+    assert rule_14(changing, "ask")
+    asking = "Ask your doctor whether it is time to stop the water pill, since your last visit was a while ago."
+    assert not rule_14(asking, "line")
+    assert not rule_14(asking, "ask")
+
+
+def test_ask_kind_still_requires_a_whole_sentence_and_still_checks_every_other_rule() -> None:
+    assert failures("your test was done", kind="ask")  # rule 1: no capital, no full stop
+    assert 12 in rules("Your follow-up is due.", kind="ask")  # rule 12: "follow-up"
+    assert 11 in rules("You missed a dose.", kind="ask")  # rule 11: the red word "missed"
+
+
 # --- rule 5: the day and the date -----------------------------------------------------------------
 
 

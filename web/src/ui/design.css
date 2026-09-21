@@ -991,6 +991,149 @@ html.shot-full .shell > .shell-scroll {
   font-size: var(--text-caption);
 }
 
+/* --- Ask's own empty state (layout fix, P1 checkpoint 4): the orb, one invitation, 3 sample
+   questions that only ever fill the composer — never sent by themselves. Centred, the same
+   shape Home's own quiet day uses (`.home-quiet`), never a card behind it. */
+.ask-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--gutter) var(--space-2);
+}
+.ask-empty .orb.lg {
+  margin-bottom: var(--space-1);
+}
+.ask-empty-invite {
+  margin: 0;
+  font-size: 25px;
+  line-height: 1.17;
+  font-weight: 300;
+}
+.ask-suggestions {
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+
+/* --- Ask's own composer (layout fix): docked above the tab bar (`Shell`'s `bottomBar`, the
+   same seam Home's own ask bar already uses, `.home-ask` below) rather than a card at the top
+   of the screen — the defect this replaces squeezed the whole thread under a form with a
+   label, a hint and two buttons. One glass pill: the small living orb, the field, and one
+   button at the end — the voice button while it is empty, Ask/Search once there are words
+   (`AskBar`'s own convention, docs/ui-mockup-v2.html). "New questions" is a quiet text button
+   above the pill, never a second primary action; the filters, in the caregiver's density, sit
+   under it. */
+.ask-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.ask-composer-top {
+  display: flex;
+  justify-content: flex-end;
+}
+.ask-composer-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-highlight);
+}
+.ask-composer-bar:focus-within {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.ask-composer-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.ask-composer-field input {
+  width: 100%;
+  min-height: var(--target);
+  border: 0;
+  outline: none;
+  background: none;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 300;
+  color: var(--ink);
+  -webkit-appearance: none;
+  appearance: none;
+}
+.ask-composer-field input::placeholder {
+  color: var(--ink);
+  opacity: 0.6;
+}
+.ask-composer-send {
+  flex: none;
+  min-height: var(--target);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 0;
+  background: var(--ink);
+  color: var(--ink-on-light);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-button);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.ask-composer-send:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.ask-composer-send:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.ask-composer-voice {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--target);
+  padding: 8px 13px;
+  border-radius: var(--radius-pill);
+  background: var(--chip-bg);
+  border: var(--chip-border);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.ask-composer-voice svg {
+  width: 14px;
+  height: 14px;
+}
+.ask-composer-voice:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.ask-composer-filters {
+  margin: 0;
+}
+.ask-composer-hint {
+  margin: 0;
+  padding: 0 4px 8px;
+  opacity: 0.75;
+}
+
 /* The thinking trace (docs/design-direction.md "Conversation, waiting and thinking";
    docs/design/nura-concept-board.html screen 5, the approved target — this file is a local
    stand-in for its shared components, built to the same rules, until the foundation's own
@@ -1055,6 +1198,41 @@ html.shot-full .shell > .shell-scroll {
   height: 13px;
   color: var(--good);
 }
+
+/* One turn — the question bubble and its answer, stacked (layout fix): its own flex column, so
+   `.bubble[data-from="person"]`'s `align-self: flex-end` resolves against it and the question
+   is right-aligned whether this is the live turn or an earlier one (the defect this replaces:
+   an earlier turn's question sat in a plain, non-flex wrapper, so `align-self` never applied
+   and it rendered full-width and left-started instead). */
+.ask-turn-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+/* Nura's own turn (P1, docs/design/experience-blueprint.html `.nu`/`.nut`): the living orb
+   beside a column, no card behind it — unlike his own question (`MessageBubble`, a bubble),
+   Nura's reply sits directly on the atmosphere, the way the blueprint's `nura()` draws it. */
+.ask-turn {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.ask-turn-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+/* The flowing answer (P1): sentences appended by `SoftText`, softly, as their own
+   `answer_sentence` events arrive — never a chopped line per sentence, never a caption under
+   each one (a sentence's own source lives in its `cites`; "Looked at", above, says it once). */
+.answer-flow {
+  font-size: var(--text-body);
+  line-height: var(--line-height);
+}
+
 /* The trace is its own bubble shape (a card, not a message he sent), so it reads as Nura
    working rather than as a third thing said. */
 .ask-trace {

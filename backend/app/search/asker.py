@@ -26,21 +26,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.keys.context import KeyContext
-from app.search.ask import Answer, AskStep, Mode, recall_stream
+from app.search.ask import Answer, AskStep, Cite, Mode, recall_stream
 from app.search.conversation import ConversationMemory
 from app.search.retrieve import Retriever
 
 
 @dataclass(frozen=True, slots=True)
 class AnswerDelta:
-    """One chunk of the final answer's own text, sent as it is put together. Never a step,
-    never a fact off the record by itself — `ClaudeAsker` only ever yields one after the whole
-    answer's lines have already passed every check (`verified`, the conclusion-and-advice
-    blocklist, the cite check): each delta is one already-safe line's text, in the order it
-    will appear. `RuleBasedAsker` never yields one; its answer has always arrived whole, as
-    `recall_stream`'s own last item, and still does."""
+    """One sentence of the final answer, sent the moment it is safe to say — the wire's own
+    `answer_sentence` event (`app.channels.api.timeline`). Never a step, never a fact off the
+    record by itself: both askers only ever yield one after the whole answer's lines have
+    already passed every check (`verified` at Ask's own profile, the conclusion-and-advice
+    blocklist, the cite check) — each delta is one already-safe line's text and the exact
+    cites it rests on, in the order it will appear, so a caller never has to reassemble cites
+    from the final `Answer` alone while a sentence is still arriving. `ClaudeAsker` yields one
+    per line of the model's own checked answer; `RuleBasedAsker` yields one per line of
+    `recall_stream`'s own already-composed, already-verified answer — the contract is the
+    same however the answer was built, so a caller (`web/src/screens/Ask.tsx`) never has to
+    know which asker it is holding."""
 
     text: str
+    cites: tuple[Cite, ...] = ()
 
 
 class Asker(Protocol):
@@ -77,9 +83,16 @@ class Asker(Protocol):
 
 
 class RuleBasedAsker:
-    """Today's asker, unchanged, and the default: `recall_stream`, behind the port. No call
-    outside this deployment, so no reach to audit and no `AnswerDelta` — the answer arrives
-    whole, exactly as it always has."""
+    """Today's asker, and the default: `recall_stream`, behind the port. No call outside this
+    deployment, so no reach to audit. Its answer has always arrived whole from
+    `recall_stream` — the retriever picks every cited line before any of them is said — but
+    the sentence-gated wire contract (`AnswerDelta` per line, then the `Answer`) still holds
+    for it: the moment `recall_stream` yields its `Answer`, this replays each of its own
+    lines, already composed and already past `words.verified` inside `recall_stream` itself,
+    as its own `AnswerDelta`, in order, before yielding the `Answer` in turn — so the web
+    client has exactly one code path for both askers, and the fixture asker used in
+    screenshots and e2e specs (a `RuleBasedAsker` over seeded demo data) exercises the real
+    contract too, not a stand-in for it."""
 
     external_processor: str | None = None
 
@@ -107,6 +120,9 @@ class RuleBasedAsker:
             registry=registry,
             language=language,
         ):
+            if isinstance(event, Answer):
+                for line in event.lines:
+                    yield AnswerDelta(text=line.text, cites=line.cites)
             yield event
 
 
