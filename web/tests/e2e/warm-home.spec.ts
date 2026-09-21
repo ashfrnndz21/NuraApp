@@ -35,7 +35,7 @@ test("his Home: the greeting and its picture, the check-in, a grid where every t
   // illustration or wave beside them — the living orb is Home's picture (`home-ask-orb`, its
   // ask bar, and the quiet day's own large orb, checked in a11y.spec.ts and design.spec.ts).
   await expect(page.getByTestId("home-head-hello")).toHaveText("Good morning, Pa.");
-  await expect(page.getByTestId("home-head").locator("h1")).toHaveText("How are you feeling today?");
+  await expect(page.getByTestId("home-head").locator("h1")).toHaveText("How are you today?");
   await expect(page.locator("nav.tabbar button")).toHaveText([...TAB_SET]);
   await expect(page.getByTestId("tab-home")).toHaveAttribute("aria-current", "page");
 
@@ -125,7 +125,7 @@ test("her Home says his check-in and her places about him by name", async ({ pag
   await page.getByTestId("door-key").click();
   await todayReady(page);
   await expect(page.getByTestId("home-head-hello")).toHaveText("Good morning, Mei.");
-  await expect(page.getByTestId("home-head").locator("h1")).toHaveText("How is Pa feeling today?");
+  await expect(page.getByTestId("home-head").locator("h1")).toHaveText("How is Pa today?");
   // The reference's own reading order (docs/design/full-experience.html, the Mei persona):
   // what changed, his next visit and what to buy, what Nura is watching for him and what was
   // sent to him this week, all above the warm check-in and "What to do for Pa" grid.

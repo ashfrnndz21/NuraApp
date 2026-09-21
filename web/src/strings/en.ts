@@ -112,9 +112,9 @@ export const en = {
   },
   hub: {
     // @patient
-    howFeeling: "How are you feeling today?",
+    howFeeling: "How are you today?",
     // @patient
-    howFeelingOther: "How is {patient} feeling today?",
+    howFeelingOther: "How is {patient} today?",
     // @patient headline
     checkTitle: "How you feel today",
     // @patient headline
@@ -271,6 +271,22 @@ export const en = {
     headlineReorder: "About {days} days of {title} are left.",
     // @patient headline
     headlineReorderOther: "About {days} days of {patient}'s {title} are left.",
+    // @patient headline
+    tookCount: "You took {done} of {total} today.",
+    // @patient headline
+    tookCountOther: "{patient} took {done} of {total} today.",
+    // @patient headline
+    trendHigher: "That is higher than your blood pressure last time.",
+    // @patient headline
+    trendHigherOther: "That is higher than {patient}'s blood pressure last time.",
+    // @patient headline
+    trendLower: "That is lower than your blood pressure last time.",
+    // @patient headline
+    trendLowerOther: "That is lower than {patient}'s blood pressure last time.",
+    // @patient headline
+    trendSame: "That is about the same as your blood pressure last time.",
+    // @patient headline
+    trendSameOther: "That is about the same as {patient}'s blood pressure last time.",
   },
   activity: {
     // @patient headline
@@ -1183,6 +1199,10 @@ export const en = {
     topThree: "3 things for today",
     // @patient phrase
     notWell: "I am not feeling well",
+    // @patient phrase
+    notWellShort: "Not well?",
+    // @patient phrase
+    notWellShortOther: "Not well?",
     // @patient headline
     notWellTitle: "Tell Nura how you feel",
     // @patient headline

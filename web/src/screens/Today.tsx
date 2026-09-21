@@ -21,13 +21,13 @@ import {
   dateChip,
   dateLine,
   dayKey,
-  dropPossessive,
   dueCards,
   feedLines,
   greeting,
   heroFurnitureAllowed,
   homeHeadlineFor,
   homeHero,
+  insightExtraLines,
   homeState,
   homeTopItem,
   homeTopItemDate,
@@ -282,26 +282,26 @@ function homeVoice(v: TodayView, patientName: string): HomeVoice {
   };
 }
 
-/** Home's own header (cp3-home): one row — the avatar IS the papers switcher (`whose`, its
- *  existing behaviour and test id, unchanged), the greeting beside it, the bell and "Not well?"
- *  at the end, and the menu still reachable at the start (`open-me`, the same sheet every other
- *  screen's header opens it from). Replaces both the old global `ShellHeader` and the board's
- *  own "home" topbar for this screen — neither drew whose-papers and the greeting in the same
- *  row, so his own initial used to appear twice. */
+/** Home's own header (cp3-home, owner review round 2): one row, and only one, at 390px — the
+ *  avatar IS the papers switcher (`whose`, its existing behaviour and test id, unchanged), the
+ *  greeting beside it (hello over the question, no date line — the date moved to sit under
+ *  "Today" in the hero below it, `HomeHero`'s own kicker, so the row never needs a second one to
+ *  fit), the bell, "Not well?" (its short pill, `NotWellButton`'s own compact label, the full
+ *  phrase still its accessible name), and the menu (`open-me`, the same sheet every other
+ *  screen's header opens it from) — trailing, not its own leading slot, so the row reads avatar
+ *  first, the way the eye already goes. Replaces both the old global `ShellHeader` and the
+ *  board's own "home" topbar for this screen — neither drew whose-papers and the greeting in the
+ *  same row, so his own initial used to appear twice. */
 function HomeTopBar({ voice }: { voice: HomeVoice }): JSX.Element {
   const s = t();
   const papers = profile.value;
   const bell = papers !== null && !emergencyOnly(papers);
   return (
     <header class="shell-head home-top-bar" data-testid="home-head">
-      <button type="button" class="head-button" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
-        <Icon name="menu" />
-      </button>
       {papers && <ProfileSwitcher compact />}
       <div class="home-head-text">
         <p class="home-head-hello" data-testid="home-head-hello">{voice.hello}</p>
         <h1 class="home-head-question" tabIndex={-1}>{voice.question}</h1>
-        <p class="home-head-date" data-testid="home-head-date">{voice.date}</p>
       </div>
       <span class="home-head-end">
         {bell && <BellButton />}
@@ -310,29 +310,65 @@ function HomeTopBar({ voice }: { voice: HomeVoice }): JSX.Element {
             small pill here now, never the full-width rose button (that is the not-feeling-well
             screen's own call button, `NotWell.tsx`). */}
         <NotWellButton compact />
+        <button type="button" class="head-button head-button-small" aria-label={s.tabs.me} aria-haspopup="dialog" onClick={openMe} data-testid="open-me">
+          <Icon name="menu" />
+        </button>
       </span>
     </header>
   );
 }
 
 /** Today's own reading, read fresh (the same call `Readings()` below already makes, kept
- *  separate so a stale or an old reading never drives the headline — "today's" means today). */
-function useTodayReading(now: Date): { systolic: number; diastolic: number } | null {
+ *  separate so a stale or an old reading never drives the headline — "today's" means today) —
+ *  and, beside it, the most recent reading from an *earlier* day, if there is one: the insight
+ *  card's own extra fact for a "reading" headline (owner review round 2) is how today's compares
+ *  to that, never the systolic/diastolic the headline already gave in full. Both come from the
+ *  one fetch; no second call. */
+function useTodayReading(now: Date): { systolic: number; diastolic: number } | null;
+function useTodayReading(now: Date, withTrend: true): { reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null };
+function useTodayReading(now: Date, withTrend?: true) {
   const bearer = token.value;
   const papers = profile.value;
-  const [reading, setReading] = useState<{ systolic: number; diastolic: number } | null>(null);
+  const [state, setState] = useState<{ reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null }>({
+    reading: null,
+    priorSystolic: null,
+  });
   useEffect(() => {
-    if (!bearer || !papers || !papers.scopes.includes("readings")) return setReading(null);
+    if (!bearer || !papers || !papers.scopes.includes("readings")) return setState({ reading: null, priorSystolic: null });
     nura.facts(bearer, papers.profile_id, "blood_pressure").then((found) => {
       const today = dayKey(now);
-      const latest = found
-        .filter((fact) => fact.subject === "blood_pressure" && fact.attribute === "reading" && dayKey(new Date(fact.valid_from)) === today)
-        .sort((a, b) => Date.parse(b.valid_from) - Date.parse(a.valid_from))[0];
-      const value = latest?.value as { systolic?: unknown; diastolic?: unknown } | null;
-      setReading(typeof value?.systolic === "number" && typeof value?.diastolic === "number" ? { systolic: value.systolic, diastolic: value.diastolic } : null);
-    }, () => setReading(null));
+      const readings = found
+        .filter((fact) => fact.subject === "blood_pressure" && fact.attribute === "reading")
+        .sort((a, b) => Date.parse(b.valid_from) - Date.parse(a.valid_from));
+      const todaysOwn = readings.find((fact) => dayKey(new Date(fact.valid_from)) === today);
+      const value = todaysOwn?.value as { systolic?: unknown; diastolic?: unknown } | null;
+      const reading = typeof value?.systolic === "number" && typeof value?.diastolic === "number" ? { systolic: value.systolic, diastolic: value.diastolic } : null;
+      const earlier = readings.find((fact) => dayKey(new Date(fact.valid_from)) !== today);
+      const earlierValue = earlier?.value as { systolic?: unknown } | null;
+      const priorSystolic = typeof earlierValue?.systolic === "number" ? earlierValue.systolic : null;
+      setState({ reading, priorSystolic });
+    }, () => setState({ reading: null, priorSystolic: null }));
   }, [bearer, papers?.profile_id, now.getTime()]);
-  return reading;
+  return withTrend ? state : state.reading;
+}
+
+/** The next visit's own place and driver lines (`useLogistics`, below — the same fetch
+ *  `VisitTile` already makes for the full visit tile): the insight card's own extra fact for a
+ *  "visit" headline (owner review round 2), never the doctor/weekday the headline already gave.
+ *  Null with no visit, or while its logistics card is still loading — a visit headline with
+ *  nothing more to say yet renders its rows without the card, same as any other empty case. */
+function useVisitAbout(visit: AppointmentOut | null): string[] {
+  const bearer = token.value;
+  const papers = profile.value;
+  const [about, setAbout] = useState<string[]>([]);
+  useEffect(() => {
+    if (!bearer || !papers || !visit) return setAbout([]);
+    nura.logistics(bearer, papers.profile_id, visit.appointment_id).then(
+      (card) => setAbout(card.lines.filter((line) => line.section === "place" || line.section === "driver").map((line) => line.text)),
+      () => setAbout([]),
+    );
+  }, [bearer, papers?.profile_id, visit?.appointment_id, language.value]);
+  return about;
 }
 
 /** The ranked feed's own flagged insight, if it raised one today — never a plain "today"/"now"
@@ -350,7 +386,8 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
   const { self } = voice;
   const locale = LOCALE[language.value];
   const flagged = feed.flags.length > 0;
-  const reading = useTodayReading(now);
+  const { reading, priorSystolic } = useTodayReading(now, true);
+  const visitAbout = useVisitAbout(nextVisit);
   const topItem: HomeTopItem | null = page
     ? homeTopItem(
         {
@@ -372,32 +409,64 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
   const dueNow = dose?.kind === "due" && topItem?.kind !== "doseDue" ? dose : null;
   const shownInsightId = topItem?.kind === "insight" ? topItem.item.item_id : null;
   const forYouItem = feed.forYou.find((item) => item.item_id !== shownInsightId) ?? null;
+  // The insight card's own extra fact (owner review round 2): a real thing the headline did not
+  // already say, from that same item's own fields — never the headline's sentence again. `null`
+  // with nothing more to say yet, in which case the card itself does not render at all; the
+  // rows below still do (`insightExtraLines`, today/model.ts).
+  const extra = topItem
+    ? insightExtraLines(
+        topItem,
+        {
+          doseProvenance: dose?.kind === "due" ? dose.provenance : null,
+          slotsTotal: page?.slots.length ?? 0,
+          slotsDone: page?.slots.filter((slot) => slot.taken).length ?? 0,
+          priorSystolic,
+          visitAbout,
+          reorderLine: page ? nearestToRunOut(page.lines)?.count?.lines[0] ?? null : null,
+        },
+        s,
+        self,
+        patientName,
+      )
+    : null;
   return (
     <>
+      {/* The date, moved here from the header (owner review round 2, fix #1: the header row had
+          no room left for a third line) — unconditional, the way it always was as part of the
+          header itself: every page state shows it (busy, quiet, or a red flag/act state, which
+          draws nothing else here at all), never only the busy day's own kicker. Same test id it
+          always had (`home-head-date`): moved, never renamed. */}
+      {page && (
+        <p class="home-kick-date" data-testid="home-head-date">
+          {voice.date}
+        </p>
+      )}
       {page && state === "busy" && topItem && (
         <div data-testid={self ? "today-hero" : "home-hero"}>
           <span class="home-kick">{s.home.todayKicker}</span>
           <SoftText as="h2" pace="headline" className="home-headline" text={homeHeadlineFor(topItem, s, locale, self, patientName)} testId="home-headline" />
-          <Glass className="home-insight" testId="insight-card">
-            <h3>{self ? s.home.insightTitle : fill(s.home.insightTitleOther, { patient: patientName })}</h3>
-            <div class="home-insight-body">
-              <div class="home-date-chip" aria-hidden="true">
-                <b>{dateChip(homeTopItemDate(topItem, now), locale).day}</b>
-                <small>{dateChip(homeTopItemDate(topItem, now), locale).month}</small>
+          {extra && (
+            <Glass className="home-insight" testId="insight-card">
+              <h3>{self ? s.home.insightTitle : fill(s.home.insightTitleOther, { patient: patientName })}</h3>
+              <div class="home-insight-body">
+                <div class="home-date-chip" aria-hidden="true">
+                  <b>{dateChip(homeTopItemDate(topItem, now), locale).day}</b>
+                  <small>{dateChip(homeTopItemDate(topItem, now), locale).month}</small>
+                </div>
+                <div class="home-insight-lines">
+                  {extra.map((line, at) => (
+                    <p key={at}>{line}</p>
+                  ))}
+                </div>
               </div>
-              <div class="home-insight-lines">
-                {insightLines(topItem, s, self, patientName).map((line, at) => (
-                  <p key={at}>{line}</p>
-                ))}
-              </div>
-            </div>
-            {/* Not `variant="primary"`: the daily check-in's own "Tell Nura" (`HomeParts.tsx`)
-                is already the screen's one Plum-filled button when it is on the page too, and
-                the design rule (`design.spec.ts`) is at most one. */}
-            <PillButton variant="secondary" onClick={() => go({ name: "feed" })} testId="insight-open">
-              {s.home.insightOpen}
-            </PillButton>
-          </Glass>
+              {/* Not `variant="primary"`: the daily check-in's own "Tell Nura" (`HomeParts.tsx`)
+                  is already the screen's one Plum-filled button when it is on the page too, and
+                  the design rule (`design.spec.ts`) is at most one. */}
+              <PillButton variant="secondary" onClick={() => go({ name: "feed" })} testId="insight-open">
+                {s.home.insightOpen}
+              </PillButton>
+            </Glass>
+          )}
           {dueNow && (
             <button type="button" class="home-row" onClick={() => void take(dueNow.lineId, dueNow.anchor)} disabled={busy} data-testid="home-row-dose">
               <span>{dueNow.sentence}</span>
@@ -447,32 +516,6 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
       )}
     </>
   );
-}
-
-/** The insight card's own two lines, per `HomeTopItem` kind — the same real facts and the same
- *  self/caregiver voice the headline used (`homeHeadlineFor`), said again in full rather than a
- *  card title repeating itself. An `insight` card keeps the feed's own body lines, the one
- *  place free text from the backend is shown, unchanged. */
-function insightLines(item: HomeTopItem, s: Strings, self: boolean, patientName: string): string[] {
-  const locale = LOCALE[language.value];
-  const slots = { patient: patientName } as Record<string, string | number>;
-  switch (item.kind) {
-    case "doseDue":
-      return [fill(self ? s.home.headlineDoseDue : s.home.headlineDoseDueOther, { ...slots, title: self ? item.title : dropPossessive(item.title), when: item.when })];
-    case "allTaken":
-      return [self ? s.home.headlineAllTaken : fill(s.home.headlineAllTakenOther, slots)];
-    case "reading":
-      return [fill(self ? s.home.headlineReading : s.home.headlineReadingOther, { ...slots, systolic: item.systolic, diastolic: item.diastolic })];
-    case "visit": {
-      const weekday = weekdayOf(item.at, locale);
-      const template = item.doctor ? (self ? s.home.headlineVisit : s.home.headlineVisitOther) : self ? s.home.headlineVisitNoDoctor : s.home.headlineVisitNoDoctorOther;
-      return [fill(template, { ...slots, weekday, doctor: item.doctor ?? "" })];
-    }
-    case "reorder":
-      return [fill(self ? s.home.headlineReorder : s.home.headlineReorderOther, { ...slots, title: self ? item.title : dropPossessive(item.title), days: item.days })];
-    case "insight":
-      return feedLines(item.item).lines.slice(0, 2);
-  }
 }
 
 /** "Read a report", the quiet day's own chip: the same picker `AddReport` (HomeParts.tsx)

@@ -1199,33 +1199,47 @@ html.shot-full .shell > .shell-scroll {
    `flex-wrap` was a silent no-op against a grid container; this overrides `display` outright. */
 .shell-head.home-top-bar {
   display: flex;
-  /* At a large text size the row runs long before the end group has any room left (the
-     `.switcher`'s own reasoning): wrapping, that group drops to a row of its own rather than
-     being pushed past the edge of the phone (a11y.spec.ts's own `sideways`, 200% text). */
+  /* One row, and only one, at 390px (owner review round 2): the date line moved out of the
+     header entirely (it sits under "Today" in the hero below, `.home-kick-date`), the menu
+     moved from its own leading slot into the end group, and the row's own padding/gap are
+     tighter than the rest of the app's chrome — this header has five real controls to fit
+     across one phone width, more than any other screen's. `flex-wrap: wrap` stays as the
+     large-text fallback (the `.switcher`'s own reasoning, a11y.spec.ts's `sideways` check at
+     200%): the row still wraps rather than running off the edge of the phone when nothing
+     smaller fits it, and a home-head assertion at the default text size is what tests the one
+     row itself. */
   flex-wrap: wrap;
   align-items: center;
+  gap: 4px;
   row-gap: var(--space-1);
+  padding: 6px 14px;
 }
 .home-head-text {
-  flex: 1 1 140px;
+  flex: 1 1 64px;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .home-head-hello {
-  font-size: var(--text-caption);
+  font-size: 11px;
+  line-height: 1.15;
   opacity: 0.85;
 }
 .home-head-question {
-  font-size: 1.1rem;
+  font-size: 14px;
   font-weight: var(--weight-title);
-  line-height: 1.2;
+  line-height: 1.15;
 }
-.home-head-date {
+/* The date, moved here from the header (owner review round 2, fix #1: the header row had no
+   room left for a third line) — under "Today" in the busy-day hero, `HomeHero` (Today.tsx).
+   Same test id it always had (`home-head-date`): moved, never renamed. */
+.home-kick-date {
+  display: block;
+  opacity: 0.6;
   font-size: var(--text-caption);
-  opacity: 0.7;
   margin-top: 2px;
+  margin-bottom: 4px;
 }
 .home-head-end {
   display: flex;
@@ -1236,9 +1250,33 @@ html.shot-full .shell > .shell-scroll {
      check (a11y.spec.ts) read that as the next stop going backwards. Both starting flush at the
      row's own top keeps their tops equal regardless of which one is a few px taller. */
   align-items: flex-start;
-  gap: 6px;
+  gap: 4px;
   flex: none;
   margin-left: auto;
+}
+/* The menu (`open-me`), trailing in the end group now rather than its own leading slot (owner
+   review round 2, fix #1) — the icon inside its own 56px target reads smaller so the short
+   "Not well?" pill beside it still has room; the target itself is unchanged (a11y.spec.ts/
+   design.spec.ts's own 56px check reads the button, not the icon). */
+.home-head-end .head-button-small svg {
+  width: 20px;
+  height: 20px;
+}
+/* The compact "Not well?" pill's own text (owner review round 2): `.pill`'s base font-size is
+   `--text-button`, 20px in the patient density (tokens.css) — sized for the one full-width pill
+   a screen carries, not a short label beside three other controls in a single row. This header's
+   own pill reads at a caption size instead; its box still clears the touch target in both
+   dimensions (`.pill.coral`'s own `min-height`, and `min-width` here), never smaller, only
+   denser — the same reasoning `.switcher-compact` already used for the avatar beside it. */
+.home-head-end .pill.compact {
+  font-size: 13px;
+  padding: 0 10px;
+  min-width: 0;
+  /* 56px, not `.pill.coral`'s own 60px (design.css) — level with the bell and the menu beside
+     it (both `.head-button`'s own 56px) rather than 4px taller, so the row's own height is the
+     one true 56px shared band, not 60. */
+  min-height: var(--target);
+  white-space: nowrap;
 }
 /* The switcher, sized to sit in the header row (fix #5): the avatar is what shows; the name
    and the chevron are still real DOM (`whose-name` keeps working exactly as before — existing
@@ -1353,7 +1391,9 @@ html.shot-full .shell > .shell-scroll {
   justify-content: space-between;
   gap: var(--space-2);
   width: 100%;
-  min-height: var(--target);
+  /* 60px (the blueprint's own row height, owner review): never smaller than the touch target
+     `--target` already guarantees (56, or 48 in the caregiver density on a smaller screen). */
+  min-height: max(var(--target), 60px);
   padding: 12px var(--space-2);
   margin-bottom: var(--space-1);
   border-radius: var(--radius-row);

@@ -433,6 +433,61 @@ export function homeHeadlineFor(item: HomeTopItem, s: Strings, locale: string, s
   }
 }
 
+/** What `insightExtraLines` needs beyond the `HomeTopItem` itself: real facts already on the
+ *  page or already being fetched for another part of Today, never a new request made only for
+ *  this card. Each field is `null`/empty with nothing yet known, never a placeholder line. */
+export interface InsightExtraContext {
+  /** The due dose's own source line ("As your doctor set it.") — `NowCard`'s "due" variant. */
+  doseProvenance: string | null;
+  /** Today's own dose count, whole and taken — the day's own tally, not a week the phone does
+   *  not carry (there is no weekly count on this page to draw one from truthfully). */
+  slotsTotal: number;
+  slotsDone: number;
+  /** The most recent reading from a day *before* today, if one exists — the insight card's own
+   *  comparison for a "reading" headline, which already gave today's own numbers in full. */
+  priorSystolic: number | null;
+  /** The next visit's own place/driver lines, from its logistics card (`useLogistics`'s own
+   *  fetch, read again for Home — the visit tile's card, not a new endpoint). */
+  visitAbout: readonly string[];
+  /** The medicine's own first reorder sentence, from its `count.lines` (the backend's own
+   *  wording — a delivery date or a pharmacy it names — not the day-count the headline used). */
+  reorderLine: string | null;
+}
+
+/** The insight card's own extra fact (owner review round 2): a real thing the headline did not
+ *  already say, from the same `HomeTopItem`'s own kind and real fields — never the headline's
+ *  sentence again (the defect the owner found: "Every tablet for today is taken." twice, 40px
+ *  apart). `null` when there genuinely is nothing more to say yet (a dose with no source line, a
+ *  reading with no earlier one to compare, a visit whose logistics have not loaded, a reorder
+ *  with no backend sentence of its own): the card itself does not render then (`HomeHero`,
+ *  screens/Today.tsx) — the rows under it still do, directly under the headline. An `insight`
+ *  item keeps the feed's own body lines, the one place free text from the backend is shown,
+ *  unchanged — that was never the duplicate the owner found. */
+export function insightExtraLines(item: HomeTopItem, on: InsightExtraContext, s: Strings, self: boolean, patientName: string): string[] | null {
+  const h = s.home;
+  const slots = { patient: patientName } as Record<string, string | number>;
+  switch (item.kind) {
+    case "doseDue":
+      return on.doseProvenance ? [on.doseProvenance] : null;
+    case "allTaken":
+      return on.slotsTotal > 0 ? [fill(self ? h.tookCount : h.tookCountOther, { ...slots, done: on.slotsDone, total: on.slotsTotal })] : null;
+    case "reading": {
+      if (on.priorSystolic === null) return null;
+      const diff = item.systolic - on.priorSystolic;
+      const template = diff > 3 ? (self ? h.trendHigher : h.trendHigherOther) : diff < -3 ? (self ? h.trendLower : h.trendLowerOther) : self ? h.trendSame : h.trendSameOther;
+      return [fill(template, slots)];
+    }
+    case "visit":
+      return on.visitAbout.length > 0 ? on.visitAbout.slice(0, 2) : null;
+    case "reorder":
+      return on.reorderLine ? [on.reorderLine] : null;
+    case "insight": {
+      const lines = feedLines(item.item).lines.slice(0, 2);
+      return lines.length > 0 ? lines : null;
+    }
+  }
+}
+
 /** The date the insight card's chip is about — never the feed row's own `created_at` (a
  *  seeding or a generation timestamp, not what the card is *about*, the defect the owner found:
  *  a card about today's tablets showing the day it happened to be written). Today for a dose or
@@ -459,7 +514,11 @@ export function homeTopItemDate(item: HomeTopItem, now: Date): Date {
 export function dateChip(date: Date, locale: string): { day: string; month: string } {
   const parts = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short" }).formatToParts(date);
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? "";
-  return { day: part("day"), month: part("month").replace(/\.$/, "") };
+  // Three letters, the blueprint's own width for the chip (owner review round 2) — `en-SG`'s
+  // own "short" gives "Sept" (four), which the chip has no more room for than "Sep"; slicing
+  // after the period is stripped only ever shortens a Latin abbreviation further, and is a
+  // no-op on ms's own three letters or zh's bare numeral.
+  return { day: part("day"), month: part("month").replace(/\.$/, "").slice(0, 3) };
 }
 
 /** The hour the way he says it (plain words, rule 5; the backend's `when_words.say_clock`):

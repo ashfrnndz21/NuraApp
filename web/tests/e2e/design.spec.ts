@@ -231,6 +231,35 @@ test("Home's ask bar label never clips: at 390px, in en, ms and zh, the caregive
   await askWordFits(page);
 });
 
+/** Fix #1 (owner review round 2 of PR #295): the merged header — avatar/switcher, greeting,
+ *  bell, "Not well?" and the menu — is one row, and only one, at 390px: every one of its real
+ *  controls shares a single vertical band (never one drawn above or below the rest, the visible
+ *  shape the `.shell-head`'s own broken `display: grid` had produced before it was fixed), and
+ *  the whole header stays inside the 72px the owner set for it. */
+test("Home's header is one visual row at 390px, no taller than 72px", async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const pa = await seedOwner(request, "Pa");
+  await signInThroughTheApp(page, pa.phone, "Pa");
+  await todayReady(page);
+
+  const header = page.getByTestId("home-head");
+  const headerBox = (await header.boundingBox())!;
+  expect(headerBox.height, "home-head's own height").toBeLessThanOrEqual(72);
+
+  const boxes = await Promise.all(
+    [page.getByTestId("whose"), page.getByTestId("bell"), page.getByTestId("not-well"), page.getByTestId("open-me")].map(async (each) => (await each.boundingBox())!),
+  );
+  // One shared band: every control's own vertical middle falls inside every other control's
+  // own top-to-bottom span — the way the eye reads a single row, not stacked ones.
+  for (const a of boxes) {
+    const middle = a.y + a.height / 2;
+    for (const b of boxes) {
+      expect(middle, "a control's own middle, inside every other control's own span").toBeGreaterThanOrEqual(b.y - 1);
+      expect(middle).toBeLessThanOrEqual(b.y + b.height + 1);
+    }
+  }
+});
+
 /** Fix #6 (owner review of PR #295): the quiet day the owner explicitly asked to see — nothing
  *  due, nothing new, no visit soon, nothing near its reorder point, no insight raised — is the
  *  large breathing orb, the greeting, and chips that each go somewhere real. No boilerplate

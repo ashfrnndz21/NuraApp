@@ -19,14 +19,19 @@ import { whenNotReached } from "./redPath";
 /** "I am not feeling well" (E13-02): on Today whatever else is or is not on the page — kept,
  *  offline, or blank — because it works with no network too (the offline card).
  *
- *  `compact` (cp3-home): a small pill in Home's own header row, beside the greeting, rather
- *  than the full-width rose button — that full-width rose style is the not-feeling-well
- *  screen's own call button (`NotWell.tsx`), never this entry point into it. Same test id,
- *  same behaviour, same red path with no animation either way. */
+ *  `compact` (cp3-home, owner review round 2): a small pill in Home's own header row, beside
+ *  the greeting, rather than the full-width rose button — that full-width rose style is the
+ *  not-feeling-well screen's own call button (`NotWell.tsx`), never this entry point into it.
+ *  Compact reads the short "Not well?" (`notWellShort(Other)`) rather than the full phrase — the
+ *  header row has no room for a whole sentence — with the full phrase (`notWell(Other)`, self or
+ *  caregiver voice, both already about-him-aware via `t()`) as its accessible name, so a screen
+ *  reader still says the whole thing. Same test id, same behaviour, same red path with no
+ *  animation either way. */
 export function NotWellButton({ compact }: { compact?: boolean } = {}): JSX.Element {
+  const s = t();
   return (
-    <Pill coral compact={compact} onClick={() => go({ name: "notWell" })} testId="not-well">
-      {t().day.notWell}
+    <Pill coral compact={compact} label={compact ? s.day.notWell : undefined} onClick={() => go({ name: "notWell" })} testId="not-well">
+      {compact ? s.day.notWellShort : s.day.notWell}
     </Pill>
   );
 }

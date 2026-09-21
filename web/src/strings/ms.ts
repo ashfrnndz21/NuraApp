@@ -271,6 +271,22 @@ export const ms = {
     headlineReorder: "Baki {title} tinggal kira-kira {days} hari.",
     // @patient headline
     headlineReorderOther: "Baki {title} {patient} tinggal kira-kira {days} hari.",
+    // @patient headline
+    tookCount: "Anda mengambil {done} daripada {total} hari ini.",
+    // @patient headline
+    tookCountOther: "{patient} mengambil {done} daripada {total} hari ini.",
+    // @patient headline
+    trendHigher: "Itu lebih tinggi daripada tekanan darah anda kali terakhir.",
+    // @patient headline
+    trendHigherOther: "Itu lebih tinggi daripada tekanan darah {patient} kali terakhir.",
+    // @patient headline
+    trendLower: "Itu lebih rendah daripada tekanan darah anda kali terakhir.",
+    // @patient headline
+    trendLowerOther: "Itu lebih rendah daripada tekanan darah {patient} kali terakhir.",
+    // @patient headline
+    trendSame: "Itu hampir sama dengan tekanan darah anda kali terakhir.",
+    // @patient headline
+    trendSameOther: "Itu hampir sama dengan tekanan darah {patient} kali terakhir.",
   },
   activity: {
     // @patient headline
@@ -1183,6 +1199,8 @@ export const ms = {
     topThree: "3 perkara untuk hari ini",
     // @patient phrase
     notWell: "Saya rasa tidak sihat",
+    notWellShort: "Tidak sihat?",
+    notWellShortOther: "Tidak sihat?",
     // @patient headline
     notWellTitle: "Beritahu Nura apa yang anda rasa",
     // @patient headline

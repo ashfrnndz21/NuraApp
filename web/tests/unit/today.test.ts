@@ -19,6 +19,7 @@ import {
   homeHeadlineFor,
   homeHero,
   homeHeroWords,
+  insightExtraLines,
   homeState,
   homeTopItem,
   homeTopItemDate,
@@ -479,6 +480,55 @@ describe("Home's new hero (cp3-home, the living orb): the day's top item", () =>
   });
 
   it("splits a date into the day and a short month for the insight card's own chip", () => {
-    expect(dateChip(new Date(2026, 8, 12), "en-SG")).toEqual({ day: "12", month: "Sept" });
+    // Three letters (owner review round 2, the blueprint's own width) — `en-SG`'s own "short"
+    // gives "Sept" (four); the chip fits "Sep".
+    expect(dateChip(new Date(2026, 8, 12), "en-SG")).toEqual({ day: "12", month: "Sep" });
+  });
+
+  describe("insightExtraLines (owner review round 2): a real fact beyond the headline, or no card at all", () => {
+    const blank = { doseProvenance: null, slotsTotal: 0, slotsDone: 0, priorSystolic: null, visitAbout: [], reorderLine: null };
+
+    it("a dose due: the dose's own source line, never invented — nothing yet, no card", () => {
+      const item: HomeTopItem = { kind: "doseDue", title: "Your evening tablet", when: "9 pm" };
+      expect(insightExtraLines(item, { ...blank, doseProvenance: "As your doctor set it." }, en, true, "Pa")).toEqual(["As your doctor set it."]);
+      expect(insightExtraLines(item, blank, en, true, "Pa")).toBeNull();
+    });
+
+    it("every tablet taken: today's own whole-and-taken count, self and caregiver — never a week the page does not carry", () => {
+      const item: HomeTopItem = { kind: "allTaken" };
+      expect(insightExtraLines(item, { ...blank, slotsTotal: 5, slotsDone: 5 }, en, true, "Pa")).toEqual(["You took 5 of 5 today."]);
+      expect(insightExtraLines(item, { ...blank, slotsTotal: 5, slotsDone: 5 }, en, false, "Pa")).toEqual(["Pa took 5 of 5 today."]);
+      expect(insightExtraLines(item, blank, en, true, "Pa")).toBeNull();
+    });
+
+    it("a reading: how it compares to the last one from an earlier day — never the systolic/diastolic the headline already gave in full", () => {
+      const item: HomeTopItem = { kind: "reading", systolic: 138, diastolic: 84 };
+      expect(insightExtraLines(item, { ...blank, priorSystolic: 120 }, en, true, "Pa")).toEqual(["That is higher than your blood pressure last time."]);
+      expect(insightExtraLines(item, { ...blank, priorSystolic: 150 }, en, true, "Pa")).toEqual(["That is lower than your blood pressure last time."]);
+      expect(insightExtraLines(item, { ...blank, priorSystolic: 137 }, en, true, "Pa")).toEqual(["That is about the same as your blood pressure last time."]);
+      expect(insightExtraLines(item, { ...blank, priorSystolic: 137 }, en, false, "Pa")).toEqual(["That is about the same as Pa's blood pressure last time."]);
+      // No earlier reading to compare to: nothing more to say yet, no card.
+      expect(insightExtraLines(item, blank, en, true, "Pa")).toBeNull();
+    });
+
+    it("a visit: where and who is driving, from its own logistics card — nothing until that card has loaded", () => {
+      const item: HomeTopItem = { kind: "visit", doctor: "Dr Tan", at: new Date(2026, 8, 21) };
+      expect(insightExtraLines(item, { ...blank, visitAbout: ["Bedok Polyclinic.", "Mei is driving."] }, en, true, "Pa")).toEqual(["Bedok Polyclinic.", "Mei is driving."]);
+      expect(insightExtraLines(item, { ...blank, visitAbout: ["Bedok Polyclinic.", "Mei is driving.", "A third line never shown."] }, en, true, "Pa")).toHaveLength(2);
+      expect(insightExtraLines(item, blank, en, true, "Pa")).toBeNull();
+    });
+
+    it("a reorder: the medicine's own reorder sentence, in the backend's wording — never the day-count the headline already used", () => {
+      const item: HomeTopItem = { kind: "reorder", title: "Your blood pressure tablet", days: 5 };
+      expect(insightExtraLines(item, { ...blank, reorderLine: "Ask your pharmacy to refill it this week." }, en, true, "Pa")).toEqual(["Ask your pharmacy to refill it this week."]);
+      expect(insightExtraLines(item, blank, en, true, "Pa")).toBeNull();
+    });
+
+    it("an insight: the feed's own body lines, unchanged — empty is no card, same as every other kind", () => {
+      const withBody: FeedItemOut = { ...insightItem, body: ["A real line from the backend.", "A second real line."] };
+      expect(insightExtraLines({ kind: "insight", item: withBody }, blank, en, true, "Pa")).toEqual(["A real line from the backend.", "A second real line."]);
+      const noBody: FeedItemOut = { ...insightItem, body: [], boundary: null };
+      expect(insightExtraLines({ kind: "insight", item: noBody }, blank, en, true, "Pa")).toBeNull();
+    });
   });
 });

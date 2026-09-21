@@ -64,14 +64,16 @@ async function everyLineOn(page: Page): Promise<string[]> {
 }
 
 /** D1: her screens say his papers about him by name — the backend's twins and the catalogue's —
- *  never to him; the pill is "Pa is not feeling well", the same button flow. */
+ *  never to him; the pill's own accessible name is "Pa is not feeling well" (its visible label
+ *  is the header's own short "Not well?", cp3-home owner review round 2 — the full phrase is
+ *  still what a screen reader says), the same button flow. */
 test("her Home, her Medicines and her Papers say his papers about him by name, never to him", async ({ page, request }) => {
   const family = await seedHome(request);
   await signInThroughTheApp(page, family.meiPhone, "Mei");
   await page.getByTestId("door-key").click();
   await todayReady(page);
   await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
-  await expect(page.getByTestId("not-well")).toHaveText(/Pa is not feeling well/);
+  await expect(page.getByTestId("not-well")).toHaveAccessibleName(/Pa is not feeling well/);
   await expect(page.getByTestId("home-hero")).toBeVisible();
   const home = await linesOn(page);
   expect(home.filter(aboutHim)).toEqual([]);
@@ -227,7 +229,7 @@ test("no caregiver-density screen says a second-person line about his record", a
 
   // The pill is about him, and it is the same button: it opens what it says it opens.
   await tab("tab-home");
-  await expect(page.getByTestId("not-well")).toHaveText(/Pa is not feeling well/);
+  await expect(page.getByTestId("not-well")).toHaveAccessibleName(/Pa is not feeling well/);
   await page.getByTestId("not-well").click();
   await check("not-well");
 

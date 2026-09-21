@@ -117,6 +117,18 @@ export interface Strings {
     headlineVisitNoDoctorOther: string;
     headlineReorder: string;
     headlineReorderOther: string;
+    /** The insight card's own extra fact (owner review round 2): a real thing the headline did
+     *  not already say, per `HomeTopItem` kind — never the headline's own sentence again. Where
+     *  there is no such fact yet (`today/model.ts`'s `insightExtra`), the card itself does not
+     *  render; the rows it would have carried sit directly under the headline instead. */
+    tookCount: string;
+    tookCountOther: string;
+    trendHigher: string;
+    trendHigherOther: string;
+    trendLower: string;
+    trendLowerOther: string;
+    trendSame: string;
+    trendSameOther: string;
   };
   /** Home's "Things to do" tile (docs/design/nura-concept-board.html): his day's activity —
    *  today's steps, water and meals, each a real write through PR #235's lifestyle logs
@@ -553,6 +565,11 @@ export interface Strings {
   day: {
     topThree: string;
     notWell: string;
+    /** The header's own compact pill (cp3-home, owner review round 2): two words, never the
+     *  whole phrase — `notWell(Other)` is still what a screen reader says (the pill's own
+     *  `aria-label`). */
+    notWellShort: string;
+    notWellShortOther: string;
     notWellTitle: string;
     notWellTitleOther: string;
     notWellLead: string;

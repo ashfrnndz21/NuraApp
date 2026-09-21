@@ -271,6 +271,22 @@ export const zh = {
     headlineReorder: "{title}大概还剩{days}天。",
     // @patient headline
     headlineReorderOther: "{patient}的{title}大概还剩{days}天。",
+    // @patient headline
+    tookCount: "您今天已经吃了{total}次中的{done}次。",
+    // @patient headline
+    tookCountOther: "{patient}今天已经吃了{total}次中的{done}次。",
+    // @patient headline
+    trendHigher: "这比您上次的血压高。",
+    // @patient headline
+    trendHigherOther: "这比{patient}上次的血压高。",
+    // @patient headline
+    trendLower: "这比您上次的血压低。",
+    // @patient headline
+    trendLowerOther: "这比{patient}上次的血压低。",
+    // @patient headline
+    trendSame: "这和您上次的血压差不多。",
+    // @patient headline
+    trendSameOther: "这和{patient}上次的血压差不多。",
   },
   activity: {
     // @patient headline
@@ -1183,6 +1199,8 @@ export const zh = {
     topThree: "今天的3件事",
     // @patient phrase
     notWell: "我觉得不舒服",
+    notWellShort: "不舒服？",
+    notWellShortOther: "不舒服？",
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
     // @patient headline
