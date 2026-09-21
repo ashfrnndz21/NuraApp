@@ -517,9 +517,9 @@ export const zh = {
     // @patient headline
     standsOutTitle: "这份文件上值得留意的地方",
     // @patient
-    standoutSafety: "范围是您这份文件上印的范围。",
+    standoutSafety: "这些范围是您文件上印的。",
     // @patient
-    standoutSafetyOther: "范围是{patient}这份文件上印的范围。",
+    standoutSafetyOther: "这些范围是{patient}文件上印的。",
     // @patient headline
     questionsTitle: "给您医生的问题",
     // @patient headline

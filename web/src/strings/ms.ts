@@ -517,9 +517,9 @@ export const ms = {
     // @patient headline
     standsOutTitle: "Apa yang menonjol dalam surat ini",
     // @patient
-    standoutSafety: "Julat yang ditunjukkan ialah yang tertulis pada surat anda.",
+    standoutSafety: "Julat ini adalah yang tertulis pada surat anda.",
     // @patient
-    standoutSafetyOther: "Julat yang ditunjukkan ialah yang tertulis pada surat {patient}.",
+    standoutSafetyOther: "Julat ini adalah yang tertulis pada surat {patient}.",
     // @patient headline
     questionsTitle: "Soalan untuk doktor anda",
     // @patient headline
