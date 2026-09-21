@@ -891,6 +891,34 @@ export interface Strings {
     countLabel: string;
     doctorLabel: string;
     checkIt: string;
+    // --- redesign package 11: "Your tablets" (the registry) and Add a medicine -----------
+    /** The form field of the short typed form ("tablet", "capsule", "inhaler…") — the one
+     *  field a photo never fills (the extractor names no "form" attribute), typed-only. */
+    formLabel: string;
+    /** "Type it in.": the third way into Add a medicine, beside a photo and a file. */
+    addTypeIt: string;
+    /** The typed form's own lead line — never "check what Nura read" when nothing was. */
+    addTypeLead: string;
+    /** The confirmation card's two actions once a photo or a file has been read. */
+    addLooksRight: string;
+    addFix: string;
+    /** The which-one question (#302): "STATIN" is a family, not one medicine. */
+    addWhichLead: string;
+    addWhichQuestion: string;
+    addWhichHint: string;
+    /** The chip beside the register's own choices, when he does not know which one it is. */
+    addNotSure: string;
+    addNotSureNote: string[];
+    /** After his yes: where it went, and the way back to see it (a `ConnectionRow`). */
+    addedConnection: string; addedConnectionOther: string;
+    seeInRegistry: string;
+    /** A label that adds nothing new (`Outcome.DUPLICATE`): the existing engine's own
+     *  answer, put as a question rather than left as a bare refusal. */
+    addDuplicateQuestion: string[]; addDuplicateQuestionOther: string[];
+    addDuplicateYes: string;
+    addDuplicateNo: string;
+    /** The registry's own "Today" section, above the list (redesign package 11). */
+    todayKick: string;
     outcomeNew: string; outcomeNewOther: string;
     outcomeRefill: string; outcomeRefillOther: string;
     outcomeChange: string;

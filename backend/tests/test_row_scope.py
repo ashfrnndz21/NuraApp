@@ -901,6 +901,7 @@ READ_ROUTES: tuple[Walk, ...] = (
     Walk("GET", f"{P}/medicines/interactions"),
     Walk("GET", f"{P}/medicines/today"),
     Walk("GET", f"{P}/medicines/now"),
+    Walk("GET", f"{P}/medicines/classify", params={"name": "amlodipine"}),
     Walk("GET", f"{P}/medicines/{{line_id}}/story"),
     Walk("GET", f"{P}/medicines/{{line_id}}/story/voice"),
     Walk("GET", f"{P}/whatsapp/thread"),
@@ -1054,6 +1055,7 @@ NOT_WALKED: dict[tuple[str, str], str] = {
     ("PUT", f"{P}/signals/{{family}}"): "switches one family on or off; returns every family",
     ("POST", f"{P}/feelings"): "writes a feeling; returns the event and flag it wrote",
     ("POST", f"{P}/medicines/draft"): "plans a medicine from a label the caller sends",
+    ("POST", f"{P}/medicines/typed"): "keeps typed words as an artefact; returns its id",
     ("POST", f"{P}/medicines"): "writes a medicine; returns the line",
     ("POST", f"{P}/medicines/{{line_id}}/taken"): "writes a dose taken; returns it",
     ("POST", f"{P}/medicines/{{line_id}}/ask-to-order/preview"): (

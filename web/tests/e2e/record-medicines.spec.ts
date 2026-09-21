@@ -163,11 +163,14 @@ for (const look of LOOKS) {
     await lookAs(page, look);
     await page.getByTestId("record-medicines").click();
     await page.getByTestId("add-medicine").click();
-    await expect(page.getByTestId("add-photo")).toBeVisible();
+    await expect(page.getByTestId("add-entry")).toBeVisible();
     await readable(page, look);
 
-    // A label photo Nura cannot read: he types what the label says.
+    // A label photo Nura cannot read: the live reading trace, then the (empty) confirmation
+    // card — "Fix" opens the same typed form he always had, and he types what the label says.
     await page.getByTestId("photo-input").setInputFiles({ name: "aspirin.png", mimeType: "image/png", buffer: unknownPng() });
+    await expect(page.getByTestId("add-confirm")).toBeVisible();
+    await page.getByTestId("add-fix").click();
     await expect(page.getByTestId("add-label")).toBeVisible();
     await page.getByLabel("The name on the label").fill("aspirin");
     await page.getByLabel("How strong it is").fill("100 mg");
@@ -188,6 +191,8 @@ for (const look of LOOKS) {
     expect(((await (await request.get(`${API}/profiles/${pa.profileId}/medicines`, auth(pa.token))).json()) as Line[]).map((each) => each.generic)).toEqual(["warfarin"]);
 
     await page.getByTestId("add-it").click();
+    await expect(page.getByTestId("add-done")).toContainText("Added to your tablets.");
+    await page.getByTestId("see-in-registry").click();
     await expect(page.getByTestId("record-note")).toHaveText("Nura added it to your list.");
     const listed = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines`, auth(pa.token))).json()) as Line[];
     expect(listed.map((each) => each.generic).sort()).toEqual(["aspirin", "warfarin"]);
@@ -200,6 +205,8 @@ for (const look of LOOKS) {
       mimeType: "application/pdf",
       buffer: Buffer.from(`%PDF-1.4\nnura-paper-placeholder:unknown-${Math.random()}\n`),
     });
+    await expect(page.getByTestId("add-confirm")).toBeVisible();
+    await page.getByTestId("add-fix").click();
     await expect(page.getByTestId("add-label")).toBeVisible();
     await page.getByLabel("The name on the label").fill("warfarin");
     await page.getByLabel("How strong it is").fill("1 mg");
@@ -220,6 +227,8 @@ test("add a medicine: a pair no pharmacist has checked yet is still shown, with 
   await page.getByTestId("record-medicines").click();
   await page.getByTestId("add-medicine").click();
   await page.getByTestId("photo-input").setInputFiles({ name: "fish-oil.png", mimeType: "image/png", buffer: unknownPng() });
+  await expect(page.getByTestId("add-confirm")).toBeVisible();
+  await page.getByTestId("add-fix").click();
   await expect(page.getByTestId("add-label")).toBeVisible();
   await page.getByLabel("The name on the label").fill("fish oil");
   await page.getByLabel("How strong it is").fill("1000 mg");

@@ -1980,6 +1980,42 @@ export const ms = {
     doctorLabel: "Nama doktor",
     // @patient phrase
     checkIt: "Semak",
+    // @patient phrase
+    formLabel: "Bentuknya (tablet, kapsul, penyedut…)",
+    // @patient phrase
+    addTypeIt: "Taip sendiri",
+    // @patient
+    addTypeLead: "Beritahu Nura namanya, kekuatannya dan cara mengambilnya.",
+    // @patient phrase
+    addLooksRight: "Betul",
+    // @patient phrase
+    addFix: "Betulkan",
+    // @patient
+    addWhichLead: "“{name}” ialah sekumpulan ubat, bukan satu ubat.",
+    // @patient
+    addWhichQuestion: "Yang mana satu?",
+    // @patient
+    addWhichHint: "Namanya biasanya dicetak kecil pada kotak.",
+    // @patient phrase
+    addNotSure: "Saya tidak pasti",
+    // @patient
+    addNotSureNote: ["Nura sudah simpan apa yang anda hantar.", "Tiada apa ditambah sehingga anda beritahu yang mana satu."],
+    // @patient
+    addedConnection: "Ditambah ke senarai ubat anda.",
+    // @patient
+    addedConnectionOther: "Ditambah ke senarai ubat {patient}.",
+    // @patient phrase
+    seeInRegistry: "Lihat dalam senarai ubat anda",
+    // @patient
+    addDuplicateQuestion: ["Anda sudah ada ubat ini.", "Adakah ini kotak baharu ubat yang sama?"],
+    // @patient
+    addDuplicateQuestionOther: ["{patient} sudah ada ubat ini.", "Adakah ini kotak baharu ubat yang sama?"],
+    // @patient phrase
+    addDuplicateYes: "Ya, saya nak beritahu berapa banyak",
+    // @patient phrase
+    addDuplicateNo: "Tidak, cuma menyemak",
+    // @patient phrase
+    todayKick: "Hari ini",
     // @patient
     outcomeNew: "Ini ubat baharu untuk senarai anda.",
     // @patient

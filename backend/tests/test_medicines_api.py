@@ -571,3 +571,89 @@ async def test_a_tap_the_phone_held_offline_is_written_when_he_made_it_and_once(
         route, json={"anchor": "breakfast", "taken_at": "2026-09-14T08:05:00"}, headers=his
     )
     assert naive.status_code == 422
+
+
+async def test_a_typed_medicine_keeps_its_own_artefact_and_the_list_says_so(
+    deployment: Deployment,
+) -> None:
+    """POST /medicines/typed (redesign package 11, the "type it" entry point): the words he
+    typed are kept as their own artefact, exactly the way a photo is, and once the medicine
+    is added its source line says "you told Nura" — never "the label" — while a photo-backed
+    line still says "the label" as it always has."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+
+    kept = await client.post(
+        f"/profiles/{profile_id}/medicines/typed",
+        json={"text": "I take fish oil 1000 mg every morning", "captured_at": "2026-09-10T08:00:00Z"},
+        headers=his,
+    )
+    assert kept.status_code == 201, kept.text
+    typed_artifact = kept.json()["artifact_id"]
+    assert uuid.UUID(typed_artifact)  # a real id, not an echo of the text
+
+    typed_label = _label("fish oil", "1000 mg", "1 capsule OD", None)
+    added_typed = await _add(client, profile_id, pa, typed_label, typed_artifact)
+    assert added_typed.status_code == 201, added_typed.text
+
+    photo = await _artefact(client, profile_id, pa, "label-source")
+    added_photo = await _add(
+        client, profile_id, pa, _label("amlodipine", "5 mg", "1 tab OD", 30), photo
+    )
+    assert added_photo.status_code == 201, added_photo.text
+
+    listed = {
+        r["generic"]: r
+        for r in (await client.get(f"/profiles/{profile_id}/medicines?language=en", headers=his)).json()
+    }
+    assert listed["fish oil"]["source"].startswith("Someone typed this in on")
+    assert listed["amlodipine"]["source"].startswith("This comes from the label you kept on")
+
+
+async def test_empty_or_too_long_typed_words_are_refused(deployment: Deployment) -> None:
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    empty = await deployment.client.post(
+        f"/profiles/{profile_id}/medicines/typed", json={"text": "   "}, headers=his
+    )
+    assert empty.status_code in (400, 422), empty.text
+    too_long = await deployment.client.post(
+        f"/profiles/{profile_id}/medicines/typed", json={"text": "x" * 5000}, headers=his
+    )
+    assert too_long.status_code == 422, too_long.text
+
+
+async def test_classify_over_http_answers_medicine_class_or_unknown(
+    deployment: Deployment,
+) -> None:
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+
+    medicine = await deployment.client.get(
+        f"/profiles/{profile_id}/medicines/classify", params={"name": "amlodipine"}, headers=his
+    )
+    assert medicine.status_code == 200
+    assert medicine.json() == {"name_kind": "medicine", "candidates": []}
+
+    family = await deployment.client.get(
+        f"/profiles/{profile_id}/medicines/classify", params={"name": "STATIN"}, headers=his
+    )
+    assert family.status_code == 200
+    assert family.json()["name_kind"] == "class"
+    assert {c["generic"] for c in family.json()["candidates"]} == {
+        "atorvastatin",
+        "simvastatin",
+        "rosuvastatin",
+    }
+
+    unknown = await deployment.client.get(
+        f"/profiles/{profile_id}/medicines/classify",
+        params={"name": "not a real thing"},
+        headers=his,
+    )
+    assert unknown.status_code == 200
+    assert unknown.json() == {"name_kind": "unknown", "candidates": []}

@@ -1,0 +1,35 @@
+{
+  "placeholder": "statin-box-2026-09-19",
+  "note": "What the paper says, labelled by hand: the answer the extractor is measured against (tests/paper_accuracy.py). Synthetic (no real patient) — the box prints only its drug family, not a medicine name, exactly as labelled here: STATIN is read correctly, because it really is all the box says.",
+  "document_kind": "medicine_label",
+  "fields": [
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "STATIN",
+      "unit": null
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 20,
+      "unit": "mg"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "STATIN",
+        "instruction": "1 tablet once a day at night",
+        "as_printed": "1 tablet once a day at night"
+      },
+      "unit": "tablet"
+    },
+    {
+      "subject": "medicine",
+      "attribute": "quantity",
+      "value": 28,
+      "unit": "tablets"
+    }
+  ]
+}

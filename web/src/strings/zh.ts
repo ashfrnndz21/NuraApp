@@ -1980,6 +1980,42 @@ export const zh = {
     doctorLabel: "医生的名字",
     // @patient phrase
     checkIt: "检查一下",
+    // @patient phrase
+    formLabel: "剂型（药片、胶囊、吸入器……）",
+    // @patient phrase
+    addTypeIt: "自己输入",
+    // @patient
+    addTypeLead: "告诉 Nura 名字、有多强、怎么吃。",
+    // @patient phrase
+    addLooksRight: "没错",
+    // @patient phrase
+    addFix: "改一下",
+    // @patient
+    addWhichLead: "“{name}”是一类药，不是一种药。",
+    // @patient
+    addWhichQuestion: "是哪一种？",
+    // @patient
+    addWhichHint: "名字通常小小地印在盒子上。",
+    // @patient phrase
+    addNotSure: "我不确定",
+    // @patient
+    addNotSureNote: ["Nura 已经保存了您发来的内容。", "在您说清楚是哪一种之前，不会添加任何药。"],
+    // @patient
+    addedConnection: "已加入您的清单。",
+    // @patient
+    addedConnectionOther: "已加入{patient}的清单。",
+    // @patient phrase
+    seeInRegistry: "在您的清单里看看",
+    // @patient
+    addDuplicateQuestion: ["您已经有这个药了。", "这是同一种药的新盒子吗？"],
+    // @patient
+    addDuplicateQuestionOther: ["{patient}已经有这个药了。", "这是同一种药的新盒子吗？"],
+    // @patient phrase
+    addDuplicateYes: "是的，我说说有多少",
+    // @patient phrase
+    addDuplicateNo: "不是，只是看看",
+    // @patient phrase
+    todayKick: "今天",
     // @patient
     outcomeNew: "这是您清单上的新药。",
     // @patient

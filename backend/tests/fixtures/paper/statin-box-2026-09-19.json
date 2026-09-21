@@ -1,0 +1,45 @@
+{
+  "placeholder": "statin-box-2026-09-19",
+  "sha256": "959cb92c1b2f82ccd041f86175c26e2b66856f6365da6a1bd99f58bb850049f3",
+  "note": "Synthetic fixture (no real patient). A cholesterol-tablet box that prints only its drug family, not a medicine name: front panel reads STATIN 20 mg, 28 tablets, no brand and no generic anywhere on it — the case the owner asked for (#302): 'a box that says only STATIN 20 mg, 28 tablets records 20 mg, tablets and 28, and asks which statin it is.' Built for `app.medicines.classify`: the extractor reads the printed word honestly (`STATIN`), and it is the licensed register — never the extracted text — that decides this is a class and not a product.",
+  "document_kind": "medicine_label",
+  "document_date": "2026-09-19",
+  "fields": [
+    {
+      "subject": "medicine",
+      "attribute": "name",
+      "value": "STATIN",
+      "unit": null,
+      "confidence": 0.95,
+      "span": { "x0": 0.1, "y0": 0.12, "x1": 0.6, "y1": 0.22 }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "strength",
+      "value": 20,
+      "unit": "mg",
+      "confidence": 0.92,
+      "span": { "x0": 0.62, "y0": 0.12, "x1": 0.85, "y1": 0.22 }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "dose",
+      "value": {
+        "drug": "STATIN",
+        "instruction": "1 tablet once a day at night",
+        "as_printed": "1 tablet once a day at night"
+      },
+      "unit": "tablet",
+      "confidence": 0.8,
+      "span": { "x0": 0.1, "y0": 0.34, "x1": 0.85, "y1": 0.41 }
+    },
+    {
+      "subject": "medicine",
+      "attribute": "quantity",
+      "value": 28,
+      "unit": "tablets",
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.46, "x1": 0.4, "y1": 0.52 }
+    }
+  ]
+}

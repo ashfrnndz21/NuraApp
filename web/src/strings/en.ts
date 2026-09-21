@@ -1982,6 +1982,42 @@ export const en = {
     doctorLabel: "The doctor's name",
     // @patient phrase
     checkIt: "Check it",
+    // @patient phrase
+    formLabel: "The form (tablet, capsule, inhaler…)",
+    // @patient phrase
+    addTypeIt: "Type it in",
+    // @patient
+    addTypeLead: "Tell Nura the name, then how strong and how to take it.",
+    // @patient phrase
+    addLooksRight: "Looks right",
+    // @patient phrase
+    addFix: "Fix",
+    // @patient
+    addWhichLead: "“{name}” is a family of medicines, not one medicine.",
+    // @patient
+    addWhichQuestion: "Which one is it?",
+    // @patient
+    addWhichHint: "The name is usually printed small on the box.",
+    // @patient phrase
+    addNotSure: "I'm not sure",
+    // @patient
+    addNotSureNote: ["Nura has kept what you sent.", "Nothing is added until you say which one it is."],
+    // @patient
+    addedConnection: "Added to your tablets.",
+    // @patient
+    addedConnectionOther: "Added to {patient}'s tablets.",
+    // @patient phrase
+    seeInRegistry: "See it in your tablets",
+    // @patient
+    addDuplicateQuestion: ["You already have this.", "Is this a new box of the same one?"],
+    // @patient
+    addDuplicateQuestionOther: ["{patient} already has this.", "Is this a new box of the same one?"],
+    // @patient phrase
+    addDuplicateYes: "Yes, say how many",
+    // @patient phrase
+    addDuplicateNo: "No, just checking",
+    // @patient phrase
+    todayKick: "Today",
     // @patient
     outcomeNew: "This is a new medicine for your list.",
     // @patient

@@ -1,0 +1,57 @@
+/* "Your tablets" — the registry, and Add a medicine (redesign package 11).
+
+   Almost everything here already exists in `ui/kit/kit.css` and `ui/design.css` (`.glass-chip`,
+   `.report-row-top`, `.report-value-num`, `.flag-chip`, `.chip-row`, `.tile`, `.pill`): this file
+   holds only the handful of selectors genuinely new to this screen — a tappable row header that
+   opens a medicine's sheet, and a real `<button>` styled as a chip for the which-one question,
+   since `Chip` (`ui/kit/Chip.tsx`) is deliberately decorative and not a control. */
+
+.medicine-line-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--target);
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.medicine-line-open:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.medicine-line-open .title {
+  margin: 0;
+}
+.medicine-line-open .caption {
+  margin: 0;
+}
+
+.chip-tap {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  cursor: pointer;
+  font: inherit;
+}
+.chip-tap:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.chip-tap:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Today's dose rows (`TodayDoses`) put a long real sentence beside a short "Taken" button in
+   a `.report-row-top` flex row: without this, the button shrinks below its own label's width
+   and the word wraps mid-letter ("Tak/en"). A button never shrinks below its label, here or
+   anywhere else `.report-row-top` holds one. */
+.report-row-top > .pill {
+  flex-shrink: 0;
+}

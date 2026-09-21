@@ -1,5 +1,7 @@
 import type {
   ArtifactRefOut,
+  ClassCandidateOut,
+  ClassifyOut,
   EpisodeViewOut,
   FeedItemOut,
   HomeCareCategory,
@@ -11,6 +13,7 @@ import type {
   ReviewCardOut,
   RoutineDayIn,
   RoutineOut,
+  SlotOut,
   TimelineItemOut,
   TrendOut,
   TrendPointOut,
@@ -20,6 +23,7 @@ import { readingTally } from "../onboarding/review";
 import { fill, type Strings } from "../strings";
 import { timeLine } from "../today/model";
 import type { HubEntry } from "./places";
+import { sanitizeDisplayText } from "./sanitize";
 
 /** The Record's logic apart from any screen, all unit-tested. Nothing here writes a sentence:
  *  every line is the backend's, or a whole line of the catalogue with a name, a date or a
@@ -161,6 +165,7 @@ export function tidyLabel(label: LabelIn): LabelIn | null {
   return {
     generic,
     strength: label.strength?.trim() || null,
+    form: label.form?.trim() || null,
     dose_text: doseText,
     quantity,
     prescriber: label.prescriber?.trim() || null,
@@ -173,6 +178,109 @@ export function countOf(typed: string): number | null {
   if (!/^\d{1,4}$/.test(trimmed)) return null;
   const value = Number(trimmed);
   return value >= 1 && value <= 1000 ? value : null;
+}
+
+// --- "Your tablets" — the registry (redesign package 11) ----------------------------------
+
+function upper1(text: string): string {
+  return text.length > 0 ? text[0]!.toUpperCase() + text.slice(1) : text;
+}
+
+/** The anchor words already in the catalogue ("Breakfast", "Bedtime", …), in his day's
+ *  order — never new prose, the same words `s.record.anchors` already carries elsewhere. */
+export function doseAnchorWords(line: Pick<LineOut, "dose">, s: Strings): string[] {
+  const known = s.record.anchors as Record<string, string>;
+  return line.dose.anchors.map((anchor) => known[anchor] ?? anchor);
+}
+
+/** "1 tablet", "0.5 mL" — the amount and its own unit, exactly as the line holds them, no
+ *  word invented: absent when there is no amount to say (a dose with none on file). */
+export function doseAmountLine(line: Pick<LineOut, "dose">): string | null {
+  if (!(line.dose.amount > 0)) return null;
+  return `${numberText(line.dose.amount)} ${line.dose.unit}`.trim();
+}
+
+/** One registry row's fields, built only from what the line actually holds (redesign
+ *  package 11): his word for it first, the chemical name and strength second and small,
+ *  the form, how many and when, how many are left when the backend has ever dispensed any,
+ *  and where it came from with its date. A field the record does not hold is `null` here,
+ *  never a placeholder — the caller renders nothing for it, never a blank or a dash. */
+export interface RegistryRow {
+  name: string;
+  chemical: string;
+  form: string | null;
+  howMany: string | null;
+  supplyLines: string[];
+  source: string | null;
+  monthlyCost: string | null;
+  highRisk: boolean;
+  duplicate: boolean;
+}
+
+export function registryRow(line: LineOut, s: Strings): RegistryRow {
+  const anchors = doseAnchorWords(line, s);
+  const amount = doseAmountLine(line);
+  const howMany = amount && anchors.length > 0 ? `${amount} · ${anchors.join(", ")}` : (amount ?? (anchors.length > 0 ? anchors.join(", ") : null));
+  return {
+    name: upper1(line.name),
+    chemical: [line.generic, line.strength].filter((each) => each.length > 0).join(" "),
+    form: line.form.length > 0 ? upper1(line.form) : null,
+    howMany,
+    supplyLines: line.count?.lines ?? [],
+    source: line.source.length > 0 ? line.source : null,
+    monthlyCost: line.monthly_cost_said ?? null,
+    highRisk: line.high_risk,
+    duplicate: (line.duplicate_of?.length ?? 0) > 0,
+  };
+}
+
+/** Today's dose cards (`GET …/medicines/today`), grouped under the registry line each is
+ *  for — "Today" first, before the registry itself (redesign package 11), reading the same
+ *  endpoint and the same tap the existing Taken flow already uses (`nura.dosesToday`,
+ *  `nura.taken`): nothing here re-plumbs it, only shows it. */
+export function slotsForLine(lineId: string, slots: readonly SlotOut[]): SlotOut[] {
+  return slots.filter((slot) => slot.line_id === lineId);
+}
+
+// --- add a medicine: the which-one question (redesign package 11, #302) -------------------
+
+/** What the class question needs to ask, decided from the register's own answer alone
+ *  (`GET …/medicines/classify`) — never from the extracted text. `"none"` when the name is
+ *  either a specific medicine or simply unknown to the register: either way, nothing to ask
+ *  here (an unknown name is still handled downstream, by the ordinary `NotIdentified`
+ *  refusal). `"ask"` only when the register itself filed products under this name as a
+ *  class, with at least one member to offer as a choice. */
+export type ClassQuestion = { kind: "none" } | { kind: "ask"; candidates: ClassCandidateOut[] };
+
+export function classQuestionFor(found: Pick<ClassifyOut, "name_kind" | "candidates">): ClassQuestion {
+  if (found.name_kind === "class" && found.candidates.length > 0) {
+    return { kind: "ask", candidates: found.candidates };
+  }
+  return { kind: "none" };
+}
+
+// --- add a medicine: typed entry, one field at a time (redesign package 11) ---------------
+
+export type TypedEntryField = "generic" | "strength" | "form" | "dose_text";
+
+/** The next field the short typed form still needs, in the order the owner asked for it —
+ *  "name → strength → form → how many, when" — or `null` once every field the backend
+ *  requires (`LabelIn`) is filled and the form may check the name. Quantity and prescriber
+ *  are optional, so they are never named here. */
+export function nextTypedField(label: LabelIn): TypedEntryField | null {
+  if (!label.generic?.trim()) return "generic";
+  if (!label.strength?.trim()) return "strength";
+  if (!label.form?.trim()) return "form";
+  if (!label.dose_text?.trim()) return "dose_text";
+  return null;
+}
+
+/** A field an extractor wrote, or a name he typed, shown on a confirmation card before he
+ *  has said anything about it: hostile until he says yes (redesign package 11). Control and
+ *  bidi characters folded away, long text capped — see `record/sanitize.ts` for exactly
+ *  what and why. This is the one function any card must run such a field's text through. */
+export function displayExtractedText(raw: string | null | undefined): string {
+  return sanitizeDisplayText(raw);
 }
 
 // --- the timeline, an illness, the directory (E03-01..03) --------------------------------------

@@ -71,6 +71,7 @@ from app.keys.context import KeyContext, Standing
 from app.keys.models import Key
 from app.keys.privacy import Privacy
 from app.keys.scopes import KeyRole, KeyWindow, Scope
+from app.medicines.classify import NameKind
 from app.medicines.dose import Anchor, Dose, Frequency, parse_dose_text
 from app.medicines.models import (
     ChangeKind,
@@ -86,6 +87,7 @@ from app.medicines.service import (
     FlagView,
     Label,
     LineView,
+    NameClassification,
     Plan,
     Reconciled,
     Slot,
@@ -1197,6 +1199,53 @@ class MedicineDraftOut(BaseModel):
             needs_label_photo=plan.needs_label_photo,
             lead_time_days=plan.lead_time_days,
         )
+
+
+class ClassCandidateOut(BaseModel):
+    """One member of a drug class the register lists, offered as a choice when a label
+    named only the class ("STATIN") and not a specific product — the register's own word
+    for the product, never the text read off the box."""
+
+    generic: str
+    product_name: str
+
+
+class ClassifyOut(BaseModel):
+    """What the register makes of a name alone, before it is trusted to identify a
+    product: `medicine` when the register can identify it; `class` when it is not a
+    product but is a family the register files products under, with those products as
+    `candidates`; `unknown` when the register has never heard of it. `candidates` is
+    always empty outside `class` — never a guess dressed up as a choice."""
+
+    name_kind: NameKind
+    candidates: list[ClassCandidateOut] = []
+
+    @classmethod
+    def of(cls, found: NameClassification) -> ClassifyOut:
+        return cls(
+            name_kind=found.kind,
+            candidates=[
+                ClassCandidateOut(generic=m.generic, product_name=m.product_name or m.brand)
+                for m in found.candidates
+            ],
+        )
+
+
+class TypedMedicineIn(BaseModel):
+    """What he typed or said about a medicine — "I take fish oil 1000 mg every morning" —
+    kept as its own artefact before it is checked against the register (redesign package
+    11, the "type it" entry point), the way a photo already is: so a typed medicine's
+    source line says "you told Nura", never "the label", once it is added."""
+
+    text: str = Field(min_length=1, max_length=2000)
+    captured_at: AwareDatetime | None = None
+
+
+class TypedMedicineOut(BaseModel):
+    """The artefact his typed words were kept under — the `source_artifact_id` a draft and
+    an add are then built from, exactly as a label photo's artefact id already is."""
+
+    artifact_id: uuid.UUID
 
 
 class CountOut(BaseModel):

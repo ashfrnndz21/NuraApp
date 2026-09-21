@@ -48,6 +48,7 @@ from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.language.review import queue_pending_interaction
 from app.medicines import dose as arithmetic
+from app.medicines.classify import NameKind, classify_name
 from app.medicines.dose import Dose
 from app.medicines.models import (
     LEAD_TIME_DAYS,
@@ -79,7 +80,14 @@ from app.medicines.strings import (
 )
 from app.medicines.windows import is_late, window_status
 from app.memory.episodic import require_artifact
-from app.memory.models import ArtifactKind, ConfidenceState, Event, EventKind, SourceChannel
+from app.memory.models import (
+    Artifact,
+    ArtifactKind,
+    ConfidenceState,
+    Event,
+    EventKind,
+    SourceChannel,
+)
 from app.memory.semantic import assert_fact
 from app.regions import REGION_TZ
 from app.safety.high_risk import MEDICATION, HighRiskNeedsLabelPhoto, is_pill_photo
@@ -413,6 +421,29 @@ async def draft_for(
     if what.draft is None:
         raise AlreadyRecorded(f"{what.match.generic}: this label is already on the list")
     return what.draft
+
+
+@dataclass(frozen=True, slots=True)
+class NameClassification:
+    """What the register makes of a name alone (`app.medicines.classify`): a specific
+    product, a class with its members offered as choices, or neither."""
+
+    kind: NameKind
+    candidates: Sequence[DrugMatch]
+
+
+@audited(Action.READ, Scope.MEDICINES, LINE)
+async def classify(
+    session: AsyncSession, *, context: KeyContext, registry: DrugRegistry, name: str
+) -> NameClassification:
+    """What a name alone is, before a label's `generic` is trusted to identify a product
+    (owner's #302 requirement): read-only, nothing written, the register decides both
+    questions. `candidates` is only ever populated for `NameKind.CLASS`, and is exactly
+    `registry.members_of_class(name)` — the register's own members, never a guess built
+    from the extracted text."""
+    kind = classify_name(registry, name)
+    candidates = registry.members_of_class(name) if kind is NameKind.CLASS else ()
+    return NameClassification(kind=kind, candidates=candidates)
 
 
 async def _write_line(
@@ -815,12 +846,53 @@ def now_in(context: KeyContext) -> datetime:
     return utcnow().astimezone(REGION_TZ[context.region])
 
 
-def source_line(line: MedicationLine, zone: tzinfo, language: str) -> str:
-    """The source line under a card that shows this medicine: the label he kept (a photo is
-    behind the line) or what was typed in, and the day it started, in his language."""
-    kind = "label" if line.source_artifact_id is not None else "typed"
+_TYPED_KINDS = frozenset({ArtifactKind.MESSAGE, ArtifactKind.VOICE})
+"""What behind a line counts as "typed in", for `source_line`: the words he typed or said,
+kept as their own artefact (`app.ingestion.voice.store_words`/`store_voice`) exactly the way
+a photo is — never a row holding the words themselves. Anything else with an artefact (a
+photo, a screenshot, a PDF) is "the label he kept"; no artefact at all is typed with nothing
+kept behind it (an old row, or a line the source predates this distinction)."""
+
+
+def source_line(
+    line: MedicationLine, zone: tzinfo, language: str, *, artifact_kind: ArtifactKind | None = None
+) -> str:
+    """The source line under a card that shows this medicine: the label he kept (a photo, a
+    screenshot or a PDF behind the line) or what he typed or said (`artifact_kind` MESSAGE or
+    VOICE, or no artefact at all), and the day it started, in his language.
+
+    `artifact_kind` is the artefact's own kind, when the caller has it to hand — reading it
+    is one more batched read (`_artifact_kinds_for`), not a guess. Left `None`, this keeps
+    the line's own presence-or-absence of a `source_artifact_id` as the only signal (the
+    behaviour every caller had before typed entries could carry an artefact too), so no
+    caller that has not been taught to fetch the kind changes what it already said.
+    """
+    if artifact_kind is not None:
+        kind = "typed" if artifact_kind in _TYPED_KINDS else "label"
+    else:
+        kind = "label" if line.source_artifact_id is not None else "typed"
     day = as_utc(line.started_at).astimezone(zone).date()
     return SOURCE[language][kind].format(date=say_date(day, language))
+
+
+async def _artifact_kinds_for(
+    session: AsyncSession, *, context: KeyContext, artifact_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, ArtifactKind]:
+    """The kind of each of these artefacts, read under the records scope — the same scope a
+    label photo's own artefact already stands behind (`_sources_withheld`,
+    `app.channels.api.medicines`). A key that does not hold the records scope at all reads
+    the medicines list on its own scope alone, exactly as it always could — this is never a
+    second door on `active_lines`/`today`, only an extra courtesy for a key that already
+    holds both, so it is skipped outright rather than raising for a medicines-only key. An
+    id such a key may not read (a withheld source) is likewise simply missing here;
+    `source_line` falls back to its old, presence-only behaviour for it, never a guess at a
+    kind the key cannot see."""
+    if not artifact_ids or not context.allows(Scope.RECORDS):
+        return {}
+    found = await audited_read(
+        session, Artifact, context, Scope.RECORDS, where=(Artifact.id.in_(list(artifact_ids)),)
+    )
+    return {artifact.id: artifact.kind for artifact in found}
 
 
 async def _taps_by_generic(
@@ -962,6 +1034,11 @@ async def active_lines(
     generic_of, every_tap = await _taps_by_generic(session, context=context)
     zone = REGION_TZ[context.region]
     today_taps = [t for t in every_tap if as_utc(t.taken_at).astimezone(zone).date() == today]
+    artifact_kinds = await _artifact_kinds_for(
+        session,
+        context=context,
+        artifact_ids=[line.source_artifact_id for line in lines if line.source_artifact_id is not None],
+    )
     views: list[LineView] = []
     for line in lines:
         name = names[line.generic]
@@ -1015,7 +1092,16 @@ async def active_lines(
                     ).doctor_question
                 ),
                 taken_label=TAKEN[lang],
-                source=source_line(line, zone, lang),
+                source=source_line(
+                    line,
+                    zone,
+                    lang,
+                    artifact_kind=(
+                        None
+                        if line.source_artifact_id is None
+                        else artifact_kinds.get(line.source_artifact_id)
+                    ),
+                ),
                 due_now=any(
                     window_status(a, now, _tapped(a.value, line.generic, today_taps, generic_of), day)[0]
                     for a in Dose.from_json(line.dose).scheduled_anchors
@@ -1120,6 +1206,11 @@ async def today(
     generic_of, taken = await _taps_by_generic(session, context=context)
     today_taps = [t for t in taken if as_utc(t.taken_at).astimezone(zone).date() == day]
     names = _names(registry, sorted({line.generic for line in lines}), lang)
+    artifact_kinds = await _artifact_kinds_for(
+        session,
+        context=context,
+        artifact_ids=[line.source_artifact_id for line in lines if line.source_artifact_id is not None],
+    )
     order = [a.value for a in arithmetic.Anchor]
     slots: list[Slot] = []
     for line in lines:
@@ -1154,7 +1245,16 @@ async def today(
                     due_now=due_now,
                     missed=missed,
                     if_forgotten=list(forgotten) if missed else [],
-                    source=source_line(line, zone, lang),
+                    source=source_line(
+                        line,
+                        zone,
+                        lang,
+                        artifact_kind=(
+                            None
+                            if line.source_artifact_id is None
+                            else artifact_kinds.get(line.source_artifact_id)
+                        ),
+                    ),
                     taken_late=tapped
                     and _tapped_late(anchor.value, line.generic, today_taps, generic_of),
                 )
@@ -1233,6 +1333,7 @@ __all__ = [
     "FlagView",
     "Label",
     "LineView",
+    "NameClassification",
     "NoSuchLine",
     "NotTheirsToChange",
     "Outcome",
@@ -1241,6 +1342,7 @@ __all__ = [
     "Reconciled",
     "Slot",
     "active_lines",
+    "classify",
     "draft_for",
     "history",
     "interaction_flags",

@@ -1445,12 +1445,41 @@ export interface LabelIn {
   generic?: string | null;
   brand?: string | null;
   strength?: string | null;
+  /** The form (tablet, capsule, inhaler…), when he typed it — never read off a photo today
+   *  (the extractor names no "form" attribute), so this is typed-entry only. */
+  form?: string | null;
   dose_text?: string | null;
   quantity?: number | null;
   prescriber?: string | null;
 }
 
 export type MedicineOutcome = "new_line" | "refill" | "dose_change" | "duplicate";
+
+/** What the licensed register makes of a name alone, before it is trusted to identify a
+ *  product (#302): `medicine` when the register can identify it; `class` when it is not a
+ *  product itself but a family the register files products under ("STATIN"), with those
+ *  products offered as `candidates`; `unknown` when the register has never heard of it. */
+export type NameKind = "medicine" | "class" | "unknown";
+
+/** One member of a drug class the register lists, offered as a choice when a label named
+ *  only the class and not a specific product — the register's own word, never text read
+ *  off the box. */
+export interface ClassCandidateOut {
+  generic: string;
+  product_name: string;
+}
+
+/** `GET …/medicines/classify`: what the register makes of a name alone. `candidates` is
+ *  always empty outside `name_kind === "class"`. */
+export interface ClassifyOut {
+  name_kind: NameKind;
+  candidates: ClassCandidateOut[];
+}
+
+/** `POST …/medicines/typed`: the artefact his typed words were kept under. */
+export interface TypedMedicineOut {
+  artifact_id: string;
+}
 
 /** What a label would do to the list, before anyone says yes: screened for interactions. */
 export interface MedicineDraftOut {

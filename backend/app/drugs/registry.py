@@ -180,3 +180,17 @@ class DrugRegistry(Protocol):
     def monograph(self, generic: str) -> Monograph:
         """The rules for this generic, or `UnknownDrug`."""
         ...
+
+    def members_of_class(self, drug_class: str) -> Sequence[DrugMatch]:
+        """Every distinct product this register files under this drug class, one per
+        generic, generic name order — empty when the register does not file anything
+        under it. This is the register's own filing (`DrugMatch.drug_class`), never a text
+        search over names: a class name the register does not use finds nothing, and a
+        product name that happens to share a word with a class is never matched here.
+
+        This is what answers "the box only names a family, not a product" (#302, the
+        owner's "which statin is it?" requirement, `app.medicines.classify`): a label that
+        named a class instead of a medicine offers these as choices rather than being
+        silently guessed at or silently refused.
+        """
+        ...

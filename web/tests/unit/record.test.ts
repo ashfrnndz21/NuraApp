@@ -187,6 +187,7 @@ describe("his medicines", () => {
     expect(tidyLabel({ generic: " Aspirin", strength: "100 mg", dose_text: "1 tab OD", quantity: 30 })).toEqual({
       generic: "aspirin",
       strength: "100 mg",
+      form: null,
       dose_text: "1 tab OD",
       quantity: 30,
       prescriber: null,

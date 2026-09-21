@@ -2,6 +2,8 @@
 
     GET  /profiles/{id}/medicines                  the reconciled list, count and flags per line
     POST /profiles/{id}/medicines/draft            what a label would do, before anyone says yes
+    GET  /profiles/{id}/medicines/classify         a name alone: a medicine, a class, or neither
+    POST /profiles/{id}/medicines/typed            what he typed or said, kept as its own source
     POST /profiles/{id}/medicines                  write it, with the yes minted for exactly that
     GET  /profiles/{id}/medicines/history          every line ever written, the change log
     GET  /profiles/{id}/medicines/interactions     every flag on the list, as questions
@@ -36,6 +38,7 @@ from app.channels.api.deps import Context, Db, providers_of
 from app.channels.api.schemas import (
     AskedOut,
     AskIn,
+    ClassifyOut,
     CountOut,
     LineOut,
     MedicineDraftIn,
@@ -51,14 +54,19 @@ from app.channels.api.schemas import (
     StoryOut,
     TakenIn,
     TakenOut,
+    TypedMedicineIn,
+    TypedMedicineOut,
 )
+from app.db import utcnow
 from app.delivery.voice import voiced
+from app.ingestion.voice import store_words
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
 from app.medicines.reorder import ask_to_order, found_more, order_preview
 from app.medicines.service import (
     active_lines,
+    classify,
     history,
     interaction_flags,
     language_for,
@@ -73,6 +81,7 @@ from app.medicines.service import (
 from app.medicines.story import STORY_PARTS, interaction_question, story_part
 from app.medicines.strings import PLAIN_NAME
 from app.memory.episodic import withheld_references
+from app.memory.models import SourceChannel
 
 router = APIRouter(prefix="/profiles", tags=["medicines"])
 
@@ -144,6 +153,47 @@ async def draft(
         for each in what.flagged
     ]
     return MedicineDraftOut.of(what, questions)
+
+
+@router.get("/{profile_id}/medicines/classify")
+async def classify_name(
+    request: Request, context: Context, session: Db, name: str = Query(..., min_length=1, max_length=64)
+) -> ClassifyOut:
+    """What the register makes of a name alone, before a label's `generic` is trusted to
+    identify a product (#302): `medicine` when the register can identify it by generic or
+    by brand; `class` when it is not a product itself but a family the register files
+    products under — "STATIN" — with those products offered as `candidates`; `unknown`
+    when the register has never heard of it. Read-only, nothing written; the register
+    alone decides, never the extracted text itself. Under the same medicines scope as the
+    draft it feeds: a key that may read the draft may ask this first.
+    """
+    found = await classify(
+        session, context=context, registry=providers_of(request).drug_registry, name=name
+    )
+    return ClassifyOut.of(found)
+
+
+@router.post("/{profile_id}/medicines/typed", status_code=status.HTTP_201_CREATED)
+async def typed_medicine_source(
+    body: TypedMedicineIn, request: Request, context: Context, session: Db
+) -> TypedMedicineOut:
+    """What he typed or said about a medicine, kept as its own artefact before it is
+    checked against the register (`app.ingestion.voice.store_words`) — the "type it" entry
+    point (redesign package 11): a typed medicine gets a source exactly like a photo does,
+    so `GET /medicines` says "you told Nura", never "the label", once it is added through
+    the ordinary `POST /medicines/draft` and `POST /medicines`. Under the records scope,
+    like every other capture route (`app.channels.api.capture`) — never the medicines
+    scope, and this alone never adds a medicine.
+    """
+    artifact = await store_words(
+        session,
+        context=context,
+        store=providers_of(request).object_store,
+        text=body.text,
+        captured_at=body.captured_at or utcnow(),
+        source_channel=SourceChannel.APP,
+    )
+    return TypedMedicineOut(artifact_id=artifact.id)
 
 
 @router.post("/{profile_id}/medicines", status_code=status.HTTP_201_CREATED)

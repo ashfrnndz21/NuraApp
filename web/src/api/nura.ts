@@ -13,6 +13,7 @@ import type {
   BriefOut,
   ChangesOut,
   ClaimableOut,
+  ClassifyOut,
   ClosedOut,
   CloudOut,
   ConditionsOut,
@@ -110,6 +111,7 @@ import type {
   ThreadEntryOut,
   TimelineOut,
   TrendOut,
+  TypedMedicineOut,
   UploadOut,
   VisitQuestionOut,
   VisitQuestionsOut,
@@ -843,6 +845,22 @@ export const storyVoice = (token: string, profileId: string, lineId: string, par
  *  is. In `language`, or the profile's own. */
 export const medicineDraft = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string, language?: string) =>
   api<MedicineDraftOut>(`/profiles/${profileId}/medicines/draft`, { method: "POST", token, query: { language }, body: { label, source_artifact_id: sourceArtifactId } });
+
+/** What the licensed register makes of a name alone, before it is trusted to identify a
+ *  product (#302): a specific medicine, a family such as "STATIN" with its members offered
+ *  as choices, or neither. Read-only. */
+export const medicineClassify = (token: string, profileId: string, name: string) =>
+  api<ClassifyOut>(`/profiles/${profileId}/medicines/classify`, { token, query: { name } });
+
+/** What he typed or said about a medicine, kept as its own artefact before it is checked
+ *  against the register (the "type it" entry point) — a typed medicine's source line then
+ *  says "you told Nura", the way a photo's already says "the label". */
+export const medicineTyped = (token: string, profileId: string, text: string, capturedAt: string) =>
+  api<TypedMedicineOut>(`/profiles/${profileId}/medicines/typed`, {
+    method: "POST",
+    token,
+    body: { text, captured_at: capturedAt },
+  });
 
 export const mintMedicine = (token: string, profileId: string, label: LabelIn, sourceArtifactId: string) =>
   api<ConfirmationOut>(`/profiles/${profileId}/confirmations`, {

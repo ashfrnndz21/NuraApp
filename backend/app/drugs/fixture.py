@@ -41,6 +41,14 @@ def _norm(text: str | None) -> str:
     return " ".join((text or "").lower().replace("mg", " mg").split())
 
 
+def _norm_class(text: str | None) -> str:
+    """A class name, for comparison only: case and underscores folded away, nothing else
+    guessed at. `"STATIN"`, `"statin"` and `"Statin"` are the same class; `"calcium_channel_
+    blocker"` and `"calcium channel blocker"` are too — but a class is never matched on a
+    partial word, so this stays an equality check, not a search."""
+    return " ".join((text or "").lower().replace("_", " ").split())
+
+
 def _same_strength(a: str | None, b: str) -> bool:
     return _norm(a) == _norm(b)
 
@@ -216,3 +224,15 @@ class FixtureRegistry:
         if found is None:
             raise UnknownDrug(f"the register has no monograph for {generic}")
         return found
+
+    def members_of_class(self, drug_class: str) -> Sequence[DrugMatch]:
+        """The register's own filing under this class, one product per distinct generic
+        (the first the file lists), generic name order. Never a text search (module doc)."""
+        wanted = _norm_class(drug_class)
+        if not wanted:
+            return []
+        seen: dict[str, DrugMatch] = {}
+        for product in self._products:
+            if _norm_class(product.drug_class) == wanted and product.generic not in seen:
+                seen[product.generic] = product
+        return sorted(seen.values(), key=lambda p: p.generic)
