@@ -15,6 +15,7 @@ import { go, openMe, openTab } from "../flow";
 import { speak } from "../speech/speak";
 import { density, isSelf, me, profile, token } from "../store/session";
 import { fill, language, LOCALE, t, type Strings } from "../strings";
+import { rangeStatus } from "../onboarding/review";
 import {
   clockWords,
   lineTitle,
@@ -40,6 +41,7 @@ import {
   weekdayOf,
   whyLine,
   type HomeTopItem,
+  type PaperSummary,
 } from "../today/model";
 import { useToday, type TodayView } from "../today/useToday";
 import { Card, Hear, Notice, Tile } from "../ui/components";
@@ -74,19 +76,26 @@ function DadToday({ saved }: { saved: boolean }): JSX.Element {
   const furniture = heroFurnitureAllowed({ flagged });
   const showsBoundary = stateAt === "top" || stateAt === "now" || stateAt === "forYou";
   const voice = homeVoice(v, name);
+  const hero = useHomeHero(v, name, voice);
   return (
     <Shell
       tab="home"
       testId="today-screen"
-      header={<HomeTopBar voice={voice} />}
+      header={<HomeTopBar voice={voice} quiet={hero.ready && hero.state === "quiet"} />}
       ask={false}
       bottomBar={<HomeAskBar patientName={name} />}
     >
-      <HomeHero v={v} patientName={name} voice={voice} />
+      <HomeHero v={v} patientName={name} voice={voice} hero={hero} />
       {page && <span data-testid="today-ready" hidden />}
       <Notices v={v} saved={saved} />
       <Held v={v} />
-      {!page && !blank && !v.error && <HomeSkeleton />}
+      {/* Fix #1 (owner review round 3): the calm skeleton stays until Home's own busy/quiet
+          decision is actually ready, not only until `page` lands — the flash the owner found
+          was the quiet state painting first, as a placeholder, while a slower input (the
+          visits read, today's own reading, a confirmed paper's range summary) was still on
+          its way. Header and ask bar need none of this (`Shell`'s own props, above) and never
+          wait for it. */}
+      {(!page || !hero.ready) && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -153,21 +162,22 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
   const drivers = page?.drivers ?? [];
   const flagged = feed.flags.length > 0;
   const furniture = heroFurnitureAllowed({ flagged });
-  const hero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
-  const state = page !== null && page.stateId !== null && Boolean(page.word) && hero !== null;
+  const stateHero = page ? homeHero(page, { flagged, kept: fromPhone }, s) : null;
+  const state = page !== null && page.stateId !== null && Boolean(page.word) && stateHero !== null;
   const showsBoundary = stateAt === "top" || stateAt === "forYou";
   const patientName = papers?.display_name || "";
   const voice = homeVoice(v, patientName);
+  const hero = useHomeHero(v, patientName, voice);
   return (
     <Shell
       tab="home"
       testId="home-screen"
-      header={<HomeTopBar voice={voice} />}
+      header={<HomeTopBar voice={voice} quiet={hero.ready && hero.state === "quiet"} />}
       ask={false}
       bottomBar={<HomeAskBar patientName={patientName} />}
     >
       {page && <span data-testid="today-ready" hidden />}
-      <HomeHero v={v} patientName={patientName} voice={voice} />
+      <HomeHero v={v} patientName={patientName} voice={voice} hero={hero} />
       {/* Her Home's State word (docs/design/full-experience.html): shown whenever there is a
           current State to show (`homeHero`'s own flagged/kept rule — unchanged from before
           cp3-home), never gated on `stateAt`, which decides only where the *State card itself*
@@ -175,16 +185,23 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
           line is here, as it always was; the safety/boundary sentences themselves are not —
           those stay exactly once, on the State card when `stateAt` puts one on the page, else
           in `SafetyNote` at the foot (below). */}
-      {state && page && hero && (
+      {state && page && stateHero && (
         <div class="panel-stack" data-testid="home-state">
-          {hero.word && (
+          {/* The state's own word and its provenance line (owner review round 3, fix #4): shown
+              only while a posture actually leads (act or watch — "unchanged" per the owner) —
+              stable's own "Steady — nothing needs doing" was the leftover boilerplate the owner
+              found on the first screen, in both the busy and the quiet state. The word and its
+              provenance are still reachable through the existing State card route
+              (`stateAt === "top"`, below) and the why sheet; the drivers and the sparkline are
+              real data, not boilerplate, and stay exactly as they were. */}
+          {stateHero.word && (page.posture === "act" || page.posture === "watch") && (
             <p class="home-state-word">
-              <strong>{hero.word}</strong>
-              {hero.line && <span> — {hero.line}</span>}
+              <strong>{stateHero.word}</strong>
+              {stateHero.line && <span> — {stateHero.line}</span>}
             </p>
           )}
           <Readings />
-          {hero.drivers && drivers.length > 0 && (
+          {stateHero.drivers && drivers.length > 0 && (
             <ChipRow testId="drivers" label={s.home.mostLikely}>
               {drivers.map((driver) => (
                 <Chip key={driver.key} tone={toneOf(driver.tone)}>
@@ -193,7 +210,7 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
               ))}
             </ChipRow>
           )}
-          {hero.word && (
+          {stateHero.word && (page.posture === "act" || page.posture === "watch") && (
             <p class="hero-sub" data-testid="home-from">
               {fill(s.today.fromState, { date: dateLine(new Date(page.computedAt ?? page.fetchedAt), LOCALE[language.value]) })}
             </p>
@@ -202,7 +219,8 @@ function ChiefHome({ saved }: { saved: boolean }): JSX.Element {
       )}
       <Notices v={v} saved={saved} />
       <Held v={v} />
-      {!page && !blank && !v.error && <HomeSkeleton />}
+      {/* Fix #1 (owner review round 3): see DadToday's own copy of this comment above. */}
+      {(!page || !hero.ready) && !blank && !v.error && <HomeSkeleton />}
       {blank ? (
         <Blank s={s} card={v.card} />
       ) : (
@@ -292,17 +310,25 @@ function homeVoice(v: TodayView, patientName: string): HomeVoice {
  *  first, the way the eye already goes. Replaces both the old global `ShellHeader` and the
  *  board's own "home" topbar for this screen — neither drew whose-papers and the greeting in the
  *  same row, so his own initial used to appear twice. */
-function HomeTopBar({ voice }: { voice: HomeVoice }): JSX.Element {
+/** `quiet`: true once Home's own decision (`useHomeHero`) is ready and is the quiet state — the
+ *  greeting and the question drop out of the header row entirely then (owner review round 3,
+ *  fix #5, the defect the owner found: "Good afternoon, Tan." twice, small in the header and
+ *  large again under the orb, which already carries the greeting on a quiet day). The header
+ *  still shows the avatar/switcher, the bell, "Not well?" and the menu — every control that
+ *  needs no data — whatever the decision is, or before it is even made. */
+function HomeTopBar({ voice, quiet }: { voice: HomeVoice; quiet: boolean }): JSX.Element {
   const s = t();
   const papers = profile.value;
   const bell = papers !== null && !emergencyOnly(papers);
   return (
     <header class="shell-head home-top-bar" data-testid="home-head">
       {papers && <ProfileSwitcher compact />}
-      <div class="home-head-text">
-        <p class="home-head-hello" data-testid="home-head-hello">{voice.hello}</p>
-        <h1 class="home-head-question" tabIndex={-1}>{voice.question}</h1>
-      </div>
+      {!quiet && (
+        <div class="home-head-text">
+          <p class="home-head-hello" data-testid="home-head-hello">{voice.hello}</p>
+          <h1 class="home-head-question" tabIndex={-1}>{voice.question}</h1>
+        </div>
+      )}
       <span class="home-head-end">
         {bell && <BellButton />}
         {/* The way in when he feels unwell comes before anything ranked (red flags escalate
@@ -325,16 +351,23 @@ function HomeTopBar({ voice }: { voice: HomeVoice }): JSX.Element {
  *  to that, never the systolic/diastolic the headline already gave in full. Both come from the
  *  one fetch; no second call. */
 function useTodayReading(now: Date): { systolic: number; diastolic: number } | null;
-function useTodayReading(now: Date, withTrend: true): { reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null };
+function useTodayReading(
+  now: Date,
+  withTrend: true,
+): { reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null; ready: boolean };
 function useTodayReading(now: Date, withTrend?: true) {
   const bearer = token.value;
   const papers = profile.value;
-  const [state, setState] = useState<{ reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null }>({
+  const [state, setState] = useState<{ reading: { systolic: number; diastolic: number } | null; priorSystolic: number | null; ready: boolean }>({
     reading: null,
     priorSystolic: null,
+    ready: false,
   });
   useEffect(() => {
-    if (!bearer || !papers || !papers.scopes.includes("readings")) return setState({ reading: null, priorSystolic: null });
+    setState({ reading: null, priorSystolic: null, ready: false });
+    // No `readings` scope: nothing to wait for — ready at once (owner review round 3, the
+    // busy/quiet decision below waits on this the same way it waits on `page`).
+    if (!bearer || !papers || !papers.scopes.includes("readings")) return setState({ reading: null, priorSystolic: null, ready: true });
     nura.facts(bearer, papers.profile_id, "blood_pressure").then((found) => {
       const today = dayKey(now);
       const readings = found
@@ -346,9 +379,15 @@ function useTodayReading(now: Date, withTrend?: true) {
       const earlier = readings.find((fact) => dayKey(new Date(fact.valid_from)) !== today);
       const earlierValue = earlier?.value as { systolic?: unknown } | null;
       const priorSystolic = typeof earlierValue?.systolic === "number" ? earlierValue.systolic : null;
-      setState({ reading, priorSystolic });
-    }, () => setState({ reading: null, priorSystolic: null }));
-  }, [bearer, papers?.profile_id, now.getTime()]);
+      setState({ reading, priorSystolic, ready: true });
+    }, () => setState({ reading: null, priorSystolic: null, ready: true }));
+    // `dayKey(now)`, not `now.getTime()` (owner review round 3): this hook now runs inside
+    // `useHomeHero`, called directly from `DadToday`/`ChiefHome` rather than a child
+    // component — its own `setState` above re-renders them, which builds a fresh `now = new
+    // Date()` (`useToday.ts`) on every pass; keyed on the exact millisecond, that re-triggered
+    // this same effect forever (the request storm on `/facts` the owner would have hit at
+    // once). The calendar day is the only thing "today's own reading" ever actually depends on.
+  }, [bearer, papers?.profile_id, dayKey(now)]);
   return withTrend ? state : state.reading;
 }
 
@@ -377,25 +416,70 @@ function insightOf(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]):
   return [...top, ...forYou].find((item) => item.category === "insight") ?? null;
 }
 
-/** Home's hero (cp3-home, the living orb): a busy day's one real headline and insight card, or
- *  a quiet day's large orb and chips — never a generic feed card's own title standing in for
- *  either (`homeTopItem`, today/model.ts). An act posture or a red flag pre-empts both entirely
- *  (`homeState`); the header above (`HomeTopBar`) is unconditional and always there. */
-function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string; voice: HomeVoice }): JSX.Element {
-  const { s, page, feed, act, top, now, nextVisit, papers, dose, busy, take } = v;
+/** A newly confirmed paper's own range summary, read from the review cards (owner review round
+ *  3, fix #2): `ready` false until the read has come back at least once — Home's own busy/quiet
+ *  decision waits for it the same way it waits for `page` (fix #1, the flash the owner found:
+ *  a confirmed paper is exactly the case that used to decide quiet first, busy a second later,
+ *  because this read had not landed yet). `null` with no insight-category card at all, or with
+ *  one whose card is not (yet, or ever) among the review cards this key can read — never a bare
+ *  title standing in for a card type with no template (nothing here trusts `item.headline`). */
+function usePaperInsight(item: FeedItemOut | null): { ready: boolean; summary: PaperSummary | null } {
+  const bearer = token.value;
+  const papers = profile.value;
+  const artifactId = typeof (item?.why as { artifact_id?: unknown } | undefined)?.artifact_id === "string" ? ((item!.why as { artifact_id: string }).artifact_id) : null;
+  const [state, setState] = useState<{ ready: boolean; summary: PaperSummary | null }>({ ready: false, summary: null });
+  useEffect(() => {
+    // No paper on this card at all: nothing to wait for — ready at once.
+    if (!artifactId || !item) return setState({ ready: true, summary: null });
+    if (!bearer || !papers) return setState({ ready: true, summary: null });
+    setState({ ready: false, summary: null });
+    nura.reviewCards(bearer, papers.profile_id, false).then(
+      (cards) => {
+        const card = cards.find((each) => each.artifact_id === artifactId) ?? null;
+        if (!card) return setState({ ready: true, summary: null });
+        const known = card.fields.map((field) => rangeStatus(field.value, field.range)).filter((each) => each !== "unknown");
+        const outside = known.filter((each) => each === "above" || each === "below").length;
+        setState({
+          ready: true,
+          summary: {
+            item,
+            documentKind: card.document_kind,
+            date: card.document_date ? new Date(card.document_date) : new Date(card.created_at),
+            outside: known.length > 0 ? outside : null,
+            total: known.length > 0 ? known.length : null,
+          },
+        });
+      },
+      () => setState({ ready: true, summary: null }),
+    );
+  }, [artifactId, bearer, papers?.profile_id]);
+  return state;
+}
+
+/** Home's hero (cp3-home, the living orb) and its own busy/quiet decision, made once — never
+ *  while an input it needs (`page`, the visits read, today's own reading, a confirmed paper's
+ *  range summary) is still on the way (owner review round 3, fix #1: the flash the owner found,
+ *  the quiet state painted first as a placeholder and the busy one a second later, once every
+ *  input had actually arrived — an empty value that has simply not answered yet must never be
+ *  read as "nothing here"). `ready` false holds the header's own greeting/question blank and the
+ *  hero at the calm skeleton (`DadToday`/`ChiefHome`, below) rather than guessing. */
+function useHomeHero(v: TodayView, patientName: string, voice: HomeVoice) {
+  const { s, page, feed, act, top, now, nextVisit, dose, visitsReady } = v;
   const { self } = voice;
-  const locale = LOCALE[language.value];
   const flagged = feed.flags.length > 0;
-  const { reading, priorSystolic } = useTodayReading(now, true);
+  const { reading, priorSystolic, ready: readingReady } = useTodayReading(now, true);
   const visitAbout = useVisitAbout(nextVisit);
-  const topItem: HomeTopItem | null = page
+  const insightItem = insightOf(top, feed.forYou);
+  const { ready: paperReady, summary: paperSummary } = usePaperInsight(insightItem);
+  const ready = page !== null && visitsReady && readingReady && paperReady;
+  const topItem: HomeTopItem | null = ready
     ? homeTopItem(
         {
           dose: dose ?? null,
           reading,
           nextVisit: nextVisit ? { scheduled_at: nextVisit.scheduled_at, doctor: nextVisit.doctor ?? null } : null,
-          lines: page.lines,
-          insight: insightOf(top, feed.forYou),
+          lines: page!.lines,
+          paper: paperSummary,
         },
         now,
         s,
@@ -405,10 +489,13 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
   // The two rows under the insight card are a different, always-actionable fact each — never
   // the same fact the headline already gave: the dose row only when the headline is not
   // already that dose, the "for you" row only for a feed item the headline is not already
-  // showing as its own insight.
+  // showing as its own insight — and never the backend's own "A quiet day" placeholder card
+  // (`app/delivery/strings.py`'s "now_quiet"), a leftover from a day this key's own dose data
+  // has already decided is not quiet (fix #4: no structural flag marks that card, so it is
+  // read off its own known, stable headline text in every language the catalogue ships).
   const dueNow = dose?.kind === "due" && topItem?.kind !== "doseDue" ? dose : null;
-  const shownInsightId = topItem?.kind === "insight" ? topItem.item.item_id : null;
-  const forYouItem = feed.forYou.find((item) => item.item_id !== shownInsightId) ?? null;
+  const shownInsightId = topItem?.kind === "paper" ? topItem.item.item_id : null;
+  const forYouItem = feed.forYou.find((item) => item.item_id !== shownInsightId && !QUIET_PLACEHOLDER_HEADLINES.has(item.headline)) ?? null;
   // The insight card's own extra fact (owner review round 2): a real thing the headline did not
   // already say, from that same item's own fields — never the headline's sentence again. `null`
   // with nothing more to say yet, in which case the card itself does not render at all; the
@@ -429,6 +516,28 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
         patientName,
       )
     : null;
+  return { ready, state, topItem, dueNow, forYouItem, extra };
+}
+
+/** The backend's own "A quiet day"/"There is nothing new..." placeholder headline, in every
+ *  language the catalogue ships (`app/delivery/strings.py`'s `HEADLINES["now_quiet"]`) — no
+ *  `_THEIRS` twin exists for it, so it reads the same in both voices. There is no structural
+ *  flag on the card itself to filter by; this is the only signal there is (fix #4). */
+const QUIET_PLACEHOLDER_HEADLINES = new Set(["A quiet day", "Hari yang tenang", "平静的一天"]);
+
+type HomeHeroState = ReturnType<typeof useHomeHero>;
+
+/** Home's hero (cp3-home, the living orb): a busy day's one real headline and insight card, or
+ *  a quiet day's large orb and chips — never a generic feed card's own title standing in for
+ *  either (`homeTopItem`, today/model.ts), and never painted before its own decision is ready
+ *  (fix #1 — `DadToday`/`ChiefHome` hold the calm skeleton until then). An act posture or a red
+ *  flag pre-empts both entirely (`homeState`); the header above (`HomeTopBar`) is unconditional
+ *  and always there. */
+function HomeHero({ v, patientName, voice, hero }: { v: TodayView; patientName: string; voice: HomeVoice; hero: HomeHeroState }): JSX.Element {
+  const { s, page, now, papers, busy, take, nextVisit } = v;
+  const { self } = voice;
+  const locale = LOCALE[language.value];
+  const { ready, state, topItem, dueNow, forYouItem, extra } = hero;
   return (
     <>
       {/* The date, moved here from the header (owner review round 2, fix #1: the header row had
@@ -436,12 +545,12 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
           header itself: every page state shows it (busy, quiet, or a red flag/act state, which
           draws nothing else here at all), never only the busy day's own kicker. Same test id it
           always had (`home-head-date`): moved, never renamed. */}
-      {page && (
+      {ready && page && (
         <p class="home-kick-date" data-testid="home-head-date">
           {voice.date}
         </p>
       )}
-      {page && state === "busy" && topItem && (
+      {ready && page && state === "busy" && topItem && (
         <div data-testid={self ? "today-hero" : "home-hero"}>
           <span class="home-kick">{s.home.todayKicker}</span>
           <SoftText as="h2" pace="headline" className="home-headline" text={homeHeadlineFor(topItem, s, locale, self, patientName)} testId="home-headline" />
@@ -481,7 +590,7 @@ function HomeHero({ v, patientName, voice }: { v: TodayView; patientName: string
           )}
         </div>
       )}
-      {page && state === "quiet" && (
+      {ready && page && state === "quiet" && (
         <div class="home-quiet" data-testid={self ? "today-hero" : "home-hero"}>
           <Orb size="lg" testId="home-orb-lg" />
           <SoftText as="h2" pace="headline" className="home-quiet-greeting" text={voice.hello} testId="quiet-greeting" />

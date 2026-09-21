@@ -34,6 +34,7 @@ import {
   tookLine,
   whyLine,
   type HomeTopItem,
+  type PaperSummary,
 } from "../../src/today/model";
 
 const SOURCE = "This comes from the label you kept on Tuesday 1 September.";
@@ -360,9 +361,15 @@ describe("Home's new hero (cp3-home, the living orb): the day's top item", () =>
   const now = new Date(2026, 8, 14, 10, 0);
   const doseDue = nowCard([slot("amlodipine", "breakfast", { due_now: true })], lines, en);
   const allTaken = nowCard([slot("amlodipine", "breakfast", { taken: true })], lines, en);
-  const insightItem = item("today", "Four of five numbers are outside the range on your paper.", { category: "insight" });
   const plainTodayItem = item("today", "Your tablets today");
-  const noInputs = { dose: null, reading: null, nextVisit: null, lines: [], insight: null };
+  const noInputs = { dose: null, reading: null, nextVisit: null, lines: [], paper: null };
+  const paperSummary = (outside: number | null, total: number | null): PaperSummary => ({
+    item: item("today", "From your papers", { category: "insight" }),
+    documentKind: "lab_report",
+    date: new Date(2026, 0, 22),
+    outside,
+    total,
+  });
 
   it("is the dose due right now, above everything else that could be said today", () => {
     expect(homeTopItem({ ...noInputs, dose: doseDue, reading: { systolic: 138, diastolic: 84 } }, now, en)).toEqual({
@@ -399,13 +406,14 @@ describe("Home's new hero (cp3-home, the living orb): the day's top item", () =>
     expect(homeTopItem({ ...noInputs, lines: [plenty] }, now, en)).toBeNull();
   });
 
-  it("is the feed's own flagged insight, last — never a plain 'today'/'now' listing card, which is nobody's insight", () => {
-    expect(homeTopItem({ ...noInputs, insight: insightItem }, now, en)).toEqual({ kind: "insight", item: insightItem });
+  it("is a confirmed paper's own range summary, last — never a plain 'today'/'now' listing card, and never any other feed card type with no template of its own", () => {
+    const summary = paperSummary(2, 5);
+    expect(homeTopItem({ ...noInputs, paper: summary }, now, en)).toEqual({ kind: "paper", ...summary });
     expect(homeTopItem(noInputs, now, en)).toBeNull();
   });
 
   it("falls back to none — a quiet day — when nothing of the above is real, never a bare card title standing in for it", () => {
-    expect(homeTopItem({ ...noInputs, insight: null }, now, en)).toBeNull();
+    expect(homeTopItem({ ...noInputs, paper: null }, now, en)).toBeNull();
   });
 
   it("a flag or an act posture outranks the quiet greeting and the busy headline both", () => {
@@ -452,9 +460,19 @@ describe("Home's new hero (cp3-home, the living orb): the day's top item", () =>
       expect(homeHeadlineFor(topItem, en, "en-SG", true, "Pa")).toBe(self);
       expect(homeHeadlineFor(topItem, en, "en-SG", false, "Pa")).toBe(other);
     }
-    // The insight kind keeps the feed's own real headline, accented the same way — never a
-    // catalogue sentence composed here.
-    expect(homeHeadlineFor({ kind: "insight", item: insightItem }, en, "en-SG", true, "Pa")).toBe(accentLastWord(insightItem.headline));
+    // A confirmed paper: filled only from its own real fields (owner review round 3, fix #2) —
+    // never the feed's own bare headline text.
+    const outside = paperSummary(2, 5);
+    expect(homeHeadlineFor({ kind: "paper", ...outside }, en, "en-SG", true, "Pa")).toBe(
+      "2 of 5 numbers on your blood test from 22 January are outside range on the *paper*.",
+    );
+    expect(homeHeadlineFor({ kind: "paper", ...outside }, en, "en-SG", false, "Pa")).toBe(
+      "2 of 5 numbers on Pa's blood test from 22 January are outside range on the *paper*.",
+    );
+    const allIn = paperSummary(0, 5);
+    expect(homeHeadlineFor({ kind: "paper", ...allIn }, en, "en-SG", true, "Pa")).toBe("Every number on your blood test from 22 January is inside the range on the *paper*.");
+    const noRange = paperSummary(null, null);
+    expect(homeHeadlineFor({ kind: "paper", ...noRange }, en, "en-SG", true, "Pa")).toBe("Your blood test from 22 January is in your *papers*.");
     for (const [topItem] of cases) {
       const line = homeHeadlineFor(topItem, en, "en-SG", true, "Pa").toLowerCase();
       for (const judgement of ["high", "low", "normal", "abnormal"]) expect(line).not.toContain(judgement);
@@ -476,7 +494,9 @@ describe("Home's new hero (cp3-home, the living orb): the day's top item", () =>
     expect(homeTopItemDate({ kind: "reading", systolic: 138, diastolic: 84 }, now)).toBe(now);
     expect(homeTopItemDate({ kind: "reorder", title: "x", days: 5 }, now)).toBe(now);
     expect(homeTopItemDate({ kind: "visit", doctor: null, at: visitAt }, now)).toBe(visitAt);
-    expect(homeTopItemDate({ kind: "insight", item: insightItem }, now)).toEqual(new Date(insightItem.created_at));
+    // A paper's own printed date (fix #3) — never `created_at`, the day it was confirmed.
+    const printed = new Date(2026, 0, 22);
+    expect(homeTopItemDate({ kind: "paper", ...paperSummary(1, 3) }, now)).toEqual(printed);
   });
 
   it("splits a date into the day and a short month for the insight card's own chip", () => {
@@ -524,11 +544,25 @@ describe("Home's new hero (cp3-home, the living orb): the day's top item", () =>
       expect(insightExtraLines(item, blank, en, true, "Pa")).toBeNull();
     });
 
-    it("an insight: the feed's own body lines, unchanged — empty is no card, same as every other kind", () => {
-      const withBody: FeedItemOut = { ...insightItem, body: ["A real line from the backend.", "A second real line."] };
-      expect(insightExtraLines({ kind: "insight", item: withBody }, blank, en, true, "Pa")).toEqual(["A real line from the backend.", "A second real line."]);
-      const noBody: FeedItemOut = { ...insightItem, body: [], boundary: null };
-      expect(insightExtraLines({ kind: "insight", item: noBody }, blank, en, true, "Pa")).toBeNull();
+    it("a paper: the feed's own body lines, unchanged — empty is no card, same as every other kind", () => {
+      const summary = paperSummary(1, 3);
+      const withBody: PaperSummary = { ...summary, item: { ...summary.item, body: ["A real line from the backend.", "A second real line."] } };
+      expect(insightExtraLines({ kind: "paper", ...withBody }, blank, en, true, "Pa")).toEqual(["A real line from the backend.", "A second real line."]);
+      const noBody: PaperSummary = { ...summary, item: { ...summary.item, body: [], boundary: null } };
+      expect(insightExtraLines({ kind: "paper", ...noBody }, blank, en, true, "Pa")).toBeNull();
+    });
+  });
+
+  describe("no feed card type prints a bare title (fix #2 regression guard)", () => {
+    it("a card type with no headline template of its own never becomes the busy topItem — a paper's own template is the only way in", () => {
+      // Every insight-category card the feed can raise (reading/note/story/learning/clip/
+      // recap/seasonal/food stories) reaches Home only through `paper` (Today.tsx's own
+      // `usePaperInsight`, gated on a review card actually matching); with no paper summary at
+      // all, `homeTopItem` never falls back to any of their raw headlines.
+      for (const headline of ["From your papers", "From your blood pressure book", "On 14 September you wrote this down:", "That is all that is new today."]) {
+        expect(homeTopItem({ ...noInputs, paper: null }, now, en)).toBeNull();
+        expect(headline).toBeTruthy(); // documents the case; homeTopItem never sees it without a summary
+      }
     });
   });
 });

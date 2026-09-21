@@ -111,19 +111,33 @@ for (const [label, viewport] of [
       await todayReady(page);
       await expect(page.locator("html")).toHaveAttribute("data-density", "caregiver");
 
-      const state = (await (await request.get(`${API}/profiles/${family.profileId}/state?language=en`, auth(family.meiToken))).json()) as { word: string; line: string; drivers: { text: string }[] };
-      // cp3-home: the State's word, line and provenance sit in their own panel under the header
+      const state = (await (await request.get(`${API}/profiles/${family.profileId}/state?language=en`, auth(family.meiToken))).json()) as {
+        word: string;
+        line: string;
+        posture: string;
+        drivers: { text: string }[];
+      };
+      // cp3-home: the State's own drivers and sparkline sit in their own panel under the header
       // (`home-state`), shown whenever there is a current State — unchanged from before this
-      // rebuild — with the drivers and the sparkline; the safety/boundary sentences themselves
-      // stay to once per screen, on the State card when one is also on the page, else in the
-      // foot note (`home-safety-note`).
+      // rebuild; the safety/boundary sentences themselves stay to once per screen, on the State
+      // card when one is also on the page, else in the foot note (`home-safety-note`). The
+      // word and its provenance (owner review round 3, fix #4) draw only while a posture
+      // actually leads — stable's own "Steady — nothing needs doing" was the leftover
+      // boilerplate on the first screen the owner found; reachable through the State card and
+      // the why sheet either way.
       const panel = page.getByTestId("home-state");
-      await expect(panel).toContainText(state.word);
-      await expect(panel).toContainText(state.line);
+      const leads = state.posture === "act" || state.posture === "watch";
+      if (leads) {
+        await expect(panel).toContainText(state.word);
+        await expect(panel).toContainText(state.line);
+        await expect(panel.getByTestId("home-from")).toContainText("Nura worked this out on");
+      } else {
+        await expect(panel.locator(".home-state-word")).toHaveCount(0);
+        await expect(panel.getByTestId("home-from")).toHaveCount(0);
+      }
       if (state.drivers.length > 0) await expect(page.getByTestId("drivers").locator(".glass-chip")).toHaveText(state.drivers.map((driver) => driver.text));
       await expect(panel.getByTestId("sparkline")).toBeVisible();
       await expect(panel.getByTestId("sparkline").locator("svg")).toHaveAttribute("aria-label", "The last blood pressure had a top number of 138.");
-      await expect(panel.getByTestId("home-from")).toContainText("Nura worked this out on");
       // The way in when he is unwell is in the header, beside her greeting (cp3-home).
       await expect(page.getByTestId("home-head").getByTestId("not-well")).toBeVisible();
 
