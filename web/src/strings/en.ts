@@ -2122,7 +2122,7 @@ export const en = {
     // @patient
     addEntryTurn: "Take a photo of the label, or type it in.",
     // @patient
-    addConfirmTurn: "Here is what Nura read from the *label.*",
+    addConfirmTurn: "Here is what Nura read from the *label*.",
     // @patient
     addConfirmHint: "Check it before it is saved.",
     // #2b, independent safety review: a photo of a loose tablet is a guess, never a read —

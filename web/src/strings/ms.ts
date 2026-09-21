@@ -2117,7 +2117,7 @@ export const ms = {
     // @patient
     addEntryTurn: "Ambil gambar label, atau taip sendiri.",
     // @patient
-    addConfirmTurn: "Ini yang Nura baca daripada *label.*",
+    addConfirmTurn: "Ini yang Nura baca daripada *label*.",
     // @patient
     addConfirmHint: "Semak sebelum ia disimpan.",
     // @patient
