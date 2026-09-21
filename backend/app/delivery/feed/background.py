@@ -33,6 +33,33 @@ never shared across concurrent coroutines — the same reason `app.channels.api.
 one per request), each bounded by `JOB_DEADLINE_SECONDS`; the whole run is bounded by
 `RUN_DEADLINE_SECONDS`. A job that raises or times out is logged and counted as failed; it
 never stops the others.
+
+**#297 defect 1 (2026-09-18): the write lock held across the network wait.** On SQLite every
+transaction begins IMMEDIATE (`app.db.make_engine`) and holds the database's one write lock
+for its whole life, not just its first write. `_run_one` used to open one session for a whole
+job — search, compress, and the cards it wrote — so that lock sat open for as long as the
+search and the compression took (20-40s each, real adapters), one job after another
+(`MAX_CONCURRENT_JOBS = 1`): every other request that writes, `resolve_session` on every
+authenticated call included, answered `sqlite3.OperationalError: database is locked` for
+minutes at a time. `run_job` (`app.delivery.feed.search`) is now three phases — a short read,
+the network with no session at all, a short write — and this module's own `run_job` below
+calls them directly, each on its own short-lived session, so no transaction is ever open
+while a job waits on the network. `speak_ahead`/`record_say_ahead_failures`
+(`app.delivery.feed.compose`) get the same treatment for the voice pre-render `_run_one` does
+after a job's cards land.
+
+**#297 defect 2 (2026-09-18): a failed search recorded as "done, found nothing".** The
+Anthropic API refused every call that day; `ClaudeSearcher`/`ClaudeCompressor` logged and
+returned an empty answer, indistinguishable from a job that searched and genuinely found
+nothing, so every job that day ended `status=done`, `results=[]`, and `due` (`app.delivery.
+feed.search`) said none of them were due again once the API came back. A port's own call
+failing now raises `app.delivery.feed.compress.PortUnavailable`, which `write_job_results`
+tells apart from a clean empty answer: the job is left `FAILED`, and `due` keeps it due for a
+retry the same day, up to `FAILED_JOB_RETRY_LIMIT` attempts. `_runs`, this process's
+once-a-day cache of what already ran, would otherwise never look again after a run finished —
+`RunRecord.worth_rechecking` and `ensure_learning_scheduled` below let a later `GET /feed` the
+same day start a fresh (short) replan when a failed job is still due, without ever running
+two at once for one profile.
 """
 
 from __future__ import annotations
@@ -55,13 +82,21 @@ from app.delivery.feed.compose import (
     LearningPlan,
     household,
     plan_learning_jobs,
-    say_ahead,
+    record_say_ahead_failures,
+    speak_ahead,
 )
 from app.delivery.feed.days import Day
 from app.delivery.feed.models import FeedItem, SearchJob
-from app.delivery.feed.search import Engine, run_job
+from app.delivery.feed.search import (
+    Around,
+    Engine,
+    failed_jobs_due,
+    prepare_job,
+    search_and_compress,
+    write_job_results,
+)
 from app.errors import Refusal
-from app.keys.context import KeyContext
+from app.keys.context import KeyContext, resolve_key_context
 from app.keys.scopes import Scope
 from app.medicines.service import LineView, active_lines
 from app.state.service import current_state
@@ -96,6 +131,20 @@ class RunRecord:
     state: State
     started_at: datetime | None = None
     done_at: datetime | None = None
+    worth_rechecking: bool = False
+    """True when something is still due right now — most often a job this run's last attempt
+    left `FAILED` and still inside its retry budget (#297 defect 2:
+    `search.FAILED_JOB_RETRY_LIMIT`), read back with `search.failed_jobs_due`.
+    `ensure_learning_scheduled` checks this to decide whether a later `GET /feed` the same
+    day is worth a fresh (short) replan — false once nothing is due any more, so a spent
+    retry budget stops asking again for the rest of the day."""
+    made: int = 0
+    """Cards the run's jobs made, once it reaches `"done"` (#291 review, REQUIRED 4)."""
+    failed: int = 0
+    """Jobs the run counted as failed, once it reaches `"done"`: raised, timed out, or left
+    `FAILED` by `write_job_results` — every way a job can end badly, not only the ones that
+    raise (#291 review, REQUIRED 4: live, all 14 jobs ended `FAILED` while the old count,
+    which only ever incremented on a raise or a timeout, read 0)."""
 
 
 _runs: dict[tuple[uuid.UUID, str], RunRecord] = {}
@@ -123,15 +172,24 @@ def ensure_learning_scheduled(
     day: Day,
     sessions: async_sessionmaker[AsyncSession],
 ) -> RunRecord | None:
-    """Called from `GET /feed` after the page is built. Starts today's catch-up at most once:
-    a record already here — "looking", "done", or "none" — means a run for today has already
-    been claimed (by this call or an earlier one) and this does nothing more. Never awaited on
-    the slow part: the task this starts runs on its own, after this function has returned."""
+    """Called from `GET /feed` after the page is built. Starts today's catch-up at most once
+    while it is actually running: a "looking" record already here means a run for today is in
+    flight (by this call or an earlier one) and this never starts a second one alongside it.
+    A "done" or "none" record with nothing left `worth_rechecking` (#297 defect 2 — the common
+    case) does nothing more either, the same as before. Only a finished run that left
+    something due again — most often a job still inside its retry budget after its own search
+    or compression failed — gets a fresh (short) replan here. Never awaited on the slow part:
+    the task this starts runs on its own, after this function has returned."""
     key = (context.profile_id, day.key)
-    if key in _runs:
-        return _runs[key]
-    _runs[key] = RunRecord(state="looking", started_at=utcnow())
-    task = asyncio.create_task(_run(key, context=context, engine=engine, day=day, sessions=sessions))
+    existing = _runs.get(key)
+    if existing is not None and (existing.state == "looking" or not existing.worth_rechecking):
+        return existing
+    _runs[key] = RunRecord(
+        state="looking", started_at=existing.started_at if existing is not None else utcnow()
+    )
+    task = asyncio.create_task(
+        _run(key, context=context, engine=engine, day=day, sessions=sessions, resuming=existing is not None)
+    )
     _tasks.add(task)
     task.add_done_callback(_log_if_failed)
     task.add_done_callback(_tasks.discard)
@@ -208,6 +266,110 @@ async def _plan(
         return None
 
 
+@dataclass(frozen=True, slots=True)
+class JobRunResult:
+    """What one job's phased run left: the cards it made (if any), and whether the run's own
+    summary line (`_run`) should count it as failed."""
+
+    items: list[FeedItem]
+    failed: bool = False
+    """True when the job ended `FAILED` (#291 review, REQUIRED 4: the run's own "N made, M
+    failed" line used to count only a job that raised or timed out here — a job whose search
+    or compression itself failed returned normally, with an empty `items`, and was silently
+    left out of "failed" entirely; live, all 14 jobs ended `FAILED` while the log read "0
+    cards made, 0 failed"), or when its write phase was skipped outright (its deadline hit
+    before phase 3 could even start; see `run_job`)."""
+
+
+async def run_job(
+    sessions: async_sessionmaker[AsyncSession],
+    *,
+    context: KeyContext,
+    job: SearchJob,
+    engine: Engine,
+    language: str,
+    around: Around,
+    doctor: str | None,
+    existing: set[str],
+) -> JobRunResult:
+    """One job, phased so the database's write lock is never held while it waits on the
+    network (#297 defect 1): a short read (`prepare_job`, plus the state a job's compression
+    grounds on), the search and the compression with no session open at all
+    (`search_and_compress`, bounded by `JOB_DEADLINE_SECONDS` on its own — #291 review
+    suggestion: the deadline fires here, before phase 3 ever opens a session, so a timeout
+    can never cancel a task mid-write), then a short write for the cards and the job's own
+    `status`/`last_run_at`/`results` (`write_job_results`) — three units of work, each on its
+    own short-lived session, never one held open across the network wait in between.
+    `_run_one`'s own `asyncio.wait_for` around this whole call is the backstop for anything
+    that predates or bypasses this (a monkeypatched fake in a test, or phase 1/3 somehow
+    hanging), not the primary deadline any more.
+
+    Phase 3 never reuses the `job` (or its `context`) carried across the wait: with
+    `expire_on_commit=False`, that Python object still holds its load-time column values, and
+    `session.merge()` would copy every one of them onto the fresh row — overwriting a pause
+    (`SearchJob.enabled`) `pause_job` set while phase 2 was waiting, with no error and no
+    trail (#291 review, REQUIRED 1: reproduced live on a file-backed database — pause during
+    the wait, and the merge silently wrote `enabled` back to `True`). Instead this re-fetches
+    the job fresh by id (`session.get`, never `.merge`), and re-resolves `context` fresh too
+    (`resolve_key_context` — REQUIRED 2: a key revoked, a scope narrowed, or the account
+    closed while phase 2 waited must refuse the write here, at write time, not slip through
+    on a stale, already-cleared context). A job found paused, deleted, or whose key no longer
+    resolves is skipped outright: no cards, and the skip itself is logged (never silently
+    dropped) — `write_job_results` itself still re-checks the one thing left, that each
+    candidate's source is still a usable, allowlisted one right now.
+
+    This is the seam `_run_one` calls once per job, and the one
+    `tests/test_feed_background.py` monkeypatches to make a job raise or hang.
+    `app.delivery.feed.search.run_job` stays the single-session version, for every caller
+    that already holds one session across a whole job (the inline `POST .../jobs/{id}/run`
+    path, and every test that calls it directly) — this function is `background`'s own
+    phased variant of it, composed from the same three phases search.py exports.
+    """
+    async with _own_session(sessions) as session:
+        state = await current_state(session, context=context)
+        prep = await prepare_job(session, context=context, job=job)
+    try:
+        outcome = await asyncio.wait_for(
+            search_and_compress(
+                engine, job, prep, state=state, language=language, around=around, existing=existing
+            ),
+            timeout=JOB_DEADLINE_SECONDS,
+        )
+    except TimeoutError:
+        log.warning("feed: a background learning job hit its %ss deadline", JOB_DEADLINE_SECONDS)
+        return JobRunResult(items=[], failed=True)
+    async with _own_session(sessions) as session:
+        try:
+            fresh_context = await resolve_key_context(
+                session, region=context.region, person_id=context.person_id, profile_id=context.profile_id
+            )
+        except Refusal:
+            log.warning(
+                "feed: job %s's own key no longer resolves at write time; skipped, no cards written",
+                job.id,
+            )
+            return JobRunResult(items=[], failed=True)
+        fresh_job = await session.get(SearchJob, job.id)
+        if fresh_job is None or not fresh_job.enabled:
+            log.warning(
+                "feed: job %s was paused or removed mid-run; skipped, no cards written", job.id
+            )
+            return JobRunResult(items=[])
+        items = await write_job_results(
+            session,
+            context=fresh_context,
+            job=fresh_job,
+            engine=engine,
+            state=state,
+            language=language,
+            around=around,
+            doctor=doctor,
+            existing=existing,
+            outcome=outcome,
+        )
+        return JobRunResult(items=items, failed=outcome.failed_because is not None)
+
+
 async def _run_one(
     sessions: async_sessionmaker[AsyncSession],
     semaphore: asyncio.Semaphore,
@@ -218,44 +380,43 @@ async def _run_one(
     plan: LearningPlan,
     keys: set[str],
     job: SearchJob,
-) -> list[FeedItem] | None:
-    """`None` means this job failed (raised, or ran past its deadline) — told apart from a
-    job that ran cleanly and simply found nothing (`[]`), so the run's own "N cards made, M
-    failed" line counts what actually went wrong, not every job that came back empty."""
+) -> JobRunResult | None:
+    """`None` means this job raised or ran past its deadline before `run_job` itself could
+    tell the difference — told apart from a `JobRunResult` (whether or not `.failed`), so the
+    run's own "N cards made, M failed" line counts every way a job can end (#291 review,
+    REQUIRED 4): raised, timed out here, or left `FAILED` by `write_job_results` (its own
+    search or compression call failed, not a clean "nothing for him")."""
     async with semaphore:
         try:
-            async with _own_session(sessions) as session:
-                # `job` was loaded (or just created) on `_plan`'s own session, already closed
-                # by the time this one opens — detached, so a plain attribute write on it
-                # (`run_job` sets `status`, `last_run_at`, `results`) is never part of this
-                # session's unit of work and is silently lost at commit, however cleanly the
-                # job itself ran: `session.merge` first, so every write `run_job` makes lands
-                # on an instance this session actually tracks.
-                job = await session.merge(job)
-                items = await asyncio.wait_for(
-                    run_job(
-                        session,
-                        context=context,
-                        job=job,
-                        engine=engine,
-                        state=await current_state(session, context=context),
-                        language=house.language,
-                        around=plan.around,
-                        doctor=house.doctor,
-                        existing=set(keys),
-                    ),
-                    timeout=JOB_DEADLINE_SECONDS,
-                )
+            result = await asyncio.wait_for(
+                run_job(
+                    sessions,
+                    context=context,
+                    job=job,
+                    engine=engine,
+                    language=house.language,
+                    around=plan.around,
+                    doctor=house.doctor,
+                    existing=set(keys),
+                ),
+                timeout=JOB_DEADLINE_SECONDS,
+            )
         except TimeoutError:
             log.warning("feed: a background learning job hit its %ss deadline", JOB_DEADLINE_SECONDS)
             return None
         except Exception:
             log.exception("feed: a background learning job failed")
             return None
-        if items:
-            async with _own_session(sessions) as session:
-                await say_ahead(session, engine, context, items)
-        return items
+        if result.items:
+            # Every card's spoken twin, pre-rendered (`app.delivery.feed.compose._say_ahead`'s
+            # own docstring) — the network call (`speak_ahead`) with no session open, then a
+            # short write only when one actually failed (#297 defect 1: this is the same
+            # pattern as `run_job` above, and for the same reason).
+            results = await speak_ahead(engine, context, result.items)
+            if any(outcome.failed is not None for outcome in results):
+                async with _own_session(sessions) as session:
+                    await record_say_ahead_failures(session, context=context, results=results)
+        return result
 
 
 async def _run(
@@ -265,12 +426,17 @@ async def _run(
     engine: Engine,
     day: Day,
     sessions: async_sessionmaker[AsyncSession],
+    resuming: bool = False,
 ) -> None:
     record = _runs[key]
     try:
         planned = await _plan(sessions, context=context, engine=engine, day=day)
         if planned is None or not planned[0].jobs:
-            record.state = "none"
+            # Nothing due right now. `resuming` tells apart the day's first check (truly
+            # nothing was ever due: "none") from a later replan that found nothing left to
+            # retry (a run already happened today: stay "done", never regress it to "none").
+            record.state = "done" if resuming else "none"
+            record.worth_rechecking = False
             record.done_at = utcnow()
             return
         plan, house, keys = planned
@@ -281,13 +447,13 @@ async def _run(
 
         async def _one(job: SearchJob) -> None:
             nonlocal made, failed
-            items = await _run_one(
+            result = await _run_one(
                 sessions, semaphore, context=context, engine=engine, house=house, plan=plan, keys=keys, job=job
             )
-            if items is None:
+            if result is None or result.failed:
                 failed += 1
             else:
-                made += len(items)
+                made += len(result.items)
 
         try:
             await asyncio.wait_for(
@@ -297,10 +463,22 @@ async def _run(
             log.warning("feed: the background learning run hit its %ss deadline", RUN_DEADLINE_SECONDS)
         log.info("feed: %d cards made, %d failed", made, failed)
         record.state = "done"
+        record.made = made
+        record.failed = failed
         record.done_at = utcnow()
+        # #297 defect 2: a job left `FAILED` by `write_job_results` (its own search or
+        # compression call failed, not a clean "nothing for him") is still due, up to its
+        # retry limit — `failed_jobs_due` checks exactly that, never a job that merely raised
+        # or is due by its ordinary cadence (see its own docstring for why the distinction
+        # matters: those were already, quietly, "due again" before this fix, and reopening a
+        # finished run for them is not what #297 asked for). `ensure_learning_scheduled`
+        # checks this flag to decide whether a later `GET /feed` today is worth another look.
+        async with _own_session(sessions) as session:
+            record.worth_rechecking = await failed_jobs_due(session, context=context, day=day)
     except Exception:
         log.exception("feed: the background learning run failed")
         record.state = "done"
+        record.worth_rechecking = True
         record.done_at = utcnow()
         raise
 

@@ -31,7 +31,14 @@ from app.audit.models import Action, Outcome
 from app.audit.trail import record
 from app.db import nested_unit_of_work, utcnow
 from app.delivery.feed.clips import ClipRenderer, clip_length_ok, may_excerpt
-from app.delivery.feed.compress import Compressed, Compressor, Found, Searcher, changes_treatment
+from app.delivery.feed.compress import (
+    Compressed,
+    Compressor,
+    Found,
+    PortUnavailable,
+    Searcher,
+    changes_treatment,
+)
 from app.delivery.feed.days import Day, plain_day
 from app.delivery.feed.items import NotPlainWords, Why, create_item
 from app.delivery.feed.local import (
@@ -69,6 +76,7 @@ from app.delivery.voice import MAX_SECONDS, Voice, seconds_to_say
 from app.drugs.registry import DrugRegistry, LabelFields, UnknownDrug
 from app.errors import Refusal
 from app.ingestion.objects import ObjectStore
+from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.language.voice_script import script_for
@@ -279,6 +287,19 @@ async def jobs_looking_today(session: AsyncSession, *, context: KeyContext, day:
     return any(due(job, day) for job in jobs)
 
 
+async def failed_jobs_due(session: AsyncSession, *, context: KeyContext, day: Day) -> bool:
+    """Whether any of his jobs was left `FAILED` by its last attempt and is still due for a
+    retry today (#297 defect 2) — never a job that has simply never run, or one due again by
+    its ordinary cadence: those already surface through `jobs_looking_today`, and reopening a
+    day's finished run for them is out of this fix's scope (`app.delivery.feed.background.
+    _run`'s own `resuming` check would otherwise put a crashed-but-never-written-down job
+    straight back in the plan, which is not what #297 asked for — a job that raised is
+    already naturally due again next time, the same as it always was; only a job this module
+    itself marked `FAILED` gets the extra "worth reopening a finished run for" treatment)."""
+    jobs = await audited_read(session, SearchJob, context, Scope.RECORDS)
+    return any(job.status is JobStatus.FAILED and due(job, day) for job in jobs)
+
+
 async def pause_job(
     session: AsyncSession, *, context: KeyContext, job_id: uuid.UUID, enabled: bool
 ) -> SearchJob:
@@ -316,12 +337,38 @@ async def pause_job(
     return job
 
 
+FAILED_JOB_RETRY_LIMIT = 3
+"""A job whose own search or compression call failed (`app.delivery.feed.compress.
+PortUnavailable` — an API error, a timeout, a dead connection, never a clean "nothing for
+him") is retried the same day, whatever its cadence, up to this many attempts (#297 defect
+2) — enough to ride out a short outage without hammering a dead API for the rest of the day.
+Past the limit `due` falls back to the job's normal cadence, same as any other job."""
+
+
+def _failed_attempts_today(job: SearchJob, day: Day) -> int:
+    """How many times `write_job_results` has already marked this job `FAILED` today. Reads
+    `job.results`, the same row `write_job_results` writes it to — no new column: a run
+    that finally succeeds overwrites `results` with its own clean shape (no `failed_attempts`
+    key), so the count starts back at zero the next time the job fails, on any day."""
+    if job.status is not JobStatus.FAILED:
+        return 0
+    if job.results.get("failed_day") != day.key:
+        return 0
+    return int(job.results.get("failed_attempts") or 0)
+
+
 def due(job: SearchJob, day: Day) -> bool:
     """Whether a job that has run should run again today: a daily one not yet today, a
     weekly one not yet this week. One that runs on a change, or before visits, runs when that
-    happens; a paused one does not run."""
+    happens; a paused one does not run.
+
+    A job left `FAILED` by its last attempt is due again regardless of cadence, up to
+    `FAILED_JOB_RETRY_LIMIT` attempts the same day (#297 defect 2) — a search that could not
+    even run is not "looked at and found nothing"."""
     if not job.enabled:
         return False
+    if job.status is JobStatus.FAILED and _failed_attempts_today(job, day) < FAILED_JOB_RETRY_LIMIT:
+        return True
     if job.last_run_at is None:
         return True
     last = job.last_run_at if job.last_run_at.tzinfo else job.last_run_at.replace(tzinfo=day.now.tzinfo)
@@ -362,50 +409,121 @@ def _facts_for(state: StateView) -> Mapping[str, Any]:
     return {} if clinical is None else dict(clinical.get("facts", {}))
 
 
-async def run_job(
-    session: AsyncSession,
-    *,
-    context: KeyContext,
-    job: SearchJob,
-    engine: Engine,
-    state: StateView,
-    language: str,
-    around: Around,
-    doctor: str | None,
-    existing: set[str],
-) -> list[FeedItem]:
-    """Run one job now: search, keep what is for him, compress, check, and write the cards.
+@dataclass(frozen=True, slots=True)
+class JobPrep:
+    """What a job needs read from the record before it may search or compress: the domains
+    of its own usable sources, named when it was made (`create_job`, `SearchJob.source_ids`)
+    — nothing else. Safe to carry into the network phase, when no session is open (#297
+    defect 1)."""
 
-    `existing` is the dedupe keys already on the profile; a page already turned into a card
-    (for this day, this week or this season, by kind) is not made twice. The job's `results`
-    record every page by outcome — never his area, which stays out of the record of a search.
-    What is kept, by kind:
+    domains: list[str]
 
-    - a local bulletin (dengue, haze, heat) about his area — or the whole region — and only
-      when a condition or medicine on his record makes it relevant; a card for today;
-    - a seasonal page while its season is near or on; a card until the season ends;
-    - a food page, one a week in turn;
-    - a video, as a clip (narrated, captioned, 20–30 s) — or as a voice note when his clips
-      have gone unplayed — and any other page as a learning card.
-    """
+
+async def prepare_job(session: AsyncSession, *, context: KeyContext, job: SearchJob) -> JobPrep:
+    """Phase 1 of `run_job`: the one database read a job needs before it may search, so its
+    caller can commit and close this session before the network phase starts."""
     sources = await usable_sources(
         session, region=context.region, source_ids=[uuid.UUID(one) for one in job.source_ids]
     )
-    domains = [source.domain for source in sources]
-    made: list[FeedItem] = []
-    questions: list[FeedItem] = []
-    rejected: list[dict[str, str]] = []
-    moment = utcnow()
+    return JobPrep(domains=[source.domain for source in sources])
+
+
+@dataclass(frozen=True, slots=True)
+class _Candidate:
+    """One found page that passed every check `search_and_compress` can make without a
+    database session, compressed and ready for `write_job_results` to turn into a card — or
+    reject for want of an allowlisted source, the one check left that still needs a row."""
+
+    found: Found
+    compressed: Compressed
+    season: Any
+    key: str
+
+
+@dataclass(frozen=True, slots=True)
+class SearchOutcome:
+    """Everything `search_and_compress` made of a job's network calls, for `write_job_results`
+    to turn into cards with no network call of its own left to make."""
+
+    candidates: tuple[_Candidate, ...]
+    rejected: list[dict[str, str]]
+    domains: list[str]
+    reasons: list[str]
+    failed_because: str | None = None
+    """Set when the searcher's or the compressor's own call failed (`PortUnavailable` — an
+    API error, a timeout, a dead connection), never when the job simply searched and found
+    nothing to keep: `write_job_results` marks the job `FAILED`, not `DONE`, and leaves it due
+    for a retry (#297 defect 2). Whatever candidates were already compressed before the
+    failure are still written as real cards; only the job's own status reflects the failure,
+    so a retry never remakes them (`existing` already carries their dedupe keys by then)."""
+    external_processor: str | None = None
+    """The label of the external model processor this job actually reached, once, the first
+    time either port made a real call with something to send it (#291 review, REQUIRED 3) —
+    `None` for a fixture engine, or when nothing was ever sent (no usable domains). Set
+    whether or not that call then succeeded: a failed call still left the bytes with the
+    processor. `write_job_results` writes the one `EXTERNAL_MODEL_PROCESSOR` audit line for
+    it, in its own short unit of work."""
+
+
+async def search_and_compress(
+    engine: Engine,
+    job: SearchJob,
+    prep: JobPrep,
+    *,
+    state: StateView,
+    language: str,
+    around: Around,
+    existing: set[str],
+) -> SearchOutcome:
+    """Phase 2 of `run_job`: every network call a job makes — the search, then each kept
+    page's compression — and nothing else. No session parameter, deliberately: this must
+    never run with a database transaction open (#297 defect 1). On SQLite every transaction
+    begins IMMEDIATE and holds the write lock for its whole life, not just its first write
+    (`app.db.make_engine`'s own docstring) — so a session open here would block every other
+    request on the process for as long as the search and the compression take, the bug that
+    held `resolve_session` (every authenticated request) behind `sqlite3.OperationalError:
+    database is locked` for minutes on 2026-09-18.
+
+    Every check that does not need a database row runs here, in the same order `run_job`
+    always ran it, so a page already on the profile (`existing`) is never compressed for
+    nothing: relevance, the kidney-diet hold, the food pick, whether the page is really on
+    the domain it claims (`on_its_source` — DB-free: a `require_usable_source` row's own
+    `.domain` is always `found.domain` by construction of that query, so this needs no row),
+    his area, its season, its dedupe key. The one check that does need a row — whether that
+    domain is still a *usable*, allowlisted source right now — waits for `write_job_results`,
+    after compression: the job's own `source_ids` already bounded what was searched
+    (`prepare_job`'s `prep.domains`), so this only ever re-confirms it, the rare exception a
+    searcher returning a page off its own list.
+    """
     code = language_for(language)
     day = around.day
-    # `Searcher.search` is a synchronous port (the real adapter's own `messages.create` call,
-    # `ClaudeSearcher._ask`), so awaiting it directly would block this event loop — every
-    # other request on the process, not just this job — for as long as the search and fetch
-    # take. `asyncio.to_thread` runs it off-thread; the fixture searcher in tests pays a
-    # thread hop for nothing, which is cheap next to never blocking the real one.
-    found_pages = list(
-        await asyncio.to_thread(engine.searcher.search, job.kind.value, job.terms, domains)
-    )
+    domains = prep.domains
+    rejected: list[dict[str, str]] = []
+    # #291 review, REQUIRED 3: the label of whichever port actually reaches outside the
+    # region first, this job — read defensively (`getattr`), so a test double that predates
+    # this attribute is still `None`, never an error.
+    reached: str | None = None
+    if domains and getattr(engine.searcher, "external_processor", None) is not None:
+        reached = engine.searcher.external_processor
+    try:
+        # `Searcher.search` is a synchronous port (the real adapter's own `messages.create`
+        # call, `ClaudeSearcher._ask`), so awaiting it directly would block this event loop —
+        # every other request on the process, not just this job — for as long as the search
+        # and fetch take. `asyncio.to_thread` runs it off-thread; the fixture searcher in
+        # tests pays a thread hop for nothing, which is cheap next to never blocking the real
+        # one.
+        found_pages = list(
+            await asyncio.to_thread(engine.searcher.search, job.kind.value, job.terms, domains)
+        )
+    except PortUnavailable as failed:
+        return SearchOutcome(
+            candidates=(),
+            rejected=[],
+            domains=domains,
+            reasons=[],
+            failed_because=f"search_failed:{failed}",
+            external_processor=reached,
+        )
     reasons: list[str] = []
     if job.kind is JobKind.LOCAL:
         reasons = relevant_to(job.terms[0], around.conditions, around.medicines)
@@ -426,15 +544,10 @@ async def run_job(
         found_pages = _food_pick(
             [one for one in found_pages if one.domain in domains], day
         ) + [one for one in found_pages if one.domain not in domains]
+    candidates: list[_Candidate] = []
+    seen: set[str] = set()
     for found in found_pages:
-        try:
-            source = await require_usable_source(
-                session, region=context.region, domain=found.domain
-            )
-        except SourceNotAllowlisted:
-            rejected.append({"url": found.url, "because": "not_allowlisted"})
-            continue
-        if not on_its_source(found.url, source.domain):
+        if not on_its_source(found.url, found.domain):
             # The page a card links to is on the allowlisted site itself, over https, or the
             # card is not made: a searcher cannot put another site's link on his card.
             rejected.append({"url": found.url, "because": "not_on_its_source"})
@@ -456,19 +569,110 @@ async def run_job(
             # with diabetes"): not for him, however the watch was added.
             rejected.append({"url": found.url, "because": "not_relevant_to_his_record"})
             continue
-        # Same reason as the search call above: `Compressor.compress` is synchronous too
-        # (the real adapter's own model call), so it also runs off-thread.
-        compressed = await asyncio.to_thread(
-            engine.compressor.compress, found.text, code, _facts_for(state)
-        )
+        key = _key_for(job, found, code, day, season.starts.year if season else None)
+        if key in existing or key in seen:
+            # Already a card on the profile (or already claimed by an earlier page this same
+            # job found): never worth a compress call. Moved ahead of compression itself
+            # (`run_job`'s own history checked this only after compressing — see #297's PR
+            # for why that reordering is safe: the key never depended on the compressed
+            # text, only on the job, the page and its season, all already known here).
+            continue
+        if reached is None and getattr(engine.compressor, "external_processor", None) is not None:
+            reached = engine.compressor.external_processor
+        try:
+            # Same reason as the search call above: `Compressor.compress` is synchronous too
+            # (the real adapter's own model call), so it also runs off-thread.
+            compressed = await asyncio.to_thread(
+                engine.compressor.compress, found.text, code, _facts_for(state)
+            )
+        except PortUnavailable as failed:
+            return SearchOutcome(
+                candidates=tuple(candidates),
+                rejected=rejected,
+                domains=domains,
+                reasons=reasons,
+                failed_because=f"compress_failed:{failed}",
+                external_processor=reached,
+            )
         if compressed is None:
             rejected.append({"url": found.url, "because": "nothing_for_him_in_" + code})
             continue
         if not compressed.passage.strip():
             rejected.append({"url": found.url, "because": "uncited"})
             continue
-        key = _key_for(job, found, code, day, season.starts.year if season else None)
+        seen.add(key)
+        candidates.append(_Candidate(found=found, compressed=compressed, season=season, key=key))
+    return SearchOutcome(
+        candidates=tuple(candidates),
+        rejected=rejected,
+        domains=domains,
+        reasons=reasons,
+        external_processor=reached,
+    )
+
+
+async def write_job_results(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    job: SearchJob,
+    engine: Engine,
+    state: StateView,
+    language: str,
+    around: Around,
+    doctor: str | None,
+    existing: set[str],
+    outcome: SearchOutcome,
+) -> list[FeedItem]:
+    """Phase 3 of `run_job`: every database read and write a job's results need, and no
+    network call of its own — safe inside any short unit of work, opened fresh after
+    `search_and_compress` has already finished waiting on the network (#297 defect 1). Turns
+    `outcome`'s compressed candidates into cards exactly the way `run_job` always has —
+    notices, recalls, a treatment-changing finding rerouted as a doctor's question, the
+    plain-words check — re-checking here the one thing `search_and_compress` could not
+    without a session: that each candidate's domain is still a usable, allowlisted source.
+
+    Writes the job's own `status`/`last_run_at`/`results` at the end: `FAILED`, not `DONE`,
+    when `outcome.failed_because` is set, so `due` (#297 defect 2) leaves it due for a retry
+    instead of writing it down as looked at and done.
+
+    Also writes the one `EXTERNAL_MODEL_PROCESSOR` audit line this job earns, when
+    `outcome.external_processor` is set — once, whether the job ends `DONE` or `FAILED`: a
+    failed call still left the job's terms, or a page's text, with the processor (#291
+    review, REQUIRED 3; the brief's own "do NOT drop the EXTERNAL_MODEL_PROCESSOR share
+    entry" — the feed's searcher and compressor never wrote one before this).
+    """
+    code = language_for(language)
+    day = around.day
+    moment = utcnow()
+    reasons = outcome.reasons
+    if outcome.external_processor is not None:
+        await record(
+            session,
+            context=context,
+            action=Action.SHARE,
+            scope=Scope.RECORDS,
+            target=EXTERNAL_MODEL_PROCESSOR,
+            target_id=job.id,
+            rows=1,
+            shared_with_label=outcome.external_processor,
+        )
+    made: list[FeedItem] = []
+    questions: list[FeedItem] = []
+    rejected: list[dict[str, str]] = list(outcome.rejected)
+    for candidate in outcome.candidates:
+        found = candidate.found
+        compressed = candidate.compressed
+        season = candidate.season
+        key = candidate.key
         if key in existing:
+            continue
+        try:
+            source = await require_usable_source(
+                session, region=context.region, domain=found.domain
+            )
+        except SourceNotAllowlisted:
+            rejected.append({"url": found.url, "because": "not_allowlisted"})
             continue
         cite: dict[str, Any] = {
             # The page the card cites, for the card to show and link (E21-06): who published
@@ -766,16 +970,83 @@ async def run_job(
                 continue
         existing.add(key)
         made.append(item)
-    job.status = JobStatus.DONE
-    job.last_run_at = moment
-    job.results = {
-        "items": [str(item.id) for item in made],
-        "questions": [str(item.id) for item in questions],
-        "rejected": rejected,
-        "searched": domains,
-    }
+    if outcome.failed_because is not None:
+        attempts = _failed_attempts_today(job, day) + 1
+        job.status = JobStatus.FAILED
+        job.last_run_at = moment
+        job.results = {
+            "items": [str(item.id) for item in made],
+            "questions": [str(item.id) for item in questions],
+            "rejected": rejected,
+            "searched": outcome.domains,
+            "failed_attempts": attempts,
+            "failed_day": day.key,
+            "because": outcome.failed_because,
+        }
+    else:
+        job.status = JobStatus.DONE
+        job.last_run_at = moment
+        job.results = {
+            "items": [str(item.id) for item in made],
+            "questions": [str(item.id) for item in questions],
+            "rejected": rejected,
+            "searched": outcome.domains,
+        }
     await session.flush()
     return [*made, *questions]
+
+
+async def run_job(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    job: SearchJob,
+    engine: Engine,
+    state: StateView,
+    language: str,
+    around: Around,
+    doctor: str | None,
+    existing: set[str],
+) -> list[FeedItem]:
+    """Run one job now: search, keep what is for him, compress, check, and write the cards.
+
+    `existing` is the dedupe keys already on the profile; a page already turned into a card
+    (for this day, this week or this season, by kind) is not made twice. The job's `results`
+    record every page by outcome — never his area, which stays out of the record of a search.
+    What is kept, by kind:
+
+    - a local bulletin (dengue, haze, heat) about his area — or the whole region — and only
+      when a condition or medicine on his record makes it relevant; a card for today;
+    - a seasonal page while its season is near or on; a card until the season ends;
+    - a food page, one a week in turn;
+    - a video, as a clip (narrated, captioned, 20–30 s) — or as a voice note when his clips
+      have gone unplayed — and any other page as a learning card.
+
+    Unchanged for every caller but `app.delivery.feed.background`'s own background run (the
+    inline `POST .../jobs/{id}/run` path, and every test that calls this directly): the three
+    phases below (`prepare_job`, `search_and_compress`, `write_job_results`), composed back
+    to back on the one session already open here — fine for a single job on a caller's own
+    request. `app.delivery.feed.background.run_job` is the phased variant #297 defect 1
+    needed: the same three phases, called directly, each on its own short-lived session, so
+    the database's write lock is never held while a background run's dozen jobs wait on the
+    network one after another.
+    """
+    prep = await prepare_job(session, context=context, job=job)
+    outcome = await search_and_compress(
+        engine, job, prep, state=state, language=language, around=around, existing=existing
+    )
+    return await write_job_results(
+        session,
+        context=context,
+        job=job,
+        engine=engine,
+        state=state,
+        language=language,
+        around=around,
+        doctor=doctor,
+        existing=existing,
+        outcome=outcome,
+    )
 
 
 def _key_for(job: SearchJob, found: Found, code: str, day: Day, season_year: int | None) -> str:
