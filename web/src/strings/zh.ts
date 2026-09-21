@@ -1138,6 +1138,8 @@ export const zh = {
     },
     // @patient
     covers: "保障范围是{value}。",
+    // @patient phrase
+    covered: "适用于{value}。",
     // @patient
     renews: "续保日期是{date}。",
     // @patient
@@ -1202,6 +1204,12 @@ export const zh = {
       confirmSafety: ["Nura显示保单上写的内容。", "不会决定什么可以获得赔付。", "这不是财务建议。"],
       // @patient phrase
       fixSomething: "更正内容",
+      // @patient
+      essentialsCutNotice: ["Nura读取了这部分的前{n}行。", "保单上可能还有更多内容。"],
+      // @patient phrase
+      waitingPeriodLabel: "等待期：{text}",
+      // @patient phrase
+      typedLabel: "手动输入",
     },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.

@@ -64,15 +64,30 @@ export function effectiveValue(field: Pick<ReviewFieldOut, "value" | "state" | "
   return field.state === "corrected" && field.corrected_value != null ? field.corrected_value : field.value;
 }
 
+/** Control and bidi-override code points stripped from every field's display text
+ *  (independent review, package 12a fix round, item 6): the confirmation card renders
+ *  `displayValueText` with no sanitising at all before this, the one hostile surface this
+ *  package's own `sanitizeDisplayText` (`web/src/insurance/model.ts`) never reached — a bidi
+ *  override could show an exclusion line on the card he confirms in a different order than it
+ *  is actually kept. The same code points that sanitiser strips: zero-width (ZWSP/ZWNJ/ZWJ),
+ *  bidi override/embedding/isolate (LRM/RLM, LRE/RLE/PDF, LRO/RLO, LRI/RLI/FSI/PDI) and the
+ *  byte-order-mark. Applied here, in the one function every field on every report table reads
+ *  its display text through — not insurance-specific, since any paper's free text can carry a
+ *  hostile character, not only a policy's. */
+const DISPLAY_CONTROL_CHARS_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+const DISPLAY_BIDI_CONTROL_RE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
 /** A field's display text, its own printed date read as a date in his language when the
  *  value is one (E02-07 library part A #3) — the paper's own words otherwise, exactly as
- *  `readableValueText` already shows them. */
+ *  `readableValueText` already shows them, with control and bidi-override code points
+ *  stripped (above). */
 export function displayValueText(value: unknown, s: Strings, locale: string): string {
   if (typeof value === "string") {
     const dated = fieldValueDate(value, locale);
     if (dated) return dated;
   }
-  return readableValueText(value, s);
+  const text = readableValueText(value, s);
+  return text.replace(DISPLAY_CONTROL_CHARS_RE, "").replace(DISPLAY_BIDI_CONTROL_RE, "");
 }
 
 /** Where a number sits against the paper's own printed range (never a judgement of ours,

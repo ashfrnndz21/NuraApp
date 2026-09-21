@@ -46,6 +46,7 @@ from tests.paper import (
     CLINIC_LETTER_HYPERTENSION,
     INSURANCE_CLAIM,
     INSURANCE_POLICY,
+    INSURANCE_POLICY_NO_EXCLUSIONS,
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
     METABOLIC_PANEL,
@@ -258,6 +259,25 @@ async def test_insurance_documents_route_to_money_scoped_facts_never_records(
     claim_fact = next(fact for fact in claim_facts if fact.id == claim_number.fact_id)
     assert claim_fact.subject == "insurance_claim" and claim_fact.value == "CLM-98765"
     assert claim_fact.event_id is None
+
+
+async def test_a_policy_paper_printing_no_exclusions_section_yields_zero_excludes_facts(
+    sg: AsyncSession, store: LocalObjectStore, extractor: FixtureExtractor
+) -> None:
+    """The fixture named for exactly this case (`insurance-policy-no-exclusions-2026-09-20`):
+    a policy paper that prints no "what it does not cover" section at all must never invent an
+    `excludes_N` fact for one — the passport's own fallback line ("Nura did not find this on
+    the policy") depends on there truly being zero such facts, not an empty-but-present one."""
+    owner = await _pa(sg)
+    card, _decided, facts = await _confirm(sg, owner, store, extractor, INSURANCE_POLICY_NO_EXCLUSIONS)
+    assert card.document_kind is DocumentKind.INSURANCE_POLICY
+    held = list(await current_facts(sg, context=owner, subject="insurance_policy", at=facts[0].valid_from))
+    excludes_attributes = [f.attribute for f in held if f.attribute.startswith("excludes_")]
+    assert excludes_attributes == []
+    # The other sections this same fixture DOES print still carry their own real facts —
+    # never a blanket "nothing found" once one section happens to be empty.
+    assert any(f.attribute.startswith("covers_") for f in held)
+    assert any(f.attribute.startswith("benefit_") for f in held)
 
 
 async def test_every_proposed_field_carries_its_artefact_and_its_page(

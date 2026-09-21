@@ -51,6 +51,7 @@ from app.insurance.policy import (
     EssentialItem,
     PolicyPeriodState,
     current_policies,
+    policy_period_date,
     policy_period_state,
     set_a_policy,
 )
@@ -64,10 +65,12 @@ router = APIRouter(prefix="/profiles", tags=["insurance"])
 Language = Query(default=None, min_length=2, max_length=16)
 
 
-def _period_state_said(state: PolicyPeriodState, renewal_date, language: str) -> str:  # type: ignore[no-untyped-def]
-    if state is PolicyPeriodState.ENDS_ON:
-        assert renewal_date is not None
-        return period_state_word(state.value, language, date=say_date(renewal_date, language))
+def _period_state_said(state: PolicyPeriodState, effective_date, language: str) -> str:  # type: ignore[no-untyped-def]
+    if state is PolicyPeriodState.UNDATED:
+        return ""  # no chip drawn at all — nothing on file to say a date about
+    if state is PolicyPeriodState.RUNS_TO:
+        assert effective_date is not None
+        return period_state_word(state.value, language, date=say_date(effective_date, language))
     return period_state_word(state.value, language)
 
 
@@ -80,7 +83,10 @@ def _items_out(raw: list[dict] | None) -> list[EssentialItemOut]:  # type: ignor
 
 def _policy_out(row, *, context: Context, language: str | None = None) -> PolicyOut:  # type: ignore[no-untyped-def]
     today = utcnow().astimezone(REGION_TZ[context.region]).date()
-    state = policy_period_state(status=row.status, renewal_date=row.renewal_date, today=today)
+    effective_date = policy_period_date(renewal_date=row.renewal_date, ends_on=row.ends_on)
+    state = policy_period_state(
+        status=row.status, renewal_date=row.renewal_date, ends_on=row.ends_on, today=today
+    )
     lang = language or "en"
     return PolicyOut(
         policy_id=row.id,
@@ -98,12 +104,14 @@ def _policy_out(row, *, context: Context, language: str | None = None) -> Policy
         set_by_person_id=row.set_by_person_id,
         set_at=row.set_at,
         period_state=state,
-        period_state_said=_period_state_said(state, row.renewal_date, lang),
+        period_state_said=_period_state_said(state, effective_date, lang),
+        period_state_date=effective_date,
         plan=row.plan,
         coverage_items=_items_out(row.coverage_items),
         excludes=_items_out(row.excludes),
         benefits=_items_out(row.benefits),
         claim_steps=_items_out(row.claim_steps),
+        essentials_cut=list(row.essentials_cut or []),
         ends_on=row.ends_on,
         waiting_period=row.waiting_period,
         claims_contact=row.claims_contact,

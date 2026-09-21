@@ -23,7 +23,7 @@ async function openInsurance(page: import("@playwright/test").Page): Promise<voi
 async function seedPolicy(
   request: APIRequestContext,
   pa: Papers,
-  over: Partial<{ insurer_name: string; renewal_date: string | null; status: string }> = {},
+  over: Partial<{ insurer_name: string; renewal_date: string | null; ends_on: string | null; status: string }> = {},
 ): Promise<string> {
   const body = {
     insurer_name: over.insurer_name ?? "Great Eastern",
@@ -31,6 +31,7 @@ async function seedPolicy(
     status: over.status ?? "active",
     guarantee_letter: false,
     renewal_date: over.renewal_date ?? null,
+    ends_on: over.ends_on ?? null,
   };
   const confirmation_id = await yes(request, pa.token, pa.profileId, { subject: "policy", ...body });
   const written = await request.post(`${API}/profiles/${pa.profileId}/insurance/policies`, { ...auth(pa.token), data: { ...body, confirmation_id } });
@@ -80,7 +81,13 @@ test("loading a policy paper: the live reading stages, the confirmation card, th
   await expect(passport).toBeVisible();
   await expect(passport).toContainText("Great Eastern");
   await expect(passport).toContainText("Hospital Shield"); // the plan, on the card itself
-  await expect(passport.getByTestId("policy-period-chip")).toContainText("In force");
+  // Never "in force" — the policy's own printed end date (2026-12-31, still ahead of the
+  // frozen clock's 14 September 2026) is named, not a claim that cover is currently valid
+  // (independent review, fix round, item 1).
+  await expect(passport.getByTestId("policy-period-chip")).toContainText("runs to");
+  await expect(passport.getByTestId("policy-period-chip")).toContainText("31 December");
+  // The insurance boundary line sits directly under the passport card (item 2).
+  await expect(passport.getByTestId("passport-boundary")).toContainText("does not decide what is covered");
   // The four sections, each with the fixture's own real lines — never a placeholder, and the
   // API agrees with what is shown.
   await expect(page.getByTestId("section-covers")).toContainText("Room and board at a panel hospital");
@@ -150,7 +157,32 @@ test("an ended policy: the passport's own quiet chip, computed by the backend fr
   await seedPolicy(request, pa, { renewal_date: "2026-01-01" }); // well before the frozen clock's day
   await signInAs(page, pa, "Pa");
   await openInsurance(page);
-  await expect(page.getByTestId("policy-passport").getByTestId("policy-period-chip")).toContainText("Ended");
+  // Never a claim that dates "in force" — the words say only that the dates have passed
+  // (independent review, fix round, item 1).
+  await expect(page.getByTestId("policy-passport").getByTestId("policy-period-chip")).toContainText("dates have passed");
+});
+
+test("a policy loaded from paper, printing only an end date (never a renewal date) is ended once that date has passed — the reviewer's own probe", async ({ page, request }) => {
+  // `ProposePolicy.tsx` always writes `renewal_date: null` and puts the printed end date in
+  // `ends_on` — before the fix, this combination read as `IN_FORCE` forever, a green chip
+  // beside a date years in the past (independent review, fix round, item 1's own probe:
+  // ends_on=2021-12-31, today=the frozen clock's 2026).
+  const pa = await openOwn(request);
+  await seedPolicy(request, pa, { renewal_date: null, ends_on: "2021-12-31" });
+  await signInAs(page, pa, "Pa");
+  await openInsurance(page);
+  const chip = page.getByTestId("policy-passport").getByTestId("policy-period-chip");
+  await expect(chip).toContainText("dates have passed");
+  await expect(chip).not.toContainText("in force");
+  await expect(chip).not.toHaveClass(/\bok\b/);
+});
+
+test("a policy with no end date and no renewal date on file draws no chip at all", async ({ page, request }) => {
+  const pa = await openOwn(request);
+  await seedPolicy(request, pa);
+  await signInAs(page, pa, "Pa");
+  await openInsurance(page);
+  await expect(page.getByTestId("policy-passport").getByTestId("policy-period-chip")).toHaveCount(0);
 });
 
 test("two policies: both shown, never merged into one card", async ({ page, request }) => {

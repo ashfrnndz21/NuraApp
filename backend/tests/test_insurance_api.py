@@ -116,11 +116,71 @@ async def test_a_policy_is_written_and_read_back_over_http(deployment: Deploymen
     assert held.status_code == 200, held.text
     assert [row["policy_id"] for row in held.json()] == [policy_id]
     assert held.json()[0]["insurer_name"] == "Great Eastern"
-    # No renewal date on file: the passport's quiet state chip (package 12a) reads "in force",
-    # computed server-side, never left for the client to guess from a free-text field.
-    assert held.json()[0]["period_state"] == "in_force"
-    assert held.json()[0]["period_state_said"] == "In force"
-    assert written.json()["period_state"] == "in_force"
+    # No end date and no renewal date on file: the passport's quiet state chip (package 12a)
+    # draws no chip at all — never "in force", a validity Nura cannot actually know
+    # (independent review, fix round, item 1) — computed server-side either way, never left
+    # for the client to guess from a free-text field.
+    assert held.json()[0]["period_state"] == "undated"
+    assert held.json()[0]["period_state_said"] == ""
+    assert held.json()[0]["period_state_date"] is None
+    assert written.json()["period_state"] == "undated"
+    assert held.json()[0]["essentials_cut"] == []
+
+
+async def test_a_policy_written_exactly_the_way_the_propose_sheet_writes_one_is_not_shown_as_running_past_its_printed_end_date(
+    deployment: Deployment,
+) -> None:
+    """The reviewer's own probe (independent review, fix round, item 1): `ProposePolicy.tsx`
+    always writes `renewal_date: null` and puts the printed end date in `ends_on` — a policy
+    written exactly that way, with an end date years in the past, must read as `ended`, never
+    `runs_to`/`in_force` forever."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    body = {
+        "insurer_name": "Great Eastern",
+        "policy_type": "hospital",
+        "status": "active",
+        "guarantee_letter": False,
+        "renewal_date": None,
+        "ends_on": "2021-12-31",
+    }
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations", json={"subject": "policy", **body}, headers=his
+    )
+    assert minted.status_code == 201, minted.text
+    written = await deployment.client.post(
+        f"/profiles/{profile_id}/insurance/policies",
+        json={**body, "confirmation_id": minted.json()["confirmation_id"]},
+        headers=his,
+    )
+    assert written.status_code == 201, written.text
+    assert written.json()["period_state"] == "ended"
+    assert written.json()["period_state_date"] == "2021-12-31"
+    held = await deployment.client.get(f"/profiles/{profile_id}/insurance/policies", headers=his)
+    assert held.json()[0]["period_state"] == "ended"
+
+
+async def test_a_far_future_end_date_is_refused(deployment: Deployment) -> None:
+    """A renewal or end date more than fifty years out is a misread digit, not a fact
+    (independent review, fix round, item 1)."""
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa, language="en")
+    his = bearer(pa["token"])
+    minted = await deployment.client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={
+            "subject": "policy",
+            "insurer_name": "Great Eastern",
+            "policy_type": "hospital",
+            "status": "active",
+            "guarantee_letter": False,
+            "ends_on": "2099-01-01",
+        },
+        headers=his,
+    )
+    assert minted.status_code == 400, minted.text
+    assert minted.json()["refusal"] == "NotAPolicy"
 
 
 async def test_a_narrower_key_is_refused_the_policy_routes_over_http(

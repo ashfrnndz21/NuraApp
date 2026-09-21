@@ -1099,6 +1099,7 @@ CLASSES: dict[str, str] = {
     "policy.waiting_period": IDENTIFIER,
     "policy.claims_contact": IDENTIFIER,
     "policy.review_card_id": IDENTIFIER,
+    "policy.essentials_cut": OPERATIONAL,
     # A claim names a policy and a visit, both identifiers by the same rule, and carries the
     # insurer's own claim number on the same terms as a policy reference.
     "insurance_claim.id": IDENTIFIER,

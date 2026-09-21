@@ -680,10 +680,14 @@ class InsurerConfirmIn(BaseModel):
 
 class PolicyEssentialItemIn(BaseModel):
     """One line of what a policy covers, does not cover, a benefit, or a step to claim —
-    the same shape `app.insurance.policy.EssentialItem` keeps once confirmed."""
+    the same shape `app.insurance.policy.EssentialItem` keeps once confirmed. `page` is
+    bounded (independent review, package 12a fix round, item 8): a real policy is a few
+    hundred pages at most, so `le=2000` is generous headroom, never a real page number this
+    far out — the same bound `app.channels.api.insurance_schemas.EssentialItemIn` keeps for
+    the policy-write route's own input."""
 
     text: str = Field(min_length=1, max_length=200)
-    page: int | None = None
+    page: int | None = Field(default=None, ge=1, le=2000)
 
 
 class PolicyConfirmIn(BaseModel):

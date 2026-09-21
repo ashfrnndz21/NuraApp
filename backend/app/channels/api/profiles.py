@@ -150,6 +150,7 @@ from app.notes.service import list_notes, write_note
 from app.reasoning.visits.logistics import drive_draft_for
 from app.reasoning.visits.questions import question_draft_for
 from app.reasoning.visits.summary import summary_draft_for
+from app.regions import REGION_TZ
 from app.routines.service import routine_draft_for
 from app.safety.boundary import Surface, boundary_line
 from app.state.service import current_state
@@ -464,6 +465,7 @@ async def mint_confirmation(
             waiting_period=body.waiting_period,
             claims_contact=body.claims_contact,
             review_card_id=body.review_card_id,
+            today=utcnow().astimezone(REGION_TZ[context.region]).date(),
         )
         return ConfirmationOut.of(await confirm(session, context, policy))
     if isinstance(body, InsuranceClaimConfirmIn):

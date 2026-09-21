@@ -559,6 +559,10 @@ class PolicyDraft:
     waiting_period: str | None = None
     claims_contact: str | None = None
     review_card_id: uuid.UUID | None = None
+    # Which of the four essentials lists above were actually cut at `ESSENTIAL_LIST_CAP`
+    # (`app.insurance.policy._clean_essentials`) — computed from the same lists this draft
+    # already carries, so it is bound by the same yes rather than a separate, untrusted claim.
+    essentials_cut: tuple[str, ...] = ()
 
     @property
     def confirm_subject(self) -> ConfirmSubject:
@@ -590,6 +594,7 @@ class PolicyDraft:
             "waiting_period": self.waiting_period,
             "claims_contact": self.claims_contact,
             "review_card_id": self.review_card_id,
+            "essentials_cut": self.essentials_cut,
         }
 
 

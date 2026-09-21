@@ -1138,6 +1138,8 @@ export const ms = {
     },
     // @patient
     covers: "Ia melindungi {value}.",
+    // @patient phrase
+    covered: "Untuk {value}.",
     // @patient
     renews: "Ia diperbaharui pada {date}.",
     // @patient
@@ -1151,7 +1153,7 @@ export const ms = {
       // @patient phrase
       excludesTitle: "Apa yang tidak dilindungi",
       // @patient phrase
-      benefitsTitle: "Manfaat dan had anda",
+      benefitsTitle: "Manfaat dan had",
       // @patient phrase
       claimTitle: "Cara membuat tuntutan",
       // @patient
@@ -1202,6 +1204,12 @@ export const ms = {
       confirmSafety: ["Nura menunjukkan apa yang polisi itu kata.", "Ia tidak menentukan apa yang dilindungi.", "Ini bukan nasihat kewangan."],
       // @patient phrase
       fixSomething: "Betulkan sesuatu",
+      // @patient
+      essentialsCutNotice: ["Nura membaca {n} baris pertama bahagian ini.", "Mungkin ada lagi pada polisi itu."],
+      // @patient phrase
+      waitingPeriodLabel: "Tempoh menunggu: {text}",
+      // @patient phrase
+      typedLabel: "Seperti yang ditaip",
     },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.

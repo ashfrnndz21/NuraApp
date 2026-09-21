@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LedgerOut, PolicyOut } from "../../src/api/types";
 import { PolicyPassport } from "../../src/insurance/PolicyPassport";
 import { stringsFor } from "../../src/strings";
-import { all, byTestId, render, text } from "./ui/render";
+import { all, byTestId, hasClass, render, text } from "./ui/render";
 
 // `PolicyPassport` and everything it composes (`Reveal`, `RevealGroup`, `Glass`, `Flag`) are
 // hookless (`web/src/ui/kit`'s own documented rule), so the app's existing prop-in/output-data
@@ -27,13 +27,15 @@ function policy(over: Partial<PolicyOut> = {}): PolicyOut {
     supersedes_id: null,
     set_by_person_id: "person-1",
     set_at: "2026-09-13T00:00:00Z",
-    period_state: "in_force",
-    period_state_said: "In force",
+    period_state: "undated",
+    period_state_said: "",
+    period_state_date: null,
     plan: null,
     coverage_items: [],
     excludes: [],
     benefits: [],
     claim_steps: [],
+    essentials_cut: [],
     ends_on: null,
     waiting_period: null,
     claims_contact: null,
@@ -245,5 +247,92 @@ describe("PolicyPassport — section composition", () => {
   it("no claims filed this year: no claimed-so-far tiles invented, never a zero shown as fact", () => {
     const out = render(<PolicyPassport policy={policy()} ledger={ledger()} testId="passport" />);
     expect(all(out, byTestId("policy-stats")).length).toBe(0);
+  });
+
+  // Independent review (package 12a fix round, item 1): never a chip claiming cover is
+  // currently valid — a neutral chip naming the date, an attention chip once it has passed,
+  // and no chip at all when nothing on file says a date.
+  it("no chip at all when the policy has no end date and no renewal date on file", () => {
+    const out = render(<PolicyPassport policy={policy({ period_state: "undated", period_state_said: "" })} ledger={null} testId="passport" />);
+    expect(all(out, byTestId("policy-period-chip")).length).toBe(0);
+  });
+
+  it("a neutral (not green) chip when the policy runs to a date still ahead", () => {
+    const out = render(<PolicyPassport policy={policy({ period_state: "runs_to", period_state_said: "The policy says it runs to 31 December 2026" })} ledger={null} testId="passport" />);
+    const chip = all(out, byTestId("policy-period-chip"))[0]!;
+    expect(hasClass("question")(chip)).toBe(true);
+    expect(hasClass("attention")(chip)).toBe(false);
+    expect(text(chip)).toBe("The policy says it runs to 31 December 2026");
+  });
+
+  it("an attention chip once the date on file has passed", () => {
+    const out = render(<PolicyPassport policy={policy({ period_state: "ended", period_state_said: "The policy's dates have passed" })} ledger={null} testId="passport" />);
+    const chip = all(out, byTestId("policy-period-chip"))[0]!;
+    expect(hasClass("attention")(chip)).toBe(true);
+  });
+
+  it("the period line reads the SAME date the chip was computed from, never a second read of ends_on", () => {
+    // ends_on itself is in the past, but period_state_date (what the backend actually used)
+    // is the future renewal_date — the period line must follow period_state_date, not ends_on.
+    const out = render(
+      <PolicyPassport
+        policy={policy({ start_date: "2026-01-01", ends_on: "2020-01-01", renewal_date: "2027-03-03", period_state: "runs_to", period_state_date: "2027-03-03", period_state_said: "The policy says it runs to 3 March 2027" })}
+        ledger={null}
+        testId="passport"
+      />,
+    );
+    const card = all(out, byTestId("passport"))[0]!;
+    expect(text(card)).not.toContain("2020");
+  });
+
+  // Independent review, item 3: a pre-existing policy with a typed "covers" and no essentials
+  // at all (every policy written before this package, or typed by hand) must show its own real
+  // words, never the "not found" fallback — and the card itself carries covered/status/the next
+  // payment date, the fields the first pass's tile once showed and this pass dropped.
+  it("a pre-existing typed policy with no essentials shows its own typed words, never the fallback", () => {
+    const out = render(
+      <PolicyPassport
+        policy={policy({ covers: "Hospital stays, up to $500 a day.", covered: "Pa and Mum", premium_due_date: "2027-01-15" })}
+        ledger={null}
+        testId="passport"
+      />,
+    );
+    const coversSection = all(out, byTestId("section-covers"))[0]!;
+    expect(text(coversSection)).toContain("Hospital stays, up to $500 a day.");
+    expect(all(out, byTestId("section-covers")).flatMap((el) => all(el, byTestId("section-not-found"))).length).toBe(0);
+    const card = all(out, byTestId("passport"))[0]!;
+    expect(text(card)).toContain("Pa and Mum");
+    expect(text(card)).toContain(s.insurance.status.active);
+  });
+
+  it("'Benefits and limits' is never second-person — correct read to him or about him alike", () => {
+    const out = render(<PolicyPassport policy={policy()} ledger={null} testId="passport" />);
+    expect(text(out)).toContain("Benefits and limits");
+    expect(text(out)).not.toContain("Your benefits");
+  });
+
+  // Independent review, item 2: the boundary line sits directly under the passport card, the
+  // same words the confirmation card already shows — never only at the foot of a long scroll.
+  it("the insurance boundary line is on the passport itself", () => {
+    const out = render(<PolicyPassport policy={policy()} ledger={null} testId="passport" />);
+    const boundary = all(out, byTestId("passport-boundary"))[0]!;
+    expect(text(boundary)).toBe(s.insurance.passport.confirmSafety.join(" "));
+  });
+
+  // Independent review, item 4: a section a write actually cut shows the notice — never
+  // inferred from the rendered list's own length.
+  it("the truncation notice shows only under a section the backend actually cut", () => {
+    const items = Array.from({ length: 12 }, (_, i) => ({ text: `Line ${i + 1}`, page: null }));
+    const out = render(<PolicyPassport policy={policy({ coverage_items: items, excludes: items, essentials_cut: ["coverage_items"] })} ledger={null} testId="passport" />);
+    const coversSection = all(out, byTestId("section-covers"))[0]!;
+    const excludesSection = all(out, byTestId("section-excludes"))[0]!;
+    expect(all(coversSection.children, byTestId("covers-cut-notice")).length).toBe(1);
+    expect(all(excludesSection.children, byTestId("excludes-cut-notice")).length).toBe(0);
+  });
+
+  it("no truncation notice when a list exactly fills the cap without actually being cut", () => {
+    const items = Array.from({ length: 12 }, (_, i) => ({ text: `Line ${i + 1}`, page: null }));
+    const out = render(<PolicyPassport policy={policy({ coverage_items: items, essentials_cut: [] })} ledger={null} testId="passport" />);
+    expect(all(out, byTestId("covers-cut-notice")).length).toBe(0);
   });
 });

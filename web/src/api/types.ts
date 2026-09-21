@@ -639,8 +639,10 @@ export type PolicyType = "hospital" | "outpatient" | "critical_illness" | "gover
 export type PolicyStatus = "active" | "lapsed" | "cancelled";
 /** The passport's own quiet state chip (package 12a, E13-04): computed server-side on the
  *  profile's own wall-clock day (`app.insurance.policy.policy_period_state`) — never inferred
- *  here from `renewal_date` and the device's own clock. */
-export type PolicyPeriodState = "in_force" | "ends_on" | "ended";
+ *  here from `renewal_date`/`ends_on` and the device's own clock, and never a claim that cover
+ *  is currently valid: `runs_to` says only what the date on file says, `ended` only that it
+ *  has passed, `undated` draws no chip at all. */
+export type PolicyPeriodState = "runs_to" | "ended" | "undated";
 
 /** One line of what a policy covers, does not cover, a benefit, or a step to claim — exactly
  *  as its own pages print it, with the page it was read on (package 12a). Extractor-written
@@ -670,6 +672,11 @@ export interface PolicyOut {
   set_at: string;
   period_state: PolicyPeriodState;
   period_state_said: string;
+  /** The one date `period_state`/`period_state_said` were computed from (`ends_on` when the
+   *  policy prints one, else `renewal_date`) — the passport's own period line reads the SAME
+   *  date from here, never recombining `start_date`/`ends_on` itself (independent review,
+   *  note 9: the chip and the card once showed two different dates for the same policy). */
+  period_state_date: string | null;
   /** The plan's own name, exactly as printed ("Hospital Shield") — its own field, never
    *  folded into `covers`. */
   plan: string | null;
@@ -680,6 +687,10 @@ export interface PolicyOut {
   excludes: EssentialItemOut[];
   benefits: EssentialItemOut[];
   claim_steps: EssentialItemOut[];
+  /** Which of the four lists above this policy's own write actually cut at the backend's own
+   *  cap — empty when none were, never inferred here from a list's own length (independent
+   *  review, item 4). */
+  essentials_cut: string[];
   ends_on: string | null;
   waiting_period: string | null;
   claims_contact: string | null;

@@ -3,7 +3,7 @@ import type { EssentialItemOut, LedgerOut, PolicyOut } from "../api/types";
 import { paperDate } from "../onboarding/dates";
 import { fill, language, LOCALE, t } from "../strings";
 import { Flag, Glass, PillButton, Reveal, RevealGroup } from "../ui/kit";
-import { claimsForPolicy, sanitizeDisplayText, splitBenefitLine, totalsForPolicy } from "./model";
+import { claimsForPolicy, ESSENTIAL_LIST_CAP, sanitizeDisplayText, splitBenefitLine, totalsForPolicy } from "./model";
 
 const ESSENTIALS_SHOWN_FIRST = 5;
 
@@ -42,6 +42,19 @@ function PageMark({ page, pageMarker }: { page: number | null; pageMarker: strin
     <small class="insurance-page" data-testid="essential-page">
       {fill(pageMarker, { page })}
     </small>
+  );
+}
+
+/** The silent-truncation notice (independent review, package 12a fix round, item 4): shown
+ *  under exactly the section a write actually cut at the backend's own cap
+ *  (`PolicyOut.essentials_cut`) — never inferred here from a list's own length, since a
+ *  policy that prints exactly twelve lines would be indistinguishable from one that printed
+ *  forty. Two short lines, never one two-idea sentence (plain-words rule 2). */
+function CutNotice({ n, lines, testId }: { n: number; lines: readonly [string, string]; testId: string }): JSX.Element {
+  return (
+    <p class="insurance-cut-notice" data-testid={testId}>
+      {fill(lines[0], { n })} {lines[1]}
+    </p>
   );
 }
 
@@ -104,13 +117,22 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
   const p = s.insurance.passport;
   const totals = totalsForPolicy(ledger, policy.policy_id);
   const claims = claimsForPolicy(ledger, policy.policy_id);
-  const chipState = policy.period_state === "ended" ? "attention" : "ok";
+  // Never a claim that cover is currently valid (independent review, item 1): `runs_to` is a
+  // neutral "question" chip naming the date, `ended` is the one attention chip, and `undated`
+  // draws no chip at all — nothing on file to say a date about.
+  const chipState = policy.period_state === "ended" ? "attention" : policy.period_state === "runs_to" ? "question" : null;
   const plan = policy.plan ? sanitizeDisplayText(policy.plan, 120) : null;
+  const covers = policy.covers ? sanitizeDisplayText(policy.covers, 400) : null;
+  const covered = policy.covered ? sanitizeDisplayText(policy.covered, 120) : null;
+  const cut = new Set(policy.essentials_cut);
 
   const locale = LOCALE[language.value];
+  // The period line reads the SAME date the chip was computed from (`period_state_date`),
+  // never `ends_on` read independently a second time (independent review, note 9: the two
+  // once showed different dates for the same policy).
   const periodParts: string[] = [];
   if (policy.start_date) periodParts.push(fill(p.periodFrom, { date: paperDate(policy.start_date, locale) }));
-  if (policy.ends_on) periodParts.push(fill(p.periodTo, { date: paperDate(policy.ends_on, locale) }));
+  if (policy.period_state_date) periodParts.push(fill(p.periodTo, { date: paperDate(policy.period_state_date, locale) }));
   const period = periodParts.length > 0 ? periodParts.join(" ") : null;
 
   return (
@@ -119,15 +141,20 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
         <Glass shape="card">
           <div class="insurance-passport-head">
             <h2>{policy.insurer_name}</h2>
-            <Flag state={chipState} testId="policy-period-chip">
-              {policy.period_state_said}
-            </Flag>
+            {chipState && (
+              <Flag state={chipState} testId="policy-period-chip">
+                {policy.period_state_said}
+              </Flag>
+            )}
           </div>
           {plan && <p class="insurance-passport-sub">{plan}</p>}
           <p class="insurance-passport-sub">{s.insurance.type[policy.policy_type]}</p>
+          <p class="insurance-passport-sub">{s.insurance.status[policy.status]}</p>
           {period && <p class="insurance-passport-sub">{period}</p>}
           {policy.policy_reference && <p class="insurance-passport-sub">{fill(s.insurance.reference, { reference: sanitizeDisplayText(policy.policy_reference, 40) })}</p>}
-          {policy.waiting_period && <p class="insurance-passport-sub">{sanitizeDisplayText(policy.waiting_period, 200)}</p>}
+          {policy.premium_due_date && <p class="insurance-passport-sub">{fill(s.insurance.premiumDue, { date: paperDate(policy.premium_due_date, locale) })}</p>}
+          {covered && <p class="insurance-passport-sub">{fill(s.insurance.covered, { value: covered })}</p>}
+          {policy.waiting_period && <p class="insurance-passport-sub">{fill(p.waitingPeriodLabel, { text: sanitizeDisplayText(policy.waiting_period, 200) })}</p>}
           {totals && (
             <div class="insurance-stats" data-testid="policy-stats">
               <div>
@@ -152,28 +179,54 @@ export function PolicyPassport({ policy, ledger, onSeeItself, testId }: { policy
         </Glass>
       </Reveal>
 
+      {/* The insurance boundary line (independent review, item 2): directly under the
+       *  passport card, not at the foot of a long scroll — the same words the confirmation
+       *  card already shows, since this passport is what a frightened person reads as Nura's
+       *  own answer about his cover. */}
+      <p class="insurance-boundary" data-testid="passport-boundary">
+        {s.insurance.passport.confirmSafety.join(" ")}
+      </p>
+
       <RevealGroup gap={140} className="insurance-sections">
         <Section title={p.coversTitle} testId="section-covers">
           {policy.coverage_items.length > 0 ? (
-            <EssentialsList items={policy.coverage_items} testId="covers-list" showAllN={p.showAllN} pageMarker={p.pageMarker} />
+            <>
+              <EssentialsList items={policy.coverage_items} testId="covers-list" showAllN={p.showAllN} pageMarker={p.pageMarker} />
+              {cut.has("coverage_items") && <CutNotice n={ESSENTIAL_LIST_CAP} lines={p.essentialsCutNotice} testId="covers-cut-notice" />}
+            </>
+          ) : covers ? (
+            <p data-testid="covers-typed-section">
+              {covers} <small class="insurance-page">{p.typedLabel}</small>
+            </p>
           ) : (
             <Fallback lines={p.notFound} />
           )}
         </Section>
         <Section title={p.excludesTitle} testId="section-excludes">
           {policy.excludes.length > 0 ? (
-            <EssentialsList items={policy.excludes} testId="excludes-list" showAllN={p.showAllN} pageMarker={p.pageMarker} />
+            <>
+              <EssentialsList items={policy.excludes} testId="excludes-list" showAllN={p.showAllN} pageMarker={p.pageMarker} />
+              {cut.has("excludes") && <CutNotice n={ESSENTIAL_LIST_CAP} lines={p.essentialsCutNotice} testId="excludes-cut-notice" />}
+            </>
           ) : (
             <Fallback lines={p.notFound} />
           )}
         </Section>
         <Section title={p.benefitsTitle} testId="section-benefits">
-          {policy.benefits.length > 0 ? <BenefitsList items={policy.benefits} testId="benefits-list" pageMarker={p.pageMarker} /> : <Fallback lines={p.notFound} />}
+          {policy.benefits.length > 0 ? (
+            <>
+              <BenefitsList items={policy.benefits} testId="benefits-list" pageMarker={p.pageMarker} />
+              {cut.has("benefits") && <CutNotice n={ESSENTIAL_LIST_CAP} lines={p.essentialsCutNotice} testId="benefits-cut-notice" />}
+            </>
+          ) : (
+            <Fallback lines={p.notFound} />
+          )}
         </Section>
         <Section title={p.claimTitle} testId="section-claim">
           {policy.claim_steps.length > 0 || policy.guarantee_letter || policy.claims_contact ? (
             <>
               {policy.claim_steps.length > 0 && <EssentialsList items={policy.claim_steps} testId="claim-steps-list" showAllN={p.showAllN} pageMarker={p.pageMarker} ordered />}
+              {cut.has("claim_steps") && <CutNotice n={ESSENTIAL_LIST_CAP} lines={p.essentialsCutNotice} testId="claim-steps-cut-notice" />}
               {policy.guarantee_letter && <p>{p.worksByGuaranteeLetter}</p>}
               {policy.claims_contact && (
                 <p data-testid="claims-contact">

@@ -1138,6 +1138,8 @@ export const en = {
     },
     // @patient
     covers: "It covers {value}.",
+    // @patient phrase
+    covered: "For {value}.",
     // @patient
     renews: "It renews on {date}.",
     // @patient
@@ -1151,7 +1153,7 @@ export const en = {
       // @patient phrase
       excludesTitle: "What it does not cover",
       // @patient phrase
-      benefitsTitle: "Your benefits and limits",
+      benefitsTitle: "Benefits and limits",
       // @patient phrase
       claimTitle: "How to claim",
       // @patient
@@ -1202,6 +1204,12 @@ export const en = {
       confirmSafety: ["Nura shows what the policy says.", "It does not decide what is covered.", "This is not financial advice."],
       // @patient phrase
       fixSomething: "Fix something",
+      // @patient
+      essentialsCutNotice: ["Nura read the first {n} lines of this section.", "There may be more on the policy."],
+      // @patient phrase
+      waitingPeriodLabel: "Waiting time: {text}",
+      // @patient phrase
+      typedLabel: "As typed",
     },
   },
   // The visit day (E05-03, E05-04): the logistics card, the recording, the clips.

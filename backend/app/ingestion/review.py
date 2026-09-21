@@ -566,6 +566,52 @@ def _capped_pill_fields(
     ]
 
 
+_INSURANCE_ESSENTIAL_ATTRIBUTE = re.compile(r"^(covers|excludes|benefit|claim_step)_\d+$")
+
+_ADVICE_LANGUAGE_TOKENS: tuple[str, ...] = (
+    # English
+    "you are covered", "you're covered", "you will get", "you'll get", "you can claim",
+    "entitled to", "should", "we recommend", "likely", "probably",
+    # Malay
+    "anda dilindungi", "anda akan mendapat", "anda boleh menuntut", "berhak",
+    "sepatutnya", "kami mengesyorkan", "berkemungkinan", "mungkin",
+    # Chinese
+    "您已受保", "你已受保", "您将获得", "您可以索赔", "有权获得", "我们建议", "可能",
+)
+"""A policy essentials line that reads like Nura's own advice about his cover ("you are
+covered up to S$150,000", "you should claim within 30 days") rather than the paper's own
+printed words (independent review, package 12a fix round, item 5). A heuristic word list
+across English, Malay and Chinese, since the paper itself may print in any of the three —
+never a refusal, only a flag: a false positive only asks him to check the line again."""
+
+
+def _carries_advice_language(text: str) -> bool:
+    lowered = text.lower()
+    return any(token in lowered or token in text for token in _ADVICE_LANGUAGE_TOKENS)
+
+
+def _flagged_insurance_essentials(
+    fields: Sequence[ExtractedField], document_kind: DocumentKind
+) -> list[ExtractedField]:
+    """Every `covers_N`/`excludes_N`/`benefit_N`/`claim_step_N` line that carries advice
+    language is held below `CONFIDENCE_THRESHOLD` so the card's own `needs_confirm` catches it
+    (`app.ingestion.models.ReviewField.needs_confirm`) — "Check this one", the same as any
+    other field Nura is unsure of, never a silent pass-through and never a refusal: a false
+    positive is still his own paper's words once he confirms it anyway. Only on an
+    `insurance_policy` (`DocumentKind.INSURANCE_POLICY`); every other kind is returned
+    unchanged."""
+    if document_kind is not DocumentKind.INSURANCE_POLICY:
+        return list(fields)
+    return [
+        replace(field, confidence=min(field.confidence, CONFIDENCE_THRESHOLD - 0.01))
+        if _INSURANCE_ESSENTIAL_ATTRIBUTE.match(field.attribute)
+        and isinstance(field.value, str)
+        and _carries_advice_language(field.value)
+        else field
+        for field in fields
+    ]
+
+
 async def card_from(
     session: AsyncSession,
     *,
@@ -592,6 +638,7 @@ async def card_from(
         fields = list(fold_legacy_reference_ranges(fields))
     if extraction.document_kind is DocumentKind.PILL_PHOTO:
         fields = _capped_pill_fields(fields, registry)
+    fields = _flagged_insurance_essentials(fields, extraction.document_kind)
     named = next(
         (field.value for field in fields if (field.subject, field.attribute) == MEDICINE_NAME),
         None,

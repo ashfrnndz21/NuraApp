@@ -36,8 +36,29 @@ async function openInsurance(page: Page): Promise<void> {
   await expect(page.getByTestId("insurance-screen")).toBeVisible();
 }
 
-async function seedPolicy(request: APIRequestContext, pa: Papers, over: Partial<{ insurer_name: string; renewal_date: string | null; status: string }> = {}): Promise<string> {
-  const body = { insurer_name: over.insurer_name ?? "Great Eastern", policy_type: "hospital", status: over.status ?? "active", guarantee_letter: false, renewal_date: over.renewal_date ?? null };
+async function seedPolicy(
+  request: APIRequestContext,
+  pa: Papers,
+  over: Partial<{
+    insurer_name: string;
+    renewal_date: string | null;
+    ends_on: string | null;
+    status: string;
+    covers: string | null;
+    coverage_items: { text: string; page: number | null }[];
+  }> = {},
+): Promise<string> {
+  const body = {
+    insurer_name: over.insurer_name ?? "Great Eastern",
+    policy_type: "hospital",
+    status: over.status ?? "active",
+    guarantee_letter: false,
+    renewal_date: over.renewal_date ?? null,
+    ends_on: over.ends_on ?? null,
+    covers: over.covers ?? null,
+    covered: over.covers ? "Pa and Mum" : null,
+    coverage_items: over.coverage_items ?? [],
+  };
   const confirmation_id = await yes(request, pa.token, pa.profileId, { subject: "policy", ...body });
   const written = await request.post(`${API}/profiles/${pa.profileId}/insurance/policies`, { ...auth(pa.token), data: { ...body, confirmation_id } });
   expect(written.status(), await written.text()).toBe(201);
@@ -143,5 +164,48 @@ for (const size of SIZES) {
     await expect(meiPage.getByTestId("policy-passport")).toBeVisible();
     await snap(meiPage, size, "8-mei-caregiver");
     await meiCtx.close();
+
+    // 9. A policy loaded from paper, ends_on only (never renewal_date) — the reviewer's own
+    // probe (independent review, fix round, item 1): a chip that once read "in force" forever.
+    const paPaperEnded = await openOwn(request, "Uncle Tan");
+    await seedPolicy(request, paPaperEnded, { renewal_date: null, ends_on: "2021-12-31" });
+    const paperEndedCtx = await browser.newContext({ viewport: { width: size.width, height: size.height }, timezoneId: "Asia/Singapore" });
+    const paperEndedPage = await paperEndedCtx.newPage();
+    await fixClock(paperEndedPage);
+    await phone(paperEndedPage, size);
+    await signInAs(paperEndedPage, paPaperEnded, "Uncle Tan");
+    await openInsurance(paperEndedPage);
+    await expect(paperEndedPage.getByTestId("policy-passport")).toBeVisible();
+    await snap(paperEndedPage, size, "9-ended-from-paper-date");
+    await paperEndedCtx.close();
+
+    // 10. A pre-existing typed policy: `covers` in his own words, no essentials at all — every
+    // policy written before this package, or typed by hand (independent review, item 3).
+    const paTyped = await openOwn(request, "Pa Typed");
+    await seedPolicy(request, paTyped, { covers: "Hospital stays, up to $500 a day." });
+    const typedCtx = await browser.newContext({ viewport: { width: size.width, height: size.height }, timezoneId: "Asia/Singapore" });
+    const typedPage = await typedCtx.newPage();
+    await fixClock(typedPage);
+    await phone(typedPage, size);
+    await signInAs(typedPage, paTyped, "Pa Typed");
+    await openInsurance(typedPage);
+    await expect(typedPage.getByTestId("policy-passport")).toBeVisible();
+    await snap(typedPage, size, "10-pre-existing-typed-policy");
+    await typedCtx.close();
+
+    // 11. A list cut at 12: the silent-truncation notice (independent review, item 4).
+    const paCut = await openOwn(request, "Pa Cut");
+    await seedPolicy(request, paCut, {
+      coverage_items: Array.from({ length: 15 }, (_, i) => ({ text: `Covered item number ${i + 1}`, page: 2 })),
+    });
+    const cutCtx = await browser.newContext({ viewport: { width: size.width, height: size.height }, timezoneId: "Asia/Singapore" });
+    const cutPage = await cutCtx.newPage();
+    await fixClock(cutPage);
+    await phone(cutPage, size);
+    await signInAs(cutPage, paCut, "Pa Cut");
+    await openInsurance(cutPage);
+    await expect(cutPage.getByTestId("policy-passport")).toBeVisible();
+    await snap(cutPage, size, "11-essentials-list-cut");
+    await cutCtx.close();
   });
 }

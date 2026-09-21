@@ -4,19 +4,28 @@
  * block, so this package's diff never touches a shared stylesheet another builder is also
  * editing tonight. */
 
-/* One quiet row: insurer name and the state chip, never crowded, never a second h1. */
+/* The insurer name, then the state chip on its own line below it (independent review, package
+ * 12a fix round: the chip went from a short word ("In force") to a full neutral clause ("The
+ * policy says it runs to {date}"), which overlapped a long insurer name when the two shared a
+ * row — a `flex-shrink: 0` pill (`.flag-chip`, the shared kit class every flag in the app
+ * uses) never yields width back to its row, so it sat on top of the heading instead of
+ * wrapping under it. Stacked, and given room to wrap onto a second line itself, it never can
+ * again, whatever a policy's own dates say. */
 .insurance-passport-head {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 .insurance-passport-head h2 {
   margin: 0;
   font-size: var(--text-title);
   font-weight: var(--weight-title);
-  flex: 1;
-  min-width: 0;
+}
+.insurance-passport-head .flag-chip {
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
 }
 .insurance-passport-sub {
   margin: 0;
@@ -51,13 +60,24 @@
   opacity: 0.8;
 }
 
-/* Sections: "What it covers" / "What it does not cover" / "Your benefits and limits" /
+/* The insurance boundary line (independent review, item 2): 12px under the passport card,
+ * the same 12px a section's own heading already keeps above its card — never touching the
+ * card above it, never crowding the first section's heading below it. */
+.insurance-boundary {
+  margin: 12px 0 0;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
+}
+
+/* Sections: "What it covers" / "What it does not cover" / "Benefits and limits" /
  * "How to claim" — a heading, 12px above its card, 24px above the next section (the operator's
- * own two rejection notes: headings touching cards, and sections crowding each other). */
+ * own two rejection notes: headings touching cards, and sections crowding each other), and
+ * 12px under the boundary line above them (the operator's capture note on this round). */
 .insurance-sections {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  margin-top: 12px;
 }
 .insurance-section-title {
   margin: 0 0 12px;
@@ -231,4 +251,12 @@
   font-weight: 500;
   font-variant-numeric: var(--numeric);
   white-space: nowrap;
+}
+
+/* The silent-truncation notice (independent review, item 4): under the list it names, quiet
+ * but never hidden — the same "withheld, named" register `.insurance-fallback` already keeps. */
+.insurance-cut-notice {
+  margin: 8px 0 0;
+  font-size: var(--text-caption);
+  color: var(--ink-quiet);
 }

@@ -565,6 +565,7 @@ export interface Strings {
     type: Record<"hospital" | "outpatient" | "critical_illness" | "government_scheme", string>;
     status: Record<"active" | "lapsed" | "cancelled", string>;
     covers: string;
+    covered: string;
     renews: string;
     premiumDue: string;
     reference: string;
@@ -612,6 +613,21 @@ export interface Strings {
       /** "Fix something" — the report table's fix-hint pill, for a card with no numeric
        *  result rows at all (a policy, a letter), in place of "Fix a number". */
       fixSomething: string;
+      /** Two short lines, never one two-idea sentence (plain-words rule 2): "Nura read the
+       *  first {n} lines of this section." / "There may be more on the policy." — shown under
+       *  any essentials section a write actually cut at the backend's own cap
+       *  (`PolicyOut.essentials_cut`), and the same two lines again on the confirmation card
+       *  when any section would be cut once saved (independent review, package 12a fix round,
+       *  item 4) — never inferred from a list's own length. */
+      essentialsCutNotice: readonly [string, string];
+      /** "Waiting time: {text}" — the passport's own label for the printed waiting-period
+       *  line, so it reads as a labelled fact rather than a bare, unexplained sentence
+       *  (independent review, operator capture note). */
+      waitingPeriodLabel: string;
+      /** "As typed" — the small label under a covers/covered line shown from the policy's own
+       *  typed word (`Policy.covers`) rather than a paper's essentials list, so the two
+       *  sources are never confused for one another (independent review, item 3). */
+      typedLabel: string;
     };
   };
   /** The visit day (E05-03, E05-04, E02-05, E03-05): the Visit screen's own lines. The

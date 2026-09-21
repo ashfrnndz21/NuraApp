@@ -26,9 +26,13 @@ const EMPTY_SUGGESTED = {
   waitingPeriod: null,
   claimsContact: null,
   coverageItems: [],
+  coverageItemsCut: false,
   excludes: [],
+  excludesCut: false,
   benefits: [],
+  benefitsCut: false,
   claimSteps: [],
+  claimStepsCut: false,
 };
 
 /** The compact one-row header (item 7, the fix for the ~290px of chrome the first pass burned

@@ -4,11 +4,11 @@ import * as nura from "../api/nura";
 import type { PolicyOut, PolicyType } from "../api/types";
 import { fieldLabel } from "../onboarding/review";
 import { session } from "../screens/record/parts";
-import { t } from "../strings";
+import { fill, t } from "../strings";
 import { Notice } from "../ui/components";
 import { ActionSheet, PillButton } from "../ui/kit";
 import type { ConfirmedPolicyFields } from "./model";
-import { sanitizeDisplayText } from "./model";
+import { anyEssentialsCut, ESSENTIAL_LIST_CAP, sanitizeDisplayText } from "./model";
 
 const POLICY_TYPES: readonly PolicyType[] = ["hospital", "outpatient", "critical_illness", "government_scheme"];
 
@@ -135,6 +135,11 @@ export function ProposePolicySheet({
         {counts.length > 0 && (
           <p class="caption" data-testid="propose-essentials-count">
             {counts.join(" · ")}
+          </p>
+        )}
+        {anyEssentialsCut(suggested) && (
+          <p class="caption" data-testid="propose-essentials-cut-notice">
+            {fill(p.essentialsCutNotice[0], { n: ESSENTIAL_LIST_CAP })} {p.essentialsCutNotice[1]}
           </p>
         )}
 
