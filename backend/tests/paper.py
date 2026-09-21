@@ -52,6 +52,13 @@ beside an ordinary lipid row and a header field, 10 September 2026."""
 LAB_REPORT_RED_FLAG = "lab-report-red-flag-2026-09-11"
 """A lab report whose facility remark names a red-flag word, 11 September 2026."""
 
+METABOLIC_PANEL = "metabolic-panel-2026-09-18"
+"""A wider metabolic panel, 18 September 2026: the controlled vocabulary added for defect #1
+(kidney_panel, blood_test, liver_panel), a result's own printed `range` in the current shape
+(defect #3, not a legacy `_reference_range` sibling), an analyte with no printed range at all,
+and one line outside the vocabulary read as `other` with `label_on_paper` (defect #1's escape
+hatch)."""
+
 CLINIC_LETTER_HYPERTENSION = "clinic-letter-hypertension-2026-09-12"
 """A clinic slip naming a condition in the clinician's own words, 12 September 2026."""
 

@@ -1503,6 +1503,8 @@ export const en = {
       fromPhoto: "From the photo you added on {date}.",
       // @patient phrase
       otherLine: "Another line on the paper",
+      // @patient
+      valueUnreadable: "Nura could not read this line.",
     },
     questions: {
       // @patient headline
@@ -1603,6 +1605,29 @@ export const en = {
         vldl: "Another blood fat number",
         tc_hdl_ratio: "The cholesterol ratio",
         non_hdl_cholesterol: "The cholesterol without the good part",
+      },
+      blood_test: {
+        hba1c: "Your sugar test",
+        haemoglobin: "Your blood count",
+        tsh: "Your thyroid test",
+        uric_acid: "Your uric acid number",
+        white_cells: "Your white blood cell number",
+        platelets: "Your platelet number",
+      },
+      kidney_panel: {
+        creatinine: "Your kidney number",
+        egfr: "Your kidney filter",
+        potassium: "Your body salt",
+        urea: "The waste number from your kidneys",
+        sodium: "The salt number in your blood",
+      },
+      liver_panel: {
+        alt: "One of your liver numbers",
+        ast: "Another of your liver numbers",
+        alp: "A liver and bone number",
+        ggt: "A liver and alcohol number",
+        bilirubin: "The yellow colour number",
+        albumin: "The protein number in your blood",
       },
       full_blood_count: { hemoglobin: "The blood count number" },
       device: { kind: "The machine" },

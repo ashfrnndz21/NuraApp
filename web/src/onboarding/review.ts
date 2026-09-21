@@ -1,4 +1,4 @@
-import type { DecisionIn, ReviewCardOut, ReviewFieldOut } from "../api/types";
+import type { DecisionIn, FieldRange, ReviewCardOut, ReviewFieldOut } from "../api/types";
 import { fill, type Strings } from "../strings";
 
 /** The capture review card (E02-07) as the onboarding records step shows it: what each line
@@ -15,19 +15,66 @@ export interface FieldEdit {
   leftOut: boolean;
 }
 
-/** The value as the paper has it, for the box. */
+/** The value as the paper has it, for the box: every shape the API can send — a number, a
+ *  string, a boolean, the `{instruction}` shape, an array, or any other small structure —
+ *  read as far down into it as there is anything to read. Empty only when there is truly
+ *  nothing readable in the value at all (`null`, `undefined`, or a wholly empty structure);
+ *  the review card never shows that as a blank line — it shows `readableValueText`'s own
+ *  words instead (E02 defect #2, "some lines showed NO value at all"). */
 export function valueText(value: unknown): string {
   if (typeof value === "number") return String(value);
   if (typeof value === "string") return value;
+  // Not localised: a boolean is rare here (a pill's "can it be split", say) and this
+  // function only ever renders the paper's own words, in no particular language — his own
+  // words for the field are `fieldLabel`'s job, in his language, not this one's.
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) {
+    return value
+      .map((each) => valueText(each))
+      .filter((each) => each.length > 0)
+      .join(" · ");
+  }
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-    if (typeof record.instruction === "string") return record.instruction;
+    if (typeof record.instruction === "string" && record.instruction.trim()) return record.instruction;
     return Object.values(record)
-      .filter((each): each is string | number => typeof each === "string" || typeof each === "number")
-      .map(String)
+      .map((each) => valueText(each))
+      .filter((each) => each.length > 0)
       .join(" · ");
   }
   return "";
+}
+
+/** `valueText`, or Nura's own words when there is nothing readable in the value at all: a
+ *  field the review card shows is never a blank line (E02 defect #2). Distinct from
+ *  `field.unreadable` (E02-02's own "Nura could not read this one, please type it"): this is
+ *  for a value that did come back from the extractor, just in a shape nothing here can turn
+ *  into readable text. */
+export function readableValueText(value: unknown, s: Strings): string {
+  const text = valueText(value);
+  return text.length > 0 ? text : s.onboarding.records.valueUnreadable;
+}
+
+/** Where a number sits against the paper's own printed range (never a judgement of ours,
+ *  and never the app's own guideline range, `app.reasoning.ranges` — only ever what this
+ *  paper prints beside this result): "under" is exclusive of an upper-only range, "or more"
+ *  is inclusive of a lower-only one, and a two-sided range is inclusive at both ends, the way
+ *  the paper prints them (matches `app.reasoning.ranges.Range.band_of`). `"unknown"` for
+ *  anything that is not a plain number, no range at all, or a range with neither bound
+ *  readable off its text (E02 defect #3). */
+export function rangeStatus(
+  value: unknown,
+  range: Pick<FieldRange, "low" | "high"> | null | undefined,
+): "above" | "below" | "in" | "unknown" {
+  if (typeof value !== "number" || !range) return "unknown";
+  const { low, high } = range;
+  if (low != null && high != null) {
+    if (value < low) return "below";
+    return value > high ? "above" : "in";
+  }
+  if (high != null) return value < high ? "in" : "above";
+  if (low != null) return value >= low ? "in" : "below";
+  return "unknown";
 }
 
 /** A number or a few words can be retyped, and a line Nura could not read must be; anything
@@ -94,10 +141,19 @@ export function decisionsFor(card: ReviewCardOut, edits: Record<string, FieldEdi
  *  `item_2`…) — every one of them shares one set of words (`s.onboarding.fields.item`). */
 const ITEM_SUBJECT = /^item_\d+$/;
 
-/** His words for the line, by the backend's subject and attribute codes; never the code. */
-export function fieldLabel(field: Pick<ReviewFieldOut, "subject" | "attribute">, s: Strings): string {
+/** His words for the line: the canonical label for the backend's subject and attribute codes
+ *  when Nura knows one; failing that, the paper's own words for the line (`label_on_paper` —
+ *  always given for a line outside the controlled vocabulary, `attribute === "other"`); only
+ *  when neither is there, a generic line name. Never the bare code either way. */
+export function fieldLabel(
+  field: Pick<ReviewFieldOut, "subject" | "attribute"> & { label_on_paper?: string | null },
+  s: Strings,
+): string {
   const subject = ITEM_SUBJECT.test(field.subject) ? "item" : field.subject;
-  return s.onboarding.fields[subject]?.[field.attribute] ?? s.onboarding.records.otherLine;
+  const known = s.onboarding.fields[subject]?.[field.attribute];
+  if (known) return known;
+  const printed = field.label_on_paper?.trim();
+  return printed && printed.length > 0 ? printed : s.onboarding.records.otherLine;
 }
 
 /** How sure Nura is, in words: the backend's own threshold (`needs_confirm`), never a percentage. */
@@ -178,6 +234,8 @@ export function readable(card: ReviewCardOut): boolean {
 export function spokenLine(field: ReviewFieldOut, s: Strings): string[] {
   const label = fieldLabel(field, s);
   if (field.unreadable) return [label, ...(field.prompt ?? [s.onboarding.records.typeIt])];
+  const text = valueText(field.value);
+  if (text.length === 0) return [label, s.onboarding.records.valueUnreadable, confidenceLine(field, s)];
   const unit = field.unit ? ` ${field.unit}` : "";
-  return [label, `${valueText(field.value)}${unit}`, confidenceLine(field, s)];
+  return [label, `${text}${unit}`, confidenceLine(field, s)];
 }

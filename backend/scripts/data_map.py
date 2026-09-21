@@ -302,6 +302,8 @@ CLASSES: dict[str, str] = {
     "review_field.unit": HEALTH,
     "review_field.confidence": OPERATIONAL,
     "review_field.span": OPERATIONAL,
+    "review_field.range": HEALTH,
+    "review_field.label_on_paper": HEALTH,
     "review_field.state": HEALTH,
     "review_field.corrected_value": HEALTH,
     "review_field.fact_id": HEALTH,

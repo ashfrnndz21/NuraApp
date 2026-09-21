@@ -1503,6 +1503,8 @@ export const zh = {
       fromPhoto: "来自您在 {date} 加的照片。",
       // @patient phrase
       otherLine: "文件上的另一行",
+      // @patient
+      valueUnreadable: "这一行 Nura 读不出来。",
     },
     questions: {
       // @patient headline
@@ -1601,6 +1603,29 @@ export const zh = {
         vldl: "另一个血脂数字",
         tc_hdl_ratio: "胆固醇的比例",
         non_hdl_cholesterol: "去掉好胆固醇后的胆固醇",
+      },
+      blood_test: {
+        hba1c: "您的血糖检查",
+        haemoglobin: "您的血色素",
+        tsh: "您的甲状腺检查",
+        uric_acid: "您的尿酸数字",
+        white_cells: "您的白血球数字",
+        platelets: "您的血小板数字",
+      },
+      kidney_panel: {
+        creatinine: "您的肾指数",
+        egfr: "您的肾过滤",
+        potassium: "您身体的盐",
+        urea: "肾脏排出的废物数字",
+        sodium: "血里的盐分数字",
+      },
+      liver_panel: {
+        alt: "您肝脏数字之一",
+        ast: "您另一个肝脏数字",
+        alp: "肝脏和骨头的数字",
+        ggt: "肝脏和酒精的数字",
+        bilirubin: "黄疸颜色数字",
+        albumin: "血里的蛋白质数字",
       },
       full_blood_count: { hemoglobin: "血液检查数字" },
       device: { kind: "这台机器" },

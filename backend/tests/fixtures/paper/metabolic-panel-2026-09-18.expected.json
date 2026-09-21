@@ -1,0 +1,14 @@
+{
+  "placeholder": "metabolic-panel-2026-09-18",
+  "note": "What the synthetic paper says, matching the fixture exactly: nothing here is a deliberate misread.",
+  "document_kind": "lab_report",
+  "fields": [
+    { "subject": "lab_report", "attribute": "facility", "value": "Bukit Lab", "unit": null },
+    { "subject": "kidney_panel", "attribute": "creatinine", "value": 95, "unit": "umol/L" },
+    { "subject": "kidney_panel", "attribute": "egfr", "value": 78, "unit": "mL/min/1.73m2" },
+    { "subject": "kidney_panel", "attribute": "potassium", "value": 4.2, "unit": "mmol/L" },
+    { "subject": "blood_test", "attribute": "hba1c", "value": 5.4, "unit": "%" },
+    { "subject": "liver_panel", "attribute": "alt", "value": 42, "unit": "U/L" },
+    { "subject": "lipid_panel", "attribute": "other", "value": "0.9", "unit": "g/L" }
+  ]
+}

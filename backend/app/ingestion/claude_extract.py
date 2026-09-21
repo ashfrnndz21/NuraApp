@@ -60,6 +60,7 @@ from app.ingestion.extract import (
     NotAFieldCode,
     NotAPage,
     NotAValue,
+    PrintedRange,
     Span,
 )
 from app.llm.blocks import answer_text
@@ -82,6 +83,31 @@ that was looked at."""
 _UNOPENABLE_TYPES = frozenset({"image/heic"})
 """Kinds the route accepts that this reader is never handed to the model at all."""
 
+_RANGE_SCHEMA: Final[dict[str, Any]] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["low", "high", "text"],
+    "properties": {
+        "low": {
+            "type": ["number", "null"],
+            "description": "The range's lower bound, only when the printed range is "
+            "unambiguous (e.g. '3.9 - 6.0' -> 3.9; '> 1.0' -> 1.0). Null when there is no "
+            "lower bound (e.g. '<150') or the text cannot be read as a number.",
+        },
+        "high": {
+            "type": ["number", "null"],
+            "description": "The range's upper bound, the same way (e.g. '<150' -> 150; "
+            "'3.9 - 6.0' -> 6.0). Null when there is no upper bound (e.g. '>1.0') or the text "
+            "cannot be read as a number.",
+        },
+        "text": {
+            "type": "string",
+            "description": "The reference range exactly as printed on the page, e.g. "
+            "'3.9 - 6.0 mmol/L', '<150', or 'Negative'.",
+        },
+    },
+}
+
 _FIELD_SCHEMA: Final[dict[str, Any]] = {
     "type": "object",
     "additionalProperties": False,
@@ -97,7 +123,8 @@ _FIELD_SCHEMA: Final[dict[str, Any]] = {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "description": "A short lower_snake_case code for the property read, e.g. 'name', "
-            "'strength', 'dose', 'ldl', 'systolic'.",
+            "'strength', 'dose', 'ldl', 'systolic'. 'other' when the line is genuinely outside "
+            "the vocabulary you were given — then label_on_paper is required.",
         },
         "value": {
             "type": ["string", "number", "boolean", "null"],
@@ -120,6 +147,17 @@ _FIELD_SCHEMA: Final[dict[str, Any]] = {
             "type": "integer",
             "description": "Which page of the document this field was read on, counting from "
             "1. A single photo is always 1.",
+        },
+        "range": {
+            **_RANGE_SCHEMA,
+            "description": "The reference range this result's own row also prints, if any "
+            "(a lab result's printed range belongs here, never as a field of its own). Omit "
+            "this property entirely when the row has no printed range.",
+        },
+        "label_on_paper": {
+            "type": ["string", "null"],
+            "description": "The words printed on the paper for this line, exactly as they "
+            "read. Required, and never null, when attribute is 'other'; optional otherwise.",
         },
     },
 }
@@ -204,6 +242,27 @@ def _span_of(entry: Mapping[str, Any]) -> Span | None:
     return Span(x0=0.0, y0=0.0, x1=1.0, y1=1.0, page=page)
 
 
+def _range_of(entry: Mapping[str, Any]) -> PrintedRange | None:
+    """The result's own printed range (E02, defect #3), when the model gave one on this field
+    directly — never invented, and never read from anywhere but the `range` property itself.
+    `None` where the model gave nothing, or gave a shape that cannot be trusted as one: the
+    field still reaches the card without a range, the same way a bad page or confidence does."""
+    raw = entry.get("range")
+    if not isinstance(raw, Mapping):
+        return None
+    low, high, text = raw.get("low"), raw.get("high"), raw.get("text")
+    low = float(low) if isinstance(low, int | float) and not isinstance(low, bool) else None
+    high = float(high) if isinstance(high, int | float) and not isinstance(high, bool) else None
+    if not isinstance(text, str):
+        text = ""
+    return PrintedRange(low=low, high=high, text=text)
+
+
+def _label_on_paper_of(entry: Mapping[str, Any]) -> str | None:
+    label = entry.get("label_on_paper")
+    return label if isinstance(label, str) else None
+
+
 def _field_from(entry: Mapping[str, Any]) -> ExtractedField | None:
     """One field of the model's answer, checked the way every extractor's fields are
     (`ExtractedField.checked`) — or None, when the model's answer for this one field cannot
@@ -223,6 +282,8 @@ def _field_from(entry: Mapping[str, Any]) -> ExtractedField | None:
             confidence=_confidence_of(entry),
             span=_span_of(entry),
             unreadable=unreadable,
+            range=_range_of(entry),
+            label_on_paper=_label_on_paper_of(entry),
         ).checked()
     except NotAFieldCode:
         # No trustworthy code to label the field with at all: nothing to show a person.
@@ -245,6 +306,7 @@ def _field_from(entry: Mapping[str, Any]) -> ExtractedField | None:
             confidence=0.0,
             span=None,
             unreadable=True,
+            label_on_paper=_label_on_paper_of(entry),
         ).checked()
 
 

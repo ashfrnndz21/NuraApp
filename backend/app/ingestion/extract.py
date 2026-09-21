@@ -27,7 +27,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from enum import StrEnum
 from pathlib import Path
@@ -145,6 +145,54 @@ VALUE_LENGTH = 200
 """The most a proposed value may hold, as canonical JSON. A value is a number, a date, a name
 or a short structure — never the page. The page is the artefact."""
 
+LABEL_ON_PAPER_LENGTH = 120
+"""The most `label_on_paper` may hold: the words printed beside one line, never a paragraph."""
+
+_RANGE_TWO_SIDED = re.compile(r"^(-?\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(-?\d+(?:\.\d+)?)")
+_RANGE_UPPER = re.compile(r"^(?:<\s*|under\s+|up to\s+|below\s+)(-?\d+(?:\.\d+)?)", re.IGNORECASE)
+_RANGE_LOWER = re.compile(
+    r"^(?:>\s*|over\s+|above\s+|at least\s+|or more\s+)(-?\d+(?:\.\d+)?)", re.IGNORECASE
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PrintedRange:
+    """A result's reference range, exactly as one row of a paper prints it (`text`), plus its
+    lower and upper bound as numbers where the text is unambiguous (E02, defect #3: "a
+    reference range arrives as a separate field instead of belonging to its result"). `low`/
+    `high` are `None` where the text has no such bound ("<150" has no low; "Negative" has
+    neither) or cannot be read as one — `text` itself is never touched, only ever the range
+    exactly as printed. Distinct from `app.reasoning.ranges.Range`, the app's own guideline
+    table looked up for the trend: this is only ever what the paper itself says."""
+
+    low: float | None
+    high: float | None
+    text: str
+
+    def as_json(self) -> dict[str, float | str | None]:
+        return {"low": self.low, "high": self.high, "text": self.text}
+
+
+def parse_printed_range(text: str) -> PrintedRange:
+    """The range exactly as printed, with its bounds read off it where they are unambiguous:
+    "<150" -> high 150; "> 1.0" -> low 1.0; "3.9 - 6.0" or "3.9-6.0" -> both; "Up to 40" -> high
+    40. Anything else — "Negative", an empty string, a range with no number the pattern
+    recognises — keeps its text with both bounds `None`: a range read wrong here shows as one
+    with no bar to compare against, never a wrong bar."""
+    raw = text.strip()
+    if not raw:
+        return PrintedRange(low=None, high=None, text=raw)
+    two_sided = _RANGE_TWO_SIDED.match(raw)
+    if two_sided:
+        return PrintedRange(low=float(two_sided.group(1)), high=float(two_sided.group(2)), text=raw)
+    upper = _RANGE_UPPER.match(raw)
+    if upper:
+        return PrintedRange(low=None, high=float(upper.group(1)), text=raw)
+    lower = _RANGE_LOWER.match(raw)
+    if lower:
+        return PrintedRange(low=float(lower.group(1)), high=None, text=raw)
+    return PrintedRange(low=None, high=None, text=raw)
+
 
 class NotAFieldCode(Refusal):
     """A subject or attribute is a short lower-case code. This was not one."""
@@ -201,6 +249,15 @@ class ExtractedField:
     confidence: float
     span: Span | None = None
     unreadable: bool = False
+    range: PrintedRange | None = None
+    """The result's own printed reference range, when the row on the paper carries one
+    (defect #3). Never present for a field that is not itself a result."""
+    label_on_paper: str | None = None
+    """The words printed on the paper for this line, exactly as they read — required by the
+    extractor's prompt when `attribute` is `"other"` (outside the controlled vocabulary), and
+    allowed on any field so the card can still show a person's own paper's wording as a last
+    resort, ahead of a generic line name (`app.channels.strings`, `web/src/onboarding/review.ts
+    fieldLabel`)."""
 
     def checked(self) -> ExtractedField:
         """The same field, or a refusal: the codes are codes, the value short — or, for an
@@ -210,6 +267,7 @@ class ExtractedField:
             raise NotAValue("an unreadable field carries no value")
         if self.span is not None and self.span.page is not None and self.span.page < 1:
             raise NotAPage("a page number counts from one")
+        label_on_paper = None if self.label_on_paper is None else str(self.label_on_paper).strip()
         return ExtractedField(
             subject=check_code(self.subject),
             attribute=check_code(self.attribute),
@@ -218,7 +276,55 @@ class ExtractedField:
             confidence=check_confidence(self.confidence),
             span=self.span,
             unreadable=self.unreadable,
+            range=self.range,
+            label_on_paper=(label_on_paper[:LABEL_ON_PAPER_LENGTH] or None)
+            if label_on_paper
+            else None,
         )
+
+
+_LEGACY_RANGE_SUFFIX = "_reference_range"
+"""The shape every extractor wrote before a result carried its own `range`: a sibling field
+named `<analyte>_reference_range` on the same subject (`app/llm/prompts/extract_document.txt`,
+the version before defect #3's fix). Still what an older answer, and the fixtures already
+written this way, carry — `fold_legacy_reference_ranges` is the server-side normaliser that
+keeps them working without a rewrite."""
+
+
+def fold_legacy_reference_ranges(fields: Sequence[ExtractedField]) -> tuple[ExtractedField, ...]:
+    """Every legacy `<analyte>_reference_range` sibling folded onto the result it describes,
+    and dropped from the list only once it actually is folded: once its text is on the
+    result's own `range`, showing it again as a line of its own is exactly the defect this
+    fixes (E02, "a reference range arrives as a separate field instead of belonging to its
+    result"), not a second read of the same range. A result that already carries its own
+    `range` — the shape a current extractor answer, or a fixture written the new way, already
+    uses — is left alone, the legacy sibling never overwriting a range the result was given
+    directly; a sibling with no result to fold onto at all, or whose value is not text, is
+    left exactly as it is too. Either way nothing here silently discards a field that was
+    never actually folded: the sibling stays, still its own line, rather than vanish."""
+    by_key = {(f.subject, f.attribute): f for f in fields}
+    folded: dict[tuple[str, str], ExtractedField] = {}
+    dropped: set[tuple[str, str]] = set()
+    for legacy in fields:
+        if not legacy.attribute.endswith(_LEGACY_RANGE_SUFFIX):
+            continue
+        base_attribute = legacy.attribute[: -len(_LEGACY_RANGE_SUFFIX)]
+        if not base_attribute:
+            continue
+        base_key = (legacy.subject, base_attribute)
+        base = by_key.get(base_key)
+        if base is None or base.range is not None or not isinstance(legacy.value, str):
+            # No result to fold onto, a result that already carries its own range (never
+            # overwritten by the legacy sibling's text), or a value that is not text at all:
+            # left exactly as it is, still its own field, rather than silently discarded.
+            continue
+        folded[base_key] = replace(base, range=parse_printed_range(legacy.value))
+        dropped.add((legacy.subject, legacy.attribute))
+    return tuple(
+        folded.get((f.subject, f.attribute), f)
+        for f in fields
+        if (f.subject, f.attribute) not in dropped
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,8 +374,19 @@ class NotAFixture(Refusal):
     """A paper fixture is a JSON file of one shape. This one was not."""
 
 
+def _printed_range_of(entry: Mapping[str, Any]) -> PrintedRange | None:
+    raw = entry.get("range")
+    if not isinstance(raw, Mapping):
+        return None
+    low, high, text = raw.get("low"), raw.get("high"), raw.get("text")
+    low = float(low) if isinstance(low, int | float) and not isinstance(low, bool) else None
+    high = float(high) if isinstance(high, int | float) and not isinstance(high, bool) else None
+    return PrintedRange(low=low, high=high, text=text if isinstance(text, str) else "")
+
+
 def _field_from(entry: Mapping[str, Any]) -> ExtractedField:
     span = entry.get("span")
+    label_on_paper = entry.get("label_on_paper")
     return ExtractedField(
         subject=entry["subject"],
         attribute=entry["attribute"],
@@ -280,6 +397,8 @@ def _field_from(entry: Mapping[str, Any]) -> ExtractedField:
         if span is None
         else Span(span["x0"], span["y0"], span["x1"], span["y1"], span.get("page")),
         unreadable=bool(entry.get("unreadable", False)),
+        range=_printed_range_of(entry),
+        label_on_paper=label_on_paper if isinstance(label_on_paper, str) else None,
     ).checked()
 
 
