@@ -27,10 +27,12 @@ Everything lands on the `redesign` branch. `main` takes it at checkpoint 8.
 ### Checkpoint 1 — The look and the building blocks
 **Scope:** the dusk glass look across every existing screen; Figtree and the serif accent bundled into the app; the
 orb; the in-place status line with the light sweep; soft word-by-word text; staggered reveal; the action sheet with its
-three-state button; range bar and chips; the app as a phone column on wide screens; the overlapping ring on Health fixed.
+three-state button; range bar and chips; **on the web the whole app sits inside a phone frame** (above 600px wide: a
+390px device frame with a bezel, the atmosphere inside it, and every bar, sheet and toast kept inside the frame; on a
+real phone it is full-bleed with no frame); the overlapping ring on Health fixed.
 No screen is restructured and no wording changes yet.
-**You test:** open the app as Pa and walk every tab. Open `#/blueprint-kit` and try each component.
-**Passes when:** it looks like the blueprint; text is comfortable to read; nothing overlaps; large type still works.
+**You test:** open the app on the web as Pa and walk every tab inside the phone frame. Open `#/blueprint-kit` and try each component.
+**Passes when:** it looks like the blueprint's phone; nothing escapes the frame; text is comfortable to read; nothing overlaps; large type still works.
 
 ### Checkpoint 2 — Load a paper
 **Scope:** blueprint scenes 5, 6, 7. The reading screen with the orb and the real stages changing in place; the report
