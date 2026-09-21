@@ -1,12 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../api/nura";
-import type { AnswerOut, FeedItemOut, FindOut, FindWhere } from "../api/types";
+import type { AnswerLineOut, AnswerOut, ClipOut, FeedItemOut, FindOut, FindWhere } from "../api/types";
 import { whatToDoLines } from "../day/model";
 import { askStartedTheRedPath, whenNotReached } from "../day/redPath";
 import { keptCards } from "../day/offline";
 import { bindingOf } from "../offline/todayCache";
 import { answerView, askMode } from "../feed/ask";
+import { appendSentence, shownSentences, type StreamedSentence } from "../feed/askStream";
 import { feedFor } from "../feed/session";
 import { go } from "../flow";
 import { density, profile, token } from "../store/session";
@@ -14,7 +15,7 @@ import { fill, language, LOCALE, t } from "../strings";
 import { dateLine } from "../today/model";
 import { voice } from "../player/voice";
 import { Field, Header, Hear, Notice, Pill, Tile } from "../ui/components";
-import { LookedAt, MessageBubble, StepTrace } from "../ui/kit";
+import { LookedAt, MessageBubble, Orb, SoftText, StatusLine } from "../ui/kit";
 import { HearClip } from "../ui/Player";
 import { Shell } from "./Shell";
 
@@ -60,12 +61,13 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
   const [busy, setBusy] = useState(false);
   const [sentQuestion, setSentQuestion] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
-  // The agent asker's own answer (`NURA_ASKER=claude`), as its lines actually land — never
-  // waited for whole: each is drawn the instant its `answer_delta` event arrives, no timer,
-  // no typewriter. The rule-based asker never sends one, so this stays empty for it and the
-  // screen behaves exactly as before (docs/design-direction.md "Conversation, waiting and
-  // thinking").
-  const [deltaLines, setDeltaLines] = useState<string[]>([]);
+  // The answer, sentence by sentence, as it actually lands (P1, docs/design-direction.md "the
+  // answer streams sentence by sentence") — never waited for whole: each `answer_sentence`
+  // event is appended the instant it arrives, no timer, no typewriter, for BOTH askers (the
+  // rule-based one replays its own already-composed lines the same way the agent asker streams
+  // its own — `app.search.asker`). `SoftText` (below) draws only the newest sentence's words as
+  // new; nothing already shown ever replays.
+  const [sentences, setSentences] = useState<StreamedSentence[]>([]);
   // The one thing a screen reader hears while Nura works: that she started, and that the
   // answer is there — never a line per step (docs/design-direction.md "Conversation, waiting
   // and thinking").
@@ -100,7 +102,7 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     setFound(null);
     setSentQuestion(text);
     setSteps([]);
-    setDeltaLines([]);
+    setSentences([]);
     setAnnounce(s.feed.askThinking);
     try {
       if (where === "records") {
@@ -116,11 +118,11 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
         // question here is a turn on that same thread (`turnStream`), so a follow-up like
         // "and the cost of that?" can be resolved against what was just asked and found.
         const onStep = (key: string, label: string, name: string) => setSteps((was) => [...was, { key, label, name }]);
-        const onDelta = (chunk: string) => setDeltaLines((was) => [...was, chunk]);
+        const onSentence = (sentenceText: string, cites: AnswerLineOut["cites"]) => setSentences((was) => appendSentence(was, sentenceText, cites));
         const onStepLabel = (key: string, label: string) => setSteps((was) => was.map((step) => (step.key === key ? { ...step, label } : step)));
         const heard = conversationId
-          ? await nura.turnStream(bearer, papers.profile_id, conversationId, text, mode, language.value, onStep, onDelta, onStepLabel)
-          : await nura.askStream(bearer, papers.profile_id, text, mode, language.value, onStep, onDelta, onStepLabel);
+          ? await nura.turnStream(bearer, papers.profile_id, conversationId, text, mode, language.value, onStep, onSentence, onStepLabel)
+          : await nura.askStream(bearer, papers.profile_id, text, mode, language.value, onStep, onSentence, onStepLabel);
         // A red flag heard in the question went the red-flag path on the backend first: what to
         // do now, the backend's card, exactly as after a red word tapped on Today.
         if (heard.red_flag?.red_flag) {
@@ -184,7 +186,7 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
     setAnswer(null);
     setSentQuestion(null);
     setSteps([]);
-    setDeltaLines([]);
+    setSentences([]);
     setFound(null);
     setQuestion("");
   };
@@ -195,6 +197,19 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
   // The shared trace's shape (`text`, `done`): every step but the one still streaming is done —
   // the same rule the old local stand-in used, now against `web/src/ui/kit/Conversation.tsx`.
   const traceSteps = steps.map((step, at) => ({ key: step.key, text: step.label, done: at < steps.length - 1 }));
+  // ONE status line while Nura works: the newest real step's own label, or the generic
+  // "Nura is looking" before the first one lands — never a checklist
+  // (docs/design/experience-blueprint.html `think()`).
+  const statusText = traceSteps.length > 0 ? traceSteps[traceSteps.length - 1]!.text : s.feed.askThinking;
+  // The answer, sentence by sentence: the finished answer's own lines (with a clip, when one
+  // is there) once they arrive — otherwise the sentences streamed so far, text only. Never
+  // both (`shownSentences`), so nothing is ever shown twice once the final `answer` lands.
+  const finalLines = view ? view.lines.map((line) => ({ text: line.text, clip: line.clip })) : null;
+  const streamedAsLines = sentences.map((sentence) => ({ text: sentence.text, clip: null as ClipOut | null }));
+  const displayedLines = shownSentences(streamedAsLines, finalLines);
+  // "Looked at": the backend's own structured `looked_at` once the answer has landed (P1);
+  // while still streaming, the bare nouns of the real steps sent so far — never invented.
+  const lookedAtParts = (answer?.looked_at && answer.looked_at.length > 0 ? answer.looked_at.map((each) => each.label) : steps.map((step) => step.name)).join(", ");
   return (
     <Shell tab="home" testId="ask-screen" attrs={{ "data-mode": mode }} ask={false}>
       <Header title={s.feed.askTitle} onBack={item ? undefined : () => go({ name: "today" })} />
@@ -251,79 +266,72 @@ export function AskScreen({ item, question: asked }: { item?: FeedItemOut; quest
           ))}
         </div>
       )}
+      {/* Nura's own turn (P1, docs/design/experience-blueprint.html `nura()`): his question as
+         a bubble, then the living orb beside ONE status line while she really works — no
+         checklist — then, once real steps and real sentences exist, "Looked at" once and the
+         answer as flowing paragraphs, each new sentence's words the only ones that animate
+         in. Everything here is real: a status line is the newest step the backend actually
+         reported, a sentence is one the plain-words gate already passed, and this box simply
+         never renders until `sentQuestion` names a question actually sent. */}
       {sentQuestion && (busy || view || found) && (
         <div class="ask-thread">
           <MessageBubble from="person" label={s.talk.you} testId="ask-question">
             <p>{sentQuestion}</p>
           </MessageBubble>
-          {busy && <StepTrace steps={traceSteps} working={s.feed.askThinking} testId="ask-trace" />}
-          {/* The agent asker's own answer, drawn as it lands (`onDelta`): each line the
-             instant its own event arrives, the pulsing dots (inside `StepTrace`, above)
-             still showing until the final `answer` event replaces all of this with the
-             finished, cited answer below. Never shown once the answer itself has arrived. */}
-          {busy && deltaLines.length > 0 && (
-            <div class="lines" data-testid="answer-delta-lines">
-              {deltaLines.map((line, at) => (
-                <p key={at} data-testid="answer-delta-line">
-                  {line}
-                </p>
-              ))}
+          {(busy || (where === "records" && view)) && (
+            <div class="ask-turn" data-testid={view ? "answer" : undefined}>
+              <Orb thinking={busy} testId="ask-orb" />
+              <div class="ask-turn-body">
+                {busy && where === "records" && displayedLines.length === 0 && !view && <StatusLine text={statusText} testId="ask-trace" />}
+                {busy && where !== "records" && <StatusLine text={statusText} testId="ask-trace" />}
+                {where === "records" && steps.length > 0 && (displayedLines.length > 0 || view) && (
+                  <LookedAt summary={fill(s.feed.askLookedAt, { parts: lookedAtParts })} steps={traceSteps} testId="ask-looked-at" />
+                )}
+                {where === "records" && displayedLines.length > 0 && (
+                  <div aria-live="polite" data-testid="answer-lines">
+                    {displayedLines.map((line, at) => (
+                      <div key={at} data-testid="answer-line">
+                        <SoftText as="p" pace="body" className="answer-flow" text={line.text} testId="answer-line-text" />
+                        {line.clip && (
+                          <HearClip name={`ask-clip:${at}`} clip={line.clip} line={line.text} label={fill(s.visit.hearClip, { doctor: line.clip.doctor })} onError={setError} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {view?.honest.map((line, at) => (
+                  <p key={`h${at}`} data-testid="answer-honest">
+                    {line}
+                  </p>
+                ))}
+                {view?.withheld && <p class="caption">{s.feed.askWithheld}</p>}
+                {/* The safety line, once, at the foot of this turn (never a diagnosis, never
+                   what to do about it) — the same words `boundary_lines` always gave, read as
+                   one line instead of stacked as separate captions. */}
+                {view && view.boundary.length > 0 && (
+                  <p class="answer-boundary" data-testid="boundary">
+                    {view.boundary.join(" ")}
+                  </p>
+                )}
+                {/* Proposals (W2): a next step the agent asker offered, never taken by itself —
+                   the pill's own words, already past every check. Shown, not yet tappable:
+                   wiring one to the confirm flow that already exists for a visit, a message or
+                   a booking is the next step here, so the pill is disabled rather than a dead
+                   tap that looks live. */}
+                {answer && answer.proposals && answer.proposals.length > 0 && (
+                  <div class="choices two" data-testid="ask-proposals">
+                    {answer.proposals.map((proposal, at) => (
+                      <Pill key={at} onClick={() => {}} disabled testId={`ask-proposal-${at}`}>
+                        {proposal.label}
+                      </Pill>
+                    ))}
+                  </div>
+                )}
+                {view && <Hear lines={view.spoken} />}
+              </div>
             </div>
           )}
         </div>
-      )}
-      {view && (
-        <Tile paper testId="answer">
-          {where === "records" && steps.length > 0 && (
-            <LookedAt
-              summary={fill(s.feed.askLookedAt, { parts: steps.map((step) => step.name).join(", ") })}
-              steps={traceSteps}
-              testId="ask-looked-at"
-            />
-          )}
-          <div class="lines" data-testid="answer-lines">
-            {view.lines.map((line, at) => (
-              <div key={at} data-testid="answer-line">
-                <p>{line.text}</p>
-                {line.source && (
-                  <p class="provenance" data-testid="answer-source">
-                    {s.feed[line.source]}
-                  </p>
-                )}
-                {line.clip && (
-                  <HearClip name={`ask-clip:${at}`} clip={line.clip} line={line.text} label={fill(s.visit.hearClip, { doctor: line.clip.doctor })} onError={setError} />
-                )}
-              </div>
-            ))}
-            {view.honest.map((line, at) => (
-              <p key={`h${at}`} data-testid="answer-honest">
-                {line}
-              </p>
-            ))}
-          </div>
-          {view.withheld && <p class="caption">{s.feed.askWithheld}</p>}
-          {view.boundary.length > 0 && (
-            <div class="lines boundary" data-testid="boundary">
-              {view.boundary.map((line, at) => (
-                <p key={at}>{line}</p>
-              ))}
-            </div>
-          )}
-          {/* Proposals (W2): a next step the agent asker offered, never taken by itself — the
-             pill's own words, already past every check. Shown, not yet tappable: wiring one to
-             the confirm flow that already exists for a visit, a message or a booking is the
-             next step here, so the pill is disabled rather than a dead tap that looks live. */}
-          {answer && answer.proposals && answer.proposals.length > 0 && (
-            <div class="choices two" data-testid="ask-proposals">
-              {answer.proposals.map((proposal, at) => (
-                <Pill key={at} onClick={() => {}} disabled testId={`ask-proposal-${at}`}>
-                  {proposal.label}
-                </Pill>
-              ))}
-            </div>
-          )}
-          <Hear lines={view.spoken} />
-        </Tile>
       )}
       {found && found.results.length === 0 && (
         <Tile paper testId="found-nothing">

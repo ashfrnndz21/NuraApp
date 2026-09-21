@@ -17,16 +17,31 @@ is never offered to the model at all: a withheld part cannot even be named, the 
 own words, each carrying its own id — never a row, never a raw value the model could restate
 past what is written down.
 
-The answer is structured output: lines, each cited only to ids a tool actually returned this
-ask; a boundary line, always the catalogue's own for the reader's language, whatever the model
-wrote (`app.safety.boundary.boundary_lines`) — the model is never trusted with that line
-itself. Every surviving line passes the plain-words verifier and the same conclusion-and-advice
+The answer reads as a natural, warm reply — two to four flowing sentences that answer the
+question first, never a fact dump — because the prompt asks for that voice, not because the
+gate is looser: every surviving line still passes the plain-words verifier, at Ask's own
+profile (`docs/plain-words.md`, `app.safety.plain_words.Kind` `"ask"`), which relaxes only the
+one-idea rule and raises the length ceiling from fifteen words to twenty — rule 14, the
+boundary, is exactly as strict as everywhere else. Every line is also cited only to ids a tool
+actually returned this ask; a boundary line, always the catalogue's own for the reader's
+language, whatever the model wrote (`app.safety.boundary.boundary_lines`) — the model is never
+trusted with that line itself. Every surviving line also passes the same conclusion-and-advice
 blocklist `app.llm.narrate.ClaudeNarrator` holds every rephrase to, and is checked for
-caregiver voice the same way (`app.channels.about_him.Reader`). A line that fails any of these
-is dropped; a cite outside this ask's own tool results is dropped from its line; a line with
-nothing left to cite is dropped. If nothing survives — or the call refuses, times out, runs
-past `MAX_ROUNDS`, or answers something that does not parse — the answer is the rule-based
-asker's own answer for the same question: the stream never ends without one.
+caregiver voice the same way (`app.channels.about_him.Reader`). A line that fails any of these,
+and cannot be repaired (below), is dropped; a cite outside this ask's own tool results is
+dropped from its line; a line with nothing left to cite is dropped. If nothing survives — or
+the call refuses, times out, runs past `MAX_ROUNDS`, or answers something that does not parse
+— the answer is the rule-based asker's own answer for the same question: the stream never ends
+without one.
+
+Streamed sentence by sentence: each line of the finished, already-checked answer is sent as
+its own `AnswerDelta` (`app.search.asker`), text and cites together, in the order it will
+appear — the wire's own `answer_sentence` event (`app.channels.api.timeline`). The model call
+itself is not token-streamed (`output_config`'s structured JSON, and a tool-use round would
+make token streaming meaningless mid-call anyway); a sentence is "streamed" the instant the
+whole checked answer is ready, never held back for effect. `RuleBasedAsker` (`app.search.
+asker`) holds the same contract — it replays `recall_stream`'s own already-composed, already-
+verified lines the same way — so a caller never has to know which asker it is holding.
 
 Demo only (ADR 0017), the same story `app.llm.narrate.ClaudeNarrator`'s module docstring
 tells: Anthropic's first-party API does not process in SG or MY, so this adapter may only be
@@ -264,8 +279,9 @@ ANSWER_SCHEMA: Final[dict[str, Any]] = {
     "properties": {
         "lines": {
             "type": "array",
-            "description": "What the record answers, each at most one sentence, plain, "
-            "never what a number means and never advice.",
+            "description": "Two to four sentences, in order, that together read as one "
+            "natural, conversational answer, the question answered first — never a list of "
+            "disconnected facts, never what a number means, never advice.",
             "items": {
                 "type": "object",
                 "additionalProperties": False,
@@ -894,7 +910,7 @@ class ClaudeAsker:
                 return
 
             for answer_line in answer.lines:
-                yield AnswerDelta(text=answer_line.text)
+                yield AnswerDelta(text=answer_line.text, cites=answer_line.cites)
             answer = Answer(
                 question_artifact_id=kept.id,
                 mode=mode,
@@ -973,12 +989,14 @@ def _drop(reason: str, *, rules: Sequence[int] = ()) -> None:
 
 
 def _plain_words_findings(text: str, language: str) -> list[Finding]:
-    """The `docs/plain-words.md` findings `text` fails, one per broken rule, sorted by rule —
-    never the text itself. Logged (by rule number only) by `_drop`, and handed to the model,
-    problem and rewrite but never the line, as the one repair round's hint."""
+    """The `docs/plain-words.md` findings `text` fails against Ask's own profile
+    (`kind="ask"`: rule 2 off, rule 3's ceiling twenty words — every other rule, 14 included,
+    exactly as strict as `kind="line"`), one per broken rule, sorted by rule — never the text
+    itself. Logged (by rule number only) by `_drop`, and handed to the model, problem and
+    rewrite but never the line, as the one repair round's hint."""
     by_rule = {
         finding.rule: finding
-        for finding in verify(text, language, "line")
+        for finding in verify(text, language, "ask")
         if finding.severity == "fail"
     }
     return [by_rule[rule] for rule in sorted(by_rule)]
@@ -1013,14 +1031,14 @@ def _answer_from_payload(
         if not text:
             _drop("empty_text")
             continue
-        if not verified(text, language):
+        if not verified(text, language, "ask"):
             findings = _plain_words_findings(text, language)
             rules = tuple(finding.rule for finding in findings)
             if failed_findings is not None:
                 for finding in findings:
                     failed_findings.setdefault(finding.rule, finding)
             rewritten = _boundary_rewrite(text, language) if rules == (14,) else None
-            if rewritten is not None and verified(rewritten, language):
+            if rewritten is not None and verified(rewritten, language, "ask"):
                 # Rule 14 alone, and nothing else wrong with the line: rewritten into the
                 # catalogue's own shape for it — a question for the doctor — rather than
                 # dropped outright (defect: every medicine line dropped, on both rounds, and

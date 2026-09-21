@@ -245,6 +245,15 @@ export interface ProposalOut {
   label: string;
 }
 
+/** One part of the record this turn really read (P1): `kind` the same key a `step` event
+ *  carries, `label` the bare noun the collapsed "Looked at" line names it by, already in his
+ *  language and the caregiver's voice if this key is not his own. Built server-side from the
+ *  steps this turn actually streamed — never a fixed list. */
+export interface LookedAtOut {
+  kind: string;
+  label: string;
+}
+
 export interface AnswerOut {
   /** The question as it was kept; null when a red word in it took the red-flag path instead. */
   question_artifact_id: string | null;
@@ -260,6 +269,10 @@ export interface AnswerOut {
   spoken: string[];
   /** Parts of the record this key does not reach, so not read. */
   withheld: string[];
+  /** The parts of the record this turn actually read (P1), in the order they were read — set
+   *  only by the streaming ask routes; empty from the plain, non-streaming `POST .../ask` and
+   *  from the red-flag path. The one "Looked at" line is built from this, once. */
+  looked_at?: LookedAtOut[];
   /** Zero or more next steps offered alongside this answer (W2). Always empty from the
    *  rule-based asker. */
   proposals?: ProposalOut[];
@@ -327,13 +340,17 @@ export interface AskAnswerEvent {
   answer: AnswerOut;
 }
 
-/** Zero or more, only from the agent asker (`NURA_ASKER=claude`): one chunk of its finished
- *  answer's own text, already past every check, sent as it is put together. The rule-based
- *  asker never sends one — its answer has always arrived whole, as `AskAnswerEvent` alone. An
- *  older client that has never seen this type simply ignores it. */
-export interface AskAnswerDeltaEvent {
-  type: "answer_delta";
+/** One sentence of the finished, already-verified answer, text and the cites it rests on
+ *  together, sent the moment it is safe to say — before the final `AskAnswerEvent`, in the
+ *  order the sentences will appear in `AskAnswerEvent.answer.lines`. Sent by BOTH askers (the
+ *  rule-based one replays its own already-composed lines the same way the agent asker streams
+ *  its own), so a caller has one code path whichever asker answered. An older client that has
+ *  never seen this type simply ignores it and still gets the whole answer in the final
+ *  `AskAnswerEvent`. */
+export interface AskAnswerSentenceEvent {
+  type: "answer_sentence";
   text: string;
+  cites: { kind: string; id: string; start_s?: number | null; end_s?: number | null }[];
 }
 
 /** A refusal heard mid-stream — a scope the key does not hold, a malformed question — in the
@@ -345,7 +362,7 @@ export interface AskRefusalEvent {
   scope?: string;
 }
 
-export type AskStreamEvent = AskStepEvent | AskStepLabelEvent | AskAnswerDeltaEvent | AskAnswerEvent | AskRefusalEvent;
+export type AskStreamEvent = AskStepEvent | AskStepLabelEvent | AskAnswerSentenceEvent | AskAnswerEvent | AskRefusalEvent;
 
 /** The feed's web/video search, streamed the same way (`POST /profiles/{id}/find/stream`):
  *  one step while the search runs, then the results `POST /profiles/{id}/find` would return. */

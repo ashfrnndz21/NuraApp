@@ -1,5 +1,6 @@
 import { api, apiBlob, apiBytes, apiStream, apiText, apiUpload, sendAndForget } from "./client";
 import type {
+  AnswerLineOut,
   AnswerOut,
   AnsweredOut,
   AppointmentOut,
@@ -346,14 +347,17 @@ export const ask = (token: string, profileId: string, question: string, mode: As
   api<AnswerOut>(`/profiles/${profileId}/ask`, { method: "POST", token, body: { question, mode, language } });
 
 /** The same question, streamed (docs/design-direction.md "Conversation, waiting and
- *  thinking"): `onStep` for each real part of his record read as it happens, `onStepLabel`
- *  (when given) for a narrator's own rephrasing of a step already sent — it may arrive at any
- *  point, including after the answer, and never holds anything back for it
- *  (`app.search.narrate.narrate_step_label`) — `onDelta` (when given) for each chunk of the
- *  agent asker's own answer text as it is sent — the rule-based asker never calls it, its
- *  answer arriving whole — resolving with the finished answer, the same `AnswerOut` `ask`
- *  returns, so a caller can treat the two the same once the promise settles. A refusal
- *  (`OutOfScope`, a malformed question) throws `Refused`, exactly as `ask` throws it. */
+ *  thinking"; P1 "the answer streams sentence by sentence"): `onStep` for each real part of
+ *  his record read as it happens, `onStepLabel` (when given) for a narrator's own rephrasing
+ *  of a step already sent — it may arrive at any point, including after the answer, and never
+ *  holds anything back for it (`app.search.narrate.narrate_step_label`) — `onSentence` (when
+ *  given) for each sentence of the finished, already-verified answer, text and its cites
+ *  together, the moment it is safe to say — sent by BOTH askers (the rule-based one replays
+ *  its own already-composed lines the same way the agent asker streams its own), so a caller
+ *  never has to special-case which one answered — resolving with the finished answer, the
+ *  same `AnswerOut` `ask` returns, so a caller can treat the two the same once the promise
+ *  settles. A refusal (`OutOfScope`, a malformed question) throws `Refused`, exactly as `ask`
+ *  throws it. */
 export function askStream(
   token: string,
   profileId: string,
@@ -361,7 +365,7 @@ export function askStream(
   mode: AskMode,
   language: string,
   onStep: (key: string, label: string, name: string) => void,
-  onDelta?: (text: string) => void,
+  onSentence?: (text: string, cites: AnswerLineOut["cites"]) => void,
   onStepLabel?: (key: string, label: string) => void,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
@@ -370,7 +374,7 @@ export function askStream(
       const streamed = event as unknown as AskStreamEvent;
       if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
       else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
-      else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
+      else if (streamed.type === "answer_sentence") onSentence?.(streamed.text, streamed.cites);
       else if (streamed.type === "answer") {
         settled = true;
         resolve(streamed.answer);
@@ -403,7 +407,7 @@ export function turnStream(
   mode: AskMode,
   language: string,
   onStep: (key: string, label: string, name: string) => void,
-  onDelta?: (text: string) => void,
+  onSentence?: (text: string, cites: AnswerLineOut["cites"]) => void,
   onStepLabel?: (key: string, label: string) => void,
 ): Promise<AnswerOut> {
   return new Promise((resolve, reject) => {
@@ -415,7 +419,7 @@ export function turnStream(
         const streamed = event as unknown as AskStreamEvent;
         if (streamed.type === "step") onStep(streamed.key, streamed.label, streamed.name);
         else if (streamed.type === "step_label") onStepLabel?.(streamed.key, streamed.label);
-        else if (streamed.type === "answer_delta") onDelta?.(streamed.text);
+        else if (streamed.type === "answer_sentence") onSentence?.(streamed.text, streamed.cites);
         else if (streamed.type === "answer") {
           settled = true;
           resolve(streamed.answer);

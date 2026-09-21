@@ -22,6 +22,19 @@ Every string on the patient's surface, on WhatsApp and in every voice note follo
 
 ---
 
+## 1a. Profiles
+
+Every string is checked as `kind="line"` unless it names a different profile
+(`app.safety.plain_words.Kind`). Ask's own answer (`app.llm.ask_agent`, the natural,
+conversational reply) is checked as `kind="ask"`: rule 2 (one idea per line) is off, so a
+sentence may carry the connective tissue a spoken answer needs, and rule 3's ceiling rises
+from fifteen words to twenty, so "Your last blood test was on 21 January 2025, about twenty
+months ago, and there is no newer one in your papers." can pass whole. Every other rule —
+14 (the boundary) above all — runs exactly as it does for `kind="line"`; a profile relaxes
+shape, never safety.
+
+---
+
 ## 2. Glossary
 
 | Instead of | Say |

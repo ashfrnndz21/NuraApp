@@ -1055,6 +1055,31 @@ html.shot-full .shell > .shell-scroll {
   height: 13px;
   color: var(--good);
 }
+
+/* Nura's own turn (P1, docs/design/experience-blueprint.html `.nu`/`.nut`): the living orb
+   beside a column, no card behind it — unlike his own question (`MessageBubble`, a bubble),
+   Nura's reply sits directly on the atmosphere, the way the blueprint's `nura()` draws it. */
+.ask-turn {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.ask-turn-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+/* The flowing answer (P1): sentences appended by `SoftText`, softly, as their own
+   `answer_sentence` events arrive — never a chopped line per sentence, never a caption under
+   each one (a sentence's own source lives in its `cites`; "Looked at", above, says it once). */
+.answer-flow {
+  font-size: var(--text-body);
+  line-height: var(--line-height);
+}
+
 /* The trace is its own bubble shape (a card, not a message he sent), so it reads as Nura
    working rather than as a third thing said. */
 .ask-trace {

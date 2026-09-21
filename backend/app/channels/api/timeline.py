@@ -55,6 +55,7 @@ from app.channels.api.timeline_schemas import (
     EpisodeIn,
     EpisodeOut,
     EpisodeViewOut,
+    LookedAtOut,
     PlaceNoteIn,
     PlaceNoteOut,
     ProviderHistoryOut,
@@ -465,7 +466,15 @@ async def _stream_turn(
                 )
             )
         elif isinstance(event, AnswerDelta):
-            await queue.put(_sse({"type": "answer_delta", "text": event.text}))
+            sentence = {
+                "type": "answer_sentence",
+                "text": event.text,
+                "cites": [
+                    {"kind": c.kind, "id": str(c.id), "start_s": c.start_s, "end_s": c.end_s}
+                    for c in event.cites
+                ],
+            }
+            await queue.put(_sse(sentence))
         else:
             await record_turn(
                 session,
@@ -475,7 +484,22 @@ async def _stream_turn(
                 question_artifact_id=event.question_artifact_id,
                 answer=event,
             )
-            answer_out = AnswerOut.of(event).model_copy(update={"conversation_id": conversation.id})
+            # "Looked at" (P1): the parts of the record this turn really read, kind and bare
+            # noun, in the order their `step` event went out — never a fixed list, and never
+            # naming a part a withheld scope kept from even being offered as a tool (the same
+            # rule `_corpus_stream`/`ClaudeAsker._tools_for` already hold by never yielding a
+            # step for one). Deduplicated by key, first occurrence order, in case a tool ran
+            # more than once in one ask.
+            seen_keys: set[str] = set()
+            looked_at: list[LookedAtOut] = []
+            for step in steps_so_far:
+                if step.key in seen_keys:
+                    continue
+                seen_keys.add(step.key)
+                looked_at.append(LookedAtOut(kind=step.key, label=ASK_STEP_NAMES[lang][step.key]))
+            answer_out = AnswerOut.of(event).model_copy(
+                update={"conversation_id": conversation.id, "looked_at": looked_at}
+            )
             await queue.put(_sse({"type": "answer", "answer": answer_out.model_dump(mode="json")}))
     if narration_tasks:
         # Nothing here delayed a step, a tool call or the answer — every one of
@@ -488,15 +512,17 @@ async def _stream_turn(
 @router.post("/{profile_id}/ask/stream")
 async def ask_stream(body: AskIn, request: Request, context: Context) -> StreamingResponse:
     """`POST /{id}/ask`, streamed (docs/design-direction.md 'Conversation, waiting and
-    thinking'): a `step` event the instant each real part of his record is read
-    (`outside.asker.ask_stream` — the rule-based retriever by default, or the agent asker on a
-    declared demo, `NURA_ASKER=claude`), zero or more `answer_delta` events as the agent
-    asker's own finished answer is sent (never sent by the rule-based one, whose answer has
-    always arrived whole), then an `answer` event — the same `AnswerOut` the plain route gives.
-    An older web client that has never seen `answer_delta` simply ignores it and still gets
-    every `step` and the final `answer`, unchanged. The red-flag path is unchanged and streams
-    nothing: it is answered before any part of the record is looked up, same as `ask` above,
-    so there is nothing to trace.
+    thinking'; P1 'the answer streams sentence by sentence'): a `step` event the instant each
+    real part of his record is read (`outside.asker.ask_stream` — the rule-based retriever by
+    default, or the agent asker on a declared demo, `NURA_ASKER=claude`), then one
+    `answer_sentence` event per sentence of the finished, already-verified answer — text and
+    its cites together, in order — from BOTH askers (`RuleBasedAsker` replays `recall_stream`'s
+    own already-composed lines the same way `ClaudeAsker` streams its own), then an `answer`
+    event — the same `AnswerOut` the plain route gives, with its `looked_at` now filled from
+    the steps this turn actually streamed. An older web client that has never seen
+    `answer_sentence` simply ignores it and still gets every `step` and the final `answer`,
+    unchanged. The red-flag path is unchanged and streams nothing: it is answered before any
+    part of the record is looked up, same as `ask` above, so there is nothing to trace.
 
     Zero or more `step_label` events may follow any `step`, whenever — even after the final
     `answer` — a Claude-backed narrator (`NURA_NARRATOR=claude`) actually rephrases that step's
