@@ -35,6 +35,8 @@ from anthropic import (
 )
 
 from app.llm.blocks import answer_text
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.prompts import load_prompt
 from app.reasoning.navigation.models import Need, NeedKind
 from app.reasoning.navigation.rule_drafter import RuleDrafter, names_dose_or_diagnosis
@@ -42,7 +44,10 @@ from app.safety.plain_words import verify
 
 log = logging.getLogger("nura.reasoning.claude_navigation_draft")
 
-MODEL: Final = "claude-opus-5"
+MODEL: Final = DEFAULT_MODELS[Task.DRAFT]
+"""The default `ClaudeDrafter` is built with when a caller does not pass `model=` (a test,
+mainly — `drafter_for` always does). Sonnet 5: a short drafted message from a few named
+fields, checked against `RuleDrafter`'s own guards before it is trusted."""
 MAX_TOKENS: Final = 512
 DRAFT_DEADLINE_S: Final = 10.0
 
@@ -91,9 +96,10 @@ class ClaudeDrafter:
 
     external_processor: str | None = "anthropic"
 
-    def __init__(self, client: AsyncAnthropic) -> None:
+    def __init__(self, client: AsyncAnthropic, *, model: str = MODEL) -> None:
         self._client = client
         self._fallback = RuleDrafter()
+        self._model = model
 
     async def draft(
         self,
@@ -112,9 +118,10 @@ class ClaudeDrafter:
             is_self=is_self,
         )
         try:
+            record_call(Task.DRAFT, self._model)
             message = await asyncio.wait_for(
                 self._client.messages.create(  # type: ignore[call-overload]
-                    model=MODEL,
+                    model=self._model,
                     max_tokens=MAX_TOKENS,
                     system=_SYSTEM_PROMPT,
                     messages=[{"role": "user", "content": prompt}],

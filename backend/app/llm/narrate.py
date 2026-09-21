@@ -78,12 +78,17 @@ from anthropic import (
 from app.channels.about_him import Reader
 from app.delivery.timeline_strings import ASK_STEP_NAMES, verified
 from app.llm.blocks import answer_text
+from app.llm.call_counter import record_call
+from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.prompts import load_prompt
 from app.search.narrate import NarratedLine, NarratedStep
 
 log = logging.getLogger("nura.search.claude_narrate")
 
-MODEL: Final = "claude-opus-5"
+MODEL: Final = DEFAULT_MODELS[Task.NARRATE]
+"""The default `ClaudeNarrator` is built with when a caller does not pass `model=` (a test,
+mainly — `narrator_for` always does). Haiku 4.5: rephrasing a step that already happened into
+a livelier line, not deciding anything — the cheapest model keeps the behaviour."""
 MAX_TOKENS: Final = 1024
 """Enough for a handful of one-sentence lines; a trace this build streams never has more than
 a few real steps (E03-05's four, Find's one)."""
@@ -329,8 +334,9 @@ class ClaudeNarrator:
     API (see the module docstring): a caller writes the audit line a fixture narration never
     needs, the way `app.ingestion.review.review_artifact` does for the extractor."""
 
-    def __init__(self, client: AsyncAnthropic) -> None:
+    def __init__(self, client: AsyncAnthropic, *, model: str = MODEL) -> None:
         self._client = client
+        self._model = model
 
     async def narrate(
         self, steps: Sequence[NarratedStep], *, language: str, reader: Reader
@@ -338,9 +344,10 @@ class ClaudeNarrator:
         if not steps:
             return
         try:
+            record_call(Task.NARRATE, self._model)
             message = await asyncio.wait_for(
                 self._client.messages.create(  # type: ignore[call-overload]
-                    model=MODEL,
+                    model=self._model,
                     max_tokens=MAX_TOKENS,
                     system=_SYSTEM_PROMPT,
                     messages=[

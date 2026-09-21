@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from app.drugs.registry import DrugRegistry
 from app.llm.client import client_for
+from app.llm.models import Task
 from app.llm.residency import allow_external_model
 from app.reasoning.analyst.claude_adapter import ClaudeAnalyst
 from app.reasoning.analyst.port import Analyst
@@ -41,7 +42,11 @@ def analyst_for(settings: Settings, *, registry: DrugRegistry | None = None) -> 
             refusal=ClaudeAnalystOutsideDemo,
             what="NURA_ANALYST=claude",
         )
-        return ClaudeAnalyst(client=client_for(settings), registry=registry)
+        return ClaudeAnalyst(
+            client=client_for(settings),
+            registry=registry,
+            model=settings.models.for_task(Task.ANALYST),
+        )
     raise NoAnalyst(
         f"no Health Analyst named {settings.analyst!r}; only {RULE!r} and {CLAUDE!r} are "
         "built. Set NURA_ANALYST=rule for a local run"

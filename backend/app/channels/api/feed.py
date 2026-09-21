@@ -183,10 +183,19 @@ async def feed(
         # immediately — never awaited here, never on this request's own slow path.
         day = today_for(context)
         run = ensure_learning_scheduled(
-            context=context, engine=_engine(request), day=day, sessions=request.app.state.session_factory
+            context=context,
+            engine=_engine(request),
+            day=day,
+            sessions=request.app.state.session_factory,
+            max_jobs_per_run=settings_of(request).max_jobs_per_run,
         )
         if run is not None:
-            jobs = FeedJobsOut(state=run.state, started_at=run.started_at, done_at=run.done_at)
+            jobs = FeedJobsOut(
+                state=run.state,
+                started_at=run.started_at,
+                done_at=run.done_at,
+                deferred=run.deferred,
+            )
     reader = await reader_of(session, context, None)
     return reader.page(
         _with_why_sheet(FeedPageOut.of(page, jobs=jobs), context=context, reader=reader)

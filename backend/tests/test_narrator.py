@@ -183,7 +183,9 @@ async def test_a_rephrased_line_is_used_when_it_is_safe() -> None:
 
     assert lines == [NarratedLine(key="medicines", text="Checking his medicines.")]
     sent = client.messages.calls[0]
-    assert sent["model"] == "claude-opus-5"
+    # Haiku 4.5, not Opus: rephrasing a step that already happened, not deciding anything
+    # (`app.llm.models.DEFAULT_MODELS[Task.NARRATE]`).
+    assert sent["model"] == "claude-haiku-4-5-20251001"
     assert "output_format" not in sent
     assert sent["output_config"]["format"]["type"] == "json_schema"
 

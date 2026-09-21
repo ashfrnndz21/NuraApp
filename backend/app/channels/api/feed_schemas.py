@@ -86,6 +86,10 @@ class FeedJobsOut(BaseModel):
     state: Literal["looking", "done", "none"]
     started_at: datetime | None = None
     done_at: datetime | None = None
+    deferred: int = 0
+    """How many of today's self-searches the run left for a later run, past
+    `NURA_MAX_JOBS_PER_RUN` (`app.delivery.feed.background.RunRecord.deferred`). 0 the
+    ordinary day the plan never reaches the cap."""
 
 
 class FeedPageOut(BaseModel):

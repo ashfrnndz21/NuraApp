@@ -340,10 +340,20 @@ def _serialized(
 
 
 async def _serve(
-    region: Region, *, review_origin: str | None = None, narrator: Narrator | None = None
+    region: Region,
+    *,
+    review_origin: str | None = None,
+    narrator: Narrator | None = None,
+    max_jobs_per_run: int | None = None,
 ) -> AsyncIterator[Deployment]:
     async with regional_database() as engine:
-        async for served in _serve_on(engine, region, review_origin=review_origin, narrator=narrator):
+        async for served in _serve_on(
+            engine,
+            region,
+            review_origin=review_origin,
+            narrator=narrator,
+            max_jobs_per_run=max_jobs_per_run,
+        ):
             yield served
 
 
@@ -353,6 +363,7 @@ async def _serve_on(
     *,
     review_origin: str | None = None,
     narrator: Narrator | None = None,
+    max_jobs_per_run: int | None = None,
 ) -> AsyncIterator[Deployment]:
     sessions = make_session_factory(engine)
     # A served deployment's own connection is one StaticPool connection; `_serialized` is
@@ -370,6 +381,7 @@ async def _serve_on(
         whatsapp_dev_secret=WHATSAPP_SECRET,
         review_staff=(("pharmacist", STAFF_TOKEN),),
         review_origin=review_origin,
+        **({"max_jobs_per_run": max_jobs_per_run} if max_jobs_per_run is not None else {}),
     )
     # The object store is a fresh directory per served deployment, one region under it,
     # gone at the end: what the local store does under backend/var/objects on a laptop.
@@ -425,10 +437,17 @@ async def client(deployment: Deployment) -> AsyncClient:
 def deployment_factory() -> Callable[..., AbstractAsyncContextManager[Deployment]]:
     """The Singapore backend, served with a caller's own `narrator` (a test double, never the
     real Claude-backed one — `tests/test_narrator.py` mocks the `anthropic` client for that)
-    in place of the default `FixtureNarrator`: `async with deployment_factory(narrator=...) as
-    deployment:`. Everything else `deployment` gives is unchanged."""
+    in place of the default `FixtureNarrator`, or a caller's own `max_jobs_per_run` in place
+    of `Settings`' own default (6) — for a test whose subject is not the run cap itself and
+    that wants a background run to finish its whole plan in one `GET /feed`, the way
+    `tests/test_feed_formats.py`'s food-card tests do: `async with deployment_factory(
+    max_jobs_per_run=50) as deployment:`. Everything else `deployment` gives is unchanged."""
 
-    def _factory(*, narrator: Narrator | None = None) -> AbstractAsyncContextManager[Deployment]:
-        return asynccontextmanager(_serve)(Region.SG, narrator=narrator)
+    def _factory(
+        *, narrator: Narrator | None = None, max_jobs_per_run: int | None = None
+    ) -> AbstractAsyncContextManager[Deployment]:
+        return asynccontextmanager(_serve)(
+            Region.SG, narrator=narrator, max_jobs_per_run=max_jobs_per_run
+        )
 
     return _factory

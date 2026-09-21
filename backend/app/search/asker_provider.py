@@ -20,6 +20,7 @@ from __future__ import annotations
 from app.delivery.feed.claude_adapters import ClaudeSearcher
 from app.llm.ask_agent import ClaudeAsker
 from app.llm.client import client_for
+from app.llm.models import Task
 from app.llm.residency import allow_external_model
 from app.search.asker import Asker, RuleBasedAsker
 from app.settings import Settings
@@ -52,8 +53,11 @@ def asker_for(settings: Settings) -> Asker:
             api_key=settings.anthropic_api_key,
             demo_mode=settings.demo_mode,
             dev_run=settings.dev_code_sender,
+            model=settings.models.for_task(Task.SEARCH),
         )
-        return ClaudeAsker(client_for(settings), searcher=searcher)
+        return ClaudeAsker(
+            client_for(settings), searcher=searcher, model=settings.models.for_task(Task.ASK)
+        )
     raise NoAsker(
         f"no asker named {settings.asker!r}; only {RULE!r} and {CLAUDE!r} are built. Set "
         "NURA_ASKER=rule for a local run"

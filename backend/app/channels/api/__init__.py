@@ -63,6 +63,7 @@ from app.channels.api import (
     delivery,
     demo_signin,
     dev_clock,
+    dev_model_calls,
     doors,
     family,
     feed,
@@ -217,6 +218,7 @@ def _api() -> APIRouter:
     api.include_router(account.router)
     api.include_router(review.router)
     api.include_router(dev_clock.router)
+    api.include_router(dev_model_calls.router)
     api.include_router(demo_signin.router)
 
     @api.get("/health")
