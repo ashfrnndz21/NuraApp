@@ -28,7 +28,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -49,13 +49,13 @@ from app.db import as_utc, utcnow
 from app.delivery import timeline_strings as words
 from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
-from app.ingestion.models import ReviewCard
+from app.ingestion.models import ReviewCard, ReviewField
 from app.ingestion.notes import NoteView, recallable_notes
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.medicines.models import MedicationLine
-from app.medicines.strings import PLAIN_NAME
+from app.medicines.strings import PLAIN_NAME, say_date
 from app.memory.episodic import fact_cites_only_what_is_held_here, hears_consults, held_here
 from app.memory.models import (
     Appointment,
@@ -504,6 +504,103 @@ async def _facts_under(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class WaitingPaper:
+    """One review card not yet confirmed (W2, `app.llm.ask_agent` "a paper waiting to be
+    checked"): his own information that a paper exists and is waiting, never what is on it.
+    Only the four things safe to say before his yes — the kind of paper, the date printed on
+    it, where it is from, and when it was added — carried here; nothing an extracted field
+    said (a value, a unit, a range) is ever read for this, let alone kept on this object, so
+    there is nothing here that could leak past the review screen by accident."""
+
+    card_id: uuid.UUID
+    kind: str
+    """His plain word for the kind of paper (`app.delivery.timeline_strings.paper_word`),
+    already the language's own — never the raw `DocumentKind` value."""
+    document_date: date | None
+    facility: str | None
+    added_at: datetime
+
+
+async def waiting_papers(
+    session: AsyncSession, context: KeyContext, *, language: str
+) -> list[WaitingPaper]:
+    """Every paper still open (`ReviewCard.is_open`) under the record's scope — audited
+    exactly as a papers read is (`audited_read`, `Scope.RECORDS`), and answering nothing at
+    all for a key that does not hold that scope, the same rule `_corpus_stream` holds for the
+    papers already confirmed: a part this key cannot open is never read, so it can never even
+    be named. The facility line, where the card has one, is read the same header field the
+    web client's own row subtitle reads (`web/src/onboarding/review.ts` `facilityField`: the
+    field whose subject is `"lab_report"` and whose attribute is `"facility"` or `"lab"`) —
+    never a value the person has not yet said yes to otherwise."""
+    if not context.allows(Scope.RECORDS):
+        return []
+    cards = await audited_read(
+        session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
+    )
+    if not cards:
+        return []
+    fields = await audited_read(
+        session,
+        ReviewField,
+        context,
+        Scope.RECORDS,
+        where=(
+            ReviewField.card_id.in_([card.id for card in cards]),
+            ReviewField.attribute.in_(("facility", "lab")),
+        ),
+    )
+    facility_by_card: dict[uuid.UUID, str] = {}
+    for review_field in fields:
+        if isinstance(review_field.value, str) and review_field.value.strip():
+            facility_by_card.setdefault(review_field.card_id, review_field.value)
+    return [
+        WaitingPaper(
+            card_id=card.id,
+            kind=words.paper_word(card.document_kind.value, language),
+            document_date=card.document_date,
+            facility=facility_by_card.get(card.id),
+            added_at=card.created_at,
+        )
+        for card in cards
+    ]
+
+
+def _mentions_a_waiting_kind(question: str, waiting: Sequence[WaitingPaper]) -> WaitingPaper | None:
+    """The obvious case only (`app.llm.ask_agent`'s module docstring): the question names the
+    kind of paper a waiting card already is — "blood test", "blood results", his word for it
+    — and nothing confirmed already answered it. The first matching card, oldest first, so a
+    repeated question always points at the same one."""
+    low = question.lower()
+    for candidate in sorted(waiting, key=lambda w: w.added_at):
+        if _candidate_matches(low, candidate):
+            return candidate
+    return None
+
+
+def _candidate_matches(low_question: str, candidate: WaitingPaper) -> bool:
+    phrases: set[str] = {candidate.kind.lower()}
+    bare = candidate.kind.lower()
+    for prefix in ("a ", "an ", "the "):
+        bare = bare.removeprefix(prefix)
+    phrases.add(bare)
+    phrases |= _WAITING_TRIGGER_WORDS.get(bare, frozenset())
+    return any(phrase and phrase in low_question for phrase in phrases)
+
+
+_WAITING_TRIGGER_WORDS: dict[str, frozenset[str]] = {
+    "blood test": frozenset(
+        {"blood", "result", "results", "lab", "panel", "ujian darah", "darah", "验血", "化验", "结果"}
+    ),
+    "hospital letter": frozenset({"hospital", "discharge", "surat hospital", "出院信"}),
+    "medicine label": frozenset({"label", "label ubat", "药盒标签"}),
+    "insurance letter": frozenset({"insurance", "insurans", "保险"}),
+}
+"""The obvious case's word list, kept small (`app.llm.ask_agent` fix 2): a question rarely
+uses the paper's own plain phrase verbatim ("blood results", not "a blood test"). Never a
+substitute for the retriever proper — a heuristic for the one live scenario this fixes."""
+
+
 async def _notes(
     session: AsyncSession, context: KeyContext, store: ObjectStore, corpus: _Corpus
 ) -> None:
@@ -881,8 +978,10 @@ async def recall_stream(
     and text up to five lines. Every cited line is a
     template filled with the values of what it cites and passes the plain-words verifier;
     a line that does not is not said. Nothing answered is "Nura does not have that written
-    down", never a guess. The question is kept as a MESSAGE artefact and the ask is written
-    to the trail, naming it.
+    down", never a guess — unless a paper still waiting for his own yes already names the kind
+    the question is about (`waiting_papers`, `_mentions_a_waiting_kind`): then one line says
+    plainly that it is waiting, cited to the card alone. The question is kept as a MESSAGE
+    artefact and the ask is written to the trail, naming it.
     """
     async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):
         context.require(Scope.ASK)
@@ -909,10 +1008,28 @@ async def recall_stream(
                 break
             said.extend(group)
         honest: list[str] = []
-        if _would_change_treatment(text, hits):
+        change_of_treatment = _would_change_treatment(text, hits)
+        if change_of_treatment:
             honest = words.reroute_lines(lang, doctor)
         elif not said:
-            honest = words.honest_lines(lang, doctor)
+            # The obvious case (W2, `app.llm.ask_agent`'s fix): nothing confirmed answers, but
+            # a paper still waiting for his own yes already names the kind the question is
+            # about — say that plainly, cited to the card alone, never to anything on it.
+            matched = _mentions_a_waiting_kind(
+                text, await waiting_papers(session, context, language=lang)
+            )
+            if matched is not None:
+                key = "paper_waiting" if matched.document_date is not None else "paper_waiting_no_date"
+                waiting_text = words.recall_line(
+                    key,
+                    lang,
+                    what=matched.kind,
+                    date="" if matched.document_date is None else say_date(matched.document_date, lang),
+                )
+                if words.verified(waiting_text, lang):
+                    said.append(AnswerLine(waiting_text, (Cite("review_card", matched.card_id),)))
+            if not said:
+                honest = words.honest_lines(lang, doctor)
         await record(
             session,
             context=context,
@@ -977,7 +1094,9 @@ __all__ = [
     "Mode",
     "NotAQuestion",
     "Proposal",
+    "WaitingPaper",
     "recall",
     "recall_stream",
+    "waiting_papers",
     "writer_name",
 ]

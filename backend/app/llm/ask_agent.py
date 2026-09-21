@@ -11,11 +11,16 @@ already happened.
 The tools are the same audited, scope-checked reads `recall_stream`'s own corpus-builder
 (`app.search.ask._corpus_stream`) uses — `read_medicines`, `read_readings`, `read_visits`,
 `read_records`, `read_feelings`, plus `search_online` (the allowlisted web,
-`app.delivery.feed.claude_adapters.ClaudeSearcher`). A tool for a scope this key does not hold
-is never offered to the model at all: a withheld part cannot even be named, the same rule
-`_corpus_stream` holds by never reading it. Every tool's result is plain lines already in his
-own words, each carrying its own id — never a row, never a raw value the model could restate
-past what is written down.
+`app.delivery.feed.claude_adapters.ClaudeSearcher`) — and `read_waiting_papers`
+(`app.search.ask.waiting_papers`): a paper he has added but not yet said yes to is his own
+information too — its kind, the date printed on it, where it is from, and when he added it —
+never a value on it, which stays behind the review screen until his own yes closes the card.
+A tool for a scope this key does not hold is never offered to the model at all: a withheld
+part cannot even be named, the same rule `_corpus_stream` holds by never reading it. Every
+tool's result is plain lines already in his own words, each carrying its own id — never a row,
+never a raw value the model could restate past what is written down. A dated line also carries
+its own elapsed phrase, already computed (`app.search.elapsed`): "how long ago" is never the
+model's arithmetic.
 
 The answer reads as a natural, warm reply — two to four flowing sentences that answer the
 question first, never a fact dump — because the prompt asks for that voice, not because the
@@ -26,13 +31,21 @@ boundary, is exactly as strict as everywhere else. Every line is also cited only
 actually returned this ask; a boundary line, always the catalogue's own for the reader's
 language, whatever the model wrote (`app.safety.boundary.boundary_lines`) — the model is never
 trusted with that line itself. Every surviving line also passes the same conclusion-and-advice
-blocklist `app.llm.narrate.ClaudeNarrator` holds every rephrase to, and is checked for
-caregiver voice the same way (`app.channels.about_him.Reader`). A line that fails any of these,
+blocklist `app.llm.narrate.ClaudeNarrator` holds every rephrase to, is checked for caregiver
+voice the same way (`app.channels.about_him.Reader`), and is checked for an elapsed phrase the
+model invented rather than copied (`_invented_elapsed_phrase`). A line that fails any of these,
 and cannot be repaired (below), is dropped; a cite outside this ask's own tool results is
-dropped from its line; a line with nothing left to cite is dropped. If nothing survives — or
-the call refuses, times out, runs past `MAX_ROUNDS`, or answers something that does not parse
-— the answer is the rule-based asker's own answer for the same question: the stream never ends
-without one.
+dropped from its line; a line with nothing left to cite is dropped.
+
+A dropped line is never just silently missing from the middle of the answer, either: if the
+model's own first (lead) line is the one dropped, or a surviving line opens as though
+answering one that is no longer there ("However…", "What … do hold…"), the survivors do not
+stand alone as an answer — one whole-answer repair round asks the model to rewrite the whole
+thing so it does, before anything is shown (`_parse_answer`'s `lead_dropped`/`dangling`,
+`_whole_answer_repair_message`). If nothing survives at all — or that whole-answer repair also
+comes back incoherent, or the call refuses, times out, runs past `MAX_ROUNDS`, or answers
+something that does not parse — the answer is the rule-based asker's own answer for the same
+question: the stream never ends without one, and never with a partial.
 
 Streamed sentence by sentence: each line of the finished, already-checked answer is sent as
 its own `AnswerDelta` (`app.search.asker`), text and cites together, in the order it will
@@ -54,9 +67,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Final
 
 from anthropic import (
@@ -74,7 +89,7 @@ from app.channels.about_him import Reader, reader_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.compress import Searcher
 from app.delivery.feed.sources import usable_sources
-from app.delivery.timeline_strings import honest_lines, reroute_lines, verified
+from app.delivery.timeline_strings import day_of, honest_lines, reroute_lines, verified
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -115,9 +130,11 @@ from app.search.ask import (
     _keep_question,
     _plain_name,
     recall,
+    waiting_papers,
 )
 from app.search.asker import AnswerDelta
 from app.search.conversation import ConversationMemory
+from app.search.elapsed import elapsed_phrase
 from app.search.retrieve import Retriever
 
 log = logging.getLogger("nura.llm.ask_agent")
@@ -141,6 +158,7 @@ TOOL_SCOPES: Final[dict[str, Scope]] = {
     "read_insurance": Scope.MONEY,
     "read_costs": Scope.MONEY,
     "read_plan": Scope.VISITS,
+    "read_waiting_papers": Scope.RECORDS,
 }
 """Which scope a tool's read rests on — the same scope `_corpus_stream` checks before it ever
 reads that part. A key that does not hold it is never offered the tool at all. `read_insurance`
@@ -160,6 +178,7 @@ TOOL_STEP_KEYS: Final[dict[str, str]] = {
     "read_costs": "costs",
     "read_plan": "plan",
     "propose_action": "plan",
+    "read_waiting_papers": "waiting_papers",
 }
 """A tool call's `AskStep` key, into `app.delivery.timeline_strings.ASK_STEPS`/`_THEIRS` — the
 same catalogue `recall_stream`'s own steps use, so the trace looks the same however it was
@@ -186,6 +205,15 @@ _TOOL_DEFS: Final[dict[str, dict[str, Any]]] = {
         "name": "read_records",
         "description": "Facts and papers written to his record outside a visit or a reading "
         "(a discharge letter, a lab result, a note kept about him).",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
+    },
+    "read_waiting_papers": {
+        "name": "read_waiting_papers",
+        "description": "Papers he has added but not yet checked and said yes to — never what "
+        "is on them, only that one exists: its kind, the date printed on it, where it is "
+        "from, and when it was added. Use this when a question could be about a paper that "
+        "may still be waiting, so you can say it is waiting instead of saying nothing is "
+        "written down.",
         "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "read_feelings": {
@@ -326,6 +354,7 @@ _TOKEN_PREFIXES: Final[dict[str, str]] = {
     "claim": "c",
     "plan": "n",
     "proposal": "x",
+    "review_card": "r",
 }
 """One letter per kind, for `_TokenCounter` — never the uuid itself. A model given `m1` and
 `v2` to cite back can actually copy them; one given a raw uuid to retype byte for byte
@@ -355,12 +384,31 @@ def _register(
     return token
 
 
+def _today(context: KeyContext) -> date:
+    """Now, on his own clock (`app.db.utcnow`, honouring a frozen clock exactly as every
+    other timestamp in this app does), read on his region's calendar — never
+    `datetime.now()`, and never the model's own idea of "today"."""
+    return day_of(utcnow(), context.region)
+
+
+def _elapsed(context: KeyContext, language: str, moment: date, seen: set[str]) -> str:
+    """The elapsed phrase for a dated tool line (fix: "how long ago" is computed here, never
+    guessed by the model mid-answer — `app.search.elapsed`). `seen` collects every phrase
+    handed out this ask, so a line that invents its own ("about 5 years ago" when nothing this
+    ask read said that) can be told apart from one that copied a phrase actually given
+    (`_parse_answer`'s invented-elapsed check)."""
+    phrase = elapsed_phrase(_today(context), moment, language)
+    seen.add(phrase)
+    return phrase
+
+
 async def _read_medicines(
     session: AsyncSession,
     context: KeyContext,
     registry: DrugRegistry | None,
     language: str,
     counter: _TokenCounter,
+    elapsed_seen: set[str],
 ) -> tuple[list[_ToolLine], int]:
     found = await audited_read(
         session,
@@ -373,31 +421,45 @@ async def _read_medicines(
     for line in found:
         name = _plain_name(registry, line.generic, language)
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
-        started = line.started_at.date().isoformat()
+        started_on = line.started_at.date()
+        elapsed = _elapsed(context, language, started_on, elapsed_seen)
         _register(
-            lines, counter, "medication_line", line.id, f"{name}, {who}, started {started}"
+            lines,
+            counter,
+            "medication_line",
+            line.id,
+            f"{name}, {who}, started {started_on.isoformat()} ({elapsed})",
         )
     return lines, len(found)
 
 
 async def _read_readings(
-    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
+    session: AsyncSession,
+    context: KeyContext,
+    language: str,
+    counter: _TokenCounter,
+    elapsed_seen: set[str],
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
     lines: list[_ToolLine] = []
     for fact in facts:
-        date = fact.valid_from.date().isoformat()
+        on = fact.valid_from.date()
+        elapsed = _elapsed(context, language, on, elapsed_seen)
         if _is_reading(fact):
             value = fact.value
-            text = f"blood pressure {value['systolic']}/{value['diastolic']} on {date}"
+            text = f"blood pressure {value['systolic']}/{value['diastolic']} on {on.isoformat()} ({elapsed})"
         else:
-            text = f"{fact.subject} {fact.attribute} = {fact.value} on {date}"
+            text = f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})"
         _register(lines, counter, "fact", fact.id, text)
     return lines, len(facts)
 
 
 async def _read_visits(
-    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+    session: AsyncSession,
+    context: KeyContext,
+    language: str,
+    counter: _TokenCounter,
+    elapsed_seen: set[str],
 ) -> tuple[list[_ToolLine], int, list[Appointment], dict[uuid.UUID, Provider]]:
     providers = {p.id: p for p in await audited_read(session, Provider, context, Scope.VISITS)}
     visits = await audited_read(session, Appointment, context, Scope.VISITS)
@@ -405,23 +467,62 @@ async def _read_visits(
     for visit in visits:
         provider = providers.get(visit.provider_id)
         who = provider.name if provider is not None else "an unnamed provider"
-        when = visit.scheduled_at.date().isoformat()
-        text = f"with {who} on {when}, status {visit.status.value}"
+        when = visit.scheduled_at.date()
+        elapsed = _elapsed(context, language, when, elapsed_seen)
+        text = f"with {who} on {when.isoformat()} ({elapsed}), status {visit.status.value}"
         _register(lines, counter, "appointment", visit.id, text)
     return lines, len(visits), list(visits), providers
 
 
 async def _read_records(
-    session: AsyncSession, context: KeyContext, counter: _TokenCounter
+    session: AsyncSession,
+    context: KeyContext,
+    language: str,
+    counter: _TokenCounter,
+    elapsed_seen: set[str],
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
     lines: list[_ToolLine] = []
     for fact in facts:
-        date = fact.valid_from.date().isoformat()
+        on = fact.valid_from.date()
+        elapsed = _elapsed(context, language, on, elapsed_seen)
         _register(
-            lines, counter, "fact", fact.id, f"{fact.subject} {fact.attribute} = {fact.value} on {date}"
+            lines,
+            counter,
+            "fact",
+            fact.id,
+            f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})",
         )
     return lines, len(facts)
+
+
+async def _read_waiting_papers(
+    session: AsyncSession,
+    context: KeyContext,
+    language: str,
+    counter: _TokenCounter,
+    elapsed_seen: set[str],
+) -> tuple[list[_ToolLine], int]:
+    """A paper he has added but not yet checked (fix 2, this module's docstring): only the
+    four things safe to say before his yes — never an extracted value, unit or range, which
+    stays behind the review screen (`app.search.ask.WaitingPaper` carries nothing else to
+    leak)."""
+    found = await waiting_papers(session, context, language=language)
+    lines: list[_ToolLine] = []
+    for paper in found:
+        when = (
+            "no date written on it"
+            if paper.document_date is None
+            else (
+                f"dated {paper.document_date.isoformat()} "
+                f"({_elapsed(context, language, paper.document_date, elapsed_seen)})"
+            )
+        )
+        added = _elapsed(context, language, paper.added_at.date(), elapsed_seen)
+        facility = f", from {paper.facility}" if paper.facility else ""
+        text = f"{paper.kind}, {when}{facility}, added {added}, not yet checked"
+        _register(lines, counter, "review_card", paper.card_id, text)
+    return lines, len(found)
 
 
 async def _read_feelings(
@@ -687,6 +788,10 @@ class ClaudeAsker:
             visits_seen: list[Appointment] = []
             providers_seen: dict[uuid.UUID, Provider] = {}
             proposals: list[Proposal] = []
+            elapsed_seen: set[str] = set()
+            """Every elapsed phrase actually handed to the model this ask (fix: "how long
+            ago" is computed once here, never guessed by the model — `_parse_answer`'s
+            invented-elapsed check catches a line that says one this ask never gave it)."""
 
             # Written once per ask, before the first call: every round reaches Anthropic's
             # first-party API, whether or not it ends up calling a tool (ADR 0017, mirroring
@@ -715,7 +820,8 @@ class ClaudeAsker:
             messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
 
             answer: Answer | None = None
-            repaired = False
+            line_repaired = False
+            whole_repaired = False
             try:
                 for _round in range(MAX_ROUNDS):
                     record_call(Task.ASK, self._model)
@@ -741,11 +847,17 @@ class ClaudeAsker:
                         parsed = (
                             None
                             if payload is None
-                            else _answer_from_payload(
-                                payload, known, lang, reader, mode, failed_findings
+                            else _parse_answer(
+                                payload,
+                                known,
+                                lang,
+                                reader,
+                                mode,
+                                failed_findings,
+                                frozenset(elapsed_seen),
                             )
                         )
-                        if parsed is None and failed_findings and not repaired:
+                        if parsed is not None and parsed.answer is None and failed_findings and not line_repaired:
                             # One repair round (defect: "the agent still returns an empty
                             # answer"): tell the model which rules its lines broke, in the
                             # verifier's own words for exactly that failure — never the line
@@ -755,7 +867,7 @@ class ClaudeAsker:
                             # every line, repair round included); the verifier's own rewrite
                             # ('a question for the doctor: "Ask Dr Tan about the new amount of
                             # the water pill."') gives it a template to copy.
-                            repaired = True
+                            line_repaired = True
                             log.info(
                                 "claude asker: repair round, rules=%s",
                                 sorted(failed_findings),
@@ -765,8 +877,8 @@ class ClaudeAsker:
                                 {"role": "assistant", "content": assistant_content}
                             )
                             hints = "; ".join(
-                                f"{finding.problem} — say instead: {finding.rewrite}"
-                                for _rule, finding in sorted(failed_findings.items())
+                                f"rule {rule} — {finding.problem} — say instead: {finding.rewrite}"
+                                for rule, finding in sorted(failed_findings.items())
                             )
                             messages.append(
                                 {
@@ -778,7 +890,56 @@ class ClaudeAsker:
                                 }
                             )
                             continue
-                        answer = parsed
+                        if (
+                            parsed is not None
+                            and parsed.answer is not None
+                            and (parsed.lead_dropped or parsed.dangling)
+                            and not whole_repaired
+                        ):
+                            # Fix 1b/1d: some lines survived, but not all of them together
+                            # still read as one whole answer — either the lead (the direct
+                            # answer) was the one dropped, or a survivor opens as though
+                            # answering a line that is no longer there. One whole-answer
+                            # repair round, counted like any other round: send the model its
+                            # own answer back, the dropped line marked, and ask it to rewrite
+                            # the whole thing so every sentence left stands alone — no new
+                            # tool call, the same checks applied to what comes back.
+                            whole_repaired = True
+                            log.info(
+                                "claude asker: whole-answer repair round, lead_dropped=%s "
+                                "dangling=%s",
+                                parsed.lead_dropped,
+                                parsed.dangling,
+                            )
+                            assistant_content = getattr(response, "content", None) or []
+                            messages.append(
+                                {"role": "assistant", "content": assistant_content}
+                            )
+                            raw_lines = payload.get("lines") if isinstance(payload, Mapping) else []
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": _whole_answer_repair_message(
+                                        raw_lines if isinstance(raw_lines, list) else [], parsed
+                                    ),
+                                }
+                            )
+                            continue
+                        if (
+                            parsed is not None
+                            and parsed.answer is not None
+                            and (parsed.lead_dropped or parsed.dangling)
+                        ):
+                            # The one whole-answer repair chance also failed to make it stand
+                            # alone: never show a partial answer (fix 1c) — the rule-based
+                            # fallback says it instead.
+                            log.info(
+                                "claude asker: whole-answer repair still incoherent; the "
+                                "rule-based answer said it"
+                            )
+                            answer = None
+                            break
+                        answer = None if parsed is None else parsed.answer
                         break
 
                     tool_uses = _tool_use_blocks(response)
@@ -806,6 +967,7 @@ class ClaudeAsker:
                             providers_seen=providers_seen,
                             counter=counter,
                             proposals=proposals,
+                            elapsed_seen=elapsed_seen,
                         )
                         for line in step_lines:
                             known[line.token] = line
@@ -946,18 +1108,21 @@ class ClaudeAsker:
         providers_seen: dict[uuid.UUID, Provider],
         counter: _TokenCounter,
         proposals: list[Proposal],
+        elapsed_seen: set[str],
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
-            return await _read_medicines(session, context, registry, language, counter)
+            return await _read_medicines(session, context, registry, language, counter, elapsed_seen)
         if name == "read_readings":
-            return await _read_readings(session, context, language, counter)
+            return await _read_readings(session, context, language, counter, elapsed_seen)
         if name == "read_visits":
-            lines, count, visits, providers = await _read_visits(session, context, counter)
+            lines, count, visits, providers = await _read_visits(
+                session, context, language, counter, elapsed_seen
+            )
             visits_seen.extend(visits)
             providers_seen.update(providers)
             return lines, count
         if name == "read_records":
-            return await _read_records(session, context, counter)
+            return await _read_records(session, context, language, counter, elapsed_seen)
         if name == "read_feelings":
             return await _read_feelings(session, context, counter)
         if name == "search_online":
@@ -969,6 +1134,8 @@ class ClaudeAsker:
             return await _read_costs(session, context, language, counter)
         if name == "read_plan":
             return await _read_plan(session, context, language, counter)
+        if name == "read_waiting_papers":
+            return await _read_waiting_papers(session, context, language, counter, elapsed_seen)
         if name == "propose_action":
             kind = str(args.get("kind") or "")
             label = str(args.get("label") or "")
@@ -1002,24 +1169,104 @@ def _plain_words_findings(text: str, language: str) -> list[Finding]:
     return [by_rule[rule] for rule in sorted(by_rule)]
 
 
-def _answer_from_payload(
+_DANGLING_OPENERS: Final[dict[str, tuple[str, ...]]] = {
+    "en": ("however", "but", "instead", "that", "it also", "so", "this"),
+    "ms": ("walau bagaimanapun", "tetapi", "tapi", "sebaliknya", "itu", "ia juga"),
+    "zh": ("然而", "但是", "但", "反而", "相反", "那", "这也", "它也"),
+}
+"""A small, named list (fix 1d, this module's docstring) of contrastive or anaphoric openers
+that only make sense right after the line they answer back to — "What your papers DO hold…"
+after a dropped lead is the live defect this catches. The prompt (`ask_agent.txt`) forbids
+every one of these outright; this is the cheap backstop for when the model writes one anyway.
+Never a ban on the word itself mid-sentence — only as how a surviving line *opens* when the
+line before it, in the model's own original order, did not survive."""
+
+_WHAT_DO_HOLD: Final[dict[str, re.Pattern[str]]] = {
+    "en": re.compile(r"^what\b.{0,40}\bdo(?:es)?\s+hold\b", re.IGNORECASE),
+    "ms": re.compile(r"^apa\b.{0,40}\bada\b", re.IGNORECASE),
+    "zh": re.compile(r"^(?:那|这)(?:些)?(?:文件|papers)?(?:里|中)?有的"),
+}
+"""The one concrete shape named in the fix ("What your papers DO hold…"): a dangling opener
+even where a bare "what"/"apa" alone would be too broad to flag on its own."""
+
+
+def _starts_with_dangling_opener(text: str, language: str) -> bool:
+    openers = _DANGLING_OPENERS.get(language, _DANGLING_OPENERS["en"])
+    lowered = text.strip().lower()
+    if any(lowered.startswith(opener) for opener in openers):
+        return True
+    pattern = _WHAT_DO_HOLD.get(language, _WHAT_DO_HOLD["en"])
+    return bool(pattern.match(text.strip()))
+
+
+_ELAPSED_PATTERN: Final[dict[str, re.Pattern[str]]] = {
+    "en": re.compile(
+        r"\b(?:today|yesterday|tomorrow|in about \d+ (?:weeks?|months?|years?)"
+        r"|about \d+ (?:weeks?|months?|years?) ago|in \d+ days?|\d+ days? ago)\b",
+        re.IGNORECASE,
+    ),
+    "ms": re.compile(
+        r"\b(?:hari ini|semalam|esok|dalam kira-kira \d+ (?:minggu|bulan|tahun)"
+        r"|kira-kira \d+ (?:minggu|bulan|tahun) lalu|dalam \d+ hari|\d+ hari lalu)\b",
+        re.IGNORECASE,
+    ),
+    "zh": re.compile(
+        r"(?:今天|昨天|明天|大约\d+(?:周|个月|年)前|大约\d+(?:周|个月|年)后|\d+天前|\d+天后)"
+    ),
+}
+"""The shape of an elapsed phrase (fix 3, this module's docstring): the model is told to copy
+one given beside a date, never work it out itself. A line whose elapsed-shaped words do not
+match one this ask actually handed it (`elapsed_given`) is treated like an uncited claim —
+repaired or dropped, never shown as though it were read off the record."""
+
+
+def _invented_elapsed_phrase(text: str, language: str, elapsed_given: frozenset[str]) -> str | None:
+    """The first elapsed-shaped phrase in `text` that is not, case-insensitively, one of
+    `elapsed_given` — the phrases the tools actually computed and handed the model this ask.
+    `None` when every elapsed-shaped phrase in the line was one it was actually given, or when
+    the line has none at all."""
+    pattern = _ELAPSED_PATTERN.get(language, _ELAPSED_PATTERN["en"])
+    given_lower = {phrase.lower() for phrase in elapsed_given}
+    for match in pattern.finditer(text):
+        if match.group().lower() not in given_lower:
+            return match.group()
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class _Parsed:
+    """The result of checking the model's own payload against every gate (fix 1, this
+    module's docstring): the answer that survives, and whether it stands alone. `lead_dropped`
+    is true when the model's own first line did not survive but at least one later line did —
+    the live defect ("What your papers DO hold…" with no lead). `dangling` is true when a
+    surviving line opens as though answering something that is no longer there, whether or not
+    the lead specifically was the one dropped."""
+
+    answer: Answer | None
+    lead_dropped: bool = False
+    dangling: bool = False
+
+
+def _parse_answer(
     payload: Mapping[str, Any],
     known: Mapping[str, _ToolLine],
     language: str,
     reader: Reader,
     mode: Mode,
     failed_findings: dict[int, Finding] | None = None,
-) -> Answer | None:
+    elapsed_given: frozenset[str] = frozenset(),
+) -> _Parsed:
     raw_lines = payload.get("lines")
     if not isinstance(raw_lines, list):
         log.info("claude asker: payload had no 'lines' list")
-        return None
+        return _Parsed(None)
     # Case-insensitive, so `M1` or `m1 ` matches the `m1` a tool result actually carried —
     # the model is asked to copy a short id back, not retype a uuid, but it still may not get
     # the case exactly right, and a line should not be thrown away over that alone.
     known_ci = {token.strip().lower(): line for token, line in known.items()}
     lines: list[AnswerLine] = []
-    for entry in raw_lines:
+    origins: list[int] = []
+    for index, entry in enumerate(raw_lines):
         if not isinstance(entry, Mapping):
             _drop("malformed_entry")
             continue
@@ -1050,6 +1297,12 @@ def _answer_from_payload(
         if _has_conclusion_language(text, language):
             _drop("conclusion_language")
             continue
+        invented = _invented_elapsed_phrase(text, language, elapsed_given)
+        if invented is not None:
+            # Fix 3: the model did its own date arithmetic instead of using an elapsed phrase
+            # this ask actually gave it — treated like an uncited claim, never shown.
+            _drop("invented_elapsed_phrase")
+            continue
         heard = reader.says(text)
         if not reader.his and reader.speaks_to_him(heard):
             _drop("caregiver_voice")
@@ -1065,13 +1318,22 @@ def _answer_from_payload(
             _drop("no_cite_matched")
             continue
         lines.append(AnswerLine(text=heard, cites=cites))
+        origins.append(index)
     if not lines:
         log.info(
             "claude asker: no line survived out of %d the model offered", len(raw_lines)
         )
-        return None
+        return _Parsed(None)
     kept_lines = lines[:1] if mode is Mode.VOICE else lines[:TEXT_LINES]
-    return Answer(
+    kept_origins = origins[: len(kept_lines)]
+    lead_dropped = bool(raw_lines) and (not kept_origins or kept_origins[0] != 0)
+    survived = set(kept_origins)
+    dangling = any(
+        _starts_with_dangling_opener(line.text, language)
+        and (origin == 0 or origin - 1 not in survived)
+        for line, origin in zip(kept_lines, kept_origins, strict=True)
+    )
+    answer = Answer(
         question_artifact_id=uuid.uuid4(),  # overwritten by the caller with the kept artefact
         mode=mode,
         language=language,
@@ -1080,6 +1342,47 @@ def _answer_from_payload(
         boundary=(),
         withheld=(),
         dropped=len(raw_lines) - len(kept_lines),
+    )
+    return _Parsed(answer, lead_dropped=lead_dropped, dangling=dangling)
+
+
+def _answer_from_payload(
+    payload: Mapping[str, Any],
+    known: Mapping[str, _ToolLine],
+    language: str,
+    reader: Reader,
+    mode: Mode,
+    failed_findings: dict[int, Finding] | None = None,
+) -> Answer | None:
+    """`_parse_answer`'s answer alone — kept as its own name for the callers (and the unit
+    tests) that only ever wanted the answer, never the coherence flags."""
+    return _parse_answer(payload, known, language, reader, mode, failed_findings).answer
+
+
+def _whole_answer_repair_message(raw_lines: Sequence[Any], parsed: _Parsed) -> str:
+    """The whole-answer repair round's own message (fix 1b/1d, this module's docstring): his
+    full answer, sent straight back — the model's own words, never logged — with the line the
+    house style dropped marked, asking for the whole answer rewritten so every line left reads
+    on its own. Same tool results, same checks; no new tool call is asked for."""
+    marked = []
+    for index, entry in enumerate(raw_lines):
+        text = entry.get("text") if isinstance(entry, Mapping) else None
+        text = text if isinstance(text, str) and text.strip() else "(not text)"
+        marked.append(f"{index + 1}. {text}")
+    reason = (
+        "its lead line (the direct answer) was removed by the house style"
+        if parsed.lead_dropped
+        else "a line that is left opens as though answering a line that is no longer there"
+    )
+    return (
+        "Your last answer, before the house style checked it, was:\n"
+        + "\n".join(marked)
+        + f"\n\nOne problem with it: {reason}. Rewrite the WHOLE answer so every sentence "
+        "left stands on its own and the set together still answers the question — never "
+        "start a sentence with a word like 'However', 'But', 'Instead', 'That', 'It also' or "
+        "'What ... do hold' that only makes sense right after a sentence that is no longer "
+        "there. Use only the same tool results already given; call no new tool. Cite the "
+        "same ids as before."
     )
 
 

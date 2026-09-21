@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,23 +24,29 @@ from app.audit.models import Action, Outcome
 from app.channels.about_him import Reader
 from app.delivery.feed.compress import Found
 from app.delivery.timeline_strings import honest_lines
+from app.ingestion.extract import FixtureExtractor
 from app.ingestion.objects import LocalObjectStore
-from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
+from app.ingestion.photos import store_photo
+from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR, review_photo
 from app.keys.scopes import KeyRole, Scope
 from app.llm.ask_agent import (
     Cite,
     ClaudeAsker,
     _answer_from_payload,
     _boundary_rewrite,
+    _parse_answer,
+    _starts_with_dangling_opener,
     _ToolLine,
     _tools_for,
 )
+from app.memory.models import SourceChannel
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.ask import Answer, AskStep, Mode, recall
 from app.search.asker import AnswerDelta
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import REGISTRY, let_in
+from tests.paper import LAB_REPORT_VITALS, PAPER, placeholder_png
 from tests.timeline_support import record, trail
 
 
@@ -644,3 +651,275 @@ async def test_every_line_failing_rule_14_still_reaches_him_through_the_fallback
     assert answer.lines == ()
     assert list(answer.honest) == honest_lines("en", None)
     assert answer.boundary
+
+
+# --- fix 1: an answer never loses its lead and keeps the rest ------------------------------
+#
+# Live evidence (the operator's own run): the model's lead sentence ("there is no blood test
+# in your checked papers") broke plain-words rule 4 (a red word, "result"), was dropped, and a
+# second sentence survived on its own — "What your papers DO hold are notes from your hospital
+# stay, ending Thursday 20 August." — which dangles with no lead to answer back to. Rule 4's
+# own word: `verify("There is no blood test result in your papers.", "en", "ask")` names
+# `"result"` — the glossary's own red word for it (`GLOSSARY`, "result"/"results"/"panel"/
+# "labs"/"lab" -> "your blood test / your kidney test / your sugar test") — never "blood test"
+# itself, which is not red. The fix: `ask_agent.txt` now tells the model to say "written down"
+# rather than "result", and a partial answer whose lead was dropped (or whose surviving line
+# dangles) gets one whole-answer repair round before ever reaching him.
+
+_BAD_LEAD = "There is no blood test result in your papers."  # rule 4 ("result") alone
+_GOOD_TAIL = "Ask Dr Tan whether it is time for another one."
+_GOOD_LEAD = "There is no newer blood test written down in your papers."
+_DANGLING_TAIL = "However, your next visit with Dr Tan is written down."
+
+
+def test_rule_4_is_tripped_by_result_never_by_blood_test_itself() -> None:
+    """What exactly rule 4 flags in the live sentence, pinned so the fix's target never
+    drifts: the red word is "result" (the glossary's own row for "result"/"results"/"panel"/
+    "labs"/"lab"), and "blood test" alone is not red."""
+    from app.safety.plain_words import verify
+
+    findings = [f for f in verify(_BAD_LEAD, "en", "ask") if f.severity == "fail"]
+    assert [f.rule for f in findings] == [4]
+    assert '"result"' in findings[0].problem
+    assert not any(
+        f.severity == "fail"
+        for f in verify("There is no blood test in your checked papers.", "en", "ask")
+    )
+
+
+async def test_a_dropped_lead_line_triggers_a_whole_answer_repair_round(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Defect, reproduced: the lead sentence fails plain words and is dropped, a later
+    sentence survives on its own — before the fix this partial answer was shown as-is (no
+    repair was ever tried, because the old repair only fired when *every* line was dropped).
+    The fix asks the model, in one extra round, to rewrite the whole answer so it stands
+    alone; here it does, and the coherent answer is what reaches him."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _BAD_LEAD, "cites": ["m1"]}, {"text": _GOOD_TAIL, "cites": ["m1"]}]),
+            _final([{"text": _GOOD_LEAD, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, deltas, answer = await _drive(
+        asker, sg, rec.owner, "when was my last blood test", tmp_path
+    )
+
+    assert steps == ["medicines"]
+    # Three calls: the tool-use round, the first (incoherent) answer, and the one
+    # whole-answer repair round — never a second.
+    assert len(client.messages.calls) == 3
+    repair_ask = client.messages.calls[2]["messages"][-1]
+    assert repair_ask["role"] == "user"
+    assert _BAD_LEAD in repair_ask["content"]  # his own words, sent back to him, never logged
+    assert "rewrite" in repair_ask["content"].lower()
+    assert [line.text for line in answer.lines] == [_GOOD_LEAD]
+    assert deltas == [_GOOD_LEAD]
+    assert _GOOD_TAIL not in " ".join(line.text for line in answer.lines)
+
+
+async def test_when_the_whole_answer_repair_also_fails_the_fallback_answers_never_a_partial(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Fix 1c: when the one whole-answer repair chance also comes back incoherent, the
+    rule-based fallback answers instead — never the dangling partial, and never a second
+    whole-answer repair round."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _BAD_LEAD, "cites": ["m1"]}, {"text": _GOOD_TAIL, "cites": ["m1"]}]),
+            _final([{"text": _BAD_LEAD, "cites": ["m1"]}, {"text": _GOOD_TAIL, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, deltas, answer = await _drive(
+        asker, sg, rec.owner, "when was my last blood test", tmp_path
+    )
+
+    assert steps == ["medicines"]
+    assert len(client.messages.calls) == 3
+    # Never the partial: the tail line the model kept re-offering on its own never reaches him.
+    assert _GOOD_TAIL not in " ".join(answer.spoken)
+    # The rule-based fallback answered instead (the same clean ending a refusal falls back to).
+    assert answer.answered or answer.honest
+    # No sentence streamed for a partial that was never going to be shown.
+    assert deltas == []
+
+
+async def test_a_dangling_opener_on_a_surviving_non_lead_line_triggers_the_same_path(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Fix 1d: the lead line survives fine — it is a *later* line, opening with "However" right
+    after the line it answered back to was dropped, that dangles. Caught the same cheap way,
+    and repaired the same way."""
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final(
+                [
+                    {"text": _GOOD_LEAD, "cites": ["m1"]},
+                    {"text": _BAD_LEAD, "cites": ["m1"]},  # dropped (rule 4)
+                    {"text": _DANGLING_TAIL, "cites": ["m1"]},  # survives, but dangles
+                ]
+            ),
+            _final(
+                [
+                    {"text": _GOOD_LEAD, "cites": ["m1"]},
+                    {"text": "Your next visit with Dr Tan is written down.", "cites": ["m1"]},
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _steps, _deltas, answer = await _drive(
+        asker, sg, rec.owner, "when was my last blood test", tmp_path
+    )
+
+    assert len(client.messages.calls) == 3
+    assert [line.text for line in answer.lines] == [
+        _GOOD_LEAD,
+        "Your next visit with Dr Tan is written down.",
+    ]
+    assert not any(line.text.lower().startswith("however") for line in answer.lines)
+
+
+def test_starts_with_dangling_opener_matches_the_live_defects_own_opener() -> None:
+    assert _starts_with_dangling_opener(
+        "What your papers do hold are notes from his hospital stay.", "en"
+    )
+    assert _starts_with_dangling_opener(_DANGLING_TAIL, "en")
+    assert not _starts_with_dangling_opener(_GOOD_LEAD, "en")
+
+
+# --- fix 3: invented elapsed phrases are caught, exactly like an uncited claim -------------
+
+
+def test_a_line_using_the_elapsed_phrase_it_was_given_survives() -> None:
+    good_id = uuid.uuid4()
+    known = {
+        f"fact:{good_id}": _ToolLine(
+            token=f"fact:{good_id}", text="", cite=Cite(kind="fact", id=good_id)
+        )
+    }
+    text = "Your last blood test was on Wednesday 21 January, about 20 months ago."
+    payload = {"lines": [{"text": text, "cites": [f"fact:{good_id}"]}]}
+    parsed = _parse_answer(
+        payload,
+        known,
+        "en",
+        Reader(his=True),
+        Mode.TEXT,
+        elapsed_given=frozenset({"about 20 months ago"}),
+    )
+    assert parsed.answer is not None
+    assert [line.text for line in parsed.answer.lines] == [text]
+
+
+def test_a_line_inventing_its_own_elapsed_phrase_is_dropped() -> None:
+    """Fix 3: the model must never do its own date arithmetic — a line whose elapsed-shaped
+    words do not match a phrase this ask actually handed it is dropped, exactly like an
+    uncited claim (defect this guards: the model quietly "correcting" a given phrase, or
+    computing one for a date it read with no elapsed phrase attached at all)."""
+    good_id = uuid.uuid4()
+    known = {
+        f"fact:{good_id}": _ToolLine(
+            token=f"fact:{good_id}", text="", cite=Cite(kind="fact", id=good_id)
+        )
+    }
+    text = "Your last blood test was on Wednesday 21 January, about 2 years ago."
+    payload = {"lines": [{"text": text, "cites": [f"fact:{good_id}"]}]}
+    # This ask only ever gave the model "about 20 months ago" for this date — "about 2 years
+    # ago" is the model's own arithmetic, never handed to it.
+    parsed = _parse_answer(
+        payload,
+        known,
+        "en",
+        Reader(his=True),
+        Mode.TEXT,
+        elapsed_given=frozenset({"about 20 months ago"}),
+    )
+    assert parsed.answer is None
+
+
+# --- fix 2: a paper waiting to be checked reaches the model, four fields only --------------
+
+SEPT_18 = datetime(2026, 9, 18, 8, 0, tzinfo=UTC)
+
+
+async def _open_review_card(sg: AsyncSession, context: Any, store: LocalObjectStore) -> uuid.UUID:
+    photo = await store_photo(
+        sg,
+        context=context,
+        store=store,
+        data=placeholder_png(LAB_REPORT_VITALS),
+        content_type="image/png",
+        captured_at=SEPT_18,
+        source_channel=SourceChannel.APP,
+    )
+    card = await review_photo(
+        sg,
+        context=context,
+        artifact_id=photo.id,
+        store=store,
+        extractor=FixtureExtractor(PAPER),
+        language="en",
+    )
+    return card.id
+
+
+async def test_waiting_papers_reach_the_model_with_only_the_four_allowed_fields(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    rec = await record(sg)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    card_id = await _open_review_card(sg, rec.owner, store)
+
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_waiting_papers"),
+            _final(
+                [
+                    {
+                        "text": "A blood test dated Thursday 10 September is waiting for "
+                        "you to check.",
+                        "cites": ["r1"],
+                    },
+                    {"text": "Once you check it, I can answer from it.", "cites": ["r1"]},
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    steps, _deltas, answer = await _drive(
+        asker, sg, rec.owner, "when was my last blood test done", tmp_path
+    )
+
+    assert steps == ["waiting_papers"]
+    tool_result = client.messages.calls[1]["messages"][-1]["content"][0]["content"]
+    assert "Bukit Lab" in tool_result  # the facility: allowed
+    assert "blood test" in tool_result  # the kind: allowed
+    # Never an extracted value, unit or range from the fixture's own numbers.
+    for leaked in ("5.6", "140", "<130", "glucose", "ldl", "mmol"):
+        assert leaked not in tool_result
+    assert str(card_id) not in tool_result  # the id given back is the short token, never a uuid
+    assert answer.lines
+
+
+async def test_a_key_without_records_scope_is_never_offered_the_waiting_papers_tool(
+    sg: AsyncSession,
+) -> None:
+    rec = await record(sg)
+    narrow = await let_in(
+        sg,
+        rec.owner,
+        phone="+6588880003",
+        name="Aminah",
+        role=KeyRole.HELPER,
+        scopes={Scope.PROFILE, Scope.ASK, Scope.VISITS, Scope.EMERGENCY},
+    )
+    assert "read_waiting_papers" not in _tools_for(narrow)
