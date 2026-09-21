@@ -1,0 +1,320 @@
+/* Package 9 — onboarding in the blueprint's language (docs/design/experience-blueprint.html
+ *  scenes `welcome`, `signin`, `who`, `cloud`). New rules only: the shared surfaces (`.glass`,
+ *  `.pill`, `.tile`, `.cloud`, `.word`) stay exactly as `kit.css`/`base.css`/`warm.css` already
+ *  style them for every other screen that uses them (the not-feeling-well word cloud, other
+ *  onboarding steps a different builder owns). Everything below is additive, scoped to the
+ *  onboarding/welcome/sign-in screens by their own class names so nothing here can leak onto a
+ *  screen this package does not own. */
+
+/* --- Welcome: the living orb is the hero, everything else compact ------------------------- */
+/* Operator review (390x844): the illustration + heart + a tall headline + three tall cards
+ *  pushed "Get started" below the fold — a first screen whose only action cannot be seen. The
+ *  fix is vertical budget, not cleverness: a smaller orb+wordmark, one headline, three one-
+ *  line rows, then the button. `.welcome-screen.spec.ts`-equivalent geometry lives in
+ *  `cp5-onboarding.spec.ts` ("Get started" fits at 390x844 and 360x640, no scroll). */
+.welcome-orb-wrap {
+  display: flex;
+  justify-content: center;
+  padding-block: 4px 2px;
+}
+/* `--target`-independent: the orb is decorative, not a tap target, so it is free to shrink with
+ *  the viewport. `clamp()` against `100vh` (a phone screen's real height, no `dvh` needed since
+ *  this is a static entry screen with no keyboard/URL-bar resize to chase) keeps it the full
+ *  128px on a tall phone and shrinks it on a short one — 360x640 measured ~74px, still clearly
+ *  the hero, never so small it reads as an afterthought. */
+.screen.welcome .welcome-orb-wrap .orb.lg {
+  width: clamp(64px, 14vh, 128px);
+  height: clamp(64px, 14vh, 128px);
+}
+/* The wordmark is now a small brand label under the orb, not its own headline — the orb and
+ *  the SoftText line below carry that weight instead. */
+.screen.welcome .welcome-word-small {
+  font-size: 1.5rem;
+  text-align: center;
+  margin: 2px 0 0;
+}
+.welcome-tagline {
+  text-align: center;
+}
+.welcome-tagline .soft-word.accent {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-style: italic;
+  font-size: 1.12em;
+  letter-spacing: 0;
+}
+/* Three compact one-line rows (icon + a short line), not three tall cards: icon left, one line
+ *  of text right, minimal padding — this is the actual fix for the below-the-fold button, the
+ *  tall `.value-tile` card layout (warm.css) is overridden here for this screen only. The
+ *  `.value-tile` class itself is kept (not renamed) so warm-home.spec.ts's existing count
+ *  assertion needs no change. */
+.screen.welcome .value-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  margin: 2px 0;
+}
+.screen.welcome .value-row {
+  display: flex;
+  /* warm.css's own `.value-tile{flex-direction:column}` (a per-property cascade, not a whole
+   *  rule) stays in force for this property unless something else sets it — `display: flex`
+   *  above does not by itself imply `row`, so this needs to be explicit. */
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 4px 2px;
+  background: none;
+  border-radius: 0;
+}
+.screen.welcome .value-row-text {
+  font-size: var(--text-body);
+  line-height: 1.25;
+}
+
+/* --- Sign in: one conversation step (docs/design/experience-blueprint.html `signin`) ------ */
+.signin-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.signin-say {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.signin-say .orb {
+  margin-top: 2px;
+}
+.signin-say-line {
+  flex: 1;
+  min-width: 0;
+  /* Not a fixed size of its own: the same body text every other paragraph on this screen uses
+   *  (`var(--text-body)`, tokens.css), so it grows exactly as a real "writing at 200%" setting
+   *  grows everything else (a11y.spec.ts's own check on this screen's first `<p>`) — the
+   *  blueprint's own `signin` scene sets this line as its big `<h1>` headline instead, which
+   *  this screen does not: `Header` already renders the screen's one `<h1>` above it (the
+   *  "exactly one h1 per screen" rule), so Nura's line here reads as body text beside the small
+   *  orb, not a second, competing headline. */
+  font-size: var(--text-body);
+  font-weight: 300;
+  line-height: 1.3;
+  margin: 0;
+}
+.signin-resend {
+  align-self: flex-start;
+}
+
+/* --- Who is this for: two large choose-cards (docs/design/experience-blueprint.html `who`) */
+.choose-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.choose-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 84px;
+  padding: 16px 18px;
+  border-radius: 26px;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--ink);
+  text-align: left;
+  transition: background 0.3s, transform 0.15s;
+}
+.choose-card:active {
+  transform: scale(0.99);
+}
+.choose-card-icon {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+}
+.choose-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.choose-card-title {
+  font-size: 1.0625rem;
+  font-weight: 500;
+}
+.choose-card-line {
+  font-size: 0.875rem;
+  opacity: 0.82;
+}
+.who-say {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+.who-say-line {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* --- The bubble cloud (docs/design/experience-blueprint.html `cloud`, `.bub`) -------------- */
+/* `.cloud`/`.word` stay base.css's flex-wrap paper chips for every other caller; `.bubble` is
+ *  layered on top of the same `.word` element only inside onboarding's health-cloud step, and
+ *  wins on specificity (two classes) without an `!important` or touching the shared file. */
+.cloud.bubble-cloud {
+  gap: 10px;
+  justify-content: center;
+  padding: 6px 0 10px;
+}
+/* The button itself — the real tap target — never moves: its own box is what a pointer, a
+ *  screen reader and Playwright's actionability check all measure, and a hit target that keeps
+ *  sliding out from under a slow or unsteady finger is a real usability defect, not only a test
+ *  one (docs/design/README.md's own body-text-size, big-target rules are written for exactly
+ *  this audience). The drift lives on `.bubble-surface`, an absolutely-positioned decorative
+ *  child painted first (so the label and the tick sit visually on top of it, no `z-index`
+ *  needed) — the glass fill, border and blur move a few px; the button's own layout box, used
+ *  for hit-testing, does not. */
+.word.bubble {
+  position: relative;
+  /* `z-index: 0` (not just `position: relative`) is what actually opens a stacking context here
+   *  — without it, a positioned child paints ABOVE this button's own in-flow text regardless of
+   *  DOM order (CSS 2.1 Appendix E: positioned descendants paint after in-flow inline content).
+   *  With it, `.bubble-surface`'s `z-index: -1` below is scoped to this button alone and stays
+   *  behind the label, never escaping to sit behind an ancestor of the button itself. */
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  /* A fixed diameter (the blueprint's own `.bub`) only works for its own hand-picked, known-
+   *  short demo words. This cloud's words are real data in three languages — "5 or more
+   *  medicines", "腰痛或背痛" — and a fixed height would clip a long one right where the brief
+   *  says a label must never be cut off. `min-width`/`min-height` (the size tiers below) still
+   *  give the small, common words a properly round bubble; a longer label past them grows the
+   *  button downward instead of overflowing it, staying inside a rounded (not perfectly
+   *  circular) shape rather than silently losing text. */
+  min-width: var(--target);
+  min-height: var(--target);
+  max-width: 152px;
+  padding: 12px 10px;
+  border-radius: 999px;
+  text-align: center;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font-weight: 400;
+  line-height: 1.15;
+  /* `content-visibility: auto` (an off-screen-pause optimisation) turned out to fight keyboard
+   *  focus in this browser: a bubble it had marked "skipped" would not reliably take
+   *  `.focus()` even once back on screen (found by `cp5-onboarding.spec.ts`'s own keyboard-walk
+   *  test). A cloud tops out around 20 bubbles — reliable focus for a keyboard/switch user
+   *  matters more here than that paint saving, so this is plain now; `prefers-reduced-motion`
+   *  below still stops the drift outright for anyone who asked for it. */
+}
+.bubble-surface {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: bubble-bob 6s ease-in-out infinite alternate;
+  pointer-events: none;
+  transition: background 0.35s;
+}
+/* Never colour alone (WCAG 1.4.1): the tick (`.bubble-tick`, in the markup) and the bolder
+ *  label weight (`.word.bubble.picked` below) carry the picked state; the surface's own fill
+ *  swap is the third, reinforcing cue — not the animated `transform`, which the running drift
+ *  already owns for this element and would otherwise fight a static one every frame. */
+.word.bubble.picked .bubble-surface {
+  background: var(--ink);
+}
+.word.bubble.fresh .bubble-surface {
+  border-color: var(--plum);
+}
+/* Three visibly different tiers (operator review: the old 68/86/104 steps read as "a table with
+ *  three font sizes", not a cloud) — by commonness/importance, the same ordering `cloudView`
+ *  already sizes on (`onboarding/cloud.ts` `sizeOf`: weight plus a boost per related pick). */
+.word.bubble.s1 { min-width: 60px; min-height: 60px; font-size: var(--word-1); padding: 10px 12px; }
+.word.bubble.s2 { min-width: 90px; min-height: 90px; font-size: var(--word-2); padding: 13px 14px; }
+.word.bubble.s3 { min-width: 126px; min-height: 126px; font-size: var(--word-3); font-weight: 500; padding: 16px; }
+/* Patient density's larger targets (tokens.css `--target: 56px`) still fit every size above;
+   a caregiver's screen (`--target: 48px`) has more headroom at the same sizes. A longer label
+   grows past its tier's minimum (never below it) rather than clipping — see the comment on
+   `.word.bubble` above. */
+/* A cloud, not a table: alternating vertical offsets so consecutive bubbles never line up into
+ *  neat columns (operator review — "reads as a two-column table of pills"). Only ever a
+ *  positive `margin-top`: a negative one could pull a bubble up into the row above it and risk
+ *  the "no overlap > 4px" rule; a positive one only ever grows the gap before it, which
+ *  `cp5-onboarding.spec.ts`'s geometry test re-checks at all three sizes. Set from the rendered
+ *  position (`at % 3`, `Cloud.tsx` — equivalent to `:nth-child(3n+…)` here, just computed
+ *  alongside the size/picked/fresh classes already built per word in the same map). */
+.word.bubble.stagger-a { margin-top: 16px; }
+.word.bubble.stagger-b { margin-top: 6px; }
+.word.bubble.picked {
+  color: #2b2140;
+  font-weight: 600;
+}
+.word.bubble .bubble-tick {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.word.bubble:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 3px;
+}
+/* A moving target is a hard one to tap precisely — the drift holds still the moment a pointer
+ *  sits over a bubble or it has keyboard focus, so a finger or a switch always lands on
+ *  something that has stopped moving under it. */
+.word.bubble:hover .bubble-surface,
+.word.bubble:focus-visible .bubble-surface {
+  animation-play-state: paused;
+}
+@keyframes bubble-bob {
+  to { transform: translateY(-6px); }
+}
+.cloud-ack {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+/* One Nura turn: the acknowledgement and the per-tap status share the orb and stack as two
+ *  lines of the same turn (operator review — the status used to sit as an orphan line with no
+ *  orb/indent of its own, unrelated to anything above it). */
+.cloud-ack-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cloud-ack-line {
+  margin: 0;
+}
+.cloud-ack-lines .status {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-surface {
+    animation: none !important;
+  }
+}

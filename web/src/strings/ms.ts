@@ -66,7 +66,7 @@ export const ms = {
   },
   welcome: {
     // @patient headline
-    tagline1: "Kesihatan anda, tersimpan bersama.",
+    tagline1: "Kesihatan anda, tersimpan *bersama*.",
     // @patient headline
     tagline2: "Keluarga anda, sentiasa dekat.",
     // @patient
@@ -546,6 +546,10 @@ export const ms = {
     // @patient phrase
     sendCode: "Hantar kod kepada saya",
     // @patient phrase
+    sending: "Menghantar…",
+    // @patient phrase
+    sent: "Dihantar",
+    // @patient phrase
     useEmail: "Daftar masuk dengan emel pula",
     // @patient phrase
     usePhone: "Daftar masuk dengan nombor telefon pula",
@@ -559,6 +563,14 @@ export const ms = {
     codeLabel: "Kod itu",
     // @patient phrase
     signInButton: "Daftar masuk",
+    // @patient phrase
+    checking: "Menyemak…",
+    // @patient phrase
+    signedIn: "Berjaya daftar masuk",
+    // @patient phrase
+    resend: "Hantar sekali lagi",
+    // @patient
+    resendDone: "Nura sudah hantar kod baharu.",
     // @patient
     emailLead: "Taip alamat emel anda.",
     // @patient phrase
@@ -579,6 +591,8 @@ export const ms = {
   doors: {
     // @patient headline
     title: "Ini untuk siapa?",
+    // @patient
+    greeting: "Siapa yang saya jaga?",
     // @patient phrase
     forMe: "Ini untuk saya",
     // @patient
@@ -1497,6 +1511,12 @@ export const ms = {
       countNone: "Nura belum tulis apa-apa lagi.",
       // @patient
       count: "Nura sudah tulis {n} perkara.",
+      // @patient
+      ackSelf: "Anda beritahu saya tentang {list}.",
+      // @patient
+      ackOther: "Nura catatkan {list} untuk {name}.",
+      // @patient phrase
+      and: " dan ",
       // @patient phrase
       tellMe: "Atau beritahu saja",
       // @patient

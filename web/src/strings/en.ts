@@ -66,7 +66,7 @@ export const en = {
   },
   welcome: {
     // @patient headline
-    tagline1: "Your health, kept together.",
+    tagline1: "Your health, kept *together*.",
     // @patient headline
     tagline2: "Your family, close by.",
     // @patient
@@ -546,6 +546,10 @@ export const en = {
     // @patient phrase
     sendCode: "Send me a code",
     // @patient phrase
+    sending: "Sending…",
+    // @patient phrase
+    sent: "Sent",
+    // @patient phrase
     useEmail: "Sign in with an email instead",
     // @patient phrase
     usePhone: "Sign in with a phone number instead",
@@ -559,6 +563,14 @@ export const en = {
     codeLabel: "The code",
     // @patient phrase
     signInButton: "Sign in",
+    // @patient phrase
+    checking: "Checking…",
+    // @patient phrase
+    signedIn: "Signed in",
+    // @patient phrase
+    resend: "Send it again",
+    // @patient
+    resendDone: "Nura sent a new code.",
     // @patient
     emailLead: "Type your email address.",
     // @patient phrase
@@ -579,6 +591,8 @@ export const en = {
   doors: {
     // @patient headline
     title: "Who is this for?",
+    // @patient
+    greeting: "Who am I looking after?",
     // @patient phrase
     forMe: "This is for me",
     // @patient
@@ -1497,6 +1511,12 @@ export const en = {
       countNone: "Nura has not written anything down yet.",
       // @patient
       count: "Nura has written {n} things down.",
+      // @patient
+      ackSelf: "You told me about {list}.",
+      // @patient
+      ackOther: "Nura wrote down {list} for {name}.",
+      // @patient phrase
+      and: " and ",
       // @patient phrase
       tellMe: "Or just tell me",
       // @patient
