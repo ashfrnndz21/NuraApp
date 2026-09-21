@@ -221,6 +221,10 @@ export interface Strings {
     mealNotHadOther: string;
     comingUpTitle: string;
     addReading: string;
+    /** "Your papers" (library part B #2): the short list under Health, and the withheld
+     *  line for a key without the records scope — named, never left off the screen blank. */
+    papersTitle: string;
+    papersWithheld: string;
   };
   /** The weekly report (W1, docs/design/nura-concept-board.html): the Health card, the live
    *  trace while it builds, the report itself, and the bell's row that opens it. */
@@ -732,6 +736,12 @@ export interface Strings {
       leaveOut: string;
       keepIn: string;
       leftOut: string;
+      leftOutByYou: string;
+      aboutThisPaper: string;
+      checkedOn: string;
+      checkedOnOther: string;
+      seePaperItself: string;
+      askAboutPaper: string;
       looksRight: string;
       saved: string;
       learnedTitle: string;
@@ -897,6 +907,23 @@ export interface Strings {
     papersNoneOther: string;
     paperFrom: string;
     paperOpen: string;
+    /** "Your papers" full list (library part B #2): the way to it from Health's short list. */
+    seeAllPapers: string;
+    seeAllPapersOther: string;
+    /** A confirmed lab paper's state chip, from `rangeStatus`: how many results sit outside
+     *  the paper's own printed range, or that none do. Never a bare count. */
+    paperChipOutside: string;
+    paperChipInRange: string;
+    /** A waiting paper's state chip — the short word, distinct from the sheet's own longer
+     *  `onboarding.records.checkThisOne`. */
+    paperChipCheck: string;
+    /** Any other confirmed kind (a letter, a receipt): read again, never re-checked. */
+    paperChipRead: string;
+    /** Grouping the full list by year once there are enough papers to need it. */
+    paperYearGroup: string;
+    /** "Ask about this paper" (library part B #3) opens Ask with the paper named — a draft
+     *  he finishes and sends himself, never asked on its own. */
+    paperAskPrefill: string;
     older: string;
     papersWith: string;
     paperWith: string;

@@ -427,7 +427,7 @@
    rows manage their own spacing (padding + a hairline), not the panel's flex gap. */
 .glass-card.report-panel {
   gap: 0;
-  padding: 4px 16px;
+  padding: 4px 18px;
 }
 .report-table-row {
   display: flex;
@@ -436,6 +436,12 @@
   width: 100%;
   min-height: var(--target);
   padding: 9px 0;
+  /* A `<button>` row's user-agent default is a 2px outset border on every side; unset here
+     first so only the hairline below ever draws — its own bright vertical line down the
+     panel's left (and right) edge, on every row, was the owner's report (E02-07 library
+     part A #1: "a line on the left side"), found live in `report-table-row`'s computed
+     style (`border: 2px outset rgb(0, 0, 0)` on a `<button>` this rule never reset). */
+  border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0;
   background: none;
@@ -506,6 +512,76 @@ button.report-table-row {
 }
 .report-row.left-out {
   opacity: 0.6;
+}
+
+/* --- An administrative row: label above value, not squeezed beside it (E02-07 library
+   part A #2: "which doctor asked for it" wrapping into five lines beside a pill) ---------- */
+.report-row-admin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+.report-row-admin-label {
+  font-size: 12.5px;
+  opacity: 0.74;
+  font-weight: 400;
+}
+.report-row-admin-printed {
+  font-size: 11.5px;
+  opacity: 0.6;
+}
+.report-row-admin-value-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  justify-content: space-between;
+}
+.report-row-admin-value {
+  font-size: 16px;
+  font-weight: 500;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+/* --- "About this paper": a closed-by-default disclosure holding the rows nobody needs to
+   act on (E02-07 library part A #4) --------------------------------------------------------- */
+.report-about-toggle {
+  display: flex;
+  /* The row base stacks its children; this one is a single line, words left, chevron right. */
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.report-about-toggle svg {
+  flex: none;
+  /* The kit chevron points right: closed it points down, open it points up. */
+  transform: rotate(90deg);
+  transition: transform 0.2s ease;
+}
+.report-about-toggle[aria-expanded="true"] svg {
+  transform: rotate(-90deg);
+}
+
+/* --- A reopened, confirmed paper: read-only rows, never a button, never tappable ----------- */
+.report-table-row.read-only {
+  cursor: default;
+}
+.report-row-checked {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.78;
+}
+.report-reopen-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 @media (prefers-reduced-motion: reduce) {

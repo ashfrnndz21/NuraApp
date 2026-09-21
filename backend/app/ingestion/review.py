@@ -63,7 +63,7 @@ from app.ingestion.models import (
     ReviewCard,
     ReviewField,
 )
-from app.ingestion.objects import ObjectStore
+from app.ingestion.objects import NoSuchObject, ObjectStore, sha256_of
 from app.ingestion.readings import (
     BLOOD_PRESSURE_RANGE,
     DIASTOLIC,
@@ -82,7 +82,7 @@ from app.memory.episodic import held_here, record_event, require_artifact
 from app.memory.models import Appointment, Artifact, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact
 from app.memory.working import require_open_episode
-from app.regions import REGION_TZ
+from app.regions import REGION_TZ, guard_region
 from app.safety.high_risk import high_risk_class
 from app.safety.red_flags import FlagKind, red_flags_in, write_red_flag
 
@@ -656,6 +656,26 @@ async def require_review_card(
     if not found:
         raise NoSuchReviewCard(f"no review card {card_id} on profile {context.profile_id}")
     return found[0]
+
+
+@audited(Action.READ, Scope.RECORDS, CARD)
+async def card_artifact(
+    session: AsyncSession, *, context: KeyContext, store: ObjectStore, card_id: uuid.UUID
+) -> tuple[bytes, str]:
+    """The bytes of the paper behind one review card, and its content type — "See the paper
+    itself" on a paper he has already checked, reopened read-only (E02-07 library part B #3).
+    Read through the record's own door twice over: the card must be his
+    (`require_review_card`), and so must the artefact it names (`require_artifact`, the same
+    door `app.family.photos.photo_content` reads a shared photo through). Nothing new is
+    stored or scoped here — a card's artefact was always his to read under the record's
+    scope; this is the one small additive route the library needed, to read it back."""
+    guard_region(held_in=store.region, asked_from=context.region)
+    card = await require_review_card(session, context=context, card_id=card_id)
+    artifact = await require_artifact(session, context=context, artifact_id=card.artifact_id)
+    data = await store.get(artifact.storage_key)
+    if sha256_of(data) != artifact.sha256:
+        raise NoSuchObject("the bytes under that key are not the paper")
+    return data, artifact.content_type
 
 
 @audited(Action.READ, Scope.RECORDS, FIELD)

@@ -1,4 +1,5 @@
 import type { DecisionIn, FieldRange, ReviewCardOut, ReviewFieldOut } from "../api/types";
+import { fieldValueDate } from "./dates";
 import { fill, type Strings } from "../strings";
 
 /** The capture review card (E02-07) as the onboarding records step shows it: what each line
@@ -53,6 +54,25 @@ export function valueText(value: unknown): string {
 export function readableValueText(value: unknown, s: Strings): string {
   const text = valueText(value);
   return text.length > 0 ? text : s.onboarding.records.valueUnreadable;
+}
+
+/** What a field really holds once he has decided: his own retyped number or words once the
+ *  card is confirmed and the field was `corrected` (a reopened paper's own true value —
+ *  library part B #3), else the paper's own reading. Never used for the live correction box
+ *  (`decide`, `canCorrect`), which always starts from what was read; only for display. */
+export function effectiveValue(field: Pick<ReviewFieldOut, "value" | "state" | "corrected_value">): unknown {
+  return field.state === "corrected" && field.corrected_value != null ? field.corrected_value : field.value;
+}
+
+/** A field's display text, its own printed date read as a date in his language when the
+ *  value is one (E02-07 library part A #3) — the paper's own words otherwise, exactly as
+ *  `readableValueText` already shows them. */
+export function displayValueText(value: unknown, s: Strings, locale: string): string {
+  if (typeof value === "string") {
+    const dated = fieldValueDate(value, locale);
+    if (dated) return dated;
+  }
+  return readableValueText(value, s);
 }
 
 /** Where a number sits against the paper's own printed range (never a judgement of ours,
@@ -384,19 +404,21 @@ export interface ReportRowView {
 
 /** One row of the report table, in full — everything a `ReportRow` needs to draw, computed
  *  once so the component itself only ever renders what this says (E02: "no row ever blank",
- *  "Check this one" only on `needs_confirm`/`unreadable`). */
-export function reportRow(field: ReviewFieldOut, s: Strings): ReportRowView {
+ *  "Check this one" only on `needs_confirm`/`unreadable`). `locale` is only for how a date
+ *  value in `valueText` reads (`displayValueText`) — never for the field's own comparisons. */
+export function reportRow(field: ReviewFieldOut, s: Strings, locale = "en-SG"): ReportRowView {
   const label = fieldLabel(field, s);
   const printed = field.label_on_paper?.trim() || null;
-  const status = rangeStatus(field.value, field.range);
+  const value = effectiveValue(field);
+  const status = rangeStatus(value, field.range);
   return {
     fieldId: field.field_id,
     label,
     printedLabel: printed && printed !== label ? printed : null,
-    valueText: readableValueText(field.value, s),
+    valueText: displayValueText(value, s, locale),
     unit: field.unit,
     status,
-    geometry: rangeBarGeometry(field.value, field.range),
+    geometry: rangeBarGeometry(value, field.range),
     flagWord: flagWord(status, s),
     tone: flagTone(status),
     rangeText: field.range?.text ?? null,
@@ -404,6 +426,45 @@ export function reportRow(field: ReviewFieldOut, s: Strings): ReportRowView {
     correctable: canCorrect(field),
     unreadable: field.unreadable,
   };
+}
+
+/** Whether a row is a measured result — a lab value with a unit or a printed range to place
+ *  it against — as opposed to an administrative line (a name, a number, a date on the paper):
+ *  the report table's own split (E02-07 library part A #4, "results first"). A row with
+ *  neither a unit nor anything to draw a range against is never a result, whatever its
+ *  subject: the same test rows `readingTally` already counts as "parsable". */
+export function isResultRow(row: Pick<ReportRowView, "unit" | "geometry" | "rangeText">): boolean {
+  return row.unit != null || row.geometry != null || row.rangeText != null;
+}
+
+/** The kinds of paper that are a table of results, where the rest is only about the paper. */
+const RESULTS_PAPERS: ReadonlySet<string> = new Set(["lab_report", "device_screen"]);
+
+export interface ReportSections {
+  /** Results first, then any administrative row that still needs him — never hidden behind
+   *  the disclosure, whatever it is (E02-07 library part A #4). */
+  open: ReviewFieldOut[];
+  /** The rest of the administrative rows, behind "About this paper", closed by default. */
+  collapsed: ReviewFieldOut[];
+}
+
+/** The report table's own order: every result row, in the position the paper printed them,
+ *  then any administrative row that needs him (`needs_confirm`/`unreadable`) — the "Check
+ *  {c}" chip's count never changes because of this split — then, behind the fold, the
+ *  administrative rows that need nothing from him at all. */
+export function reportSections(fields: readonly ReviewFieldOut[], s: Strings, locale = "en-SG", kind?: string): ReportSections {
+  // Only a paper of results has lines "about the paper" to fold away (a lab's name, a sample
+  // date). On a letter, a slip or a prescription the words ARE the paper — why he was in
+  // hospital, when the next visit is — so nothing is folded at all.
+  if (kind !== undefined && !RESULTS_PAPERS.has(kind)) return { open: [...fields], collapsed: [] };
+  const open: ReviewFieldOut[] = [];
+  const collapsed: ReviewFieldOut[] = [];
+  for (const field of fields) {
+    const row = reportRow(field, s, locale);
+    if (isResultRow(row) || row.needsAttention) open.push(field);
+    else collapsed.push(field);
+  }
+  return { open, collapsed };
 }
 
 /** The provenance line the table shows once, under every row, when every field came from the

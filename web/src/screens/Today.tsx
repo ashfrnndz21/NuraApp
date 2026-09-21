@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { focusHeading } from "../ui/focus";
 import { EmergencyCard } from "./Emergency";
 import type { KeptCard } from "../offline/emergencyCache";
 import { emergencyOnly } from "../offline/emergencyCache";
@@ -486,6 +487,12 @@ function useHomeHero(v: TodayView, patientName: string, voice: HomeVoice) {
       )
     : null;
   const state = homeState({ flagged, act, topItem });
+  // E15-04: a new screen starts at its heading. Home's heading only settles once the decision
+  // is made — the header's question when busy, the large greeting when quiet — and the header
+  // is redrawn as it does, so the focus `app.tsx` gave the first one is lost. Give it again.
+  useEffect(() => {
+    if (ready) focusHeading();
+  }, [ready, state]);
   // The two rows under the insight card are a different, always-actionable fact each — never
   // the same fact the headline already gave: the dose row only when the headline is not
   // already that dose, the "for you" row only for a feed item the headline is not already
@@ -593,7 +600,7 @@ function HomeHero({ v, patientName, voice, hero }: { v: TodayView; patientName: 
       {ready && page && state === "quiet" && (
         <div class="home-quiet" data-testid={self ? "today-hero" : "home-hero"}>
           <Orb size="lg" testId="home-orb-lg" />
-          <SoftText as="h2" pace="headline" className="home-quiet-greeting" text={voice.hello} testId="quiet-greeting" />
+          <SoftText as="h1" pace="headline" className="home-quiet-greeting" text={voice.hello} testId="quiet-greeting" />
           <SoftText
             as="p"
             pace="body"

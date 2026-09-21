@@ -447,6 +447,10 @@ export const en = {
     comingUpTitle: "Coming up",
     // @patient phrase
     addReading: "Write down a blood pressure",
+    // @patient headline
+    papersTitle: "Your papers",
+    // @patient
+    papersWithheld: "This key does not cover {name}'s papers.",
   },
   insights: {
     // @patient headline
@@ -1537,6 +1541,18 @@ export const en = {
       keepIn: "Keep this one",
       // @patient
       leftOut: "Nura will leave this one out.",
+      // @patient
+      leftOutByYou: "You left this one out.",
+      // @patient phrase
+      aboutThisPaper: "About this paper",
+      // @patient
+      checkedOn: "You checked this on {date}.",
+      // @patient
+      checkedOnOther: "{patient} checked this on {date}.",
+      // @patient phrase
+      seePaperItself: "See the paper itself",
+      // @patient phrase
+      askAboutPaper: "Ask about this paper",
       // @patient phrase
       looksRight: "Looks right",
       // @patient
@@ -1863,9 +1879,9 @@ export const en = {
     // @patient headline
     medicinesOther: "{patient}'s medicines",
     // @patient headline
-    papers: "Papers waiting for your yes",
+    papers: "Your papers",
     // @patient headline
-    papersOther: "Papers waiting for a yes",
+    papersOther: "{patient}'s papers",
     // @patient headline
     routine: "Your day",
     // @patient headline
@@ -2002,13 +2018,29 @@ export const en = {
     // @patient phrase
     orderNo: "Not now",
     // @patient
-    papersNone: "No paper is waiting for your yes.",
+    papersNone: "Nura has no papers for you yet.",
     // @patient
-    papersNoneOther: "No paper is waiting for a yes.",
+    papersNoneOther: "Nura has no papers for {patient} yet.",
     // @patient
     paperFrom: "This came in on {date}.",
     // @patient phrase
     paperOpen: "Look at this paper",
+    // @patient phrase
+    seeAllPapers: "See all your papers",
+    // @patient phrase
+    seeAllPapersOther: "See all of {patient}'s papers",
+    // @patient phrase
+    paperChipOutside: "{n} outside",
+    // @patient phrase
+    paperChipInRange: "All in range",
+    // @patient phrase
+    paperChipCheck: "Check",
+    // @patient phrase
+    paperChipRead: "Read",
+    // @patient phrase
+    paperYearGroup: "In {year}",
+    // @patient phrase
+    paperAskPrefill: "About my {paper} from {date} — ",
     // @patient phrase
     older: "Show older visits",
     // @patient

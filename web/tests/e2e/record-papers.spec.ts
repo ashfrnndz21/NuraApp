@@ -110,18 +110,28 @@ for (const look of LOOKS) {
     await page.getByTestId("record-papers").click();
     const waiting = page.getByTestId("waiting-paper");
     await expect(waiting).toHaveCount(1);
-    await expect(waiting).toContainText("This is a blood test.");
-    await expect(waiting.locator(`[data-card-id="${handled.review_card_id}"]`)).toHaveCount(1);
+    await expect(waiting).toContainText("Blood test");
+    await expect(waiting).toHaveAttribute("data-card-id", handled.review_card_id!);
     await readable(page, look);
 
-    await waiting.getByTestId("open-paper").click();
+    await waiting.click();
     await expect(page.locator(`main[data-card-id="${handled.review_card_id}"]`)).toBeVisible();
     await readable(page, look);
     await page.getByTestId("looks-right").click();
     await expect(page.getByTestId("record-note")).toHaveText("Nura wrote it down.");
-    await expect(page.getByTestId("no-papers")).toHaveText("No paper is waiting for your yes.");
+    // Confirmed, not gone: it is now a checked paper in the same list (library part B #2).
+    await expect(page.getByTestId("waiting-paper")).toHaveCount(0);
+    const checked = page.getByTestId("checked-paper");
+    await expect(checked).toHaveCount(1);
+    await expect(checked).toHaveAttribute("data-card-id", handled.review_card_id!);
     const card = (await (await request.get(`${API}/profiles/${pa.profileId}/review-cards/${handled.review_card_id}`, auth(pa.token))).json()) as { confirmed_at: string | null };
     expect(card.confirmed_at).not.toBeNull();
+
+    // Reopened, it is read-only: "You checked this on", and nothing to correct.
+    await checked.click();
+    await expect(page.getByTestId("report-checked-on")).toBeVisible();
+    await expect(page.getByTestId("looks-right")).toHaveCount(0);
+    await readable(page, look);
   });
 
   test(`a blood pressure read off the machine's screen, confirmed with no typing (${look})`, async ({ page, request }) => {

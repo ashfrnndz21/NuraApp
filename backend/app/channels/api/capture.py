@@ -7,6 +7,8 @@
     POST /profiles/{id}/readings/photo                a photo of a machine's screen
     GET  /profiles/{id}/review-cards                  the profile's cards, newest first
     GET  /profiles/{id}/review-cards/{card_id}        one card with its fields
+    GET  /profiles/{id}/review-cards/{card_id}/artifact  the paper itself, "See the paper itself"
+                                                      on a card reopened read-only (E02-07 library)
     POST /profiles/{id}/review-cards/{card_id}/fields/{field_id}/type
                                                       type in a field Nura could not read
     POST /profiles/{id}/review-cards/{card_id}/confirm  close it with the yes minted for it
@@ -63,6 +65,7 @@ from app.ingestion.photos import store_photo
 from app.ingestion.review import (
     ImportStep,
     ImportStepKey,
+    card_artifact,
     card_fields,
     confirm_review_card,
     list_review_cards,
@@ -345,6 +348,19 @@ async def review_cards(
 async def review_card(card_id: uuid.UUID, context: Context, session: Db) -> ReviewCardOut:
     card = await require_review_card(session, context=context, card_id=card_id)
     return await _card_out(session, context, card)
+
+
+@router.get("/{profile_id}/review-cards/{card_id}/artifact")
+async def review_card_artifact(
+    card_id: uuid.UUID, request: Request, context: Context, session: Db
+) -> Response:
+    """The paper itself behind one card, a photo or a PDF exactly as it was kept — "See the
+    paper itself" once he has reopened a paper he already checked (E02-07 library part B #3).
+    Read under the record's scope, like the card and everything on it."""
+    data, content_type = await card_artifact(
+        session, context=context, store=providers_of(request).object_store, card_id=card_id
+    )
+    return Response(content=data, media_type=content_type, headers={"Cache-Control": "private, no-store"})
 
 
 @router.post("/{profile_id}/review-cards/{card_id}/fields/{field_id}/type")

@@ -52,6 +52,10 @@ beside an ordinary lipid row and a header field, 10 September 2026."""
 LAB_REPORT_RED_FLAG = "lab-report-red-flag-2026-09-11"
 """A lab report whose facility remark names a red-flag word, 11 September 2026."""
 
+LIPID_GLUCOSE_PANEL = "lipid-glucose-panel-2026-09-05"
+"""A lipid and glucose panel with every result's printed range, 5 September 2026: the paper the
+report table's range bars are drawn from (redesign checkpoint 2). Wholly synthetic."""
+
 METABOLIC_PANEL = "metabolic-panel-2026-09-18"
 """A wider metabolic panel, 18 September 2026: the controlled vocabulary added for defect #1
 (kidney_panel, blood_test, liver_panel), a result's own printed `range` in the current shape

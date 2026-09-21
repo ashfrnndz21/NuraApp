@@ -222,7 +222,7 @@ export const zh = {
     // @patient headline
     todayKicker: "今天",
     // @patient headline
-    insightTitle: "你的健康",
+    insightTitle: "您的健康",
     // @patient headline
     insightTitleOther: "{patient}的健康",
     // @patient phrase
@@ -447,6 +447,10 @@ export const zh = {
     comingUpTitle: "接下来",
     // @patient phrase
     addReading: "写下血压读数",
+    // @patient headline
+    papersTitle: "您的文件",
+    // @patient
+    papersWithheld: "这把钥匙不包括{name}的文件。",
   },
   insights: {
     // @patient headline
@@ -1211,7 +1215,9 @@ export const zh = {
     topThree: "今天的3件事",
     // @patient phrase
     notWell: "我觉得不舒服",
+    // @patient phrase
     notWellShort: "不舒服？",
+    // @patient phrase
     notWellShortOther: "不舒服？",
     // @patient headline
     notWellTitle: "告诉Nura您的感觉",
@@ -1535,6 +1541,18 @@ export const zh = {
       keepIn: "留下这一条",
       // @patient
       leftOut: "Nura 不会用这一条。",
+      // @patient
+      leftOutByYou: "您把这一条去掉了。",
+      // @patient phrase
+      aboutThisPaper: "关于这份文件",
+      // @patient
+      checkedOn: "您在{date}查看过这份文件。",
+      // @patient
+      checkedOnOther: "{patient}在{date}查看过这份文件。",
+      // @patient phrase
+      seePaperItself: "查看原文件",
+      // @patient phrase
+      askAboutPaper: "询问这份文件",
       // @patient phrase
       looksRight: "看起来没错",
       // @patient
@@ -1859,9 +1877,9 @@ export const zh = {
     // @patient headline
     medicinesOther: "{patient}的药",
     // @patient headline
-    papers: "等您说好的文件",
+    papers: "您的文件",
     // @patient headline
-    papersOther: "等确认的文件",
+    papersOther: "{patient}的文件",
     // @patient headline
     routine: "您的一天",
     // @patient headline
@@ -1998,13 +2016,29 @@ export const zh = {
     // @patient phrase
     orderNo: "现在不用",
     // @patient
-    papersNone: "没有文件在等您说好。",
+    papersNone: "Nura 还没有您的文件。",
     // @patient
-    papersNoneOther: "没有等确认的文件。",
+    papersNoneOther: "Nura 还没有{patient}的文件。",
     // @patient
     paperFrom: "这是{date}收到的。",
     // @patient phrase
     paperOpen: "看这份文件",
+    // @patient phrase
+    seeAllPapers: "查看您所有的文件",
+    // @patient phrase
+    seeAllPapersOther: "查看{patient}所有的文件",
+    // @patient phrase
+    paperChipOutside: "{n}项超出范围",
+    // @patient phrase
+    paperChipInRange: "都在范围内",
+    // @patient phrase
+    paperChipCheck: "请查看",
+    // @patient phrase
+    paperChipRead: "查看",
+    // @patient phrase
+    paperYearGroup: "{year}年",
+    // @patient phrase
+    paperAskPrefill: "关于我{date}的{paper} — ",
     // @patient phrase
     older: "看以前的看诊",
     // @patient
