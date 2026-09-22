@@ -437,11 +437,16 @@ export function reportRow(field: ReviewFieldOut, s: Strings, locale = "en-SG"): 
   const printed = field.label_on_paper?.trim() || null;
   const value = effectiveValue(field);
   const status = rangeStatus(value, field.range);
+  const valueText = displayValueText(value, s, locale);
   return {
     fieldId: field.field_id,
     label,
-    printedLabel: printed && printed !== label ? printed : null,
-    valueText: displayValueText(value, s, locale),
+    // The paper's own label is worth a line of its own only when the value does not already
+    // open with it: a policy's essentials are read "in the item's own words together with
+    // its amount" ("Overall Annual Limit: RM150,000"), so printing "Overall Annual Limit"
+    // above that said every line twice (the owner's own schedule, 22 Sep 2026).
+    printedLabel: printed && printed !== label && !saysItself(valueText, printed) ? printed : null,
+    valueText,
     unit: field.unit,
     status,
     geometry: rangeBarGeometry(value, field.range),
@@ -452,6 +457,16 @@ export function reportRow(field: ReviewFieldOut, s: Strings, locale = "en-SG"): 
     correctable: canCorrect(field),
     unreadable: field.unreadable,
   };
+}
+
+/** Whether a value already opens with the paper's own label for it ("Overall Annual Limit:
+ *  RM150,000" under the printed label "Overall Annual Limit"), so the label need not be said
+ *  again above it. Case and surrounding spaces do not count; the value must go on past the
+ *  label (a value that IS the label is still shown once, as the value). */
+export function saysItself(valueText: string, printed: string): boolean {
+  const v = valueText.trim().toLowerCase();
+  const p = printed.trim().toLowerCase().replace(/[:\s]+$/, "");
+  return p.length > 0 && v.startsWith(p) && v.length > p.length;
 }
 
 /** Whether a row is a measured result — a lab value with a unit or a printed range to place
