@@ -1,6 +1,21 @@
 import { describe, expect, it } from "vitest";
 import type { ConditionOut } from "../../src/api/types";
-import { acknowledgementLine, asksFor, boost, cloudView, joinNames, lowerFirst, phaseOf, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
+import {
+  acknowledgementLine,
+  asksFor,
+  boost,
+  CLOUD_DIAMETER,
+  CLOUD_PACK_WIDTH,
+  cloudView,
+  joinNames,
+  lowerFirst,
+  packCloud,
+  phaseOf,
+  sizeOf,
+  tapHint,
+  toggle,
+  topWords,
+} from "../../src/onboarding/cloud";
 import type { CloudWord } from "../../src/onboarding/cloud";
 import { en } from "../../src/strings/en";
 import { ms } from "../../src/strings/ms";
@@ -160,7 +175,7 @@ describe("lowerFirst", () => {
 });
 
 describe("acknowledgementLine", () => {
-  const bubble = (name: string): CloudWord => ({ code: name, name, term: null, size: 1, picked: true, fresh: false });
+  const bubble = (name: string): CloudWord => ({ code: name, name, term: null, size: 1, picked: true, fresh: false, hasRelated: false });
 
   it("says nothing when nothing is picked", () => {
     expect(acknowledgementLine([], "You told me about {list}.", " and ")).toBeNull();
@@ -261,5 +276,100 @@ describe("phaseOf", () => {
   it("varies between different codes — the whole point is neighbours do not move in lockstep", () => {
     const phases = new Set(["high_blood_pressure", "cholesterol", "diabetes", "heart"].map(phaseOf));
     expect(phases.size).toBeGreaterThan(1);
+  });
+});
+
+describe("packCloud", () => {
+  const circle = (code: string, size: 1 | 2 | 3, picked = false): CloudWord => ({
+    code,
+    name: code,
+    term: null,
+    size,
+    picked,
+    fresh: false,
+    hasRelated: false,
+  });
+
+  it("places nothing off either edge", () => {
+    const view = ["a", "b", "c", "d", "e", "f", "g", "h"].map((code, at) => circle(code, ((at % 3) + 1) as 1 | 2 | 3));
+    const { circles } = packCloud(view);
+    for (const each of circles) {
+      expect(each.leftPercent, each.code).toBeGreaterThanOrEqual(0);
+      const rightPercent = each.leftPercent + (each.diameter / CLOUD_PACK_WIDTH) * 100;
+      expect(rightPercent, each.code).toBeLessThanOrEqual(100.01);
+      expect(each.top, each.code).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  /** No two BOXES (the real tap targets, `cp5-onboarding.spec.ts`'s own geometry check reads
+   *  exactly these — a button's rendered box is a square, `border-radius` only changes how it
+   *  paints) overlap on both axes at once, wherever they landed. */
+  function assertNoOverlap(circles: ReturnType<typeof packCloud>["circles"]): void {
+    for (let i = 0; i < circles.length; i++) {
+      for (let j = i + 1; j < circles.length; j++) {
+        const a = circles[i]!;
+        const b = circles[j]!;
+        const aLeft = (a.leftPercent / 100) * CLOUD_PACK_WIDTH;
+        const bLeft = (b.leftPercent / 100) * CLOUD_PACK_WIDTH;
+        const overlapX = Math.min(aLeft + a.diameter, bLeft + b.diameter) - Math.max(aLeft, bLeft);
+        const overlapY = Math.min(a.top + a.diameter, b.top + b.diameter) - Math.max(a.top, b.top);
+        if (overlapX > 0 && overlapY > 0) {
+          expect(Math.min(overlapX, overlapY), `${a.code} vs ${b.code}`).toBeLessThanOrEqual(0.01);
+        }
+      }
+    }
+  }
+
+  it("never overlaps two circles — a real floating cloud, not a stack", () => {
+    const view = Array.from({ length: 14 }, (_, at) => circle(`w${at}`, ((at % 3) + 1) as 1 | 2 | 3));
+    assertNoOverlap(packCloud(view).circles);
+  });
+
+  it("never overlaps even when the biggest circles come first — the real graph's own shape: four weight-3 top words, then a run of weight-2 reveals", () => {
+    const view = [
+      ...Array.from({ length: 4 }, (_, at) => circle(`big${at}`, 3)),
+      ...Array.from({ length: 10 }, (_, at) => circle(`mid${at}`, 2)),
+    ];
+    assertNoOverlap(packCloud(view).circles);
+  });
+
+  it("never overlaps a full cloud, 'show more words' included — up to about 30, the most this graph ever shows at once", () => {
+    const view = Array.from({ length: 30 }, (_, at) => circle(`w${at}`, ((at % 3) + 1) as 1 | 2 | 3));
+    assertNoOverlap(packCloud(view).circles);
+  });
+
+  it("gives every size tier the diameter the stylesheet already draws it at", () => {
+    expect(CLOUD_DIAMETER).toEqual({ 1: 60, 2: 90, 3: 126 });
+  });
+
+  it("is deterministic — the same words in the same order pack the same way", () => {
+    const view = ["bp", "chol", "sugar", "heart"].map((code, at) => circle(code, ((at % 3) + 1) as 1 | 2 | 3));
+    const first = packCloud(view);
+    const second = packCloud(view);
+    expect(second.circles).toEqual(first.circles);
+  });
+
+  it("packs an empty cloud without throwing", () => {
+    expect(packCloud([]).circles).toEqual([]);
+  });
+});
+
+describe("tapHint", () => {
+  const s = en.onboarding.cloud;
+  const templates = { picked: s.pickedPlainSelf, added: s.pickedAddedSelf, removed: s.removedSelf, removedSub: s.removedSub };
+  const withRelated = (): CloudWord => ({ code: "bp", name: "High blood pressure", term: null, size: 3, picked: true, fresh: false, hasRelated: true });
+  const withoutRelated = (): CloudWord => ({ code: "joints", name: "Joints", term: null, size: 1, picked: true, fresh: false, hasRelated: false });
+
+  it("says what picking a word with reveals just did — never everything picked so far", () => {
+    expect(tapHint(withRelated(), true, templates)).toBe("High blood pressure, noted. I added what often goes with it.");
+  });
+
+  it("says a plain word is simply noted, with nothing to add", () => {
+    expect(tapHint(withoutRelated(), true, templates)).toBe("Joints, noted.");
+  });
+
+  it("reads the same on an unpick, whichever word it was", () => {
+    expect(tapHint(withRelated(), false, templates)).toBe(`${templates.removed} ${templates.removedSub}`);
+    expect(tapHint(withoutRelated(), false, templates)).toBe(`${templates.removed} ${templates.removedSub}`);
   });
 });

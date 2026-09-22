@@ -825,11 +825,20 @@ export interface Strings {
     cloud: {
       titleSelf: string;
       titleOther: string;
+      headSelf: string;
+      headOther: string;
       lead: string;
       lead2: string;
       lead3: string;
       noted: string;
       removed: string;
+      pickedPlainSelf: string;
+      pickedPlainOther: string;
+      pickedAddedSelf: string;
+      pickedAddedOther: string;
+      removedSelf: string;
+      removedOther: string;
+      removedSub: string;
       more: string;
       fewer: string;
       done: string;

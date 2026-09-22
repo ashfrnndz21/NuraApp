@@ -1610,6 +1610,10 @@ export const ms = {
       titleSelf: "Apa yang ada dalam kesihatan anda?",
       // @patient headline
       titleOther: "Apa yang ada dalam kesihatan {name}?",
+      // @patient headline
+      headSelf: "Apa yang ada dalam kesihatan anda? Tekan yang berkenaan.",
+      // @patient headline
+      headOther: "Apa yang ada dalam kesihatan {name}? Tekan yang berkenaan.",
       // @patient
       lead: "Tekan setiap satu yang berkenaan.",
       // @patient
@@ -1620,6 +1624,20 @@ export const ms = {
       noted: "Nura sudah tulis itu.",
       // @patient
       removed: "Nura sudah buang itu.",
+      // @patient
+      pickedPlainSelf: "{name}, sudah ditulis.",
+      // @patient
+      pickedPlainOther: "{name}, sudah ditulis untuk {who}.",
+      // @patient
+      pickedAddedSelf: "Nura tambah apa yang selalu datang bersamanya.",
+      // @patient
+      pickedAddedOther: "Nura tambah apa yang selalu datang bersamanya.",
+      // @patient
+      removedSelf: "Nura sudah buang itu.",
+      // @patient
+      removedOther: "Nura sudah buang itu untuk {who}.",
+      // @patient
+      removedSub: "Tekan apa-apa lagi yang berkenaan.",
       // @patient phrase
       more: "Tunjuk lebih banyak perkataan",
       // @patient phrase

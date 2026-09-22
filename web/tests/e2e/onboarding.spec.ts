@@ -164,7 +164,9 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await page.getByTestId("word-high_blood_pressure").click();
   await expect(page.getByTestId("word-high_blood_pressure")).toHaveAttribute("aria-pressed", "true");
   expect(await spoken(page)).toEqual(["High blood pressure"]);
-  await expect(page.getByTestId("cloud-status")).toHaveText("Nura wrote that down.");
+  // Nura's line names the word he just tapped and says what it did — never everything picked
+  // so far — changing in place on every tap (docs/design/onboarding-mock.html `pick()`).
+  await expect(page.getByTestId("cloud-status")).toHaveText("High blood pressure, noted. I added what often goes with it.");
   const order = await page.getByTestId("cloud").locator("button").evaluateAll((all) => all.map((each) => each.getAttribute("data-testid")));
   expect(order.indexOf("word-bp_tablets")).toBe(order.indexOf("word-high_blood_pressure") + 1);
   await expect(page.getByTestId("word-heart_doctor")).toHaveAttribute("data-size", "2");

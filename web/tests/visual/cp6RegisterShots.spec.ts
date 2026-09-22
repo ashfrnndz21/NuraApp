@@ -99,19 +99,29 @@ async function run(page: Page, prefix: string, wide: boolean, errors: string[]):
   await shoot(page, `${OUT}/${prefix}-08-about-transcript.png`, wide);
   await page.getByTestId("density-simple").click();
 
-  // 7. The cloud: empty, then picked, with the acknowledgement.
+  // 7. The cloud: empty, a floating scatter of different-sized circles.
   await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "cloud");
   await expect(page.getByTestId("cloud").locator('[data-testid^="word-"]').first()).toBeVisible();
   await shoot(page, `${OUT}/${prefix}-09-cloud-empty.png`, wide);
+
+  // 8. Picked: the tapped word, the words it bloomed in under it, and Nura's one line under
+  // the cloud naming exactly what that tap did (docs/design/onboarding-mock.html `pick()`).
   await page.getByTestId("word-high_blood_pressure").click();
   await expect(page.getByTestId("cloud-ack")).toBeVisible();
+  await page.getByTestId("word-high_blood_pressure").scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, -80); // a little air above the tapped word, its bloom below it
   await shoot(page, `${OUT}/${prefix}-10-cloud-picked.png`, wide);
 
-  // 8. A word with a follow-up: its question opens right under the cloud.
+  // 9. A word with a follow-up: its question opens right under the cloud, before he answers it.
   await page.getByTestId("word-bp_tablets").click();
   await expect(page.getByTestId("ask-bp_tablets")).toBeVisible();
+  await page.getByTestId("ask-bp_tablets").scrollIntoViewIfNeeded();
   await shoot(page, `${OUT}/${prefix}-11-cloud-ask.png`, wide);
+
+  // 10. The same question, answered — his tap is the whole answer.
   await page.getByTestId("option-one_to_five_years").click();
+  await expect(page.getByTestId("option-one_to_five_years")).toHaveAttribute("aria-pressed", "true");
+  await shoot(page, `${OUT}/${prefix}-11b-cloud-ask-answered.png`, wide);
   await page.getByTestId("cloud-done").click();
 
   // 9. Add a paper: three rows, icon + title + hint, never a stack of plain pills.

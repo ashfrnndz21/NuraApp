@@ -66,12 +66,18 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  // chromium stays the CI default; webkit is run explicitly (`--project=webkit`) to catch
-  // engine-specific defects chromium's own walk does not reproduce (e.g. the register-path
-  // blank screen the owner hit in Safari, 2026-09-22).
+  // chromium is the only project CI runs — CI's own runner has no WebKit browser installed
+  // (`browserType.launch: Executable doesn't exist`, every spec, found on #318's own CI run),
+  // and installing one is off limits here (no `.github` changes). Locally, webkit is included
+  // by default (`!process.env.CI`) to catch engine-specific defects chromium's own walk does
+  // not reproduce (e.g. the register-path blank screen the owner hit in Safari, 2026-09-22) —
+  // run it with `--project=webkit`. On CI itself, set `NURA_E2E_WEBKIT=1` on a runner that has
+  // installed WebKit (`npx playwright install webkit`) to opt back in.
   projects: [
     { name: "chromium", use: { ...devices["Pixel 5"], browserName: "chromium" } },
-    { name: "webkit", use: { ...devices["iPhone 13"], browserName: "webkit" } },
+    ...(process.env.NURA_E2E_WEBKIT === "1" || !process.env.CI
+      ? [{ name: "webkit", use: { ...devices["iPhone 13"], browserName: "webkit" as const } }]
+      : []),
   ],
   // The backend: `make dev` (its env and its command), on the port the API URL names, with its
   // clock frozen at FROZEN_CLOCK. Build the app first (`make build-web`) so it serves /app.

@@ -1610,6 +1610,10 @@ export const en = {
       titleSelf: "What is part of your health?",
       // @patient headline
       titleOther: "What is part of {name}'s health?",
+      // @patient headline
+      headSelf: "What is part of your health? Tap what fits.",
+      // @patient headline
+      headOther: "What is part of {name}'s health? Tap what fits.",
       // @patient
       lead: "Tap each one that is part of it.",
       // @patient
@@ -1620,6 +1624,20 @@ export const en = {
       noted: "Nura wrote that down.",
       // @patient
       removed: "Nura took that off.",
+      // @patient
+      pickedPlainSelf: "{name}, noted.",
+      // @patient
+      pickedPlainOther: "{name}, noted for {who}.",
+      // @patient
+      pickedAddedSelf: "I added what often goes with it.",
+      // @patient
+      pickedAddedOther: "Nura added what often goes with it.",
+      // @patient
+      removedSelf: "Nura took that off.",
+      // @patient
+      removedOther: "Nura took that off for {who}.",
+      // @patient
+      removedSub: "You can tap anything else that applies.",
       // @patient phrase
       more: "Show more words",
       // @patient phrase

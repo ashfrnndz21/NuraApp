@@ -1610,6 +1610,10 @@ export const zh = {
       titleSelf: "您的健康有哪些方面？",
       // @patient headline
       titleOther: "{name} 的健康有哪些方面？",
+      // @patient headline
+      headSelf: "您的健康有哪些方面？点符合的。",
+      // @patient headline
+      headOther: "{name} 的健康有哪些方面？点符合的。",
       // @patient
       lead: "有的就点一下。",
       // @patient
@@ -1620,6 +1624,20 @@ export const zh = {
       noted: "Nura 记下了。",
       // @patient
       removed: "Nura 拿掉了。",
+      // @patient
+      pickedPlainSelf: "{name}，记下了。",
+      // @patient
+      pickedPlainOther: "{name}，为{who}记下了。",
+      // @patient
+      pickedAddedSelf: "Nura 加上了常常一起出现的。",
+      // @patient
+      pickedAddedOther: "Nura 加上了常常一起出现的。",
+      // @patient
+      removedSelf: "Nura 拿掉了。",
+      // @patient
+      removedOther: "Nura 为{who}拿掉了。",
+      // @patient
+      removedSub: "再点符合的。",
       // @patient phrase
       more: "显示更多",
       // @patient phrase

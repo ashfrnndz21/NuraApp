@@ -2,14 +2,14 @@ import { useEffect, useState } from "preact/hooks";
 import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import { saveWordsAndGoOn } from "../../onboarding/actions";
-import { acknowledgementLine, asksFor, cloudView, foldTold, phaseOf, toggle, type CloudWord } from "../../onboarding/cloud";
+import { asksFor, cloudView, foldTold, packCloud, phaseOf, tapHint, toggle, type CloudWord } from "../../onboarding/cloud";
 import { answers, conditions, picked, say, to, whose } from "../../onboarding/state";
 import { speak } from "../../speech/speak";
 import { token } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Notice, Pill } from "../../ui/components";
 import { Icon, Orb, Reveal, SoftText } from "../../ui/kit";
-import { Sheet, Status, StepTitle } from "./parts";
+import { Sheet, Status } from "./parts";
 
 /** The word cloud (#117's graph): plain words, the most common biggest and first, so they are
  *  on the screen without scrolling. A tap picks a word, says it aloud (its spoken twin — audio
@@ -38,13 +38,23 @@ export function CloudStep(): JSX.Element {
   const words = conditions.value?.conditions ?? [];
   const view = cloudView(words, picked.value, { showAll, lastPicked });
 
+  // Nura's one line under the cloud, in his own words or hers (say(), the same self/other
+  // dispatch every other turn on this screen already uses) — `{who}` only ever appears in the
+  // "other" half of each pair.
+  const hintTemplates = {
+    picked: say(c.pickedPlainSelf, c.pickedPlainOther),
+    added: say(c.pickedAddedSelf, c.pickedAddedOther),
+    removed: say(c.removedSelf, c.removedOther),
+    removedSub: c.removedSub,
+  };
+
   const tap = (word: CloudWord) => {
     const next = toggle(words, picked.value, word.code);
     const nowPicked = next.includes(word.code);
     picked.value = next;
     answers.value = Object.fromEntries(Object.entries(answers.value).filter(([code]) => next.includes(code)));
     setLastPicked(nowPicked ? word.code : null);
-    setStatus(nowPicked ? c.noted : c.removed);
+    setStatus(tapHint(word, nowPicked, hintTemplates, { who: whose().name }));
     if (nowPicked) speak({ lines: word.term ? [word.name, fill(c.term, { term: word.term })] : [word.name], language: language.value });
   };
 
@@ -104,35 +114,40 @@ export function CloudStep(): JSX.Element {
   };
 
   const title = say(c.titleSelf, c.titleOther);
-  const pickedWords = view.filter((word) => word.picked);
+  const head = say(c.headSelf, c.headOther);
   const asks = asksFor(words, picked.value);
-  // en/ms read a name mid-sentence lower-case ("you told me about high blood pressure"); zh has
-  // no letter case to change (`lowerFirst`, `onboarding/cloud.ts`).
-  const ack = acknowledgementLine(pickedWords, say(c.ackSelf, c.ackOther), c.and, { slots: { name: whose().name }, lowercase: language.value !== "zh" });
+  const { circles, height } = packCloud(view);
   return (
     <main class="screen onboarding" data-stage="cloud">
-      <StepTitle title={title} />
-      <p class="lead">{c.lead}</p>
-      {/* The bubble cloud (docs/design/experience-blueprint.html `cloud` scene): floating,
-          tappable bubbles, sized by how common the word is; a tick and heavier weight mark a
-          pick, never colour alone (WCAG 1.4.1). The words, sizes, order and every test id below
-          are exactly what the plain word-cloud markup this replaces already had — only the
-          shape and the drift are new. Each bubble's own `phaseOf(word.code)` gives its drift a
-          different delay and duration (on the inner `.bubble-surface`, never the button itself
-          — see the comment on `.word.bubble` in onboarding.css) so neighbours never move in
+      {/* The conversation head (docs/design/experience-blueprint.html `cloud` scene: "What is
+          part of your health? Tap what fits." beside the orb, 25px light) — never a title over
+          a separate grey subtitle. */}
+      <div class="who-say">
+        <Orb size="sm" />
+        <SoftText text={head} pace="headline" as="h1" className="who-say-line conversation-head" testId="cloud-head" />
+      </div>
+      {/* The bubble cloud (docs/design/experience-blueprint.html `cloud` scene): a floating
+          cloud of different-sized circles — the word's own weight, `onboarding/cloud.ts`'s own
+          `sizeOf` — scattered and drifting, never a grid of same-sized pills. `packCloud` places
+          every circle once, in `view`'s own order, so Tab still walks it in reading order; only
+          where each one SITS is new here, the tap target and its hit box (a tick and heavier
+          weight mark a pick, never colour alone, WCAG 1.4.1) are exactly what they always were.
+          Each bubble's own `phaseOf(word.code)` gives its drift a different delay and duration
+          (on the inner `.bubble-surface`, never the button itself) so neighbours never move in
           lockstep. */}
-      <div class="cloud bubble-cloud" role="group" aria-label={title} data-testid="cloud">
-        {view.map((word, at) => {
+      <div class="cloud bubble-cloud" role="group" aria-label={title} data-testid="cloud" style={{ height: `${height}px` }}>
+        {circles.map((word, at) => {
           const phase = phaseOf(word.code);
           return (
             <button
               key={word.code}
               type="button"
-              class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}${at % 3 === 1 ? " stagger-a" : at % 3 === 2 ? " stagger-b" : ""}`}
+              class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
               aria-pressed={word.picked}
               data-testid={`word-${word.code}`}
               data-size={word.size}
               onClick={() => tap(word)}
+              style={{ left: `${word.leftPercent}%`, top: `${word.top}px`, width: `${word.diameter}px`, height: `${word.diameter}px` }}
             >
               <span class="bubble-surface" aria-hidden="true" style={{ animationDelay: `${-phase * 7}s`, animationDuration: `${5 + phase * 3}s` }} />
               {word.picked && (
@@ -168,17 +183,13 @@ export function CloudStep(): JSX.Element {
           ))}
         </div>
       )}
-      {/* One Nura turn, one orb: the acknowledgement and the per-tap status
-          ("Nura wrote that down.") are the same turn's two lines, not an orphan status line
-          floating with no indent under it (operator review) — `status` alone (nothing picked
-          yet, or the last tap unpicked down to zero) still shows under the orb on its own. */}
-      {(ack || status) && (
-        <div class="cloud-ack">
+      {/* Nura's own line, changed in place on every tap (docs/design/onboarding-mock.html
+          `pick()`'s own `cloudmsg`) — what this one tap just did, never an accumulating list of
+          everything picked so far. */}
+      {status && (
+        <div class="cloud-ack" data-testid="cloud-ack">
           <Orb size="sm" />
-          <div class="cloud-ack-lines">
-            {ack && <SoftText text={ack} pace="body" as="p" className="cloud-ack-line" testId="cloud-ack" />}
-            <Status text={status} testId="cloud-status" />
-          </div>
+          <Status text={status} testId="cloud-status" />
         </div>
       )}
       <p class="caption" data-testid="cloud-count">
