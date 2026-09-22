@@ -43,7 +43,13 @@ from app.search.ask import Cite, Mode, recall_stream
 from app.search.ask import waiting_papers as waiting_papers_read
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import let_in
-from tests.paper import LAB_REPORT_NOT_HIS, LAB_REPORT_VITALS, LIPID_PANEL_2025, PAPER, placeholder_png
+from tests.paper import (
+    LAB_REPORT_NOT_HIS,
+    LAB_REPORT_VITALS,
+    LIPID_PANEL_2025,
+    PAPER,
+    placeholder_png,
+)
 from tests.timeline_support import record, trail
 
 SG = Region.SG

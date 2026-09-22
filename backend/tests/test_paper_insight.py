@@ -52,7 +52,13 @@ from app.safety.plain_words import verify
 from tests.conftest import Deployment
 from tests.medicines_support import add as add_medicine
 from tests.medicines_support import label
-from tests.paper import LAB_REPORT_NOT_HIS, LAB_REPORT_VITALS, LIPID_GLUCOSE_PANEL, LIPID_PANEL, LIPID_PANEL_2025
+from tests.paper import (
+    LAB_REPORT_NOT_HIS,
+    LAB_REPORT_VITALS,
+    LIPID_GLUCOSE_PANEL,
+    LIPID_PANEL,
+    LIPID_PANEL_2025,
+)
 from tests.safety_support import clinic, let_in, pa
 from tests.test_ingestion import _card, _decide, _yes
 from tests.timeline_support import book

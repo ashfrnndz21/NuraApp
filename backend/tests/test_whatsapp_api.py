@@ -244,7 +244,6 @@ async def test_a_unique_violation_past_the_check_first_door_is_a_calm_409_never_
 
     async def never_finds_it(*args: object, **kwargs: object) -> None:
         del args, kwargs
-        return None
 
     first = await deployment.client.post(
         "/dev/whatsapp/inbound",

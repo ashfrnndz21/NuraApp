@@ -17,10 +17,11 @@ compared first (`review.py:_write_paper`).
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
-from typing import Any, Sequence
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -150,13 +151,20 @@ async def check_whose_paper(
     mismatches: list[IdentitySignal] = []
 
     paper_name_field = _field(fields, LAB_REPORT, "patient_name")
-    paper_name = paper_name_field.value if isinstance(getattr(paper_name_field, "value", None), str) else None
-    if paper_name and profile_display_name:
-        if not names_match(paper_name, profile_display_name):
-            mismatches.append(IdentitySignal("name", paper_name, profile_display_name))
+    paper_name = (
+        paper_name_field.value
+        if paper_name_field is not None and isinstance(paper_name_field.value, str)
+        else None
+    )
+    if paper_name and profile_display_name and not names_match(paper_name, profile_display_name):
+        mismatches.append(IdentitySignal("name", paper_name, profile_display_name))
 
     paper_id_field = _field(fields, LAB_REPORT, "patient_id")
-    paper_patient_id = paper_id_field.value if isinstance(getattr(paper_id_field, "value", None), str) else None
+    paper_patient_id = (
+        paper_id_field.value
+        if paper_id_field is not None and isinstance(paper_id_field.value, str)
+        else None
+    )
     if paper_patient_id:
         known_ids = await current_facts(session, context=context, subject=LAB_REPORT, attribute="patient_id")
         confirmed_ids = {
@@ -165,17 +173,17 @@ async def check_whose_paper(
             if isinstance(f.value, str) and f.confidence_state is ConfidenceState.CONFIRMED_BY_PERSON
         }
         if confirmed_ids and paper_patient_id.strip().lower() not in confirmed_ids:
-            mismatches.append(IdentitySignal("patient_id", paper_patient_id, sorted(confirmed_ids)[0]))
+            mismatches.append(IdentitySignal("patient_id", paper_patient_id, min(confirmed_ids)))
 
     paper_birth_year = _birth_year_on_paper(fields, document_date=document_date)
     if paper_birth_year is not None:
         known_years = await current_facts(session, context=context, subject=PERSON, attribute="birth_year")
-        confirmed_years = [
+        maybe_years = [
             _int_or_none(f.value)
             for f in known_years
             if f.confidence_state is ConfidenceState.CONFIRMED_BY_PERSON
         ]
-        confirmed_years = [y for y in confirmed_years if y is not None]
+        confirmed_years = [y for y in maybe_years if y is not None]
         if confirmed_years:
             # A year or two of slack: a lab's printed age is often rounded, and a birthday
             # inside the gap between two papers moves the computed year by exactly one.
@@ -186,7 +194,7 @@ async def check_whose_paper(
     paper_sex_field = _field(fields, PERSON, "sex")
     paper_sex = (
         paper_sex_field.value.strip().lower()
-        if isinstance(getattr(paper_sex_field, "value", None), str)
+        if paper_sex_field is not None and isinstance(paper_sex_field.value, str)
         else None
     )
     if paper_sex in {"male", "female"}:
@@ -198,7 +206,7 @@ async def check_whose_paper(
         }
         confirmed_sexes = {s for s in confirmed_sexes if s in {"male", "female"}}
         if confirmed_sexes and paper_sex not in confirmed_sexes:
-            mismatches.append(IdentitySignal("sex", paper_sex, sorted(confirmed_sexes)[0]))
+            mismatches.append(IdentitySignal("sex", paper_sex, min(confirmed_sexes)))
 
     outcome = IdentityOutcome.MISMATCH if mismatches else IdentityOutcome.MATCH
     return IdentityCheck(

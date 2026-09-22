@@ -35,7 +35,14 @@ from app.ingestion.models import FieldState
 from app.ingestion.notes import add_scribble
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.photos import store_photo
-from app.ingestion.review import Decision, answer_review_card_question, card_fields, confirm_review_card, review_draft_for, review_photo
+from app.ingestion.review import (
+    Decision,
+    answer_review_card_question,
+    card_fields,
+    confirm_review_card,
+    review_draft_for,
+    review_photo,
+)
 from app.keys.confirm import confirm
 from app.keys.scopes import KeyRole, Scope
 from app.memory.changes import Changes, mark_looked, what_changed

@@ -13,8 +13,6 @@ reading screen's own clarify question is `web/tests/e2e/whoseP­aper.spec.ts`.
 
 from __future__ import annotations
 
-import pytest
-
 from app.ingestion.whose_paper import names_match
 from tests.api import bearer, own_profile, register_by_phone
 from tests.capture_support import confirm, decide, mint, photo

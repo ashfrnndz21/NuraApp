@@ -17,13 +17,14 @@ which asks rather than silently filing (`PendingQuestion.DUPLICATE_PAPER`).
 
 from __future__ import annotations
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.audit.access import audited, audited_read
 from app.audit.models import Action
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
 from app.memory.episodic import held_here
 from app.memory.models import Artifact, ArtifactKind
-from sqlalchemy.ext.asyncio import AsyncSession
 
 PAPER_KINDS = (ArtifactKind.PHOTO, ArtifactKind.PDF)
 """What D-4a dedupes: the two kinds `POST .../photos` and `POST .../imports` write. A device

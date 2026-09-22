@@ -96,7 +96,12 @@ from app.ingestion.consult import (
 from app.ingestion.documents import PdfTooLarge
 from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
-from app.ingestion.review import AlreadyConfirmed, CardSetAside, NoSuchReviewCard, QuestionAlreadyAnswered
+from app.ingestion.review import (
+    AlreadyConfirmed,
+    CardSetAside,
+    NoSuchReviewCard,
+    QuestionAlreadyAnswered,
+)
 from app.ingestion.voice import VoiceNoteTooLong
 from app.insurance.claim import (
     NoSuchClaim,

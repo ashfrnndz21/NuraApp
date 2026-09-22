@@ -47,6 +47,7 @@ from app.delivery.timeline_strings import day_of
 from app.drafts import DecidedField, FactDraft, ReviewDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
+from app.identity.models import Profile
 from app.ingestion.extract import (
     DocumentKind,
     ExtractedField,
@@ -83,7 +84,6 @@ from app.keys.scopes import Scope
 from app.medicines.models import LineStatus, MedicationLine
 from app.memory.attach import attach_from_ingestion
 from app.memory.episodic import held_here, record_event, require_artifact
-from app.identity.models import Profile
 from app.memory.models import Appointment, Artifact, ConfidenceState, EventKind, Fact
 from app.memory.semantic import assert_fact
 from app.memory.working import require_open_episode
@@ -946,7 +946,7 @@ async def card_for_artifact(
         context,
         Scope.RECORDS,
         where=(ReviewCard.artifact_id == artifact_id, _cards_held_here(context)),
-        order_by=(ReviewCard.created_at,),
+        order_by=(ReviewCard.created_at.asc(),),
         limit=1,
     )
     return found[0] if found else None

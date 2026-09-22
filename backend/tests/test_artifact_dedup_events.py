@@ -69,9 +69,8 @@ from tests.safety_support import REGISTRY as SAFETY_REGISTRY
 from tests.safety_support import pa as safety_pa
 from tests.safety_support import transcriber_for
 from tests.timeline_support import record as arranged_record
-from tests.voice_notes import AFTER_THE_WALK
+from tests.voice_notes import AFTER_THE_WALK, placeholder_voice
 from tests.voice_notes import CONTENT_TYPE as VOICE_NOTE_CONTENT_TYPE
-from tests.voice_notes import placeholder_voice
 from tests.whatsapp_support import MEI, family
 
 
