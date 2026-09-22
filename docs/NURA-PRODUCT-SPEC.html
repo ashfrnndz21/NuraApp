@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nura — product specification</title>
+<style>
+  :root {
+    --bg: #14121a;
+    --bg-2: #1b1826;
+    --panel: #201c2c;
+    --border: rgba(255,255,255,0.09);
+    --text: #efe9f5;
+    --text-soft: #b8aec8;
+    --text-faint: #8b81a0;
+    --accent: #c9a6e8;
+    --accent-2: #f0c9da;
+    --code-bg: #2a2438;
+    --link: #d8b9f0;
+    --quote-bg: rgba(201,166,232,0.08);
+    --quote-border: #9a7bc4;
+    --max-width: 920px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+    background:
+      radial-gradient(ellipse 800px 500px at 15% -5%, rgba(154,110,196,0.16), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 10%, rgba(240,201,218,0.08), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  .wrap {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 48px 20px 96px;
+  }
+  h1 {
+    font-size: clamp(24px, 4vw, 34px);
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    color: #fbf6ff;
+    background: linear-gradient(135deg, #fbf6ff 30%, var(--accent) 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .wrap > p:first-of-type em {
+    color: var(--text-faint);
+    font-size: 14px;
+    display: block;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 24px;
+    font-weight: 650;
+    margin: 56px 0 18px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    color: #fff;
+    letter-spacing: -0.005em;
+  }
+  h2:first-of-type { margin-top: 8px; }
+  h3 {
+    font-size: 18px;
+    font-weight: 650;
+    margin: 30px 0 12px;
+    color: var(--accent-2);
+  }
+  p { margin: 0 0 14px; color: var(--text); }
+  ul, ol { margin: 0 0 16px; padding-left: 24px; }
+  li { margin-bottom: 10px; color: var(--text); }
+  li em { color: var(--text-soft); }
+  strong { color: #fff; font-weight: 650; }
+  em { color: var(--text-soft); font-style: italic; }
+  a { color: var(--link); text-decoration: underline; text-decoration-color: rgba(216,185,240,0.4); }
+  a:hover { text-decoration-color: var(--link); }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--code-bg);
+    color: #e3c9f5;
+    padding: 0.1em 0.4em;
+    border-radius: 5px;
+    font-size: 0.87em;
+    word-break: break-word;
+  }
+  blockquote {
+    margin: 20px 0;
+    padding: 14px 20px;
+    background: var(--quote-bg);
+    border-left: 3px solid var(--quote-border);
+    border-radius: 6px;
+  }
+  blockquote p { margin-bottom: 0; color: var(--text-soft); }
+  blockquote p + p { margin-top: 10px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14.5px;
+    background: var(--panel);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    background: rgba(255,255,255,0.04);
+    color: var(--accent-2);
+    font-weight: 650;
+    font-size: 13px;
+    text-transform: none;
+  }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  .toc {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 28px 0 40px;
+  }
+  .toc-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+  }
+  .toc ol { margin: 0; padding-left: 20px; }
+  .toc li { margin-bottom: 6px; font-size: 14.5px; }
+  .toc a { text-decoration: none; color: var(--text-soft); }
+  .toc a:hover { color: var(--accent-2); }
+  ::selection { background: rgba(201,166,232,0.35); }
+  @media (max-width: 600px) {
+    .wrap { padding: 32px 16px 72px; }
+    table { font-size: 13px; }
+    th, td { padding: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Nura — the app: product, users, user stories, experience, features, safety, design, architecture, status</h1>
+<p><em>Compiled from the repository on <code>redesign</code> (worktree branch <code>product-spec-doc</code>, based on <code>origin/redesign</code> at <code>914591c0</code>), 2026‑09‑22. Every claim below cites the file it rests on. Where two documents disagree, this document says so rather than picking one.</em></p>
+<hr />
+<h2>1. What Nura is</h2>
+<p>Nura is, in its own README, <strong>&quot;a health chief of staff for one person and the family around them. Quiet most days; flawless on the four days a year that matter.&quot;</strong> (<code>README.md</code>). <code>CLAUDE.md</code> (repo root) expands the audience: <strong>&quot;A family health app for Malaysia and Singapore: an elderly patient, the adult child who runs his care, a domestic helper on WhatsApp, and a clinic that only receives.&quot;</strong></p>
+<p><strong>For whom.</strong> The demo seed — the one living record the repo ships — names the two people concretely: <strong>Pa</strong>, who owns the profile, and <strong>Mei</strong>, who &quot;holds a chief key: every scope, the same window as any chief's&quot; (<code>docs/deploy-demo.md</code> §3a). Pa is the patient: elderly, reading in Malay, Chinese or English, sometimes reached only on WhatsApp. Mei is the caregiver who runs his care day to day. A third role recurs throughout the design corpus without a fixed demo account: the doctor visit itself — the pre-visit brief, the questions card, the post-visit summary and memo (<code>backend/app/reasoning/visits/__init__.py</code>) — which the product treats as a recurring event to prepare for and to record, never a role Nura interacts with directly (&quot;Nura never sends anything itself,&quot; <code>backend/app/reasoning/navigation/__init__.py</code>).</p>
+<blockquote>
+<p><strong>Naming note.</strong> The root <code>CLAUDE.md</code>'s own &quot;Domain vocabulary&quot; section says: <em>&quot;'Pa' and 'Ash' are example people in the docs, never identifiers in code&quot;</em> — but every current design document (<code>docs/deploy-demo.md</code>, <code>docs/design/design-build-2.md</code>, <code>docs/design/audit-2026-09-22.md</code>, <code>docs/design/build-plan.md</code>) and the demo seed itself use <strong>Mei</strong>, not Ash, as the caregiver's name. <code>docs/design-system.md</code> (the older design system) also still says &quot;Chief (Ash).&quot; The caregiver's name changed from Ash to Mei at some point after <code>CLAUDE.md</code> and <code>design-system.md</code> were last touched; both are stale on this one point. This document uses Pa and Mei throughout, per the current demo seed and design corpus.</p>
+</blockquote>
+<p><strong>The promise, in one paragraph.</strong> Nura takes everything it can honestly know about one person — his medicines, his papers, his insurance, his daily readings, his appointments, what he eats, what he has asked — and turns it into what to do next: a reminder at the right moment, what to prepare for the doctor, a plain-words explanation of a result, a short video that applies to him. <code>docs/recommendation-engine.md</code> §0 quotes the owner's own brief for this: <em>&quot;the core of what i wanted to build was … based on this and anything else i forgot, becomes a correlative recommendation to the user of the app, on reminders, what to prep for when meeting the doc, what to prep, personalized reads, personalized video feeds etc.&quot;</em> The experience specification the owner registered as binding states the same intent as an interaction model: <strong>&quot;AI understands → AI prioritizes → AI surfaces → user explores → AI explains → user acts&quot;</strong> (<code>docs/design/design-build-2.md</code> §1.1). Nura organises, prepares and surfaces; it never diagnoses or treats (<code>CLAUDE.md</code>, &quot;Non-negotiables&quot;).</p>
+<p><strong>The principles</strong>, each traceable to a binding rule, not a slogan:</p>
+<ul>
+<li><strong>Plain words.</strong> <em>&quot;Every string on the patient's surface, on WhatsApp and in every voice note&quot;</em> follows a thirteen-rule standard and a glossary that replaces every clinical term with what a person already calls it — &quot;the water pill,&quot; &quot;your blood pressure book,&quot; &quot;the sugar tablet&quot; (<code>docs/plain-words.md</code> §1–2). <code>CLAUDE.md</code>: <em>&quot;Every string the patient sees or hears passes <code>docs/plain-words.md</code>.&quot;</em></li>
+<li><strong>Nothing reaches a patient unchecked.</strong> Every card records the State it was rendered from and is refused if it fails the plain-words verifier (<code>backend/app/state/__init__.py</code>; <code>backend/app/delivery/feed/__init__.py</code>: <em>&quot;the lines come from <code>app.delivery.strings</code>, pass <code>app.safety.plain_words.verify</code> … an item that fails either is not created&quot;</em>).</li>
+<li><strong>The person's own yes.</strong> <em>&quot;Nothing changes a medicine, books anything, or sends anything without an explicit confirm from a person&quot;</em> (<code>CLAUDE.md</code>). Ingestion is described the same way: <em>&quot;A photo comes in and its bytes go to the object store … Extraction runs … answers with fields, each carrying a confidence; nothing it says is a fact yet&quot;</em> until <em>&quot;the person's explicit yes&quot;</em> (<code>backend/app/ingestion/__init__.py</code>).</li>
+<li><strong>Consent and scopes.</strong> <em>&quot;The consent record is a mandatory parameter on every cross-entity call&quot;</em> is not this repo's own wording, but its own equivalent is exact: every read and write of profile data goes through <code>app/keys/</code> scope enforcement (<code>CLAUDE.md</code>, &quot;Non-negotiables&quot;; <code>backend/app/keys/__init__.py</code>), and a <code>Consent</code> row records <em>&quot;what the patient, or someone acting for him, agreed to, in which words, and when&quot;</em> (<code>backend/app/consent/__init__.py</code>).</li>
+<li><strong>Region residency.</strong> <em>&quot;Profiles are pinned to a region (SG or MY). Health data never leaves its region&quot;</em> (<code>CLAUDE.md</code>). The one narrow exception — a Claude-backed model call, and only in a declared demo or the owner's own dev laptop — is its own ADR, not a loophole in this rule (<code>docs/adr/0017-claude-runtime-features-demo-only.md</code>).</li>
+<li><strong>The audit trail.</strong> <em>&quot;Every read, every write and every share of one person's health graph&quot;</em> is written down; <em>&quot;The owner and his chief are the only readers&quot;</em> (<code>backend/app/audit/__init__.py</code>).</li>
+</ul>
+<hr />
+<h2>2. User stories</h2>
+<p>Grouped by journey, in the form &quot;As Pa / As Mei, I want…, so that…&quot;. Status is marked <strong>Built</strong>, <strong>Partly</strong>, or <strong>Not built</strong>, drawn from <code>docs/design/build-plan.md</code>'s progress table (the 24 work packages against the redesign) and <code>docs/design/audit-2026-09-22.md</code>'s screen-by-screen verdicts against <code>docs/design/experience-blueprint.html</code>'s 26 scenes. Where a story exists only on the pre-redesign <code>main</code> branch, that is noted from <code>docs/parity.md</code>.</p>
+<h3>Arrive &amp; set up</h3>
+<ul>
+<li><em>As Pa, I want to sign in with my phone number and a code, so that I never need a password.</em> <strong>Built</strong> — scene 02 &quot;Matches… nothing to fault&quot; (<code>audit-2026-09-22.md</code> §2, row 02).</li>
+<li><em>As Pa, I want to say who the profile is for (me, my parent, someone else), conversationally, so that setup feels like being asked, not filling a form.</em> <strong>Partly</strong> — the app &quot;is two large static cards, no orb, no bubbles, no reply… intent preserved, form not&quot; (<code>audit-2026-09-22.md</code> §2, row 03); package 9 (onboarding) is marked Done in <code>build-plan.md</code> but the audit, taken after, found this regression, tracked under PR #318.</li>
+<li><em>As Pa, I want to say what conditions I have by tapping a cloud of words or just saying it in a sentence, so that setup is low-friction either way.</em> <strong>Partly</strong> — &quot;13 one-question screens&quot; now stand between consent and the cloud, and the cloud itself &quot;renders as a two-column grid of same-size, same-tint pills, not the blueprint's irregular cloud&quot; (<code>audit-2026-09-22.md</code> §2, row 04; D‑10, D‑11).</li>
+<li><em>As Pa, I want to skip adding papers today with no penalty, so that I am never blocked.</em> <strong>Partly</strong> — &quot;right options, plainer treatment, no icons, no sublines&quot; (<code>audit-2026-09-22.md</code> §2, row 05).</li>
+</ul>
+<h3>Load a paper</h3>
+<ul>
+<li><em>As Pa, I want to hand Nura a photo of one paper and watch it read the paper in real stages, so that I trust what it found.</em> <strong>Built</strong> — scene 06 is <em>&quot;the best screen in the app&quot;</em> per the audit, because <em>&quot;the stages are the backend's own, not invented&quot;</em> (<code>audit-2026-09-22.md</code> §2, row 06; <code>design-build-2-reading.md</code> scene 06).</li>
+<li><em>As Pa, I want the extracted values shown as one table with ranges, not twenty-five separate cards, so that I only have to say yes once.</em> <strong>Partly</strong> — built (checkpoint 2, <code>build-plan.md</code> package 4, &quot;Done (#296)&quot;), but the audit found <em>&quot;the headline count does not match the rows,&quot;</em> a raw analyte code shown (&quot;Apo‑B&quot;), an unreadable unit, and a date format the app's own plain-words rule 5 forbids (<code>audit-2026-09-22.md</code> §2 row 07, D‑12).</li>
+<li><em>As Pa, I want to see one paper flagged for me to check rather than every field, so that I am not asked twenty-five small questions.</em> <strong>Built</strong> in the report table's design (<code>design-build-2-reading.md</code> scene 07: <em>&quot;one thing needs a yes, not twenty-five&quot;</em>).</li>
+<li><em>As Pa, I want Nura to connect what the paper just confirmed to my medicines and my next visit, unprompted, so that I don't have to ask.</em> <strong>Partly / unreachable</strong> — &quot;Reached from the onboarding papers step and from Your papers only. From Home's 'Add a paper' it is never reached&quot; (<code>audit-2026-09-22.md</code> §2, row 08; D‑5, three independent safety reviews, <code>build-plan.md</code> &quot;checkpoint 3&quot; log).</li>
+<li><em>As Pa, I want to send a whole folder of papers at once and get one summary at the end, so that a backlog of papers isn't twenty-five separate chores.</em> <strong>Not built</strong> — &quot;the batch grid and one-yes-for-all exist. No inbox, no verdicts&quot; (<code>audit-2026-09-22.md</code> §2, row 09; <code>build-plan.md</code> package 18 &quot;Not started: needs owner decisions&quot;).</li>
+<li><em>As Pa, I want Nura to check whose paper it is before filing anything, so that a family member's result never lands on my record by mistake.</em> <strong>Not built</strong> — &quot;Nothing checks whose paper it is… a wrong person's <code>birth_year</code>/<code>sex</code> overwrite the profile's own and then drive reference ranges, the emergency card and the screening schedule&quot; (<code>audit-2026-09-22.md</code> §3.2, D‑2, Critical). Requirements are specified in <code>build-spec.md</code>'s &quot;Owner requirement added 2026‑09‑22: whose paper is it&quot; and <code>build-plan.md</code> package 19.</li>
+<li><em>As Pa, I want the same paper photographed twice not to become two papers, so that my record stays trustworthy.</em> <strong>Not built</strong> — &quot;No duplicate detection of any kind… I uploaded the same policy twice and got two policies; the same panel three times and got three papers, silently&quot; (<code>audit-2026-09-22.md</code> §1.6, §3.2, D‑4).</li>
+</ul>
+<h3>Read it (table, ranges, what it means)</h3>
+<ul>
+<li><em>As Pa, I want my blood test shown with the doctor's own range and whether I'm inside or above it, in one line, so that I understand it without asking.</em> <strong>Built</strong> in substance — <code>docs/health-feed-spec.md</code> §2's &quot;own-data insight&quot; card type and <code>build-plan.md</code> package 3's Done status; deltas noted above (D‑12).</li>
+<li><em>As Mei, I want a fuller reading with the raw values and every flagged field, so that I can judge what needs a doctor's attention.</em> Reflected in <code>docs/design-system.md</code> §3's &quot;Chief&quot; density and <code>docs/design/design-build-2.md</code> §15 (&quot;Insight before raw data&quot;). <strong>Partly</strong> built per the redesign's Health screen deltas (§2 below, D‑18: &quot;no trend chart… blood pressure is a plain text row&quot;).</li>
+</ul>
+<h3>Ask Nura (multi-turn, memory, clarifying questions, elapsed time, waiting papers)</h3>
+<ul>
+<li><em>As Pa, I want to ask Nura a question in my own words and get an answer that names its source, so that I can trust it.</em> <strong>Partly, with a critical content defect</strong> — Ask's empty state and streaming both work (<code>audit-2026-09-22.md</code> §2 row 16: &quot;matches well&quot;), but <em>&quot;Ask cannot state a value from a confirmed paper&quot;</em>: reproduced live, <em>&quot;How is my cholesterol?&quot; → &quot;Your cholesterol test from Friday 18 September is in your papers.&quot;</em> (no number) (<code>audit-2026-09-22.md</code> §3.1, D‑1, Critical).</li>
+<li><em>As Pa, I want a follow-up question to remember what I just asked, so that I don't repeat myself.</em> <strong>Built</strong> — &quot;conversation memory works: <code>Conversation</code>/<code>Turn</code> rows… six turns verbatim&quot; (<code>audit-2026-09-22.md</code> §3.3), and scene 16 shows this explicitly: <em>&quot;Remembers this chat&quot;</em> (<code>design-build-2-reading.md</code> scene 16).</li>
+<li><em>As Pa, I want Nura to ask me a clarifying question when my question is ambiguous, rather than guess, so that I'm not given a wrong answer.</em> <strong>Not built as a real interruption</strong> — &quot;the clarifying question is not an interrupt: <code>ClarifyOut</code> rides inside the <strong>final</strong> <code>answer</code> event… the chip tap starts a <strong>whole new run</strong>&quot; (<code>audit-2026-09-22.md</code> §7.1). Live-tested twice by the operator on 2026‑09‑22: &quot;no clarifying question was proposed&quot; (<code>build-plan.md</code>, log entry 2026‑09‑22).</li>
+<li><em>As Pa, I want to know how long it has been since my last blood test, computed for me, so that I don't have to do the arithmetic myself.</em> <strong>Built</strong>, and specifically fixed under the &quot;ask‑quality&quot; defect (<code>build-plan.md</code> package 8 log, #302): &quot;elapsed time computed by the backend,&quot; verified live: <em>&quot;A blood test dated Saturday 12 September is waiting for you to check&quot;</em> (<code>build-plan.md</code>, log entry 2026‑09‑22, Stage 1 merge).</li>
+<li><em>As Pa, I want to be told a paper is waiting for me to check, without Nura stating any of its unconfirmed values as fact, so that nothing unchecked reaches me.</em> <strong>Built</strong>, as a safety fix: <em>&quot;a waiting paper now exposes only its kind (closed list), its printed date (validated, never in the future) and when it was added — no extracted text at all&quot;</em> (<code>build-plan.md</code> package 8 log, #302). The underlying rule is named explicitly in the user's own memory of this project and confirmed in the repo's log: <em>&quot;an extractor-written string is hostile until the person confirms it&quot;</em> (<code>build-plan.md</code>, 2026‑09‑21 log entry).</li>
+</ul>
+<h3>Home briefing</h3>
+<ul>
+<li><em>As Pa, I want one sentence that tells me what matters today, composed from what actually happened, so that I don't have to hunt for it.</em> <strong>Partly</strong> — Home's headline exists and is data-driven, but the priority order the code uses (<code>doseDue → allTaken → today's reading → a visit within a week → a reorder → paper → (quiet)</code>) puts a newly filed paper <strong>last</strong>: &quot;Pa confirmed a blood test and Home still said 'Every tablet for today is taken.'&quot; (<code>audit-2026-09-22.md</code> §3.5, §2 row 15, D‑22).</li>
+<li><em>As Pa, I want a single insight card, a reminder and one feed line — never more — so that Home never overwhelms me.</em> <strong>Partly</strong> — the app's Home carries &quot;a 5-element header,&quot; more elements than the blueprint's two-line header and quiet composite (<code>audit-2026-09-22.md</code> §2 row 15).</li>
+</ul>
+<h3>Health &amp; Analyst</h3>
+<ul>
+<li><em>As Pa, I want my blood pressure shown as a trend with a plain &quot;above your usual&quot; line, so that I see the direction, not just today's number.</em> <strong>Not built</strong> — &quot;there is <strong>no chart anywhere in the app</strong>… blood pressure is a plain text row&quot; (<code>audit-2026-09-22.md</code> §2 row 17, D‑18).</li>
+<li><em>As Mei, I want a weekly analyst report that reads what changed and turns it into visit questions, so that I walk into the appointment prepared.</em> <strong>Partly</strong> — &quot;Generates and streams real stages,&quot; but repeats its own finding, says &quot;Ask Dr Tan this&quot; (a wording the operator had already rejected once), and shows a stray glyph and two competing date lines (<code>audit-2026-09-22.md</code> §2 row 18, D‑23).</li>
+</ul>
+<h3>Medicines (registry, add by photo/file/typing, which statin, safety screening, reorder)</h3>
+<ul>
+<li><em>As Pa, I want to add a medicine by photographing the box, so that I never have to type a drug name.</em> <strong>Built</strong> — <code>docs/design/build-plan.md</code> package 11 &quot;Done (#313)&quot;. Registry strength: <em>&quot;233 products, 25 interaction pairs, 50 monographs&quot;</em> (<code>docs/design/build-spec.md</code> §6), and brand→generic resolution is measured above 95% (<code>docs/parity.md</code>, E00‑06).</li>
+<li><em>As Pa, I want Nura to ask &quot;which statin?&quot; rather than record &quot;STATIN&quot; when the box only names the drug family, so that nothing vague is kept as fact.</em> <strong>Not built as designed</strong> — &quot;the app: photo/type-it entries exist; voice not built. On a class-only box the read-back prints 'The medicine: STATIN' with 'Looks right' as the primary — no 'which statin?' question&quot; (<code>audit-2026-09-22.md</code> §2 row 12, D‑6). The backend itself already refuses to store a class name as a medicine (<code>build-plan.md</code>, package 13 log, #313: <em>&quot;a class name ('STATIN') can never be stored as a medicine&quot;</em>) — the defect is in the screen offering &quot;Looks right&quot; over that refusal, not in the write path.</li>
+<li><em>As Pa, I want a dose taken to be one tap, with no confirmation modal, so that the daily ritual stays effortless.</em> <strong>Built</strong> — scene 19: &quot;the button itself becomes the record… no separate confirmation step&quot; (<code>design-build-2-reading.md</code> scene 19).</li>
+<li><em>As Pa or Mei, I want two medicines of the same class flagged for the pharmacist, never as a verdict Nura makes itself, so that I know Nura is not deciding pharmacology.</em> <strong>Built</strong> — &quot;an <code>InsightKind.MEDICINE</code> insight, <code>ask_who=PHARMACIST</code> — already the blueprint's 'Ask your pharmacist' pattern, already routed to the pharmacist, never a verdict&quot; (<code>docs/design/build-spec.md</code> §6).</li>
+<li><em>As Pa, I want a reminder before I run out, so that I never miss a refill.</em> <strong>Built</strong> — E04‑04/E04‑05, &quot;the count drops per tap, and the reorder date moves with the lead time&quot; (<code>docs/parity.md</code>, E04‑04, done); the Ask‑to‑order tap itself still does nothing (<code>docs/parity.md</code>, E04‑05, missing).</li>
+<li><em>As Pa, I want a high-risk medicine's dose only ever recorded from a label photo, never from a voice note or a typed message, so that a dangerous dose is never guessed at.</em> <strong>Built</strong> — enforced at the write layer for every writer: <em>&quot;a dose of one is saved from a label photo, never from a message or a voice note alone&quot;</em> (<code>backend/app/safety/__init__.py</code>; <code>docs/parity.md</code>, E16‑04, done).</li>
+<li><em>As Pa, I want to add a medicine by voice, so that I don't need to use the camera or type.</em> <strong>Not built</strong> — named explicitly as a gap at every mention (<code>build-plan.md</code> package 11 and 13 logs: &quot;Not built: adding a medicine by voice&quot;).</li>
+</ul>
+<h3>Insurance</h3>
+<ul>
+<li><em>As Mei, I want my policy's essentials — what it covers, what it excludes, how to claim — read from the PDF with a page citation on every line, so that I can trust what I'm told.</em> <strong>Not built as a &quot;passport&quot;; a much flatter, person-typed summary exists.</strong> <em>&quot;Today's <code>Policy</code> is a person-typed summary… the blueprint's <code>policy</code> scene is a document-read&quot;</em> (<code>docs/design/build-spec.md</code> §5). The Insurance &quot;essentials&quot; half of package 12 is merged (<code>build-plan.md</code> package 12: &quot;Insurance half done (#309)&quot;), but the audit still found a dead end: after &quot;Looks right,&quot; a sheet renders over a stale empty state and &quot;the tab bar stops responding&quot; (<code>audit-2026-09-22.md</code> §2 row 11, D‑16).</li>
+<li><em>As Pa, I want one line on the emergency card naming my insurer, so that a stranger at a hospital desk knows who to call.</em> <strong>Built</strong> — <code>insurer</code> stays on <code>Scope.EMERGENCY</code>, &quot;the one line the emergency card says&quot; (<code>backend/app/insurance/__init__.py</code>).</li>
+<li><em>As Mei, I want to see how much has been claimed this year, without a made-up percentage of &quot;covered,&quot; so that I know only what the insurer actually said.</em> <strong>Built</strong> on the ledger side — <code>insurance_ledger()</code> sums claims by policy (<code>docs/design/build-spec.md</code> §5); the display rule is enforced in code: <em>&quot;never a made-up midpoint, never a 'covered' percentage invented&quot;</em> (<code>cost_expectation.py</code>, cited in <code>build-spec.md</code> §5).</li>
+</ul>
+<h3>Visits (planner, questions to ask, logistics)</h3>
+<ul>
+<li><em>As Pa, I want the questions Nura suggests for my next visit to be first-person and drawn from what actually happened, not a raw code, so that they read the way I would say them.</em> <strong>Built</strong>, after rework — the first pass showed &quot;a raw code ('Ldl on this paper is outside the range printed on it.'), native checkboxes that did nothing&quot;; sent back, rebuilt as <em>&quot;one card 'For Dr Lim on 25 September,' first-person questions from a checked bank, 'Keep these for my visit'&quot;</em> (<code>build-plan.md</code> package 7 log, #303).</li>
+<li><em>As Mei, I want a driver suggested for the visit from the family roster, confirmed with a yes, so that logistics don't fall entirely on me.</em> <strong>Built</strong> — <code>docs/parity.md</code>, E05‑03, done.</li>
+<li><em>As Pa, I want Nura to record what the doctor said and turn it into my own memos, never a silent medicine change, so that nothing changes without my say-so.</em> <strong>Built</strong> — <em>&quot;actions become memos, a medicine change becomes a flag and a question (never a change)&quot;</em> (<code>backend/app/reasoning/visits/__init__.py</code>); <code>docs/parity.md</code>, E05‑05, done (web confirm step still API‑only).</li>
+<li><em>As Mei, I want an estimate of what a procedure might cost, cited to past receipts, even before a visit is booked.</em> <strong>Not built</strong> — &quot;today's engine has no unbooked-procedure estimator&quot; (<code>design-build-2-map.md</code>, row 44; <code>docs/design/build-plan.md</code> package 17, &quot;Not started&quot;).</li>
+</ul>
+<h3>The feed (clips, articles, story, quiet hours, live search)</h3>
+<ul>
+<li><em>As Pa, I want a short video that applies specifically to me, with why I'm seeing it stated before what it is, so that it never feels generic.</em> <strong>Not reachable today</strong> — the live web search that would produce clips and articles has never run on the redesigned backend; the API returns text-only cards with <code>source_id: null</code> (<code>audit-2026-09-22.md</code> §2 row 22; <code>build-plan.md</code> package 13: &quot;Done except the live web-search run… needs the owner's OK, a server restart and credits&quot;).</li>
+<li><em>As Pa, I want the feed to stop offering new cards once I've seen today's, with an honest &quot;that's all for now,&quot; and then move into my own story and evergreen learning.</em> <strong>Built</strong>, after a fix — the initial order put every story card ahead of every learning card, hiding eight learning cards behind twenty-six story ones; fixed to &quot;the newest card per story; past the gate a learning card first, then turns, one card per kind&quot; (<code>build-plan.md</code> package 13 log, #315). <code>docs/health-feed-spec.md</code> §0 defines the order: <em>&quot;Now … → Today … → a gate … → His story … → Learning.&quot;</em></li>
+<li><em>As Pa, I want Nura to stay quiet at night, so that I'm never pinged outside reasonable hours.</em> <strong>Built</strong> — verified live: &quot;the feed is quiet 21:00–07:00 by design&quot; (<code>build-plan.md</code> package 13 log, 2026‑09‑22).</li>
+<li><em>As Pa, I want to say &quot;not for me&quot; on a card and have that preference remembered, so that the feed learns without me having to explain why.</em> <strong>Built</strong> — <code>docs/health-feed-spec.md</code> §3 step 9: <em>&quot;engagement events… feed novelty and format fit; two ignored text cards flip the profile's preferred format to voice.&quot;</em></li>
+<li><em>As Mei, I want to see what was sent to Pa this week, with its source and whether he opened it, so that I can watch without having to ask him.</em> Specified in <code>docs/health-feed-spec.md</code> §1 (&quot;Caregiver · For Pa&quot; placement); not confirmed built in the redesign pass reviewed here.</li>
+</ul>
+<h3>Not well / emergency card</h3>
+<ul>
+<li><em>As Pa, I want tapping &quot;not well&quot; to skip every animation and thinking delay, so that the moment feels urgent, not performative.</em> <strong>Built, by design</strong> — scene 23: &quot;no thinking animation, no streaming, no delay&quot; (<code>design-build-2-reading.md</code> scene 23; <code>audit-2026-09-22.md</code> §2 row 23: &quot;No thinking animation, no delay — correct&quot;).</li>
+<li><em>As a stranger who finds Pa unable to speak, I want an emergency card with his conditions, medicines, allergies and a number to call, available offline, so that I know what to do.</em> <strong>Built</strong> on the backend, with a real client-side gap — <code>docs/parity.md</code>, E13‑01, &quot;missing&quot;: the web shows only a placeholder (&quot;Nura will keep your emergency card here.&quot;) offline; the printable page exists.</li>
+<li><em>As Pa, I want a red flag I raise myself to reach my family immediately, never held for the quiet hours, and to climb to the next person if nobody answers.</em> <strong>Built</strong> — the escalation ladder: <em>&quot;Red flags skip his rung. A red flag goes straight to the roster… never held for the quiet hours&quot;</em> (<code>docs/adr/0005-the-ladder-is-the-one-escalation-record.md</code>, decision 2).</li>
+<li><em>As Pa, on medicine or on foot, I want a fall while I'm on a blood thinner to always be treated as an ambulance case, whatever the hour, so that a dangerous bleed is never treated as &quot;wait until morning.&quot;</em> <strong>Built, but gated off pending clinical sign-off</strong> — the two-tier logic exists (<code>docs/adr/0010-red-flag-tiers.md</code>), but <em>&quot;None of this reaches a family until a clinician signs the table… Unset — every deployment until the sign-off — every red flag's step is the ambulance&quot;</em> (same ADR, &quot;Behind a switch until it is signed&quot;).</li>
+</ul>
+<h3>Connect &amp; family</h3>
+<ul>
+<li><em>As Pa, I want to name a role for someone (chief, viewer, helper) and know exactly what they can and can't see, so that sharing is precise, not all-or-nothing.</em> <strong>Built on the backend, thin on the web</strong> — <code>docs/parity.md</code>, E12‑01, done on the backend; &quot;Web cuts only a 'caregiver' key by parts: no role choice, no time window, no narrowing.&quot; The redesigned Connect screen is <strong>Not built</strong> — <code>build-plan.md</code> package 14, &quot;Not started&quot;; the audit shows an avatar grid with three empty states where the blueprint shows populated role rows (<code>audit-2026-09-22.md</code> §2 row 24).</li>
+<li><em>As Pa, I want my &quot;only me&quot; setting to take a part of my record out of a live key instantly, and to be on the trail, so that I keep control even after I've shared.</em> <strong>Built on the backend</strong> — <code>docs/parity.md</code>, E12‑04, done (no web trail or control yet).</li>
+<li><em>As Mei, I want a duty roster so that tasks are assigned to a named person, not left to whoever notices.</em> <strong>Backend-only</strong> — <code>docs/parity.md</code>, E12‑03.</li>
+</ul>
+<h3>Caregiver view</h3>
+<ul>
+<li><em>As Mei, I want the same Home screen Pa sees, recomposed in a caregiver's voice about him, not a different app.</em> <strong>Built, proven to be a data substitution, not a parallel template</strong> — &quot;its one <code>stream()</code> call is structurally identical to Home's&quot; (<code>design-build-2-reading.md</code>, &quot;Ten conclusions,&quot; #10; scene 25).</li>
+<li><em>As Mei, I want every medicine line spoken in one consistent voice, not switching between &quot;Pa takes…&quot; and &quot;the sugar tablet,&quot; so that reading his medicines doesn't feel inconsistent.</em> <strong>Not built / defect</strong> — &quot;Mei's Medicines mixes voices inside one list: row 1 'Pa takes 1 tablet of Pa's blood pressure tablet…', rows 2–5 'Take 1 tablet of the sugar tablet…'&quot; (<code>audit-2026-09-22.md</code> §4.3, D‑20).</li>
+</ul>
+<h3>ASEAN by configuration</h3>
+<ul>
+<li><em>As the owner, I want the app's emergency number, drug register, currency, publishers, ID format and residency region to all change from one country setting, so that adding Thailand (or another ASEAN market) is adding a pack, never rewriting a caller.</em> <strong>Decided, partly built.</strong> The two facts a country pack must get right (emergency number, drug register) already work for both existing regions (<code>docs/design/build-spec.md</code> §0(a): &quot;Region-derived facts already exist for both&quot;). The generalisation into a first-class &quot;country pack&quot; concept is the owner's decision of 2026‑09‑22, recorded as <code>build-plan.md</code> package 24, <strong>Not started</strong>: <em>&quot;one country setting (MY, SG first; TH and others by adding a pack) that tailors the emergency number, the licensed drug register, currency, the trusted publishers, ID format, privacy wording and the region the data lives in.&quot;</em></li>
+</ul>
+<hr />
+<h2>3. The experience</h2>
+<h3>The 26 scenes</h3>
+<p><code>docs/design/experience-blueprint.html</code>'s own <code>SC</code> array defines exactly <strong>26</strong> scenes in six groups (<code>experience-blueprint.html:192</code> onward; confirmed by direct extraction of each scene's <code>k</code>/<code>g</code>/<code>n</code> fields). Note: <code>docs/design/build-spec.md</code>'s own header describes the blueprint as having &quot;25 scenes&quot; — this is the one place in the corpus that disagrees with the file itself and with every other document (<code>design-build-2.md</code>, <code>design-build-2-reading.md</code> and <code>audit-2026-09-22.md</code> all say 26). The list below is authoritative against the HTML source.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Group</th>
+<th>Title</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Arrive</td>
+<td>Welcome</td>
+<td>The orb alone, breathing, before any account or data exists; one streamed sentence, then one <strong>Start</strong> button (<code>design-build-2-reading.md</code> scene 01).</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Arrive</td>
+<td>Sign in</td>
+<td>Phone number, then a code field, revealed one at a time — &quot;no password anywhere in Nura&quot; (scene 02).</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Arrive</td>
+<td>Who is this for</td>
+<td>A conversation: Nura's bubble, three chips (Me / My parent / Someone else), the person's reply, Nura's second turn (scene 03).</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Arrive</td>
+<td>What is part of your health</td>
+<td>The &quot;bubble cloud&quot;: tappable condition bubbles that bob continuously, or a sheet to say it in one sentence instead (scene 04).</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Your papers</td>
+<td>Add a paper</td>
+<td>Three entry rows (photo / file / many at once) or &quot;I have no papers today,&quot; with no penalty for skipping (scene 05).</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Your papers</td>
+<td>Nura reads it</td>
+<td>Four real backend stages narrated in place, then a headline, then five summary rows — &quot;the best screen in the app&quot; per the audit (scene 06; <code>audit-2026-09-22.md</code> §2 row 06).</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Your papers</td>
+<td>The report table</td>
+<td>One table, range bars, &quot;Looks right&quot; / &quot;Fix a number,&quot; one flagged uncertain row (scene 07).</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Your papers</td>
+<td>What it means for you</td>
+<td>Questions for the doctor, connected unprompted to medicines and the next visit; &quot;Keep these for my visit&quot; (scene 08).</td>
+</tr>
+<tr>
+<td>9</td>
+<td>One record</td>
+<td>Many papers at once</td>
+<td>Seven papers as a visible queue, one shared status, each row's own flag cycling live (scene 09).</td>
+</tr>
+<tr>
+<td>10</td>
+<td>One record</td>
+<td>What changed in your record</td>
+<td>Six plain verdicts — New/Same/Newer/Conflict/Replaces/Yours? — never silent, never a raw diff (scene 10).</td>
+</tr>
+<tr>
+<td>11</td>
+<td>One record</td>
+<td>Policy passport</td>
+<td>Real page-by-page progress (&quot;Reading page 4 of 48…&quot;), then four tabs (scene 11).</td>
+</tr>
+<tr>
+<td>12</td>
+<td>One record</td>
+<td>Add a medicine</td>
+<td>A box photo or typed/spoken entry; asks &quot;which statin?&quot; rather than guessing when the box only names a family (scene 12).</td>
+</tr>
+<tr>
+<td>13</td>
+<td>One record</td>
+<td>Medicine registry</td>
+<td>Every source merged into one card per medicine; a &quot;Show my pharmacist&quot; summary sheet (scene 13).</td>
+</tr>
+<tr>
+<td>14</td>
+<td>One record</td>
+<td>Everything connected</td>
+<td>One fact's full context — source, medicine, visit, policy line, analyst mention, a clip — five doors from one screen (scene 14).</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Every day</td>
+<td>Home</td>
+<td>One composed headline, one insight card, a reminder, a feed line — three things, not more (scene 15).</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Every day</td>
+<td>Ask Nura</td>
+<td>Two questions in sequence, sources shown before the answer, the second remembering the first (scene 16).</td>
+</tr>
+<tr>
+<td>17</td>
+<td>Every day</td>
+<td>Health</td>
+<td>A summary card, a trend chart, three paper rows — a static composed view, no AI turn (scene 17).</td>
+</tr>
+<tr>
+<td>18</td>
+<td>Every day</td>
+<td>Health Analyst</td>
+<td>Four narrated stages, then sections revealed one at a time; a section with nothing to say is left out, never shown empty (scene 18).</td>
+</tr>
+<tr>
+<td>19</td>
+<td>Every day</td>
+<td>Medicines</td>
+<td>Tap &quot;I took it&quot; — the button itself becomes the record, no modal (scene 19).</td>
+</tr>
+<tr>
+<td>20</td>
+<td>Care and money</td>
+<td>Visits and costs</td>
+<td>The next-visit card; &quot;What might it cost?&quot; and &quot;Draft the message,&quot; both via a sheet; Nura never sends anything itself (scene 20).</td>
+</tr>
+<tr>
+<td>21</td>
+<td>Care and money</td>
+<td>Insurance</td>
+<td>Policy card and a claims ledger as a short list, not a spreadsheet (scene 21).</td>
+</tr>
+<tr>
+<td>22</td>
+<td>Every day</td>
+<td>For you</td>
+<td>Two clips and a &quot;Did you know&quot; card, chosen because of something specific to this person; why before what (scene 22).</td>
+</tr>
+<tr>
+<td>23</td>
+<td>Safety</td>
+<td>Not feeling well</td>
+<td>The one deliberately urgent scene: background swaps colour in the same frame as the card, no thinking, no stagger (scene 23).</td>
+</tr>
+<tr>
+<td>24</td>
+<td>Family</td>
+<td>Connect</td>
+<td>Three people's access rows with role badges, &quot;Let someone in,&quot; &quot;See it as Mei&quot; (scene 24).</td>
+</tr>
+<tr>
+<td>25</td>
+<td>Family</td>
+<td>Mei's Home</td>
+<td>The same Home template, recomposed with a caregiver's voice — proven a data substitution, not a second template (scene 25).</td>
+</tr>
+<tr>
+<td>26</td>
+<td>Family</td>
+<td>Profile</td>
+<td>Six rows, most already answered in a sentence; the most static scene in the file (scene 26).</td>
+</tr>
+</tbody>
+</table>
+<h3>The interaction model</h3>
+<p>The owner's own words, registered as binding from 2026‑09‑22: <strong>&quot;AI understands → AI prioritizes → AI surfaces → user explores → AI explains → user acts. Minimise navigation, maximise contextual interaction.&quot;</strong> (<code>docs/design/design-build-2.md</code> §1.1). The design-reading pass found this realised in the blueprint through two distinct disclosure modes, not one: an <strong>&quot;AI turn&quot;</strong> (the <code>nura()</code> function: think → headline → body/rows, used wherever Nura is actively reasoning — scenes 06, 08, 09, 10, 16, 18) and a <strong>&quot;static composed view&quot;</strong> (scenes 17, 21, 24, 26: content simply reveals, with no AI turn at all) — <em>&quot;a real second mode the spec does not name separately but the blueprint consistently distinguishes&quot;</em> (<code>design-build-2-reading.md</code>, &quot;Ten conclusions,&quot; #5).</p>
+<p>Two of the specification's own core claims have <strong>no reference implementation</strong> in the blueprint itself, which the reading pass calls out explicitly so they are understood as design work, not extraction:</p>
+<ol>
+<li><strong>The composer never expands in place</strong> in the blueprint — tapping the docked &quot;Ask&quot; bar is always a full scene change (<code>go('ask')</code>), directly contradicting spec §9's <em>&quot;the compact pill expands in place… do not open a separate full-screen chatbot&quot;</em> (<code>design-build-2-reading.md</code>, cross-cutting notes; conclusion #1).</li>
+<li><strong>No shared-element transition exists anywhere in the blueprint's own code</strong> — every detail is either a full scene change or a bottom sheet; spec §12's &quot;a Home card transforms into the detail&quot; is <em>&quot;asserted in scene 14's content… but never demonstrated in its motion&quot;</em> (<code>design-build-2-reading.md</code>, cross-cutting notes; conclusion #2).</li>
+</ol>
+<h3>The state machines (<code>design-build-2.md</code> §28, <code>mobile-architecture.md</code> §3)</h3>
+<p><strong>AI state:</strong> <code>idle → listening → thinking → responding → idle</code>, <code>* → error → idle</code>, driven only by events from a stream, never a timer (<code>mobile-architecture.md</code> §3). The current backend, however, has no event that maps cleanly onto this: <em>&quot;idle → listening: … None — no capture-start event exists in any of the six vocabularies&quot;</em>; <em>&quot;responding → idle: … None — no explicit 'run finished' signal&quot;</em> (<code>design-build-2-map.md</code> §2.1). The blueprint's own reference implementation shows only two of the five CSS states in motion (idle spin, <code>.think</code>'s faster spin, plus a <code>.lg</code> breathing size variant on Welcome) — <em>&quot;three states beyond what the blueprint ever shows&quot;</em> (<code>design-build-2-reading.md</code>, conclusion #3).</p>
+<p><strong>Card state:</strong> <code>collapsed → pressed → expanded → interactive → dismissed</code>, with <code>loading</code> and <code>error</code> reachable from <code>expanding</code> (<code>mobile-architecture.md</code> §3). A tap is meant to become &quot;the expanded object, never Screen A → Screen B&quot; — a promise the current build does not keep: <code>ExpandableCard</code> &quot;confirmed absent&quot; (<code>design-build-2.md</code> §2).</p>
+<p><strong>Media state:</strong> <code>idle → loading → playing ⇄ paused → complete</code> (<code>mobile-architecture.md</code> §3). <code>playing → paused</code> is <em>&quot;not modelled anywhere — the blueprint's <code>.pl</code> button has no pause affordance… a gap in the reference, not just the app&quot;</em> (<code>design-build-2-map.md</code> §2.3).</p>
+<hr />
+<h2>4. Features in detail</h2>
+<p>For each domain: what it does, the modules that implement it, the safety rules that bind it, what the person actually reads (quoted), and open defects by D-number (<code>docs/design/audit-2026-09-22.md</code> §5) where they exist.</p>
+<h3>Ingestion — reading a paper</h3>
+<p><strong>What it does.</strong> A photo or PDF's bytes go to the object store of the profile's own region; extraction runs behind a port and answers with per-field confidence, never a fact yet; a person confirms, corrects or rejects field by field; only on a yes are Facts written, with the photo as provenance (<code>backend/app/ingestion/__init__.py</code>).</p>
+<p><strong>Modules.</strong> <code>backend/app/ingestion/extract.py</code> (the <code>Extractor</code> port), <code>claude_extract.py</code> (<code>ClaudeExtractor</code>, demo/dev-only), <code>review.py</code> (the review card), <code>objects.py</code> (region-pinned storage), <code>connectors/</code> (read-only calendar).</p>
+<p><strong>Safety.</strong> Importing the package &quot;wires the label-photo rule for a high-risk drug… onto the memory store, so that a medicine dose cannot land from anything but a photo whichever surface writes it&quot; (same file). Region residency is enforced twice — at the door and again inside the adapter (<code>docs/adr/0017-claude-runtime-features-demo-only.md</code>, decision 1 and 4).</p>
+<p><strong>What the person sees.</strong> <em>&quot;Looks right&quot;</em> (<code>web/src/strings/en.ts:1760</code>), <em>&quot;Nura wrote it down&quot;</em> (<code>en.ts:1761</code>), <em>&quot;This paper is waiting for you to check&quot;</em> (<code>en.ts:938</code>).</p>
+<p><strong>Open defects.</strong> D‑2 (whose paper is it — Critical), D‑4 (no duplicate detection — High), D‑5 (Home's &quot;Add a paper&quot; never reaches the insight screen — High).</p>
+<h3>Matching — one record</h3>
+<p><strong>What it does (specified, not built).</strong> No matching engine exists in code today — <code>docs/design/build-spec.md</code> §4 marks the whole section <strong>GAP</strong>. The design specifies six verdicts per fact: New, Same, Newer, Conflict, Replaces, and &quot;Not yours?&quot; — the last two and Conflict <em>always</em> need a person's yes (§4, &quot;Which verdicts need the person's yes&quot;). A synonym table mapping a lab's printed name to a canonical analyte code is the first missing piece; ten canonical analytes already have clinically-sourced bands in <code>backend/tests/fixtures/labs/ranges.json</code>, and thirty more are proposed but explicitly flagged: <em>&quot;every row NEEDS CLINICAL REVIEW&quot;</em> (<code>build-spec.md</code> §4).</p>
+<p><strong>Safety.</strong> <em>&quot;Rules decide, never a model&quot;</em> — the matching engine follows the analyst's existing pattern: a model may rephrase, never decide (<code>build-spec.md</code> §4 header, citing <code>RuleAnalyst</code>).</p>
+<h3>Medicines</h3>
+<p><strong>What it does.</strong> A label is identified through the licensed registry, reconciled against active lines (refill, dose change, new line, duplicate), and its high-risk class enforced at the write layer (<code>backend/app/medicines/__init__.py</code>; <code>backend/app/drugs/__init__.py</code>).</p>
+<p><strong>Modules.</strong> <code>app/medicines/service.py</code> (<code>_one_product</code>, <code>reconcile</code>, <code>record_dose_taken</code>), <code>app/drugs/fixture.py</code> (233 products, 25 interaction pairs, 50 monographs, NPRA/HSA-shaped registration numbers — <code>build-spec.md</code> §6), <code>app/safety/high_risk.py</code> (5 hand-named classes: anticoagulant, insulin, cardiac glycoside, antimetabolite, opioid).</p>
+<p><strong>Safety.</strong> <em>&quot;Nothing here writes a sentence: a monograph is rule ids, and the words for them live in <code>app.medicines.strings</code>&quot;</em> (<code>backend/app/medicines/__init__.py</code>). <em>&quot;Explicitly NO interaction judgement… Nura lists, a pharmacist judges&quot;</em> (<code>build-spec.md</code> §6).</p>
+<p><strong>What the person sees.</strong> <em>&quot;The medicine you kept&quot;</em>, and the class-only refusal path: <em>&quot;a class name… can never be stored as a medicine&quot;</em> (<code>build-plan.md</code> package 13 log). Glossary: <em>&quot;The water pill,&quot;</em> <em>&quot;Your blood pressure tablet,&quot;</em> <em>&quot;The cholesterol tablet,&quot;</em> <em>&quot;The sugar tablet&quot;</em> (<code>docs/plain-words.md</code> §2).</p>
+<p><strong>Open defects.</strong> D‑6 (offers &quot;Looks right&quot; over &quot;The medicine: STATIN&quot; — High), D‑19 (docked pill clips the card behind it; a one-at-a-time pager instead of a list — Medium).</p>
+<h3>The feed</h3>
+<p><strong>What it does.</strong> A vertical pager, ranked <code>now → today (1–2 new cards) → a gate → his story → learning</code>, capped at two new cards a day, never on an alert day, respecting quiet hours (<code>docs/health-feed-spec.md</code> §0, §1). A safety notice about one of his own medicines is <strong>never</strong> a card in his feed — held for the chief, or rerouted as a doctor's question — resolved explicitly after an earlier draft of the same spec read ambiguously: <em>&quot;§0 wins&quot;</em> (<code>docs/health-feed-spec.md</code> §2, &quot;A safety notice is never his card&quot;).</p>
+<p><strong>Modules.</strong> <code>backend/app/delivery/feed/__init__.py</code> (<code>items</code>, <code>compose</code>, <code>rank</code>, <code>engagement</code>, <code>search</code>), <code>backend/app/delivery/recommend/__init__.py</code> (the broker described in ADR 0016).</p>
+<p><strong>Safety.</strong> <em>&quot;An item that fails [the plain-words verifier] is not created&quot;</em> (<code>backend/app/delivery/feed/__init__.py</code>). <code>create_item</code> &quot;refuses a <code>TreatmentChangingCard</code> outright, the same choke point that refuses a <code>NOTICE</code> built for the patient&quot; (<code>docs/health-feed-spec.md</code> §2).</p>
+<p><strong>What the person sees.</strong> <em>&quot;Nura keeps quiet at night&quot;</em> (<code>en.ts:904</code>), <em>&quot;Not for me&quot;</em> (<code>en.ts:884</code>), <em>&quot;Your story&quot;</em> (<code>en.ts:874</code>).</p>
+<p><strong>Open defects.</strong> The live web search has never run on the redesigned backend (<code>build-plan.md</code> package 13); D‑15 (every card's prepared voice fails to build, falling back to the phone's own voice ten times in one walk — Medium).</p>
+<h3>Recommendation / correlation</h3>
+<p><strong>What it does.</strong> <code>docs/recommendation-engine.md</code>'s own audit (§1.2) is blunt: <em>&quot;Today the inputs and the outputs exist, and nothing connects them. Each output reads its own narrow inputs.&quot;</em> Correlation is designed to sit <strong>beside</strong> State, not inside it, for four reasons written into <code>docs/adr/0016-correlation-sits-beside-state.md</code>: State promises never to judge a number; posture (the day's colour) is the worst of six dimensions and must not move from a correlation; State recomputes inside every single fact write, while a pattern reads weeks of series; and a pattern can span two scopes, which State's per-subject narrowing cannot hide correctly.</p>
+<p><strong>Modules (designed, largely not yet built).</strong> <code>app/reasoning/patterns/</code> (a <code>PatternDetector</code> port, arithmetic-only default adapter — &quot;two groups of his own answered days, a minimum of days in each, a noise gate… It computes no probability and no coefficient,&quot; ADR 0016 decision 1); <code>app/delivery/recommend/</code> (the broker — <code>models.py</code> for <code>Evidence</code>/<code>Candidate</code>, <code>broker.slate()</code>; &quot;the broker writes no words and no rows,&quot; <code>backend/app/delivery/recommend/__init__.py</code>).</p>
+<p><strong>Safety.</strong> <em>&quot;A model never chooses which of his numbers to compare, never writes a pattern's sentence, and never sets a candidate's audience or safety class&quot;</em> (ADR 0016, decision 6). Patterns render only behind <code>NURA_PATTERNS=1</code>, and until a pharmacist approves a rule, every rendering carries <em>&quot;A pharmacist has not checked this yet&quot;</em> (ADR 0016, decision 7).</p>
+<h3>Visits</h3>
+<p><strong>What it does.</strong> The pre-visit brief, question generation, post-visit summary and memo consolidation, all rendered from State and passed through the plain-words verifier (<code>backend/app/reasoning/visits/__init__.py</code>).</p>
+<p><strong>Safety.</strong> <em>&quot;On his yes, actions become memos, a medicine change becomes a flag and a question (never a change)&quot;</em> (same file).</p>
+<p><strong>What the person sees.</strong> <em>&quot;For Dr Lim on 25 September&quot;</em>, <em>&quot;Keep these for my visit&quot;</em> (<code>build-plan.md</code> package 7 log).</p>
+<h3>Insurance</h3>
+<p><strong>What it does.</strong> A person-typed summary today (insurer, reference, dates, free-text <code>covers</code>), not a document-parsed passport; a fuller, cited &quot;policy passport&quot; (limits, exclusions, how-to-claim, all with <code>{quote, page}</code> citations) is specified but not built (<code>docs/design/build-spec.md</code> §5). <code>app/insurance/__init__.py</code>: <em>&quot;The one place an insurance identifier is kept… identity-card numbers never outside this module.&quot;</em></p>
+<p><strong>Safety.</strong> Policy and claim data sit under <code>Scope.MONEY</code>, held to a chief only by default; <code>insurer</code> alone (the emergency-card line) sits on <code>Scope.EMERGENCY</code>, which every role holds — <em>&quot;a different question, on purpose, from what a policy pays for&quot;</em> (<code>backend/app/insurance/__init__.py</code>).</p>
+<p><strong>What the person sees.</strong> <em>&quot;Your insurance letter is ready&quot;</em> (<code>docs/plain-words.md</code> §2), <em>&quot;Nura has no insurance written down for you yet&quot;</em> (<code>audit-2026-09-22.md</code> §2 row 11).</p>
+<p><strong>Open defects.</strong> D‑9 (unclear whether a confirmed policy actually saved — the screen is trapped by D‑16), D‑16 (the propose sheet renders over a stale empty state and the tab bar stops responding — High), D‑13 (the structured, cited policy lists exist on the backend and are invisible to Ask — Medium).</p>
+<h3>Safety systems (not well / emergency)</h3>
+<p><strong>What it does.</strong> A fixed emergency-card projection readable under a scope every role holds; a not-feeling-well button and symptom log that write a red flag before anything else happens; an escalation ladder that climbs Pa → helper → caregiver on duty → chief (<code>backend/app/safety/__init__.py</code>; <code>docs/adr/0005-the-ladder-is-the-one-escalation-record.md</code>).</p>
+<p><strong>Safety.</strong> <em>&quot;A word tapped on the feeling cloud, free text on WhatsApp, the words said or typed to the not-feeling-well button and the symptom log all raise the same <code>Flag</code>… before any ranking or cap, telling every live key with the emergency scope&quot;</em> (<code>backend/app/safety/__init__.py</code>). <em>&quot;A flag that depends on a fact not on the record is written with why it was suppressed, so the caregiver sees it was considered.&quot;</em></p>
+<p><strong>What the person sees.</strong> <em>&quot;Nura does not decide what is wrong.&quot;</em> (closing line on every red-flag reply, <code>docs/adr/0010-red-flag-tiers.md</code>); <em>&quot;Mei knows now.&quot;</em> / <em>&quot;You did right to say so.&quot;</em> (<code>docs/adr/0002-emergency-scope-and-the-safety-layers-posture.md</code>, decision 12).</p>
+<p><strong>Open defect.</strong> D‑0 (Critical) — <em>&quot;opening Profile freezes the app within 500 ms&quot;</em> on WebKit, the only engine on an iPhone; the emergency card, Insurance and the way back out of Profile are all downstream of it (<code>audit-2026-09-22.md</code> §1, §5).</p>
+<h3>Family / Connect</h3>
+<p><strong>What it does.</strong> Roles and scoped grants (six preset roles, each with a window, in plain words), a family thread with digests, a duty roster, an audit trail in Pa's own words with an &quot;only me&quot; control (<code>backend/app/family/__init__.py</code>).</p>
+<p><strong>Safety.</strong> <em>&quot;The 'only me' floor itself lives with the keys… because it is enforced in the resolver; this package writes the rows and renders the words&quot;</em> (same file).</p>
+<p><strong>Open defect.</strong> Package 14 (Connect, Mei's Home rebuild, Not well, Profile) is <strong>Not started</strong> on the redesign (<code>build-plan.md</code>); the pre-redesign Connect screen shows three empty sections where the blueprint shows three populated role rows (<code>audit-2026-09-22.md</code> §2 row 24).</p>
+<hr />
+<h2>5. Safety &amp; trust</h2>
+<h3>Plain words</h3>
+<p>Thirteen rules and a three-language glossary bind everything the patient reads or hears (<code>docs/plain-words.md</code> §1–2). The standard is enforced twice: at build time (<code>make plain-words</code>, <code>CLAUDE.md</code>) and at run time by <code>app/safety/plain_words.py</code>, <em>&quot;the verifier behind <code>make plain-words</code>… every string tagged <code>@patient</code> passes the standard or does not ship, and <code>plain_words.verify</code> is the same check for the memos and cards the backend writes at run time&quot;</em> (<code>backend/app/safety/__init__.py</code>). A relaxed profile exists for Ask's own conversational answers (<code>kind=&quot;ask&quot;</code>): one idea per line is relaxed and the word ceiling rises from fifteen to twenty, but <em>&quot;every other rule — 14 (the boundary) above all — runs exactly as it does… a profile relaxes shape, never safety&quot;</em> (<code>docs/plain-words.md</code> §1a).</p>
+<h3>The vetoes</h3>
+<p>No code path may output advice to start, stop or change a medicine (<code>CLAUDE.md</code>); reasoning explicitly disclaims this power: <em>&quot;Nothing here diagnoses or treats, and nothing here calls a model to decide pharmacology&quot;</em> (<code>backend/app/reasoning/__init__.py</code>). A value not yet confirmed by a person is never stated as fact — the rule the &quot;ask-quality&quot; fix (<code>build-plan.md</code>, #302) exists specifically to enforce, discovered when <em>&quot;the reviewer proved, with a working test, that an unchecked number could reach the patient as fact&quot;</em> (<code>build-plan.md</code>, package 8 log). <strong>Whose paper it is</strong> is the newest veto, added at the owner's explicit instruction on 2026‑09‑22 and specified as deterministic rules only, never a model decision (<code>docs/design/build-spec.md</code>, &quot;Owner requirement added 2026‑09‑22&quot;). All four vetoes are currently held together as <em>audit findings against the live build</em>, not yet all closed in code: D‑1, D‑2 and D‑3 (<code>audit-2026-09-22.md</code> §5) name exactly the places the ask-quality and whose-paper rules are not yet fully wired into Ask.</p>
+<h3>Consent scopes and keys</h3>
+<p>Every read of profile data goes through one resolver (<code>app/keys/__init__.py</code>: <em>&quot;<code>resolve_key_context</code> is the only way to get a <code>KeyContext</code>, and <code>scoped_select</code>/<code>scoped_new</code> are the only way to touch a row of profile data with one&quot;</em>). A <code>Consent</code> row records what was agreed, in which words, when (<code>backend/app/consent/__init__.py</code>). A sharing consent's role and window are <strong>required, never optional</strong> — <code>docs/adr/0015-…</code> records that an earlier attempt made them optional and the real web client never sent them, silently unbinding every family grant; the fix made both fields non-defaultable at the API boundary. Scopes named in the corpus: <code>RECORDS</code>, <code>MEDICINES</code>, <code>READINGS</code>, <code>VISITS</code>, <code>FAMILY</code>, <code>MONEY</code>, <code>EMERGENCY</code>, <code>ASK</code> (<code>docs/adr/0004-…</code>, <code>backend/app/insurance/__init__.py</code>).</p>
+<h3>Row scope</h3>
+<p>A row is read only under the scope it was written under — fixed in <code>docs/adr/0004-rows-are-read-under-the-scope-they-were-written-under.md</code> after per-table scope checks were found to leak rows written under a <em>different</em> scope through the same table (a RECORDS key could read a family's WhatsApp messages stored in the same artefact table). <em>&quot;A reference the key may not follow is withheld by name… never the id, never a silent gap.&quot;</em></p>
+<h3>The audit trail</h3>
+<p><em>&quot;Every read, every write and every share of one person's health graph&quot;</em> — one writer, one query, gated by the same doors every service reaching profile data goes through; <em>&quot;The owner and his chief are the only readers&quot;</em> (<code>backend/app/audit/__init__.py</code>). Escalations to the family are recorded once, through one door (<code>escalate_flag</code>), replacing three separate, non-sending records that predated it (<code>docs/adr/0005-…</code>).</p>
+<h3>Region residency</h3>
+<p><em>&quot;Profiles are pinned to a region (SG or MY). Health data never leaves its region&quot;</em> (<code>CLAUDE.md</code>). <code>app/regions.py</code> pins every Person/Profile at creation; ambulance number, currency, timezone and drug register all already vary correctly by region (<code>docs/design/build-spec.md</code> §0(a)). The one designed exception — a Claude-backed model call — is scoped narrowly and audited as a distinct event: <em>&quot;Every Claude-backed adapter's bytes reaching Anthropic is audited as a reach outside the region, distinct from an ordinary read or write&quot;</em> (<code>docs/adr/0017-…</code>, decision 3), and is permitted <strong>only</strong> in a declared demo (<code>NURA_DEMO_MODE=1</code>) or the owner's own declared dev laptop run (<code>NURA_DEV_CODE_SENDER=1</code>) — never on a public deployment (<code>docs/adr/0017-…</code>, &quot;Decision&quot; and its 2026‑09‑17 addendum).</p>
+<h3>The model-per-task table (ADR 0018)</h3>
+<p>Before this ADR, every Claude-backed adapter hard-coded the most expensive model regardless of task; one live feed run made <em>&quot;about 48 Opus calls… and produced one card&quot;</em> (<code>docs/adr/0018-model-per-task-cheapest-that-keeps-the-safety-behaviour.md</code>, &quot;Context&quot;). The fix is one resolved table:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Tasks</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Opus 5</strong></td>
+<td><code>extract</code> (reading a paper), <code>ask</code></td>
+<td><em>&quot;A misread field or a wrong answer reaches a family directly; quality and safety matter most here&quot;</em></td>
+</tr>
+<tr>
+<td><strong>Sonnet 5</strong></td>
+<td><code>analyst</code>, <code>search</code> (needs server tools Haiku 4.5 lacks), <code>estimate</code>, <code>draft</code></td>
+<td><em>&quot;the cheapest model that still supports them&quot;</em> / checked against guards before being trusted</td>
+</tr>
+<tr>
+<td><strong>Haiku 4.5</strong></td>
+<td><code>compress</code>, <code>clip</code>, <code>narrate</code></td>
+<td><em>&quot;short rewrites over text Nura already has, not open-ended reasoning&quot;</em></td>
+</tr>
+</tbody>
+</table>
+<p>A run itself is capped independently of the model: <code>NURA_MAX_JOBS_PER_RUN</code> (default 6) and a per-call server-tool cap (<code>SEARCH_TOOL_MAX_USES = 3</code>) — <em>&quot;the model decides what one call costs, the cap decides how many calls one run can make&quot;</em> (ADR 0018, decision 4).</p>
+<h3>What runs live vs fixture</h3>
+<p>Nine model call sites exist in the backend, one per task (<code>app/llm/models.py</code>), all through the raw <code>anthropic</code> SDK — <em>&quot;There is no Claude Agent SDK anywhere&quot;</em> (<code>audit-2026-09-22.md</code> §7.1). Every one defaults to a fixture adapter; a real deployment cannot construct any Claude-backed adapter at all outside a declared demo or dev run (<code>docs/adr/0017-…</code>). On the demo deployment specifically, <code>NURA_EXTRACTOR</code>, <code>NURA_SEARCHER</code> and <code>NURA_COMPRESSOR</code> all default to <code>fixture</code>, reading only from <code>backend/tests/fixtures/</code> (<code>docs/deploy-demo.md</code> §5): <em>&quot;That is the safer default for a first deploy: it needs no key, it cannot send anything anyone types to a third party.&quot;</em></p>
+<hr />
+<h2>6. Design</h2>
+<h3>Visual language — two competing statements</h3>
+<p><code>docs/design/design-build-2.md</code> §2 (binding from 2026‑09‑22) specifies: <em>&quot;Deep indigo/violet environment; subtle purple-to-warm gradients; soft radial lighting; translucent surfaces; glass-like cards; large rounded corners… Premium, calm, intelligent, human, cinematic, modern, slightly futuristic.&quot;</em> This directly supersedes the older <code>docs/design-system.md</code> §1, which specifies <strong>light</strong> washes (&quot;Mist,&quot; &quot;Blush,&quot; &quot;Lavender,&quot; &quot;Sage&quot;) on the premise that <em>&quot;Glassmorphism fails the elderly… text on a blurred, translucent surface over a gradient drops contrast.&quot;</em> Both documents are still in the repository; <code>design-build-2.md</code> is the one marked &quot;binding, from 22 September 2026,&quot; so it is authoritative going forward, but the older document's specific accessibility warning about glass-on-gradient contrast has not been re-answered under the new dark visual language — <code>docs/design/build-spec.md</code> §10 raises exactly this: <em>&quot;text-on-glass-on-gradient is a three-layer contrast problem, and the brief's own ≥4.5:1 rule must be checked against the worst-case composite, which a static Figma comp would not catch.&quot;</em></p>
+<h3>Type scale and tokens</h3>
+<p><code>design-build-2.md</code> §2 calls for Figtree with an Instrument Serif italic accent word per headline; <code>design-system.md</code> §2 (older) specifies Outfit throughout. <code>build-plan.md</code>'s Checkpoint 1 scope confirms the newer choice is what shipped: <em>&quot;Figtree and the serif accent bundled into the app.&quot;</em> Measured against the brief's own scale, the shipped app diverges in several places: Welcome's tagline renders at <em>&quot;31.2px weight 500, line-height 36.8px&quot;</em> against a brief of <em>&quot;33px / 1.08 / 300&quot;</em>; section titles render at weight 700 against an allowed 300–600; captions render as low as 11px against a 12.5px floor (<code>audit-2026-09-22.md</code> §4.4, D‑21).</p>
+<h3>The card system and tiers</h3>
+<p>Specified: one <code>Card</code> component with named variants (insight, reminder, video/content, metric, recommendation, document, AI summary, action, alert) across three tiers — primary, secondary, tertiary (<code>design-build-2.md</code> §5). Built: <em>&quot;cards are several components&quot;</em> — <code>Glass</code>, <code>GlassTile</code>, <code>TintCard</code>, <code>FeedCard</code>, <code>MemoCard</code>, with <em>&quot;one card component with named variants and three tiers does not exist&quot;</em> (<code>design-build-2.md</code> §2 gap table; <code>design-build-2-map.md</code> §3).</p>
+<h3>Motion tokens and rules</h3>
+<p>The one governing principle: <em>&quot;motion shows real state, never fakes time. Nothing in <code>web/src/ui/kit</code> runs an animation on a timer with no state behind it&quot;</em> (<code>docs/design/motion.md</code> §title). Two tokens carry every duration today: <code>--settle</code> (220ms) for an entrance, <code>--press</code> (90ms) for a tap, both collapsing to 0ms under reduced motion (<code>motion.md</code>). The specification calls for a much larger family — <code>motion.fast/standard/slow</code>, <code>spring.gentle/standard/bouncy</code>, <code>card.enter</code>, <code>sheet.enter</code>, <code>orb.idle/listening/thinking/responding</code> — none of which exists yet: <em>&quot;No spring family, no per-role tokens, values hard-coded in places&quot;</em> (<code>design-build-2.md</code> §2). The blueprint's own reference file additionally reveals that stagger speed varies empirically with list density (a 5-row lab table staggers at 110ms/row; a 7-row inbox at 80ms/row; a 2-card answer at 300–320ms/card) and that word-reveal pace is not one number (62–90ms/word for headlines, 36–58ms/word for body text, 210ms/word for a spoken video caption) — open questions for whoever builds the single <code>MotionProvider</code> (<code>design-build-2-reading.md</code>, conclusions #7–#8).</p>
+<h3>Orb states</h3>
+<p>Specified: five states — idle, listening, thinking, responding, error (<code>design-build-2.md</code> §8). Built: two — idle and a faster-spinning <code>.think</code>, plus a <code>.lg</code> breathing size variant used only on Welcome (<code>design-build-2-map.md</code> §3; confirmed against the blueprint's own CSS, <code>design-build-2-reading.md</code> conclusion #3). The orb's own real-world driver is unresolved: no backend event exists yet to trigger <code>listening</code> or <code>responding</code> honestly (<code>design-build-2-map.md</code> §2.1).</p>
+<h3>Loading / empty / error rules</h3>
+<p>Specified in prose, not &quot;Loading…&quot;: <em>&quot;'Looking through your recent results…', 'Connecting the dots…'&quot;</em> for loading; <em>&quot;why, what, next&quot;</em> for empty and error, <em>&quot;never an HTTP code&quot;</em> (<code>design-build-2.md</code> §21–23). None of the three has a shared primitive today — <em>&quot;four places do pieces of one job&quot;</em> (<code>design-build-2-map.md</code> §3, <code>LoadingState</code>/<code>EmptyState</code>/<code>ErrorState</code> rows, all marked <strong>add</strong>). One real measured instance of a correct empty state exists in the live app: <em>&quot;Nura has no insurance written down for you yet&quot;</em> (<code>audit-2026-09-22.md</code> §2 row 11), alongside six different hand-written rejection strings for the single condition &quot;the terminal stream event never came&quot; (<code>audit-2026-09-22.md</code> §7.1).</p>
+<h3>Navigation</h3>
+<p>Five tabs — Home, Health, Connect, Services, Profile — already match the blueprint exactly at the tab-bar level: <em>&quot;a 1:1 match with the blueprint's <code>TABS</code> const… no navigation redesign needed at the tab-bar level&quot;</em> (<code>docs/design/build-spec.md</code> §9). <code>docs/design/design-build-2.md</code> §17: <em>&quot;Minimal bottom navigation… visually quiet, subtle but obvious active state. Content is the hero; navigation is infrastructure.&quot;</em></p>
+<h3>Responsiveness</h3>
+<p>On the web, the entire app sits inside a simulated 390px phone frame above 600px viewport width, with a real phone rendering full-bleed (<code>docs/design/build-plan.md</code>, Checkpoint 1 scope). <code>design-build-2.md</code> §26: <em>&quot;Mobile first. Tablet/desktop widen intelligently, keep card proportions… same hierarchy and interaction philosophy.&quot;</em></p>
+<h3>Accessibility</h3>
+<p>Contrast 4.5:1 minimum (<code>build-plan.md</code>, &quot;Rules that do not bend&quot;); the older <code>design-system.md</code> §5 (patient/&quot;Dad&quot; density specifically) is stricter still — 7:1 and above, 20px body minimum, 56px targets. <code>CLAUDE.md</code>'s patient-mode rule is exact: <em>&quot;one thing per screen, no horizontal gestures, no pull-to-refresh, no badges, no autoplay of the next card, 20pt body, 56pt targets, 7:1 contrast, every card has a spoken twin.&quot;</em> Measured against this rule live, several captions fall under the 12.5px caption floor the newer brief sets (11–11.5px — <code>audit-2026-09-22.md</code> §4.4, D‑21), and no target under 44px was measured anywhere (<code>audit-2026-09-22.md</code> §4.4).</p>
+<h3>Languages</h3>
+<p>Three ship today — English, Malay, Chinese — with every catalogue held to the same table by <code>make language</code> (<code>docs/plain-words.md</code> §6; <code>backend/app/language/__init__.py</code>). Hokkien and Tamil are voice-only, deferred to &quot;T2&quot; (<code>docs/parity.md</code>, E11‑04, E15‑05). Thai is named as the next language a fourth country pack would need (<code>docs/design/build-spec.md</code>, &quot;Owner decision 2026‑09‑22: ASEAN-ready by configuration&quot;).</p>
+<hr />
+<h2>7. Architecture</h2>
+<h3>Backend</h3>
+<p>FastAPI, one app builder shared by <code>main</code> and the tests, serving every route twice — once bare (for <code>/docs</code> and the checkpoints) and once under <code>/api</code> (for the web client) — from one router (<code>backend/app/channels/api/__init__.py</code>). SQLAlchemy models with Alembic migrations; every datetime column goes through one <code>UTCDateTime</code> type decorator, because SQLite silently drops timezone offsets that Postgres keeps (<code>docs/adr/0009-times-are-stored-as-utc.md</code>). The layout follows the port/adapter shape <code>CLAUDE.md</code> prescribes: <code>identity</code>, <code>keys</code>, <code>consent</code>, <code>audit</code> (accounts and access); <code>ingestion</code> (capture, review); <code>memory</code> (episodic/semantic/working, the spine); <code>state</code> (six dimensions); <code>reasoning</code> (trends, medicines, questions, brief, summary, memo, feeling inference, gaps); <code>search</code> (ask); <code>delivery</code> (feed, triggers, nudges, escalation); <code>channels</code> (app API, WhatsApp); <code>safety</code> (boundary, high-risk, red flags, plain words). Model calls are confined to <code>app/llm/</code> — one client factory, prompts as files, never a string inlined in an adapter (<code>backend/app/llm/__init__.py</code>; <code>CLAUDE.md</code>, &quot;backend/CLAUDE.md&quot; reference in the audit).</p>
+<p><strong>Streams.</strong> The current reality is fragmented: <em>&quot;six bespoke SSE vocabularies&quot;</em> across <code>/ask/stream</code>, <code>/find/stream</code>, <code>/insights/stream</code>, <code>/papers/{id}/insight/stream</code>, <code>/photos|imports/stream</code> and <code>/not-feeling-well/stream</code>, each with its own event names, its own <code>_sse()</code> serialiser copy-pasted five times, and <em>&quot;four mutually incompatible terminal events for one concept&quot;</em> (<code>answer</code>, <code>results</code>, <code>report</code>, <code>card</code>) (<code>docs/design/audit-2026-09-22.md</code> §7.1). This is the single largest engine-side gap the audit names, and it is what the design build's &quot;event vocabulary decision&quot; answers (below).</p>
+<h3>Web</h3>
+<p>Preact (&quot;the kit&quot;), served from <code>web/src</code>, with tokens (<code>ui/tokens.css</code>), two densities (patient/caregiver), a strings layer (<code>en</code>/<code>ms</code>/<code>zh</code>, tagged <code>@patient</code>), and a component kit under <code>ui/kit</code> (<code>CLAUDE.md</code>, &quot;Layout&quot;). <code>ADR 0001</code> made the web client the <em>first</em> client and requires it to carry every user story the native plan had, substituting for four platform-only hooks (HealthKit, widgets/Live Activity, the share extension, Siri) with web equivalents (<code>docs/adr/0001-web-first-client.md</code>).</p>
+<h3>The planned native app</h3>
+<p><code>docs/design/mobile-architecture.md</code> is also marked <strong>&quot;binding, from 22 September 2026,&quot;</strong> and specifies a full native rewrite: Expo, React Native, Expo Router, Reanimated 4, Gesture Handler, React Native Skia for the orb/ambient/chart layer, Zustand — with Nura's own FastAPI backend and model layer kept (the owner's original stack list named Supabase and OpenAI/a &quot;preferred model layer&quot;; both are explicitly overridden: <em>&quot;Two of the owner's rows change, for reasons already decided in this repo&quot;</em> — <code>mobile-architecture.md</code> §2). The decision to actually go native is <strong>not yet made</strong>: it hangs on a &quot;Home spike&quot; — Phase 1 and Phase 2 for Home only, judged on the owner's own iPhone against the blueprint's Home, composer, expand and sheet scenes — <em>&quot;If it clears the bar, design-build-2 steps 8–12 proceed native and this file governs. If it does not, the reasons are written here and the web stack continues&quot;</em> (<code>mobile-architecture.md</code> §5).</p>
+<blockquote>
+<p><strong>Contradiction to flag.</strong> The root <code>README.md</code> and <code>CLAUDE.md</code> both still describe the native client as a <strong>SwiftUI iOS app</strong> (<code>README.md</code>: <em>&quot;<code>ios/</code> — SwiftUI app (iOS 17+)&quot;</em>; <code>CLAUDE.md</code>, &quot;Commands&quot;: <em>&quot;iOS: <code>cd ios &amp;&amp; xcodegen generate</code>… <code>make ios-test</code> runs <code>xcodebuild test</code>&quot;</em>), and <code>docs/health-feed-spec.md</code> is written entirely against a SwiftUI/<code>FeedPagerView</code>/<code>WidgetKit</code> implementation. <code>docs/design/mobile-architecture.md</code>, dated the same day and marked equally binding, specifies React Native/Expo instead, on the owner's own later instruction. None of README.md, CLAUDE.md or the health-feed spec has been updated to reflect this; as of this document, the repository states two different native-stack decisions simultaneously, and the Home-spike gate that would resolve which one governs has not yet run.</p>
+</blockquote>
+<h3>Data model</h3>
+<p>Facts carry a validity window and a confidence state — <em>&quot;immutable, replaced only by supersession&quot;</em> (<code>backend/app/memory/__init__.py</code>); the four core memory primitives are Artifacts (bytes in the region's object store), Events (a moment something happened), Facts (statements with provenance and confidence) and the spine (Providers, Appointments) (same file). Review cards are the one place a proposed, unconfirmed value lives before a person's yes (<code>backend/app/ingestion/__init__.py</code>). Policies are typed rows, not yet cited document reads (<code>docs/design/build-spec.md</code> §5). Medicine lines carry <code>generic, brand, strength, form, registration_no, drug_class, high_risk, source_kind, status, change_kind, confidence</code> (<code>docs/design/build-spec.md</code> §6). Feed items are immutable, each stamped with the State snapshot it was rendered from (<code>backend/app/delivery/feed/__init__.py</code>).</p>
+<h3>The event vocabulary decision (AG-UI shape)</h3>
+<p>The audit's own recommendation, adopted into the design plan: <strong>&quot;Adopt the event vocabulary over the existing SSE. Do not adopt the library.&quot;</strong> (<code>docs/design/audit-2026-09-22.md</code> §7.4). AG-UI's roughly sixteen event types — lifecycle (<code>RUN_STARTED</code>/<code>RUN_FINISHED</code>/<code>RUN_ERROR</code>), text (<code>TEXT_MESSAGE_START/CONTENT/END</code>), tool calls (<code>TOOL_CALL_START/ARGS/END/RESULT</code>), and state (<code>STATE_SNAPSHOT</code>/<code>STATE_DELTA</code>) — would collapse six incompatible unions into one, give the UI a real place to show a tool call instead of an opaque localised sentence, and let an unknown event become a typed no-op instead of a silent drop (<code>audit-2026-09-22.md</code> §7.1, §7.4). Adopting the AG-UI <em>library</em> is explicitly rejected — it would bring in integrations the repo does not use and would violate the &quot;never assume the orchestrator&quot; instinct the audit itself applies by analogy (<code>audit-2026-09-22.md</code> §7.4). <code>docs/design/design-build-2.md</code> §4, design step 6, schedules this work (~20h) as a precondition for the orb's five states to be driven by anything real.</p>
+<hr />
+<h2>8. Status and plan</h2>
+<h3>The 24 work packages</h3>
+<p>Per <code>docs/design/build-plan.md</code>'s own progress table (Done / done-with-caveats / Not started; percent complete counted as done packages ÷ 24, &quot;a count, not a forecast&quot;):</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Package</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>The look, phone frame, shared components</td>
+<td><strong>Done</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Build spec (doc)</td>
+<td><strong>Done</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Report data: labels, ranges, no blank lines</td>
+<td><strong>Done</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Reading screen and report table</td>
+<td><strong>Done</strong>, polish deferred to <code>papers-library</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Insight engine after a paper</td>
+<td><strong>Done</strong></td>
+</tr>
+<tr>
+<td>6</td>
+<td>New Home with the living orb</td>
+<td><strong>Done</strong></td>
+</tr>
+<tr>
+<td>7</td>
+<td>&quot;What it means for you&quot; wired after &quot;Looks right&quot;</td>
+<td><strong>Done</strong> (after being rejected and rebuilt once)</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Ask Nura interface</td>
+<td><strong>Done</strong>; answer-quality follow-up in <code>ask-quality</code></td>
+</tr>
+<tr>
+<td>9</td>
+<td>Onboarding: Welcome, sign in, who is this for, bubble cloud</td>
+<td><strong>Done</strong> (after a rejected first pass)</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Health and Health Analyst screens</td>
+<td><strong>Done</strong> (after a rejected first pass)</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Medicines screens</td>
+<td><strong>Done</strong>; voice add not built</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Visits and costs, Insurance</td>
+<td><strong>Insurance half done</strong>; visits and costs <strong>not started</strong></td>
+</tr>
+<tr>
+<td>13</td>
+<td>For you feed screens</td>
+<td><strong>Done except the live web-search run</strong></td>
+</tr>
+<tr>
+<td>14</td>
+<td>Not feeling well, Connect, Mei's Home, Profile</td>
+<td><strong>Not started</strong></td>
+</tr>
+<tr>
+<td>15</td>
+<td>Feed database-lock fix, failed searches retried</td>
+<td><strong>Done</strong></td>
+</tr>
+<tr>
+<td>16</td>
+<td>Streamed reading (rows as they're read)</td>
+<td><strong>Not started</strong></td>
+</tr>
+<tr>
+<td>17</td>
+<td>Cost of a procedure with no visit booked</td>
+<td><strong>Not started</strong></td>
+</tr>
+<tr>
+<td>18</td>
+<td>The inbox for many papers</td>
+<td><strong>Not started</strong> — needs owner decisions</td>
+</tr>
+<tr>
+<td>19</td>
+<td>The matching engine and its verdicts</td>
+<td><strong>Not started</strong> — needs owner decisions and real papers</td>
+</tr>
+<tr>
+<td>20</td>
+<td>Policy passport</td>
+<td><strong>Not started</strong> — needs real policies</td>
+</tr>
+<tr>
+<td>21</td>
+<td>Medicine registry and Add a medicine</td>
+<td><strong>Not started</strong> — needs the country decision</td>
+</tr>
+<tr>
+<td>22</td>
+<td>Connections and content in context</td>
+<td><strong>Not started</strong></td>
+</tr>
+<tr>
+<td>23</td>
+<td>Merge to main, full checks, full pass as Pa and Mei</td>
+<td><strong>Not started</strong></td>
+</tr>
+<tr>
+<td>24</td>
+<td>ASEAN-ready country packs</td>
+<td><strong>Not started</strong></td>
+</tr>
+</tbody>
+</table>
+<p>At the point <code>docs/design/build-plan.md</code>'s log ends, the count stood at <strong>13 of 24</strong>.</p>
+<h3>The audit's ranked defects</h3>
+<p><code>docs/design/audit-2026-09-22.md</code> §5 ranks 26 defects (D‑0 through D‑25). The four rated <strong>Critical</strong>: <strong>D‑0</strong> (Profile freezes the app on WebKit/Safari within 500ms — the only engine on an iPhone), <strong>D‑1</strong> (Ask cannot state a value from a confirmed paper — no catalogue template exists for any non‑blood‑pressure measurement), <strong>D‑2</strong> (nothing checks whose paper it is, and a wrong person's data can overwrite the profile's own birth year and sex), <strong>D‑3</strong> (a conclusion-language drop discards an answer with no record of why, so the repair round never fires). The audit's own recommended build order (§6) is: D‑0 first (&quot;everything else is cosmetic next to an app that stops on his phone&quot;), then D‑3/D‑7/D‑1 (&quot;make Ask able to say a fact it already holds… it is the owner's complaint&quot;), then D‑2 (&quot;nothing else should be filed until this exists&quot;), then D‑4 (duplicates), then the two unreachable promised behaviours (D‑5, D‑6), then memory correctness (D‑8, D‑13), then a wording-and-type pass, then the three structurally wrong screens (Health's chart, Medicines' list, the onboarding cloud), then packages 14 and 12 (&quot;the four screens that read as 'a different app' to him&quot;), then Part D's minimum agentic-layer change.</p>
+<h3>Design build 2's twelve steps</h3>
+<p><code>docs/design/design-build-2.md</code> §4 lays out twelve steps from &quot;Analyse the reference&quot; through &quot;Test every interaction,&quot; interleaved explicitly with the audit's own engine-fix order: <em>&quot;Steps 0–5 of the audit's order… run first and in parallel with design steps 1–5, because they change what the screens can truthfully say. Design step 6 carries the event vocabulary. Design step 9 carries the judge and the unified context.&quot;</em> As of this document, step 1 (&quot;Analyse the reference,&quot; <code>design-build-2-reading.md</code>) and step 2 (&quot;Interaction map,&quot; <code>design-build-2-map.md</code>) are both drafted and awaiting the owner's confirmation — both files' own headers say <strong>&quot;Status: draft for owner confirmation.&quot;</strong> Steps 3 onward (architecture, tokens, motion system, core shell, Home, expandable/detail, AI interaction, secondary experiences, polish, testing) have not started.</p>
+<h3>The Home spike decision</h3>
+<p>Not yet run. <code>docs/design/mobile-architecture.md</code> §5: the spike is Phase 1 + Phase 2 for Home only, against the real backend, judged on the owner's own iPhone against the blueprint's Home, composer, expand and sheet scenes — the gate that decides whether the native rewrite proceeds in React Native/Expo or the web stack continues through design steps 3–9.</p>
+<h3>What the owner can test today</h3>
+<p>Per <code>docs/design/build-spec.md</code>'s own testing note: always the same place, <code>http://localhost:8000/app/</code>, running the last build that reached a checkpoint — <em>&quot;never work in progress&quot;</em> — signed in as <em>&quot;Try it as Pa&quot;</em>, <em>&quot;Try it as Mei,&quot;</em> or a real number; individual components can be tried in isolation at <code>http://localhost:8000/app/#/blueprint-kit</code> (<code>docs/design/build-plan.md</code>, header). <code>docs/design/build-plan.md</code>'s own log entry for 2026‑09‑22 records the owner's own definition of &quot;Test Day 1&quot; — register, set up profile and health details, load documents including medicine boxes and insurance papers, get a first personalised video and web feeds, insights on the record, and a multi-turn conversation with natural clarifying questions — with doctor appointments explicitly coming after. That request re-sequenced the remaining build order toward packages 7, 9, 10, 11, the insurance half of 12, and 13, plus Ask's answer quality and clarifying questions (<code>build-plan.md</code>, log entry, &quot;Owner defines the first real test run&quot;).</p>
+<hr />
+<h2>9. Glossary of Nura's own words</h2>
+<table>
+<thead>
+<tr>
+<th>Word</th>
+<th>Meaning</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Paper</strong></td>
+<td>Any document — a lab result, a prescription, a letter, a policy, a receipt — never &quot;document&quot; or &quot;record&quot; to the patient.</td>
+<td><code>docs/plain-words.md</code> §2: &quot;Feed, timeline, record&quot; → &quot;Your Today page. Your papers.&quot;</td>
+</tr>
+<tr>
+<td><strong>Card</strong></td>
+<td>One self-contained unit on the feed or Today page: a headline, body, why-line, source, one action.</td>
+<td><code>backend/app/delivery/feed/__init__.py</code>; <code>docs/health-feed-spec.md</code> §2</td>
+</tr>
+<tr>
+<td><strong>&quot;Looks right&quot;</strong></td>
+<td>The one confirming tap over a review card — never &quot;Confirm,&quot; &quot;Submit&quot; or &quot;Approve.&quot;</td>
+<td><code>web/src/strings/en.ts:1760</code></td>
+</tr>
+<tr>
+<td><strong>Waiting papers</strong></td>
+<td>A paper extracted but not yet confirmed; nothing from it is stated as fact until the person's yes.</td>
+<td><code>web/src/strings/en.ts:938</code>, <code>:645</code>; <code>build-plan.md</code> package 8 log (&quot;waiting papers named without any of their values&quot;)</td>
+</tr>
+<tr>
+<td><strong>Story</strong></td>
+<td>The vertical feed's recall section: cards drawn from a person's own record — what the doctor said, how a number changed, a family photo.</td>
+<td><code>docs/health-feed-spec.md</code> §0; <code>web/src/strings/en.ts:874</code></td>
+</tr>
+<tr>
+<td><strong>Clip</strong></td>
+<td>A short (20–30 second), captioned, sourced video excerpt specific to the person's own medicines or conditions.</td>
+<td><code>docs/health-feed-spec.md</code> §2</td>
+</tr>
+<tr>
+<td><strong>Chief</strong></td>
+<td>The key role with the fullest scope short of the owner — Mei's role in the demo seed.</td>
+<td><code>docs/deploy-demo.md</code> §3a; <code>docs/design-system.md</code> §3</td>
+</tr>
+<tr>
+<td><strong>Caregiver</strong></td>
+<td>A narrower key role (RECORDS-holding, typically no FAMILY), distinct from a chief.</td>
+<td><code>docs/adr/0002-…</code>, decision 6</td>
+</tr>
+<tr>
+<td><strong>Scope</strong></td>
+<td>One of a fixed set of named permissions (RECORDS, MEDICINES, READINGS, VISITS, FAMILY, MONEY, EMERGENCY, ASK) that gates every read and write of a profile's data.</td>
+<td><code>backend/app/keys/__init__.py</code>; <code>docs/adr/0004-…</code></td>
+</tr>
+<tr>
+<td><strong>Boundary</strong></td>
+<td>The rule, and the copy, that keeps Nura from diagnosing, treating or advising — every inferring surface must carry its own boundary line.</td>
+<td><code>backend/app/safety/__init__.py</code>; <code>docs/adr/0002-…</code>, decision 12</td>
+</tr>
+<tr>
+<td><strong>Red flag</strong></td>
+<td>A symptom or word the app never waits to act on — escalated before any ranking, cap or delay.</td>
+<td><code>backend/app/safety/__init__.py</code></td>
+</tr>
+<tr>
+<td><strong>State</strong></td>
+<td>The six-dimension model recomputed on every new fact; every card names the State it was rendered from.</td>
+<td><code>backend/app/state/__init__.py</code></td>
+</tr>
+<tr>
+<td><strong>Ladder</strong></td>
+<td>The one escalation record — who was told, in what order, whether they answered.</td>
+<td><code>docs/adr/0005-the-ladder-is-the-one-escalation-record.md</code></td>
+</tr>
+<tr>
+<td><strong>Pattern</strong></td>
+<td>A reviewed, arithmetic-only comparison across a person's own record, kept deliberately separate from State — never a Fact, never folded into posture.</td>
+<td><code>docs/adr/0016-correlation-sits-beside-state.md</code></td>
+</tr>
+<tr>
+<td><strong>Consent</strong></td>
+<td>A recorded, versioned, revocable agreement — never inferred, never defaulted.</td>
+<td><code>backend/app/consent/__init__.py</code></td>
+</tr>
+<tr>
+<td><strong>Demo mode</strong></td>
+<td>A declared, banner-carrying, nightly-wiped deployment that may run on fixtures and test-only phone numbers — never mistakable for a real deployment.</td>
+<td><code>docs/adr/0008-demo-mode.md</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Where the sources disagree</h2>
+<ol>
+<li>
+<p><strong>Scene count: 25 vs 26.</strong> <code>docs/design/build-spec.md</code>'s own header describes <code>experience-blueprint.html</code> as having &quot;25 scenes&quot;; every other document that counts them (<code>design-build-2.md</code>, <code>design-build-2-reading.md</code>, <code>audit-2026-09-22.md</code>) says 26, and a direct extraction of the HTML's own <code>SC</code> array confirms 26. <code>build-spec.md</code> is the outlier.</p>
+</li>
+<li>
+<p><strong>The caregiver's name: Ash vs Mei.</strong> The root <code>CLAUDE.md</code> (&quot;Domain vocabulary&quot;) and the older <code>docs/design-system.md</code> name the caregiver <strong>Ash</strong>. Every 2026‑09‑2x design document and the live demo seed (<code>docs/deploy-demo.md</code> §3a) name her <strong>Mei</strong>. Neither older document has been updated to match.</p>
+</li>
+<li>
+<p><strong>The native client's stack: SwiftUI vs React Native.</strong> <code>README.md</code> and <code>CLAUDE.md</code> describe a SwiftUI iOS 17+ app under <code>ios/</code>, with <code>xcodegen</code>/<code>xcodebuild</code> build commands; <code>docs/health-feed-spec.md</code> is written entirely against that SwiftUI implementation. <code>docs/design/mobile-architecture.md</code>, dated the same day and marked equally &quot;binding,&quot; specifies Expo/React Native/Reanimated/Skia instead, on the owner's later instruction — and explicitly gates the actual decision on an unrun &quot;Home spike.&quot; As of this document neither older file has been reconciled with the newer one, and the gate that would resolve the contradiction has not run.</p>
+</li>
+<li>
+<p><strong>The visual language: light glass vs dark dusk-glass.</strong> <code>docs/design-system.md</code> (older) specifies light washes (Mist, Blush, Lavender, Sage) on Outfit type, with an explicit accessibility argument against heavy glassmorphism for an elderly reader. <code>docs/design/design-build-2.md</code> (newer, &quot;binding from 22 September 2026&quot;) specifies a deep indigo/violet dark environment on Figtree + Instrument Serif. <code>build-plan.md</code>'s Checkpoint 1 log confirms the newer, dark language is what actually shipped, but the older document's specific contrast warning about text on blurred glass over a moving gradient has not been re-answered under the new palette — <code>build-spec.md</code> §10 raises the identical concern independently, against the new visual language, unresolved.</p>
+</li>
+<li>
+<p><strong>What <code>docs/health-feed-spec.md</code> describes vs what exists.</strong> The whole document is written against a SwiftUI/iOS implementation (<code>FeedPagerView</code>, <code>WidgetKit</code>, <code>AVQueuePlayer</code>) that predates <code>docs/adr/0001-web-first-client.md</code>'s decision to build web first. Its acceptance criteria and architecture section describe screens and components that do not exist under those names anywhere in <code>web/src</code> or the current <code>ios/</code> scaffold; its card-type table and safety rules (§0–§2, §7) remain the accurate, current specification, cited throughout §4 of this document, but §6 (&quot;iOS implementation&quot;) is stale against the actual client.</p>
+</li>
+</ol>
+
+</div>
+</body>
+</html>
