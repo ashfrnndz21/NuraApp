@@ -98,7 +98,14 @@ from app.channels.about_him import Reader, reader_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.compress import Searcher
 from app.delivery.feed.sources import usable_sources
-from app.delivery.timeline_strings import WHAT, day_of, honest_lines, reroute_lines, verified
+from app.delivery.timeline_strings import (
+    VALUE,
+    WHAT,
+    day_of,
+    honest_lines,
+    reroute_lines,
+    verified,
+)
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -656,6 +663,7 @@ async def _read_readings(
     counter: _TokenCounter,
     elapsed_seen: set[str],
     dates_seen: set[str],
+    values_given: dict[uuid.UUID, frozenset[str]],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
@@ -667,6 +675,13 @@ async def _read_readings(
         if _is_reading(fact):
             value = fact.value
             text = f"blood pressure {value['systolic']}/{value['diastolic']} on {said} ({elapsed})"
+            # B2 (review round 3): before this, a reading's own two numbers were never
+            # registered at all, so `_value_claim` skipped every line citing one — proved
+            # reaching the user: fact = 118/76, the model said "190 over 120", cited the real
+            # fact, nothing caught it.
+            values_given[fact.id] = _reading_value_strings(
+                float(value["systolic"]), float(value["diastolic"])
+            )
             catalogue_word: str | None = WHAT[language].get("blood_pressure")
         else:
             text = f"{fact.subject} {fact.attribute} = {fact.value} on {said} ({elapsed})"
@@ -675,6 +690,8 @@ async def _read_readings(
             # shown as a label. Only a real, closed-catalogue word for it may be offered as a
             # clarify candidate at all; a subject this table does not know gets no label.
             catalogue_word = WHAT[language].get(str(fact.subject))
+            if isinstance(fact.value, int | float):
+                values_given[fact.id] = _value_strings(float(fact.value))
         label: str | None = None
         label_safe: frozenset[str] = frozenset()
         if catalogue_word is not None:
@@ -711,16 +728,39 @@ async def _read_visits(
     return lines, len(visits), list(visits), providers
 
 
-_RANGE_NOTE: Final[dict[str, str]] = {
-    "within_range": "within the range printed on the paper",
-    "above_range": "above the range printed on the paper",
-    "below_range": "below the range printed on the paper",
-}
-"""D-1: the words a records tool line adds after a measured value, so the model can answer
-"is it high" truthfully without doing the comparison itself — the same "never the model's
-arithmetic" rule `_elapsed` already holds, applied here to a printed range instead of elapsed
-time. Never the app's own guideline opinion (`printed_range_for_fact`'s own docstring): the
-band named here is always read off the paper he confirmed, or absent."""
+_RANGE_BAND_KEYS: Final = ("within_range", "above_range", "below_range")
+
+
+_RANGE_NOTE_SUBJECT: Final[dict[str, str]] = {"en": "It is ", "ms": "Ia ", "zh": "这"}
+"""The pronoun `VALUE[language][band]`'s own comparison sentence opens with, in each
+language — stripped off by `_range_note` so what is left is a bare, joinable fragment
+("above the range printed on the paper"), never a whole capitalised sentence with its own
+leading subject and trailing full stop, which would force the tool line — and, worse,
+`bands_given`'s own allow-list — to require one exact sentence shape the model must
+reproduce whole rather than weave into its own."""
+
+
+def _range_note(band: str, language: str) -> str:
+    """D-1: the words a records tool line adds after a measured value, so the model can answer
+    "is it high" truthfully without doing the comparison itself — the same "never the model's
+    arithmetic" rule `_elapsed` already holds, applied here to a printed range instead of
+    elapsed time. Never the app's own guideline opinion (`printed_range_for_fact`'s own
+    docstring): the band named here is always read off the paper he confirmed, or absent.
+
+    B1, round 3's own fix: this used to be one hard-coded English-only fragment per band
+    (`_RANGE_NOTE`, retired) — wrong for `bands_given`, which stores this same string as the
+    ONE phrase `_band_claim` allows back from the model. An `ms`/`zh` ask answers in `ms`/`zh`,
+    so an English-only allow-list meant a correctly handed-out band could never survive in
+    either language — the "handed-out band kept" half of B1's own test failed in exactly this
+    way until this changed. Built instead from the catalogue's own `VALUE[language][band]`'s
+    second line — the same, already-localised comparison sentence a patient-facing answer
+    already uses (`search/ask.py` reads the very same value for the rule-based asker's own
+    line) — with its own leading pronoun and trailing full stop removed
+    (`_RANGE_NOTE_SUBJECT`), so both the tool line and the check speak the ask's own language,
+    the same one, as a fragment either can still build its own sentence around."""
+    sentence = VALUE[language].get(band, VALUE["en"][band])[1]
+    fragment = sentence.removeprefix(_RANGE_NOTE_SUBJECT.get(language, _RANGE_NOTE_SUBJECT["en"]))
+    return fragment.rstrip("。.")
 
 
 def _value_strings(value: float) -> frozenset[str]:
@@ -732,6 +772,27 @@ def _value_strings(value: float) -> frozenset[str]:
     if float(value).is_integer():
         forms.add(str(int(value)))
     return frozenset(forms)
+
+
+def _bare_number(value: float) -> str:
+    """`122.0` as `"122"`, never a trailing `.0` — the shape a joined form ("118/76") is built
+    from, matching the tool line's own `f"{value['systolic']}/{value['diastolic']}"` when the
+    reading is a whole number, which a confirmed blood pressure reading always is."""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+def _reading_value_strings(systolic: float, diastolic: float) -> frozenset[str]:
+    """B2 (review round 3): every plain string a blood pressure reading's own two numbers
+    could be said as — each number alone (so a line stating only one of them is not flagged
+    for lacking the other), and the two joined forms this app's own templates use ("118/76",
+    the raw tool-line shape; "118 over 76", the way `READING`/`_read_readings`'s own text says
+    it back) — never a reason a true reading reads as invented."""
+    top, bottom = _bare_number(systolic), _bare_number(diastolic)
+    return (
+        _value_strings(systolic)
+        | _value_strings(diastolic)
+        | frozenset({f"{top}/{bottom}", f"{top} over {bottom}"})
+    )
 
 
 async def _read_records(
@@ -773,8 +834,9 @@ async def _read_records(
             printed = await printed_range_for_fact(session, context, fact)
             band = None if printed is None else band_of_printed(float(fact.value), printed)
             if band is not None:
-                text = f"{text}; {_RANGE_NOTE[band]}"
-                bands_given[fact.id] = _RANGE_NOTE[band]
+                note = _range_note(band, language)
+                text = f"{text}; {note}"
+                bands_given[fact.id] = note
             else:
                 text = f"{text}; the paper prints no range for it"
         _register(
@@ -914,7 +976,11 @@ async def _read_insurance(
 
 
 async def _read_costs(
-    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
+    session: AsyncSession,
+    context: KeyContext,
+    language: str,
+    counter: _TokenCounter,
+    values_given: dict[uuid.UUID, frozenset[str]],
 ) -> tuple[list[_ToolLine], int]:
     """What he has actually paid or claimed, by visit — his own ledger
     (`app.insurance.ledger`), never a public price list: this build carries no cost-expectation
@@ -927,6 +993,13 @@ async def _read_costs(
             f"{row.visit_purpose} under {row.policy_name} on {row.visit_date_said}: "
             f"{amount}, {row.status_word}"
         )
+        # B2 (review round 3): the amount is a worded string ("S$120"), not a bare float, so
+        # its own digit run(s) are registered directly rather than run through `_value_strings`
+        # (built for `Fact.value`, a real number) — an "insurance amount" is exactly the kind
+        # of number `_value_claim` now fails closed on if nothing registers it.
+        found = frozenset(_VALUE_NUMBER.findall(amount))
+        if found:
+            values_given[row.claim_id] = found
         _register(lines, counter, "claim", row.claim_id, text)
     return lines, len(ledger.lines)
 
@@ -1155,9 +1228,10 @@ class ClaudeAsker:
             bookkeeping as `elapsed_seen` and for the same reason: `_parse_answer`'s
             invented-date check catches a line that states a date this ask never gave it."""
             bands_given: dict[uuid.UUID, str] = {}
-            """Per fact (`_read_records`), the one range-band phrase (`_RANGE_NOTE`) this ask
-            actually handed out for it, when the paper printed a range at all — review blocker
-            1: those phrases are neutral prose that passes `_has_conclusion_language` on
+            """Per fact (`_read_records`), the one range-band phrase (`_range_note`, in this
+            ask's own language) this ask actually handed out for it, when the paper printed a
+            range at all — review blocker 1: those phrases are neutral prose that passes
+            `_has_conclusion_language` on
             sight, so a forged verdict ("above the range…" for a fact with no printed range,
             or the wrong band for one that does) is caught here instead, per fact, never by a
             global set a claim about any fact could satisfy."""
@@ -1562,7 +1636,7 @@ class ClaudeAsker:
             )
         if name == "read_readings":
             return await _read_readings(
-                session, context, language, counter, elapsed_seen, dates_seen, reader
+                session, context, language, counter, elapsed_seen, dates_seen, values_given, reader
             )
         if name == "read_visits":
             lines, count, visits, providers = await _read_visits(
@@ -1591,7 +1665,7 @@ class ClaudeAsker:
         if name == "read_insurance":
             return await _read_insurance(session, context, counter)
         if name == "read_costs":
-            return await _read_costs(session, context, language, counter)
+            return await _read_costs(session, context, language, counter, values_given)
         if name == "read_plan":
             return await _read_plan(session, context, language, counter)
         if name == "read_waiting_papers":
@@ -1824,18 +1898,57 @@ _DATE_CLAIM: Final[dict[str, re.Pattern[str]]] = {
 }
 
 
+def _build_weekday_pattern(language: str) -> re.Pattern[str]:
+    """A bare weekday name, in this language, with no day-of-month or month beside it at
+    all — the shape `_DATE_CLAIM` does not look for (review round 3): "…taken on Tuesday."
+    states a specific day just as plainly as a full date does, and plain-words rule 5 only
+    flags a day+month printed WITHOUT a weekday (`plain_words.py`'s own `_check_dates`),
+    never a weekday alone, so this reached the user unchecked by rule 5 or `_dated_claim`
+    both."""
+    names = "|".join(re.escape(name) for name in sorted(DAY_NAMES[language], key=len, reverse=True))
+    if language == "zh":
+        return re.compile(names)
+    return re.compile(rf"\b(?:{names})\b", re.IGNORECASE)
+
+
+_WEEKDAY_ONLY: Final[dict[str, re.Pattern[str]]] = {
+    language: _build_weekday_pattern(language) for language in ("en", "ms", "zh")
+}
+
+
+def _weekdays_given(dates_given: frozenset[str], language: str) -> frozenset[str]:
+    """The weekday name(s) `dates_given`'s own worded dates actually use, in this language —
+    `say_date`'s own weekday word out of each date string ("Wednesday" out of "Wednesday 21
+    January"; "星期三" out of "1月21日星期三")."""
+    names = DAY_NAMES.get(language, DAY_NAMES["en"])
+    return frozenset(name for date in dates_given for name in names if name in date)
+
+
 def _dated_claim(text: str, language: str, dates_given: frozenset[str]) -> str | None:
-    """D-1(b): the first worded date (`_DATE_CLAIM`'s own shape) `text` states that this ask
-    never actually gave it — the same "computed here, never guessed by the model" rule
-    `_elapsed_claim` already holds for elapsed time, applied to the date itself now that it
-    reaches the model pre-worded (`_worded_date`) rather than as an ISO string rule 5 would
-    catch on its own. `None` when the line states no such date, or every one it states was
-    really given."""
+    """D-1(b), extended round 3: the first worded date (`_DATE_CLAIM`'s own full shape, or
+    `_WEEKDAY_ONLY`'s bare weekday) `text` states that this ask never actually gave — the
+    same "computed here, never guessed by the model" rule `_elapsed_claim` already holds for
+    elapsed time, applied to the date itself now that it reaches the model pre-worded
+    (`_worded_date`) rather than as an ISO string rule 5 would catch on its own. A full date
+    is checked against the exact worded strings this ask gave (`dates_given`); a bare weekday
+    — one with no day-of-month or month beside it, so it is not part of a full date match at
+    all — is checked against the weekday(s) those same given dates actually fall on
+    (`_weekdays_given`), never the exact string, since a bare weekday never claims a specific
+    day-of-month to be wrong about, only which day of the week. `None` when the line states
+    no such date, or every one it states — full or bare — really was given."""
     pattern = _DATE_CLAIM.get(language, _DATE_CLAIM["en"])
     given_lower = {phrase.lower() for phrase in dates_given}
+    remaining = text
     for match in pattern.finditer(text):
+        remaining = remaining.replace(match.group(), " ", 1)
         if match.group().lower() not in given_lower:
             return match.group()
+    allowed_weekdays_lower = {w.lower() for w in _weekdays_given(dates_given, language)}
+    weekday_pattern = _WEEKDAY_ONLY.get(language, _WEEKDAY_ONLY["en"])
+    for match in weekday_pattern.finditer(remaining):
+        word = match.group()
+        if word.lower() not in allowed_weekdays_lower:
+            return word
     return None
 
 
@@ -1957,27 +2070,77 @@ def _dated_claim_finding(phrase: str, language: str) -> Finding:
     )
 
 
+_COMPARISON_WORDS: Final[dict[str, frozenset[str]]] = {
+    "en": frozenset(
+        {
+            "above", "over", "below", "under", "outside", "within", "inside", "normal",
+            "high", "low", "lower", "higher", "exceeds",
+        }
+    ),
+    "ms": frozenset({"julat", "melebihi", "bawah", "dalam", "atas", "normal", "tinggi", "rendah"}),
+    "zh": frozenset({"范围", "高于", "低于", "正常", "偏高", "偏低", "超出", "之内"}),
+}
+"""B1 (review round 3): every word a range verdict could be built from, in each language —
+never only the catalogue's own three exact English phrases, which is all the first version of
+`_band_claim` looked for. Proved reaching the user: a paraphrase
+("It is over the range on the paper."), a different comparison word ("…outside the range
+printed on the paper."), or the Malay/Chinese catalogue's own words
+(`timeline_strings.VALUE["ms"]`/`["zh"]`) used regardless of which language this particular
+ask is answering in — "Ia melebihi julat yang dicetak pada kertas." reached the user from an
+`en`-language ask. Checked in every language every time, never only the ask's own: a forged
+verdict does not have to be written in the language `verify()` happens to be running."""
+
+_COMPARISON_WORD_PATTERN: Final[dict[str, re.Pattern[str]]] = {
+    "latin": re.compile(
+        "|".join(
+            rf"\b{re.escape(w)}\b"
+            for w in sorted(_COMPARISON_WORDS["en"] | _COMPARISON_WORDS["ms"], key=len, reverse=True)
+        ),
+        re.IGNORECASE,
+    ),
+}
+
+_BP_OVER: Final = re.compile(r"\b\d+\s+over\s+\d+\b", re.IGNORECASE)
+"""A blood pressure reading said the way this app's own templates say it back
+(`_reading_value_strings`'s own joined form, "138 over 84") — stripped before `_band_words`
+runs, so the legitimate "over" inside a reading is never confused with the comparison word
+"over" ("over the range printed on the paper"). Digit-over-digit only: "over the range" itself
+has no digit on either side of "over" and is untouched by this."""
+
+
+def _band_words(text: str) -> frozenset[str]:
+    """Every comparison-lexicon word (`_COMPARISON_WORDS`, any language) `text` contains, case-
+    insensitively for en/ms (word-boundary matched, so "normalise" never matches "normal") and
+    by plain substring for zh (which has no spaces to bound a word with) — after `_BP_OVER`
+    removes a blood-pressure reading's own legitimate "N over N"."""
+    text = _BP_OVER.sub(" ", text)
+    found = {m.group().lower() for m in _COMPARISON_WORD_PATTERN["latin"].finditer(text)}
+    found |= {word for word in _COMPARISON_WORDS["zh"] if word in text}
+    return frozenset(found)
+
+
 def _band_claim(
     text: str, cites: Sequence[Cite], bands_given: Mapping[uuid.UUID, str]
 ) -> str | None:
-    """Review blocker 1: the first range-band phrase (`_RANGE_NOTE`'s own three — "above/
-    below/within the range printed on the paper") `text` states that was never actually
-    handed out for a fact this line cites. Checked per fact — `bands_given` is keyed by fact
-    id, never a global set — so a band given for one fact can never license a forged claim
-    about a different one, and a fact the tool printed no range for (no entry at all) makes
-    every band phrase about it a forgery, not only a mismatched one. The phrases are ordinary
-    English words ("above", "range", "paper") that pass `_has_conclusion_language` on sight,
-    which is exactly why the model was free to write one at will until this existed. `None`
-    when the line states no such phrase, or the one it states really was given for a fact it
-    cites."""
-    allowed = {
+    """B1 (review round 3), fail closed: a line citing a fact with no `bands_given` entry at
+    all may not contain a single word of comparison vocabulary in any language
+    (`_COMPARISON_WORDS`) — the paper printed no range for that fact, so there is nothing to
+    compare it to, in any wording. A line citing a fact WITH a band may contain only that
+    fact's own handed-out phrase (`_range_note`'s own comparison sentence, in this ask's
+    language, stored verbatim in `bands_given`): it is stripped from the text first
+    (`_strip_safe_substrings`), and the comparison-word check runs on what is left — so a
+    different band word ("above" when
+    "within" was given), a second language's version of it, or a paraphrase of the correct
+    one are all still caught; only a verbatim copy of the fact's own given phrase survives,
+    the same "computed here, never guessed" discipline `_elapsed`/`_worded_date` already hold
+    for their own claims. `None` only when no comparison word the line uses is left unaccounted
+    for once every cited fact's own given phrase is removed."""
+    allowed_phrases = frozenset(
         bands_given[cite.id] for cite in cites if cite.kind == "fact" and cite.id in bands_given
-    }
-    low = text.lower()
-    for phrase in _RANGE_NOTE.values():
-        if phrase in low and phrase not in allowed:
-            return phrase
-    return None
+    )
+    remaining = _strip_safe_substrings(text, allowed_phrases)
+    words = _band_words(remaining)
+    return min(words) if words else None
 
 
 _BAND_RULE: Final = 96
@@ -2009,6 +2172,20 @@ known-good values for the cited fact(s) are stripped away, so a date's own day-o
 elapsed phrase's own count never itself reads as an invented value."""
 
 
+_VALUE_EXEMPT_KINDS: Final = frozenset({"policy", "feeling_note", "web"})
+"""Cite kinds `_value_claim` does not fail closed on (review round 3, named and narrow on
+purpose) — each carries genuine free text this app has no reliable way to reduce to a single
+tracked value, so failing closed on it would drop true, harmless content, not catch a forgery:
+`_read_insurance`'s own `covers` field is the policy's real coverage lines as free text —
+"Room and board at a panel hospital: S$400 per day"; `_read_feelings`'s own text is what he
+himself wrote in a note, quotable as he wrote it, including any number he happened to use;
+`_search_online`'s own text is an allowlisted source's title, which may itself contain a
+number ("5 Tips for Managing Blood Pressure") that names nothing about him at all. Everything
+else this ask can cite is expected to register into `values_given` when it hands out a number
+at all (`_read_records`, `_read_readings`, `_read_costs`); a number in a line citing anything
+else, tracked or not, is checked."""
+
+
 def _value_claim(
     text: str,
     cites: Sequence[Cite],
@@ -2016,25 +2193,23 @@ def _value_claim(
     elapsed_given: frozenset[str],
     dates_given: frozenset[str],
 ) -> str | None:
-    """Review blocker 2: the first number `text` states, once the ask's own given elapsed
-    phrases, worded dates and the known-good value string(s) for the fact(s) this line cites
-    are stripped away, that still looks like a value — a wrong number for a real, confirmed,
-    cited fact, which no other check catches: plain words rule 10 only counts numbers, never
-    checks them, and the elapsed/date claims are a different kind of number entirely. Checked
-    only when at least one cited fact is one `values_given` actually tracks (`_read_records`'s
-    own facts): a line citing something this check has no known-good value for at all (a
-    reading, a visit, a medicine) is left alone here rather than risk a false drop on a
-    number this check was never given the means to judge. `None` when the line states no such
-    number, when it is not one of `_read_records`'s tracked facts, or the number it states
-    really was given for the fact it cites."""
-    allowed: set[str] = set()
-    tracked = False
-    for cite in cites:
-        if cite.kind == "fact" and cite.id in values_given:
-            tracked = True
-            allowed |= values_given[cite.id]
-    if not tracked:
+    """B2 (review round 3), fail closed: the first number `text` states, once the ask's own
+    given elapsed phrases, worded dates and the known-good value string(s) for the fact(s)
+    this line cites are stripped away, that still looks like a value. Before this, a line
+    citing something `values_given` had no entry for at all was skipped entirely — proved
+    reaching the user on a blood pressure reading (`_read_readings` never populated
+    `values_given` at all): fact = 118/76, the model said 190/120, cited the real fact, and
+    nothing caught it. Now: every cite except `_VALUE_EXEMPT_KINDS` is checked whether or not
+    `values_given` tracks it — an untracked id contributes nothing to `allowed`, so any number
+    left in the text after stripping the given elapsed/date phrases is treated as invented,
+    the same as a number that actively contradicts a tracked value. `None` only when every
+    cite is exempt, or the number(s) the line states really were given for what it cites."""
+    if cites and all(cite.kind in _VALUE_EXEMPT_KINDS for cite in cites):
         return None
+    allowed: set[str] = set()
+    for cite in cites:
+        if cite.kind not in _VALUE_EXEMPT_KINDS:
+            allowed |= values_given.get(cite.id, frozenset())
     stripped = _strip_safe_substrings(text, elapsed_given | dates_given | frozenset(allowed))
     match = _VALUE_NUMBER.search(stripped)
     return match.group() if match is not None else None

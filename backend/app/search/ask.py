@@ -829,22 +829,37 @@ async def _compose(
     # D-1: a "paper" candidate and a "fact" candidate on the same artifact score identically on
     # every phrase they share (a fact's own subject is folded into its paper's candidate names
     # too, `_corpus_stream`'s own RECORDS loop) — a tie the retriever then breaks on nothing
-    # more meaningful than the two candidates' random ids. Review item 9: reordering every
-    # "paper" hit to the end, globally, would also demote one with no competing fact at all —
-    # discarding the retriever's own score and recency for a paper that was never actually
-    # tied with anything. Scoped instead to the artefacts that really do have a same-artefact
-    # "fact" hit in this same result set: only a paper hit for one of THOSE artefacts moves
-    # after its fact hit, so a same-artefact "fact" always claims `papers_said` first — a
-    # specific value is always more useful than "it is in your papers" — while every other
-    # paper hit keeps the rank the retriever itself gave it.
+    # more meaningful than the two candidates' random ids. Review item 9: an earlier version of
+    # this fix reordered every tied "paper" hit to the END OF THE WHOLE LIST — correct only when
+    # nothing else came after it, and otherwise pushing a paper past unrelated facts it was
+    # never actually tied with, discarding the retriever's own rank for those too. Precisely
+    # scoped instead: a tied paper hit is moved to sit immediately after the FIRST same-artefact
+    # "fact" hit it reaches in the (otherwise untouched) order the retriever gave every hit —
+    # not "somewhere near the end" — so a same-artefact "fact" still always claims
+    # `papers_said` first (a specific value is always more useful than "it is in your papers"),
+    # and every hit that was never tied with anything, paper or fact, keeps exactly the rank
+    # the retriever gave it, relative to every other untied hit.
     fact_artifacts = {
         corpus.facts[hit.ref].artifact_id
         for hit in hits
         if hit.kind == "fact" and corpus.facts[hit.ref].artifact_id is not None
     }
-    ordered_hits = sorted(
-        hits, key=lambda hit: hit.kind == "paper" and hit.ref in fact_artifacts
-    )
+    ordered_hits: list[Candidate] = []
+    deferred_papers: dict[uuid.UUID, list[Candidate]] = {}
+    for hit in hits:
+        if hit.kind == "paper" and hit.ref in fact_artifacts:
+            deferred_papers.setdefault(hit.ref, []).append(hit)
+            continue
+        ordered_hits.append(hit)
+        if hit.kind == "fact":
+            artifact_id = corpus.facts[hit.ref].artifact_id
+            if artifact_id is not None:
+                ordered_hits.extend(deferred_papers.pop(artifact_id, ()))
+    # A deferred paper whose tied artefact's fact hit somehow never appended above (should
+    # not happen: `fact_artifacts` is built from these same `hits`) is still shown, never
+    # silently dropped — appended last, the one case this still cannot place precisely.
+    for leftover in deferred_papers.values():
+        ordered_hits.extend(leftover)
     for hit in ordered_hits:
         if hit.kind == "reading":
             fact = corpus.facts[hit.ref]

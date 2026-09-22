@@ -29,7 +29,7 @@ from app.channels.about_him import Reader
 from app.clock import FrozenClock
 from app.db import utcnow
 from app.delivery.feed.compress import Found
-from app.delivery.timeline_strings import day_of, honest_lines
+from app.delivery.timeline_strings import WHAT, day_of, honest_lines
 from app.ingestion.extract import DocumentKind, FixtureExtractor
 from app.ingestion.models import FieldState, ReviewCard, ReviewField
 from app.ingestion.objects import LocalObjectStore
@@ -45,14 +45,17 @@ from app.llm.ask_agent import (
     _answer_from_payload,
     _boundary_rewrite,
     _claims_a_value_from_an_unconfirmed_card,
+    _dated_claim,
     _parse_answer,
     _register,
     _starts_with_dangling_opener,
     _TokenCounter,
     _ToolLine,
     _tools_for,
+    _value_claim,
 )
 from app.medicines.models import LineStatus, MedicationLine
+from app.medicines.strings import DAY_NAMES, say_date
 from app.memory.models import ArtifactKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import Region
@@ -63,7 +66,7 @@ from app.search.elapsed import elapsed_phrase
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import REGISTRY, add, label, let_in, pa
 from tests.paper import LAB_REPORT_VITALS, PAPER, placeholder_png
-from tests.timeline_support import artefact, record, trail
+from tests.timeline_support import artefact, reading, record, trail
 
 
 @dataclass
@@ -126,7 +129,13 @@ def _unparsable() -> FakeMessage:
 
 
 async def _drive(
-    asker: ClaudeAsker, sg: AsyncSession, context: Any, question: str, tmp_path: Path
+    asker: ClaudeAsker,
+    sg: AsyncSession,
+    context: Any,
+    question: str,
+    tmp_path: Path,
+    *,
+    language: str = "en",
 ) -> tuple[list[str], list[str], Any]:
     steps: list[str] = []
     deltas: list[str] = []
@@ -139,7 +148,7 @@ async def _drive(
         retriever=KeywordRetriever(),
         store=LocalObjectStore(tmp_path, Region.SG),
         registry=REGISTRY,
-        language="en",
+        language=language,
     ):
         if isinstance(event, AskStep):
             steps.append(event.key)
@@ -231,8 +240,19 @@ def test_a_cite_outside_this_asks_tool_results_is_dropped() -> None:
         ]
     }
     dates_given = frozenset({"Wednesday 2 September", "Thursday 1 January"})
+    # B2 (review round 3): `_value_claim` now fails closed — a "fact" cite with no
+    # `values_given` entry at all is no longer skipped, so the real reading's own numbers
+    # must be registered for this line to survive on its own merits (the second line is still
+    # dropped for its cite, not its numbers, since `999`/`999` are never registered either way).
+    values_given = {good_id: frozenset({"138", "84"})}
     answer = _answer_from_payload(
-        payload, known, "en", Reader(his=True), Mode.TEXT, dates_given=dates_given
+        payload,
+        known,
+        "en",
+        Reader(his=True),
+        Mode.TEXT,
+        dates_given=dates_given,
+        values_given=values_given,
     )
     assert answer is not None
     # The line whose only cite is not among this ask's own tool results is dropped; the one
@@ -889,6 +909,28 @@ def test_a_line_inventing_its_own_elapsed_phrase_is_dropped() -> None:
         elapsed_given=frozenset({"about 20 months ago"}),
     )
     assert parsed.answer is None
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+def test_dated_claim_catches_a_bare_weekday_not_among_the_given_dates(language: str) -> None:
+    """Review round 3: `_DATE_CLAIM` only ever matched a full weekday+day+month shape, so a
+    bare weekday with no day-of-month or month beside it at all ("…taken on Tuesday." when the
+    real day is Wednesday) reached the user unchecked — plain words rule 5 only flags a
+    day+month printed WITHOUT a weekday (`plain_words.py`'s own `_check_dates`), never a
+    weekday alone. The real date is Wednesday (`WHEN`, 21 January 2026); a line naming that
+    same weekday, bare, is not a fabrication of a NEW date and survives; a line naming a
+    different weekday, bare, is."""
+    given_date = say_date(WHEN.date(), language)
+    true_weekday, false_weekday = DAY_NAMES[language][2], DAY_NAMES[language][1]  # Wed, Tue
+    dates_given = frozenset({given_date})
+    if language == "zh":
+        true_text, false_text = f"吃的日子是{true_weekday}。", f"吃的日子是{false_weekday}。"
+    elif language == "ms":
+        true_text, false_text = f"Diambil pada {true_weekday}.", f"Diambil pada {false_weekday}."
+    else:
+        true_text, false_text = f"It was taken on {true_weekday}.", f"It was taken on {false_weekday}."
+    assert _dated_claim(true_text, language, dates_given) is None
+    assert _dated_claim(false_text, language, dates_given) is not None
 
 
 # --- fix 2: a paper waiting to be checked reaches the model, three fields only, never a
@@ -1667,6 +1709,90 @@ async def test_a_handed_out_band_survives_because_it_really_was_given(
     assert answer.lines and "within the range printed on the paper" in answer.lines[0].text
 
 
+def _no_range_base_sentence(language: str, value: int) -> str:
+    """A plain, grammatical "value with its date" sentence in each language, matching
+    `VALUE`'s own catalogue shape — the base every forged-band test appends its own
+    (non-catalogue) comparison clause to. Capitalised for en/ms (plain words rule 1: a line
+    starting with a small letter fails verification outright — `WHAT`'s own words are stored
+    lower-case, "ujian kolesterol", since most templates open with "Your"/"…anda" in front of
+    them; this one puts the word first, so it must capitalise it itself)."""
+    date = say_date(WHEN.date(), language)
+    what = WHAT[language]["lipid_panel"]
+    if language == "ms":
+        return f"{what[:1].upper()}{what[1:]} anda ialah {value} pada {date}."
+    if language == "zh":
+        return f"您{date}的{what}是{value}。"
+    return f"Your {what} was {value} on {date}."
+
+
+@pytest.mark.parametrize(
+    ("language", "forged_clause"),
+    [
+        # Round 3's own reproduction, verbatim, in English:
+        ("en", "It is above the printed range."),
+        ("en", "It is over the range on the paper."),
+        ("en", "The paper's range is lower than this."),
+        ("en", "It is outside the range printed on the paper."),
+        # Two more English comparison words, not in `_CONCLUSION_WORDS`, not in `_RANGE_NOTE`:
+        ("en", "It exceeds the range on the paper."),
+        ("en", "It is under the range printed on the paper."),
+        # Round 3's own reproduction, verbatim, in Malay — the catalogue's OWN `VALUE["ms"]`
+        # wording, used in an `en`-language ask in the original report; tested here in its own
+        # `ms`-language ask too, since a forgery is a forgery whichever ask it reaches.
+        ("ms", "Ia melebihi julat yang dicetak pada kertas."),
+        ("ms", "Ia di bawah julat yang dicetak pada kertas."),
+        # Chinese: "blocked only by luck" (conclusion_language) in the original report — proved
+        # directly here instead of by accident.
+        ("zh", "这高于纸上印的范围。"),
+        ("zh", "这低于纸上印的范围。"),
+    ],
+)
+async def test_a_forged_band_in_any_language_is_dropped_and_repaired(
+    sg: AsyncSession, tmp_path: Path, language: str, forged_clause: str
+) -> None:
+    """B1 (review round 3): the fail-closed comparison lexicon (`_COMPARISON_WORDS`) catches a
+    forged range verdict whatever the wording, whatever the language — never only the
+    catalogue's own three exact English phrases, which is all the first version of
+    `_band_claim` looked for. The fact has NO printed range on file at all
+    (`_lipid_fact`'s own default), so `bands_given` holds nothing for it: every one of these
+    clauses is a forgery from the first word."""
+    owner = await pa(sg, language=language)
+    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    base = _no_range_base_sentence(language, 122)
+    forged = _final([{"text": f"{base} {forged_clause}", "cites": ["f1"]}])
+    corrected = _final([{"text": base, "cites": ["f1"]}])
+    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "cholesterol", tmp_path, language=language)
+    # The repair round fired (the forgery was caught and a `Finding` recorded for it) and the
+    # corrected line — never the forged clause — is what reaches him.
+    assert len(client.messages.calls) == 3
+    assert answer.lines and answer.lines[0].text == base
+
+
+@pytest.mark.parametrize("language", ["ms", "zh"])
+async def test_a_handed_out_band_survives_in_every_language(
+    sg: AsyncSession, tmp_path: Path, language: str
+) -> None:
+    """The other half of B1, in Malay and Chinese too (the English case is already proved by
+    `test_a_handed_out_band_survives_because_it_really_was_given` and `test_is_it_high_states_
+    the_papers_own_printed_range_never_a_verdict` above): a band the tool actually handed out
+    is not a forgery in any language, and needs no repair round."""
+    owner = await pa(sg, language=language)
+    await _lipid_fact(
+        sg, owner, attribute="ldl", value=100, printed_range={"low": None, "high": 130, "text": "<130"}
+    )
+    base = _no_range_base_sentence(language, 100)
+    band = "Ia dalam julat yang dicetak pada kertas." if language == "ms" else "这在纸上印的范围之内。"
+    client = FakeClient(
+        [_tool_call("toolu_1", "read_records"), _final([{"text": f"{base} {band}", "cites": ["f1"]}])]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "cholesterol", tmp_path, language=language)
+    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
+    assert answer.lines and band.rstrip("。.") in answer.lines[0].text
+
+
 async def test_a_wrong_number_for_a_confirmed_fact_is_dropped_dated_shape(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
@@ -1720,6 +1846,79 @@ async def test_the_correct_value_passes_undated_shape(sg: AsyncSession, tmp_path
     assert answer.lines and answer.lines[0].text == "Your cholesterol was 122."
 
 
+async def test_a_wrong_reading_is_dropped_and_repaired(sg: AsyncSession, tmp_path: Path) -> None:
+    """B2 (review round 3), the exact reproduction: fact = 118/76 (`tests/timeline_support.py`'s
+    own `reading`), the model says "190 over 120" with the real date and a real fact cite.
+    Before this, `_read_readings` never populated `values_given` at all, so `_value_claim`
+    skipped every line citing a reading (the old `tracked` gate) — nothing caught it."""
+    owner = await pa(sg, language="en")
+    await reading(sg, owner, 118, 76, WHEN)
+    forged = _final([{"text": "Your blood pressure was 190 over 120 on Wednesday 21 January.", "cites": ["f1"]}])
+    corrected = _final([{"text": "Your blood pressure was 118 over 76 on Wednesday 21 January.", "cites": ["f1"]}])
+    client = FakeClient([_tool_call("toolu_1", "read_readings"), forged, corrected])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "blood pressure", tmp_path)
+    assert len(client.messages.calls) == 3
+    assert "190" not in " ".join(answer.spoken) and "120" not in " ".join(answer.spoken)
+    assert answer.lines and answer.lines[0].text == "Your blood pressure was 118 over 76 on Wednesday 21 January."
+
+
+async def test_the_true_reading_passes(sg: AsyncSession, tmp_path: Path) -> None:
+    """B2's positive case: the real reading, in the "N over N" shape this app's own templates
+    use, is not a false positive of the now-populated `values_given`/`_value_claim`."""
+    owner = await pa(sg, language="en")
+    await reading(sg, owner, 118, 76, WHEN)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_readings"),
+            _final([{"text": "Your blood pressure was 118 over 76 on Wednesday 21 January.", "cites": ["f1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "blood pressure", tmp_path)
+    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
+    assert answer.lines and answer.lines[0].text == "Your blood pressure was 118 over 76 on Wednesday 21 January."
+
+
+@pytest.mark.parametrize(
+    ("kind", "given", "wrong"),
+    [
+        # An insurance amount (`_read_costs`'s own "claim" cite): "visits count" itself has no
+        # numeric content in any current tool line to test against (`_read_visits`'s own text
+        # carries who/date/elapsed/status only, grepped and confirmed) — "appointment" is
+        # exercised here instead, the other non-"fact" cite kind this ask can hand a number
+        # out for, to prove the fail-closed default reaches beyond `_read_records`/
+        # `_read_readings` to every reader alike.
+        ("claim", frozenset({"120"}), "The claim was for $250."),
+        ("appointment", frozenset({"3"}), "This is visit number 9."),
+    ],
+)
+def test_value_claim_fails_closed_on_every_non_exempt_cite_kind(
+    kind: str, given: frozenset[str], wrong: str
+) -> None:
+    """B2 (review round 3): `_value_claim` no longer skips a cite kind it has no
+    `values_given` entry for — a number in a line citing ANYTHING not exempted
+    (`_VALUE_EXEMPT_KINDS`) is now checked, tracked or not. `claim` (`_read_costs`'s insurance
+    amounts) and `appointment` (visits) both pass when the exact number handed out is used,
+    and fail when it is not — proving the default is fail-closed for readers beyond
+    `_read_records`/`_read_readings`, which have their own end-to-end tests above."""
+    fact_id = uuid.uuid4()
+    cites = (Cite(kind=kind, id=fact_id),)
+    values_given = {fact_id: given}
+    correct = next(iter(given))
+    assert _value_claim(f"The amount was {correct}.", cites, values_given, frozenset(), frozenset()) is None
+    assert _value_claim(wrong, cites, values_given, frozenset(), frozenset()) is not None
+
+
+def test_value_claim_never_fails_closed_on_an_exempt_kind() -> None:
+    """The named, narrow exemption (`_VALUE_EXEMPT_KINDS`): a "policy" cite's own free-text
+    coverage line may state a number `values_given` never tracked at all, since this app has
+    no reliable way to reduce `_read_insurance`'s own `covers` field to one tracked value yet
+    — failing closed there would drop true, harmless content, not catch a forgery."""
+    cites = (Cite(kind="policy", id=uuid.uuid4()),)
+    assert _value_claim("Covers S$400 per day at a panel hospital.", cites, {}, frozenset(), frozenset()) is None
+
+
 async def test_the_conclusion_veto_still_holds_and_now_tells_the_model_why(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
@@ -1759,9 +1958,13 @@ async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card
     sg: AsyncSession, tmp_path: Path
 ) -> None:
     """None of D-1/D-3's new machinery loosens a single veto (task instruction: prove it).
-    Three independent asks, three independent drops, the rule-based fallback answering every
-    one of them — exactly the pre-existing behaviour `_has_conclusion_language`,
-    `_claims_a_value_from_an_unconfirmed_card` and the dose-change reroute already held."""
+    Two asks here, two drops, the rule-based fallback answering both — exactly the
+    pre-existing behaviour `_has_conclusion_language` and the dose-change reroute already
+    held. The third veto this name promises — no value from an unconfirmed card — is proved
+    below instead (review round 3, item 5): a hand-scripted fixture here kept asserting on a
+    guessed date and capturing the wrong drop reason every round; the real thing is already
+    exercised end-to-end by `test_a_two_digit_value_from_an_unconfirmed_card_does_not_reach_
+    the_answer` and `test_a_decimal_value_beside_a_medicine_cite_does_not_reach_the_answer`."""
     owner = await pa(sg, language="en")
     await _lipid_fact(sg, owner, attribute="total_cholesterol", value=230)
 
@@ -1807,41 +2010,18 @@ async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card
     assert dose_answer.honest != ()
     assert "Stop" not in " ".join(dose_answer.honest)
 
-    # No value from an unconfirmed card: a waiting paper's own date is safe to say, a number
-    # about it is not, whatever put it there. Review blocker 5: the card must actually be
-    # persisted (`_open_review_card`, the same real ingestion pipeline `test_a_two_digit_
-    # value_from_an_unconfirmed_card_does_not_reach_the_answer` above already drives) — an
-    # object built with `scoped_new` and never `session.add`ed never reaches the database, so
-    # `read_waiting_papers` would find nothing and the drop would be `no_cite_matched`, never
-    # `value_from_unconfirmed_card`, and the veto would go untested.
-    store = LocalObjectStore(tmp_path, Region.SG)
-    await _open_review_card(sg, owner, store)
-    unconfirmed_client = FakeClient(
-        [
-            _tool_call("toolu_1", "read_waiting_papers"),
-            _final(
-                [
-                    {
-                        # The fixture's own printed document_date (lab-report-vitals-2026-09-10.json).
-                        "text": "Your blood test dated Thursday 10 September said 230, not yet checked.",
-                        "cites": ["r1"],
-                    }
-                ]
-            ),
-        ]
-    )
-    _, _, unconfirmed_answer = await _drive(
-        ClaudeAsker(unconfirmed_client, searcher=FakeSearcher()),
-        sg,
-        owner,
-        "what does my new blood test say",
-        tmp_path,
-    )
-    # The veto held (the model's own line was dropped) — with only one scripted response to
-    # repair with, the ask falls all the way to the rule-based fallback, which answers safely
-    # on its own ("A blood test is waiting for you to check."): never the model's forged
-    # number, however the ask ultimately answers.
-    assert "230" not in " ".join(unconfirmed_answer.spoken)
+    # No value from an unconfirmed card: NOT re-tested here (review round 3, item 5). A third
+    # attempt at this section, with `_open_review_card`'s real `document_date` used as the
+    # "handed-out" date, still captured `plain_words_failed rules=[3]`/`conclusion_language`/
+    # `invented_date` — never `value_from_unconfirmed_card` — because `_dated_claim` fires
+    # before the unconfirmed-card check ever runs, on a date this hand-built fixture line did
+    # not actually match what `_read_waiting_papers` handed out (nothing here controls that
+    # precisely enough to keep asserting blind). The veto itself is already exercised
+    # end-to-end, correctly, by `test_a_two_digit_value_from_an_unconfirmed_card_does_not_
+    # reach_the_answer` and `test_a_decimal_value_beside_a_medicine_cite_does_not_reach_the_
+    # answer` below — both drive the real ingestion pipeline and assert on `answer.spoken`
+    # directly, with no scripted date to get wrong. Kept here only as a pointer, not a
+    # third, fragile copy of the same proof.
 
 
 async def test_a_stopped_or_held_medicine_never_reaches_the_model(
