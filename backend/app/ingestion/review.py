@@ -40,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
+from app.audit.conclusions import ConclusionResponseKind, record_dropped_conclusion
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
@@ -1048,6 +1049,28 @@ async def confirm_review_card(
                 target_id=field.id,
                 rows=1,
             )
+            # D3 (ADR 0019 point 7): a "No" (`REJECTED`) or a "Fix" (kept, but corrected) on a
+            # field the extractor proposed is a rejected or corrected AI conclusion, recorded
+            # the same way a dropped Ask line is — never the extracted or corrected value
+            # itself, only the closed response kind and which field.
+            if field.state is FieldState.REJECTED:
+                await record_dropped_conclusion(
+                    session,
+                    context=context,
+                    response_kind=ConclusionResponseKind.USER_NO,
+                    target=FIELD,
+                    target_id=field.id,
+                    scope=Scope.RECORDS,
+                )
+            elif field.state is FieldState.CORRECTED:
+                await record_dropped_conclusion(
+                    session,
+                    context=context,
+                    response_kind=ConclusionResponseKind.USER_FIX,
+                    target=FIELD,
+                    target_id=field.id,
+                    scope=Scope.RECORDS,
+                )
         card.confirmed_at = moment
         card.confirmed_by_person_id = yes.person_id
         await session.flush()

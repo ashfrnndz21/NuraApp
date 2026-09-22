@@ -19,11 +19,17 @@ from app.keys.scopes import KeyRole, Scope
 
 
 class Action(StrEnum):
-    """The three things that can happen to profile data. Every one of them is written down."""
+    """What can happen to profile data. Every one of them is written down."""
 
     READ = "read"
     WRITE = "write"
     SHARE = "share"
+    REVIEW = "review"
+    """D3 (ADR 0019 point 7; `docs/design/NURA-BUILD-MASTER-SPEC.md` §39): a model's own
+    conclusion was rejected — dropped by a gate before it ever reached a person, or dropped by
+    the person himself on a read-back or a review card. `refused_because` names the closed
+    reason (`app.audit.conclusions.ConclusionReasonCode` or `ConclusionResponseKind`); never
+    the conclusion's own words. See `app.audit.conclusions.record_dropped_conclusion`."""
 
 
 class Outcome(StrEnum):
