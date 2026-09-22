@@ -25,11 +25,15 @@ from __future__ import annotations
 
 import itertools
 import json
+import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
+from functools import lru_cache
 from typing import Any
+
+log = logging.getLogger("nura.runtime.events")
 
 
 class EventType(StrEnum):
@@ -56,6 +60,67 @@ class EventType(StrEnum):
     CUSTOM = "CUSTOM"
 
 
+class ErrorCode(StrEnum):
+    """`RUN_ERROR.code`'s own closed set (independent review of #331, round 3, fix 2): before
+    this, `code` was an open Python exception class name (`"KeyError"`, `"NoSuchAppointment"`,
+    `"UnknownIntent"`, …) — unbounded, and a client branching on it would be branching on this
+    codebase's own internals. Five buckets, deterministic, never a class name:
+    `app.runtime.run._error_code` is the one function that maps an exception to one of these."""
+
+    REFUSED = "refused"
+    """Consent, a scope, a role or a confirmation stood in the way."""
+    NOT_FOUND = "not_found"
+    """The thing asked about does not exist, or nothing has been computed yet."""
+    UNKNOWN_INTENT = "unknown_intent"
+    BAD_REQUEST = "bad_request"
+    """The payload itself was malformed or incomplete."""
+    INTERNAL = "internal"
+    """Anything else — including a bug. Never shown as such; `RUN_ERROR.message` stays the
+    one calm, generic line for this bucket."""
+
+
+@lru_cache(maxsize=1)
+def _closed_tool_keys() -> frozenset[str]:
+    """Every closed `key` a `TOOL_CALL_START`/`TOOL_CALL_RESULT`/`CUSTOM("step", …)` may
+    legitimately name (F3, round 3 fix 3): `app.search.ask.AskStep.key` and the two extra
+    keys only `ClaudeAsker` yields, `app.reasoning.analyst.port.StepKey`,
+    `app.ingestion.review.ImportStepKey`, `app.safety.not_feeling_well.NfwStepKey`, and
+    `run.py`'s own two plain-run tool names — read from the real catalogues and enums
+    themselves (never hand-copied) so this set can never quietly drift from what `run.py`
+    actually emits. Imported lazily so `app.runtime.events` never has to import `app.search`,
+    `app.reasoning`, `app.ingestion` or `app.safety` at module load."""
+    from app.delivery.timeline_strings import ASK_STEPS, RUN_STAGE_WORDS
+    from app.ingestion.review import ImportStepKey
+    from app.reasoning.analyst.port import StepKey
+    from app.safety.not_feeling_well import NfwStepKey
+
+    return frozenset(
+        set(ASK_STEPS["en"])
+        | set(RUN_STAGE_WORDS["en"])
+        | {member.value for member in ImportStepKey}
+        | {member.value for member in StepKey}
+        | {member.value for member in NfwStepKey}
+    )
+
+
+@lru_cache(maxsize=1)
+def _closed_document_kinds() -> frozenset[str]:
+    from app.ingestion.extract import DocumentKind
+
+    return frozenset(member.value for member in DocumentKind)
+
+
+@lru_cache(maxsize=1)
+def _closed_notices() -> frozenset[str]:
+    from app.ingestion.review import Notice
+
+    return frozenset(member.value for member in Notice)
+
+
+_CLOSED_LANGUAGES = frozenset({"en", "ms", "zh"})
+_CLOSED_LINKED_KINDS = frozenset({"medicine", "visit"})
+
+
 def _closed_json(value: object) -> dict[str, Any]:
     """A closed, frozen dataclass's own fields as JSON, `None` ones dropped. The one place
     this module turns a typed payload into wire JSON — never a caller's own dict, which is
@@ -77,7 +142,10 @@ class ToolResult:
     key: str | None = None
     """Which read this was: `app.search.ask.AskStep.key`, `app.reasoning.analyst.port.
     StepKey.value`, `app.ingestion.review.ImportStepKey.value` or `app.safety.
-    not_feeling_well.NfwStepKey.value` — always a closed enum's own value, never free text."""
+    not_feeling_well.NfwStepKey.value` — always a closed enum's own value, never free text.
+    Validated against the real, closed union of those (`_closed_tool_keys`), not merely typed
+    as `str`: round 3 of the independent review found `ToolResult(key="LDL 3.8 mmol/L,
+    borderline high — consider a statin")` was accepted before this."""
     count: int | None = None
     document_kind: str | None = None
     linked_kind: str | None = None
@@ -86,33 +154,56 @@ class ToolResult:
     sections: int | None = None
     red_flag: bool | None = None
 
+    def __post_init__(self) -> None:
+        if self.key is not None and self.key not in _closed_tool_keys():
+            raise ValueError(f"ToolResult.key must be one of the closed step keys, not {self.key!r}")
+        if self.document_kind is not None and self.document_kind not in _closed_document_kinds():
+            raise ValueError(f"ToolResult.document_kind must be a closed DocumentKind, not {self.document_kind!r}")
+        if self.linked_kind is not None and self.linked_kind not in _CLOSED_LINKED_KINDS:
+            raise ValueError(f"ToolResult.linked_kind must be 'medicine' or 'visit', not {self.linked_kind!r}")
+
 
 @dataclass(frozen=True, slots=True)
 class StepCustom:
     """`CUSTOM("step", …)`: the existing routes' own `{"type": "step", "key": …}` shape,
-    unchanged, riding inside the new envelope."""
+    unchanged, riding inside the new envelope. `key` is validated the same closed way
+    `ToolResult.key` is."""
 
     key: str
+
+    def __post_init__(self) -> None:
+        if self.key not in _closed_tool_keys():
+            raise ValueError(f"StepCustom.key must be one of the closed step keys, not {self.key!r}")
 
 
 @dataclass(frozen=True, slots=True)
 class CardCustom:
     """`CUSTOM("card", …)`: a review card or a not-feeling-well card's own closed summary —
     never the card's own fields, which a client already holds from the plain route's own
-    response shape, or will read from `GET /review-cards/{id}` by the id here."""
+    response shape, or will read from `GET /review-cards/{id}` by the id here. `notice` is
+    validated against the closed `app.ingestion.review.Notice` enum."""
 
     card_id: str | None = None
     notice: str | None = None
     red_flag: bool | None = None
 
+    def __post_init__(self) -> None:
+        if self.notice is not None and self.notice not in _closed_notices():
+            raise ValueError(f"CardCustom.notice must be a closed Notice, not {self.notice!r}")
+
 
 @dataclass(frozen=True, slots=True)
 class ReportCustom:
     """`CUSTOM("report", …)`: the weekly Health Analyst report's own closed summary — never
-    a section's own text, which a client reads from `GET /insights/{id}`."""
+    a section's own text, which a client reads from `GET /insights/{id}`. `language` is
+    validated against the closed `("en", "ms", "zh")` set."""
 
     sections: int
     language: str
+
+    def __post_init__(self) -> None:
+        if self.language not in _CLOSED_LANGUAGES:
+            raise ValueError(f"ReportCustom.language must be one of en/ms/zh, not {self.language!r}")
 
 
 CustomPayload = StepCustom | CardCustom | ReportCustom
@@ -177,14 +268,35 @@ def to_sse(event: Event) -> bytes:
 class EventBuilder:
     """One run's own event factory: closes over `run_id`, `intent` and a `SeqCounter`, so
     call sites in `run.py` never thread `seq=` by hand and can never get two events the same
-    sequence number by mistake."""
+    sequence number by mistake.
 
-    __slots__ = ("_seq", "intent", "run_id")
+    **One builder per run, always (independent review of #331, round 3, B1-R1).** Before
+    this, `app.channels.api.runs.start_run`'s own `pump` built one `EventBuilder` for its
+    last-resort catch and every `run.py` handler built a second, separate one — so anything
+    that escaped a handler (a bug reading State before its own `try`, a commit failure after
+    `RUN_FINISHED` had already gone out on `session_scope`'s own exit) surfaced as `RUN_ERROR`
+    under a **different** `run_id`, with `seq` restarted at 1. Now exactly one `EventBuilder`
+    is created in `start_run`'s `pump` and threaded through `run_nura` into every handler
+    (`run.py`'s own module doc); this class enforces the other half of that promise itself:
+    `run_finished`/`run_error` refuse to build a second terminal event. The first one to call
+    either wins; every call after it is logged and returns `None` — never a second `RUN_ERROR`
+    chasing a `RUN_FINISHED` that already reached the wire, and never a caller that has to
+    remember to check `self.terminated` itself before deciding whether to yield."""
+
+    __slots__ = ("_seq", "_terminated", "intent", "run_id")
 
     def __init__(self, *, run_id: uuid.UUID | str | None = None, intent: str) -> None:
         self.run_id = str(run_id) if run_id is not None else str(uuid.uuid4())
         self.intent = intent
         self._seq = SeqCounter()
+        self._terminated = False
+
+    @property
+    def terminated(self) -> bool:
+        """Whether `run_finished` or `run_error` has already built this run's one terminal
+        event. A caller may check this before doing further work, but does not have to: both
+        methods are themselves safe to call more than once."""
+        return self._terminated
 
     def _event(self, type_: EventType, data: Mapping[str, Any]) -> Event:
         return Event(
@@ -200,18 +312,27 @@ class EventBuilder:
             data["subject"] = subject
         return self._event(EventType.RUN_STARTED, data)
 
-    def run_finished(self, *, result: Mapping[str, Any] | None = None) -> Event:
+    def run_finished(self, *, result: Mapping[str, Any] | None = None) -> Event | None:
+        """`None`, logged, if this run already has a terminal event — see the class doc."""
+        if self._terminated:
+            log.warning("nura run %s: RUN_FINISHED dropped, already terminated", self.run_id)
+            return None
+        self._terminated = True
         return self._event(EventType.RUN_FINISHED, {"result": result} if result is not None else {})
 
-    def run_error(self, *, message: str, code: str | None = None) -> Event:
+    def run_error(self, *, message: str, code: ErrorCode) -> Event | None:
         """`message` is calm, patient-facing copy (master-spec §29: never a technical or HTTP
         string) — the same discipline `app.channels.api.refusals.refused` already holds the
-        plain routes to. `code` is a closed machine name for a client that wants to branch,
-        never shown."""
-        data: dict[str, Any] = {"message": message}
-        if code is not None:
-            data["code"] = code
-        return self._event(EventType.RUN_ERROR, data)
+        plain routes to. `code` is one of the closed `ErrorCode` values, checked at runtime —
+        never a Python exception's class name, which used to reach the wire here (round 3,
+        fix 2). `None`, logged, if this run already has a terminal event — see the class doc."""
+        if not isinstance(code, ErrorCode):
+            raise TypeError(f"RUN_ERROR.code must be an ErrorCode, not {type(code).__name__}")
+        if self._terminated:
+            log.warning("nura run %s: RUN_ERROR dropped, already terminated (code=%s)", self.run_id, code)
+            return None
+        self._terminated = True
+        return self._event(EventType.RUN_ERROR, {"message": message, "code": code.value})
 
     # --- text ---------------------------------------------------------------------------------
 
@@ -240,8 +361,14 @@ class EventBuilder:
     def tool_call_args(self, *, tool_call_id: str, delta: str) -> Event:
         return self._event(EventType.TOOL_CALL_ARGS, {"tool_call_id": tool_call_id, "delta": delta})
 
-    def tool_call_end(self, *, tool_call_id: str) -> Event:
-        return self._event(EventType.TOOL_CALL_END, {"tool_call_id": tool_call_id})
+    def tool_call_end(self, *, tool_call_id: str, error: bool = False) -> Event:
+        """`error=True` closes a call that broke before it produced a `TOOL_CALL_RESULT`
+        (round 3, fix 1): every handler now closes whichever call is open, this way, before
+        its own `RUN_ERROR` — never a `TOOL_CALL_START` left with no matching `END` at all."""
+        data: dict[str, Any] = {"tool_call_id": tool_call_id}
+        if error:
+            data["error"] = True
+        return self._event(EventType.TOOL_CALL_END, data)
 
     def tool_call_result(self, *, tool_call_id: str, content: ToolResult) -> Event:
         """`content` is a `ToolResult` — a short, closed summary, never a row and never free
@@ -286,6 +413,7 @@ __all__ = [
     "CardCustom",
     "CustomPayload",
     "Envelope",
+    "ErrorCode",
     "Event",
     "EventBuilder",
     "EventType",

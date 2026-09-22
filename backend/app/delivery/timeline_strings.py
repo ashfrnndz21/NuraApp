@@ -561,6 +561,38 @@ RUN_STAGE_WORDS: Mapping[str, Mapping[str, str]] = {
 wire as the line a loading state shows)."""
 
 # @patient
+RUN_ERROR_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "refused": "The people looking after this cannot do that yet.",
+        "not_found": "Nura does not have that ready yet.",
+        "unknown_intent": "Nura does not know how to do that yet.",
+        "bad_request": "That does not look right.",
+        "internal": "Nura could not finish that just now.",
+    },
+    "ms": {
+        "refused": "Orang yang menjaga ini belum boleh buat itu.",
+        "not_found": "Nura belum ada itu lagi.",
+        "unknown_intent": "Nura tidak tahu buat itu lagi.",
+        "bad_request": "Itu tidak kelihatan betul.",
+        "internal": "Nura tidak dapat selesaikan itu sekarang.",
+    },
+    "zh": {
+        "refused": "照顾这个的人现在还不能这样做。",
+        "not_found": "Nura还没有准备好那个。",
+        "unknown_intent": "Nura还不知道怎么做那件事。",
+        "bad_request": "这看起来不对。",
+        "internal": "Nura现在无法完成。",
+    },
+}
+"""`app.runtime.events.ErrorCode`'s own five sentences (independent review of #331, round 3,
+B2-R1): before this, `app.runtime.run._REFUSAL_WORDS` lived in `run.py` itself, in English
+only, with no `# @patient` tag and outside every path `.claude/rules/patient-strings.md`
+checks — so a violation planted there was never caught by `make plain-words`, and a caregiver
+key was shown the same English sentence his own key was. Keyed by the closed
+`app.runtime.events.ErrorCode` value, never a Python exception's class name: a `RUN_ERROR`
+always reads one of exactly these five lines, in the profile's own language."""
+
+# @patient
 READING: Mapping[str, Lines] = {
     "en": ("Your blood pressure on {date} was {top_number} over {bottom_number}.",),
     "ms": ("Tekanan darah anda pada {date} ialah {top_number} atas {bottom_number}.",),
@@ -724,6 +756,7 @@ __all__ = [
     "READING",
     "RECALL",
     "REROUTE",
+    "RUN_ERROR_WORDS",
     "RUN_STAGE_WORDS",
     "WAITING",
     "WHAT",

@@ -61,23 +61,28 @@ async def start_run(
     where `POST …/photos/stream` would, and so on for every intent, because each one calls the
     identical guarded function the existing route calls (`app.runtime.run`'s own module doc).
 
-    A run always terminates (§4; independent review of #331, B1): `run_nura` itself already
-    turns every exception a wrapped call raises into `RUN_ERROR` before it ever reaches here
-    (`app.runtime.run`'s own module doc). `pump` below catches `Exception` one more time
-    anyway — never `str(exc)` on the wire, always `_calm_error_message` — so a bug in
-    `run_nura`'s own dispatch (an unknown intent, say — raised before its first event) still
-    ends the stream as a well-formed run, and `stream_with_background_pump`'s `finally`
-    (`app.channels.api.sse_pump`) never has anything left to re-raise once bytes are out.
+    A run always terminates (§4; independent review of #331, B1, B1-R1): exactly one
+    `EventBuilder` is built here, passed into `run_nura` (which threads it into whichever
+    handler runs), and kept by `pump` for its own last-resort catch too — never a second
+    builder built partway through a run, which used to mean anything escaping a handler
+    surfaced under a fresh `run_id` with `seq` restarted at 1 (`app.runtime.run`'s own module
+    doc). `run_nura` already turns every exception a wrapped call raises into `RUN_ERROR`
+    before it ever reaches here; `pump`'s own `except` is the outer net for the one thing that
+    can still happen entirely outside `run_nura`'s own generator — `session_scope`'s commit,
+    on the way out of the `async with` below, failing after `run_nura` already yielded
+    `RUN_FINISHED`. `EventBuilder.run_error` itself refuses to build a second terminal event
+    (`events.py`'s own doc), so even that case ends in exactly one `RUN_ERROR`, never a second
+    one chasing the `RUN_FINISHED` that already reached the wire.
 
     Opens its own session (`session_scope`), never `Depends(db)`, for the reason
     `app.channels.api.timeline.ask_stream` gives: a `StreamingResponse` is handed back, and so
     a `yield` dependency closed, well before Starlette actually drives the pump."""
     engine = Engine(providers=providers_of(request), settings=settings_of(request))
     subject = RunSubject(profile_id=profile_id, payload=body.payload)
+    builder = EventBuilder(intent=body.intent)
 
     async def pump(queue: Any) -> None:
-        builder = EventBuilder(intent=body.intent)
-        started = False
+        session = None  # bound even if session_scope's own __aenter__ never completes
         try:
             async with session_scope(request) as session:
                 # `body.intent` is a plain `str` by design (its own docstring); `Intent` is a
@@ -85,16 +90,26 @@ async def start_run(
                 # exactly as it would a real `Intent` member, and any string that is not one
                 # of the six raises `UnknownIntent` the same way — never a type error at
                 # runtime, only at the type-checker, which this line tells so on purpose.
-                async for event in run_nura(body.intent, subject, context, session, engine):  # type: ignore[arg-type]
-                    started = started or event.envelope.type.value == "RUN_STARTED"
+                async for event in run_nura(
+                    body.intent,  # type: ignore[arg-type]
+                    subject,
+                    context,
+                    session,
+                    engine,
+                    builder=builder,
+                ):
                     await queue.put(to_sse(event))
+            # A commit failure here (session_scope's own __aexit__) is caught below, using the
+            # SAME builder `run_nura` already used — see this function's own docstring.
         except Exception as exc:
             log.exception("nura run %s: an event never reached the wire", body.intent)
-            if not started:
-                await queue.put(to_sse(builder.run_started()))
-            await queue.put(
-                to_sse(builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__))
-            )
+            # `_calm_error_message` falls back to English on its own if `session` cannot
+            # actually answer a language query (including `session is None`, when
+            # `session_scope`'s own `__aenter__` never completed) — see its own doc.
+            message, code = await _calm_error_message(session, context, exc)
+            error = builder.run_error(message=message, code=code)
+            if error is not None:
+                await queue.put(to_sse(error))
 
     return StreamingResponse(stream_with_background_pump(pump), media_type="text/event-stream")
 

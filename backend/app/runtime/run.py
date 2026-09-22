@@ -13,17 +13,34 @@ confidence threshold, source validity, a medicine safety gate, an escalation or 
 line — every one of those is decided, exactly as today, inside the wrapped call, before this
 module ever sees the result. This module only reports what already happened, as events.
 
-**A run always terminates (§4; independent review of #331, B1).** Every handler below is one
-`try` whose `except Exception` — not only `except Refusal` — is the last thing that runs
-before the generator returns: whatever goes wrong inside the wrapped call, on the model's own
-side or on a bad payload, becomes one `RUN_ERROR` and the run ends there. Nothing here lets a
-bug end a stream silently, mid-message, with the connection simply closing.
+**One `EventBuilder` per run, always (§4; independent review of #331, round 3, B1-R1).**
+`run_nura` is given its builder by its caller (`app.channels.api.runs.start_run`'s own
+`pump`, which creates exactly one and keeps it for its own last-resort catch too) and threads
+the same instance into every handler — never a second one built partway through. `RUN_STARTED`
+is the first event this function yields; everything else, including looking up the handler
+and reading State before any wrapped call runs, happens inside one `try` so that nothing
+between `RUN_STARTED` and the handler's own work can escape uncaught with a fresh `run_id` and
+`seq` restarted at 1 (round 3's own proof: a `RuntimeError` reading State used to do exactly
+that, four handlers out of six). `EventBuilder.run_finished`/`run_error` refuse to build a
+second terminal event on their own (`events.py`'s own doc) — belt and braces on top of this
+module only ever calling one of them once per run.
 
-**Patient words, not engine language (§29; B2).** `TOOL_CALL_START.stage` and
-`RUN_ERROR.message` are never a Python exception's own text, a bare enum value or a function
-name — both come from `app.delivery.timeline_strings`' own `@patient`-tagged catalogues, in
-the profile's language, the same words the plain routes this module wraps already say while
-they work.
+**A handler closes what it opened before it lets an exception through (round 3, fix 1).** A
+`TOOL_CALL_START` a handler yielded is always followed by a `TOOL_CALL_END` — `error=True` if
+the call itself never finished — before the exception reaches `run_nura`'s own catch; a
+`TEXT_MESSAGE_START` is closed the same way. A handler never yields `RUN_ERROR` itself: it
+raises, and `run_nura` is the one place that turns any exception into the run's one terminal
+event.
+
+**Patient words, not engine language (§29; B2, B2-R1).** `TOOL_CALL_START.stage` reads the
+`@patient`-tagged catalogues in `app.delivery.timeline_strings`, in the profile's language.
+`RUN_ERROR.message` reads `RUN_ERROR_WORDS` — also `@patient`-tagged, also in
+`app.delivery.timeline_strings`, not here (round 3: a catalogue kept in `app/runtime/**`, off
+every path `.claude/rules/patient-strings.md` and `make plain-words` check, is not actually
+checked) — keyed by the closed `app.runtime.events.ErrorCode` this module maps every
+exception to (`_error_code`), never a Python exception's class name and never a `Refusal`'s
+own constructor text, which is written for a log, not a person (`app.channels.api.refusals`
+module doc).
 
 **Fixture and live parity (ADR 0019 point 12; master-spec §42).** Every intent below is
 wired against a *port* (`app.search.asker.Asker`, `app.reasoning.analyst.port.Analyst` — see
@@ -31,7 +48,8 @@ each module's own doc), never against a specific adapter, so the event sequence 
 adapter produces and the one a live model adapter produces are the same shape: neither this
 module nor a client reading its stream can tell which one is running
 (`tests/test_runtime_events.py::test_fixture_and_live_askers_produce_the_same_event_type_sequence`,
-`test_rule_and_claude_analysts_produce_the_same_event_type_sequence`).
+`test_rule_and_claude_analysts_produce_the_same_event_type_sequence`, both driven through
+`run_nura` itself, not the adapters alone).
 """
 
 from __future__ import annotations
@@ -48,7 +66,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.channels.api.deps import Providers
 from app.errors import Refusal
 from app.keys.context import KeyContext
-from app.runtime.events import CardCustom, Event, EventBuilder, ReportCustom, StepCustom, ToolResult
+from app.runtime.events import (
+    CardCustom,
+    ErrorCode,
+    Event,
+    EventBuilder,
+    ReportCustom,
+    StepCustom,
+    ToolResult,
+)
 from app.settings import Settings
 from app.state.models import Dimension
 from app.state.service import StateView, current_state
@@ -99,38 +125,62 @@ class UnknownIntent(Refusal):
     """`POST /profiles/{id}/runs` was asked for an intent this runtime does not know."""
 
 
-# --- calm, patient-facing errors (§29; B2) -------------------------------------------------------
+# --- exception -> closed ErrorCode, exception -> patient words (§29; B2, B2-R1) -------------
 
-_REFUSAL_WORDS: dict[str, str] = {
-    "OutOfScope": "The people looking after this cannot see that part yet.",
-    "NoKey": "Nura does not recognise who is asking.",
-    "NoState": "Nura does not have enough written down yet to answer that.",
-    "StaleState": "Something just changed. Please try again in a moment.",
-    "SnapshotBehindTheCard": "Something just changed. Please try again in a moment.",
-    "NotAQuestion": "That does not look like a question Nura can answer.",
-    "NoBriefYet": "Nura has not prepared anything for this visit yet.",
-    "NotEveryFieldDecided": "A few things on this paper still need a yes or a no.",
-    "AlreadyConfirmed": "This paper has already been checked.",
-    "UnreadableField": "Nura could not read one of the fields on this paper.",
-    "UnknownIntent": "Nura does not know how to do that yet.",
+_REFUSAL_ERROR_CODE: dict[str, ErrorCode] = {
+    "OutOfScope": ErrorCode.REFUSED,
+    "NoKey": ErrorCode.REFUSED,
+    "AlreadyConfirmed": ErrorCode.REFUSED,
+    "NoState": ErrorCode.NOT_FOUND,
+    "StaleState": ErrorCode.NOT_FOUND,
+    "SnapshotBehindTheCard": ErrorCode.NOT_FOUND,
+    "NoBriefYet": ErrorCode.NOT_FOUND,
+    "NotAQuestion": ErrorCode.BAD_REQUEST,
+    "NotEveryFieldDecided": ErrorCode.BAD_REQUEST,
+    "UnreadableField": ErrorCode.BAD_REQUEST,
+    "UnknownIntent": ErrorCode.UNKNOWN_INTENT,
 }
-"""One calm sentence per `Refusal` this runtime's own wrapped calls are known to raise
-(master-spec §29: never engine language, never "key does not cover records"). Never read
-from a `Refusal`'s own constructor message — that message is written for a log
-(`app.channels.api.refusals` module doc: "the sentence is the app's to write, not this
-layer's") and may name an id, a role or a scope. A refusal not listed here, and any other
-exception at all, gets `_GENERIC_ERROR_WORD`: an honest line, never a guess at one."""
-
-_GENERIC_ERROR_WORD = "Nura could not finish that just now. Please try again."
+"""Every `Refusal` this runtime's own wrapped calls are known to raise, mapped to one of
+`ErrorCode`'s five buckets (round 3, fix 2) — never a class name reaching `RUN_ERROR.code`,
+which used to be exactly that (`'KeyError'`, `'NoSuchAppointment'`, `'UnknownIntent'`, an open
+set with no end to it). A `Refusal` not listed here gets `ErrorCode.REFUSED`, the safest
+default for a kind this runtime has not seen yet."""
 
 
-def _calm_error_message(exc: BaseException) -> str:
-    """Patient words only (§29; B1/B2) — never the exception's own text, whether it is a
-    `Refusal`'s constructor message or a bug's own `str()`. This is the one seam a run's
-    `RUN_ERROR.message` passes through; nothing else in this module writes error copy."""
+def _error_code(exc: BaseException) -> ErrorCode:
     if isinstance(exc, Refusal):
-        return _REFUSAL_WORDS.get(type(exc).__name__, _GENERIC_ERROR_WORD)
-    return _GENERIC_ERROR_WORD
+        return _REFUSAL_ERROR_CODE.get(type(exc).__name__, ErrorCode.REFUSED)
+    if isinstance(exc, KeyError | ValueError):
+        # pydantic's ValidationError is a ValueError subclass; a bad or missing payload field
+        # (KeyError: `prepare_visit` with no `appointment_id`) is the same bucket.
+        return ErrorCode.BAD_REQUEST
+    return ErrorCode.INTERNAL
+
+
+async def _calm_error_message(
+    session: AsyncSession | None, context: KeyContext, exc: BaseException
+) -> tuple[str, ErrorCode]:
+    """Patient words only (§29; B1/B2/B2-R1) — never the exception's own text, whether it is a
+    `Refusal`'s constructor message or a bug's own `str()`. Reads `RUN_ERROR_WORDS` (`app.
+    delivery.timeline_strings`, `@patient`-tagged, checked by `make plain-words`) in the
+    profile's own language where that can still be read; falls back to English on the code's
+    own generic line if even that fails (`session` may be `None` — `app.channels.api.runs.
+    start_run`'s own `pump` passes it through unconditionally, if `session_scope` itself never
+    opened one — rather than let a second exception hide the first."""
+    from app.delivery.timeline_strings import RUN_ERROR_WORDS
+
+    code = _error_code(exc)
+    try:
+        from app.memory.timeline import language_for
+
+        if session is None:
+            raise RuntimeError("no session to read a language from")
+        language = await language_for(session, context, None)
+    except Exception:
+        log.exception("nura run: could not read the profile's language for a calm RUN_ERROR")
+        language = "en"
+    words = RUN_ERROR_WORDS.get(language, RUN_ERROR_WORDS["en"])
+    return words.get(code.value, RUN_ERROR_WORDS["en"][code.value]), code
 
 
 def _dimensions_json(view: StateView) -> dict[str, Any]:
@@ -202,7 +252,7 @@ async def _state_before(session: AsyncSession, *, context: KeyContext) -> StateV
 
 
 async def _understand_paper(
-    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine
+    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine, builder: EventBuilder
 ) -> AsyncIterator[Event]:
     from app.audit.access import audited_profile_read
     from app.channels.about_him import Reader, reader_of
@@ -235,10 +285,9 @@ async def _understand_paper(
             text = catalogue[step.key.value]
         return reader.says(text)
 
-    builder = EventBuilder(intent=Intent.UNDERSTAND_PAPER.value)
-    yield builder.run_started(subject=str(subject.profile_id))
-    before = await _state_before(session, context=context)
+    open_tool_call_id: str | None = None
     try:
+        before = await _state_before(session, context=context)
         language = (await audited_profile_read(session, context)).language
         reader = await reader_of(session, context, None)
         kind = str(subject.payload.get("kind", "photo"))
@@ -283,12 +332,14 @@ async def _understand_paper(
         ):
             if isinstance(event, ImportStep):
                 tool_call_id = f"{builder.run_id}:{event.key.value}"
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key.value,
                     stage=_stage(reader, language, event),
                 )
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
+                open_tool_call_id = None
                 yield builder.tool_call_result(
                     tool_call_id=tool_call_id,
                     content=ToolResult(
@@ -309,17 +360,20 @@ async def _understand_paper(
         state_event = await _maybe_state_event(builder, session, context=context, before=before)
         if state_event is not None:
             yield state_event
-        yield builder.run_finished(result={"card_id": str(card.id)})
-    except Exception as exc:
-        log.exception("nura run %s: %s", builder.intent, builder.run_id)
-        yield builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__)
+        finished = builder.run_finished(result={"card_id": str(card.id)})
+        if finished is not None:
+            yield finished
+    except Exception:
+        if open_tool_call_id is not None:
+            yield builder.tool_call_end(tool_call_id=open_tool_call_id, error=True)
+        raise
 
 
 # --- answer_question ---------------------------------------------------------------------------
 
 
 async def _answer_question(
-    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine
+    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine, builder: EventBuilder
 ) -> AsyncIterator[Event]:
     from app.channels.about_him import reader_of
     from app.channels.api.timeline_schemas import AskIn
@@ -328,12 +382,11 @@ async def _answer_question(
     from app.search.ask import AskStep
     from app.search.asker import AnswerDelta
 
-    builder = EventBuilder(intent=Intent.ANSWER_QUESTION.value)
-    yield builder.run_started(subject=str(subject.profile_id))
-    before = await _state_before(session, context=context)
     message_id = f"{builder.run_id}:answer"
     started_text = False
+    open_tool_call_id: str | None = None
     try:
+        before = await _state_before(session, context=context)
         body = AskIn.model_validate(subject.payload)
         language = await language_for(session, context, body.language)
         reader = await reader_of(session, context, body.language)
@@ -355,12 +408,14 @@ async def _answer_question(
                 # step's own already-safe count — never the record itself (module doc; this
                 # is the fixture/live parity point the audit named at ask_agent.py:1316).
                 tool_call_id = f"{builder.run_id}:{event.key}:{event.count}"
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key,
                     stage=reader.says(ASK_STEPS[language][event.key]),
                 )
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
+                open_tool_call_id = None
                 yield builder.tool_call_result(
                     tool_call_id=tool_call_id, content=ToolResult(key=event.key, count=event.count)
                 )
@@ -378,19 +433,22 @@ async def _answer_question(
         state_event = await _maybe_state_event(builder, session, context=context, before=before)
         if state_event is not None:
             yield state_event
-        yield builder.run_finished(result={"lines": len(final.lines)})
-    except Exception as exc:
-        log.exception("nura run %s: %s", builder.intent, builder.run_id)
+        finished = builder.run_finished(result={"lines": len(final.lines)})
+        if finished is not None:
+            yield finished
+    except Exception:
+        if open_tool_call_id is not None:
+            yield builder.tool_call_end(tool_call_id=open_tool_call_id, error=True)
         if started_text:
             yield builder.text_message_end(message_id=message_id)
-        yield builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__)
+        raise
 
 
 # --- generate_analysis -------------------------------------------------------------------------
 
 
 async def _generate_analysis(
-    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine
+    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine, builder: EventBuilder
 ) -> AsyncIterator[Event]:
     from app.channels.about_him import reader_of
     from app.memory.timeline import language_for
@@ -398,10 +456,9 @@ async def _generate_analysis(
     from app.reasoning.analyst.provider import analyst_for
     from app.reasoning.analyst.service import save_report
 
-    builder = EventBuilder(intent=Intent.GENERATE_ANALYSIS.value)
-    yield builder.run_started(subject=str(subject.profile_id))
-    before = await _state_before(session, context=context)
+    open_tool_call_id: str | None = None
     try:
+        before = await _state_before(session, context=context)
         asked_language = subject.payload.get("language")
         language = await language_for(
             session, context, str(asked_language) if asked_language else None
@@ -412,12 +469,14 @@ async def _generate_analysis(
         async for event in analyst.report_stream(session, context=context, language=language):
             if isinstance(event, Step):
                 tool_call_id = f"{builder.run_id}:{event.key.value}"
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key.value,
                     stage=reader.says(event.label),
                 )
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
+                open_tool_call_id = None
                 yield builder.tool_call_result(
                     tool_call_id=tool_call_id, content=ToolResult(key=event.key.value)
                 )
@@ -431,54 +490,65 @@ async def _generate_analysis(
         state_event = await _maybe_state_event(builder, session, context=context, before=before)
         if state_event is not None:
             yield state_event
-        yield builder.run_finished(result={"sections": len(report.sections)})
-    except Exception as exc:
-        log.exception("nura run %s: %s", builder.intent, builder.run_id)
-        yield builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__)
+        finished = builder.run_finished(result={"sections": len(report.sections)})
+        if finished is not None:
+            yield finished
+    except Exception:
+        if open_tool_call_id is not None:
+            yield builder.tool_call_end(tool_call_id=open_tool_call_id, error=True)
+        raise
 
 
 # --- generate_recommendations -------------------------------------------------------------------
 
 
 async def _generate_recommendations(
-    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine
+    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine, builder: EventBuilder
 ) -> AsyncIterator[Event]:
     """The feed's self-searches have no stream of their own today (`GET …/feed/jobs/status`
     is a plain read of work that already ran or is still due) — so, like `prepare_visit`
-    below, this is a plain run: `RUN_STARTED`, one `TOOL_CALL_*` for the one real read it
-    makes, `RUN_FINISHED`. Nothing here starts a search job itself (`POST …/search-jobs`
-    already exists and is unchanged); this intent only reports whether today's are done."""
+    below, this is a plain run: one `TOOL_CALL_*` for the one real read it makes,
+    `RUN_FINISHED`. Nothing here starts a search job itself (`POST …/search-jobs` already
+    exists and is unchanged); this intent only reports whether today's are done."""
     from app.channels.about_him import reader_of
     from app.delivery.feed.days import today_for
     from app.delivery.feed.search import jobs_looking_today
     from app.delivery.timeline_strings import RUN_STAGE_WORDS
     from app.memory.timeline import language_for
 
-    builder = EventBuilder(intent=Intent.GENERATE_RECOMMENDATIONS.value)
-    yield builder.run_started(subject=str(subject.profile_id))
+    open_tool_call_id: str | None = None
     try:
         language = await language_for(session, context, None)
         reader = await reader_of(session, context, None)
         tool_call_id = f"{builder.run_id}:jobs_looking_today"
+        open_tool_call_id = tool_call_id
         yield builder.tool_call_start(
             tool_call_id=tool_call_id,
             tool_call_name="jobs_looking_today",
             stage=reader.says(RUN_STAGE_WORDS[language]["jobs_looking_today"]),
         )
+        # round 3, fix 1: the real work (`await`) happens between START and END here — unlike
+        # the streamed intents above, where a step is only ever reported once the read behind
+        # it has already finished. A failure here left `TOOL_CALL_START` with no matching
+        # `END` before this fix; `open_tool_call_id` is what the `except` below closes.
         looking = await jobs_looking_today(session, context=context, day=today_for(context))
         yield builder.tool_call_end(tool_call_id=tool_call_id)
+        open_tool_call_id = None
         yield builder.tool_call_result(tool_call_id=tool_call_id, content=ToolResult(looking=looking))
-        yield builder.run_finished(result={"looking": looking})
-    except Exception as exc:
-        log.exception("nura run %s: %s", builder.intent, builder.run_id)
-        yield builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__)
+        finished = builder.run_finished(result={"looking": looking})
+        if finished is not None:
+            yield finished
+    except Exception:
+        if open_tool_call_id is not None:
+            yield builder.tool_call_end(tool_call_id=open_tool_call_id, error=True)
+        raise
 
 
 # --- triage_red_flag ----------------------------------------------------------------------------
 
 
 async def _triage_red_flag(
-    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine
+    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine, builder: EventBuilder
 ) -> AsyncIterator[Event]:
     from app.channels.about_him import reader_of
     from app.channels.api.safety_schemas import SaidIn
@@ -487,10 +557,9 @@ async def _triage_red_flag(
     from app.memory.timeline import language_for
     from app.safety.not_feeling_well import NfwStep, not_feeling_well_stream
 
-    builder = EventBuilder(intent=Intent.TRIAGE_RED_FLAG.value)
-    yield builder.run_started(subject=str(subject.profile_id))
-    before = await _state_before(session, context=context)
+    open_tool_call_id: str | None = None
     try:
+        before = await _state_before(session, context=context)
         body = SaidIn.model_validate(subject.payload)
         # `not_feeling_well_stream` resolves the card's own language internally (voice
         # transcription may differ from what was asked); this is only the best available
@@ -514,6 +583,7 @@ async def _triage_red_flag(
         ):
             if isinstance(event, NfwStep):
                 tool_call_id = f"{builder.run_id}:{event.key.value}"
+                open_tool_call_id = tool_call_id
                 stage_words = NFW_STEPS.get(language, NFW_STEPS["en"])
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
@@ -521,6 +591,7 @@ async def _triage_red_flag(
                     stage=reader.says(stage_words[event.key.value]),
                 )
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
+                open_tool_call_id = None
                 yield builder.tool_call_result(
                     tool_call_id=tool_call_id, content=ToolResult(key=event.key.value)
                 )
@@ -532,53 +603,62 @@ async def _triage_red_flag(
         state_event = await _maybe_state_event(builder, session, context=context, before=before)
         if state_event is not None:
             yield state_event
-        yield builder.run_finished(result={"red_flag": has_red_flag})
-    except Exception as exc:
-        log.exception("nura run %s: %s", builder.intent, builder.run_id)
-        yield builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__)
+        finished = builder.run_finished(result={"red_flag": has_red_flag})
+        if finished is not None:
+            yield finished
+    except Exception:
+        if open_tool_call_id is not None:
+            yield builder.tool_call_end(tool_call_id=open_tool_call_id, error=True)
+        raise
 
 
 # --- prepare_visit -------------------------------------------------------------------------------
 
 
 async def _prepare_visit(
-    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine
+    subject: RunSubject, context: KeyContext, session: AsyncSession, engine: Engine, builder: EventBuilder
 ) -> AsyncIterator[Event]:
     """Visit prep has no stream of its own today (`GET …/appointments/{id}/brief` is a plain
-    read) — a plain run, per the operator's own correction: `RUN_STARTED`, one `TOOL_CALL_*`
-    for the one real read (`app.reasoning.visits.brief.brief_for`, unchanged), `STATE_SNAPSHOT`
-    (a visit brief is rendered from State — `brief_for` reads `current_state` itself — so a
-    snapshot is always meaningful here, never only a delta), `RUN_FINISHED`."""
+    read) — a plain run, per the operator's own correction: one `TOOL_CALL_*` for the one
+    real read (`app.reasoning.visits.brief.brief_for`, unchanged), `STATE_SNAPSHOT` (a visit
+    brief is rendered from State — `brief_for` reads `current_state` itself — so a snapshot is
+    always meaningful here, never only a delta), `RUN_FINISHED`."""
     from app.channels.about_him import reader_of
     from app.delivery.timeline_strings import RUN_STAGE_WORDS
     from app.memory.timeline import language_for
     from app.reasoning.visits.brief import brief_for
 
-    builder = EventBuilder(intent=Intent.PREPARE_VISIT.value)
-    yield builder.run_started(subject=str(subject.profile_id))
+    open_tool_call_id: str | None = None
     try:
         raw_appointment_id = subject.payload["appointment_id"]
         appointment_id = uuid.UUID(str(raw_appointment_id))
         language = await language_for(session, context, None)
         reader = await reader_of(session, context, None)
         tool_call_id = f"{builder.run_id}:brief_for"
+        open_tool_call_id = tool_call_id
         yield builder.tool_call_start(
             tool_call_id=tool_call_id,
             tool_call_name="brief_for",
             stage=reader.says(RUN_STAGE_WORDS[language]["brief_for"]),
         )
+        # round 3, fix 1: same gap as `generate_recommendations` above — the real work is
+        # between START and END, so a failure in `brief_for` used to leave START unmatched.
         brief = await brief_for(
             session, context=context, appointment_id=appointment_id, registry=engine.drug_registry
         )
         yield builder.tool_call_end(tool_call_id=tool_call_id)
+        open_tool_call_id = None
         yield builder.tool_call_result(tool_call_id=tool_call_id, content=ToolResult(lines=len(brief.lines)))
         after = await _state_before(session, context=context)
         if after is not None:
             yield builder.state_snapshot(snapshot=_state_snapshot_payload(after))
-        yield builder.run_finished(result={"appointment_id": str(appointment_id)})
-    except Exception as exc:
-        log.exception("nura run %s: %s", builder.intent, builder.run_id)
-        yield builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__)
+        finished = builder.run_finished(result={"appointment_id": str(appointment_id)})
+        if finished is not None:
+            yield finished
+    except Exception:
+        if open_tool_call_id is not None:
+            yield builder.tool_call_end(tool_call_id=open_tool_call_id, error=True)
+        raise
 
 
 _INTENTS: dict[Intent, Any] = {
@@ -597,18 +677,44 @@ async def run_nura(
     context: KeyContext,
     session: AsyncSession,
     engine: Engine,
+    *,
+    builder: EventBuilder | None = None,
 ) -> AsyncIterator[Event]:
     """`runNura(intent, subject, context)` (ADR 0019 point 5; master-spec §5), over the
     existing engine (`Providers`, `app.channels.api.deps`) and the existing session — never a
-    second database connection, never a second copy of any wrapped route's own logic. Raises
-    `UnknownIntent` for anything not in `Intent`, before any event is yielded; every other
-    outcome, including a refusal or any other exception from the wrapped call, is reported as
-    events — `RUN_STARTED` then `RUN_ERROR`, never an exception past this function (§4; B1)."""
-    handler = _INTENTS.get(intent)
-    if handler is None:
-        raise UnknownIntent(f"no such intent: {intent!r}")
-    async for event in handler(subject, context, session, engine):
-        yield event
+    second database connection, never a second copy of any wrapped route's own logic.
+
+    `builder` is normally supplied by the caller (`app.channels.api.runs.start_run`'s `pump`,
+    which keeps the same instance for its own last-resort catch — round 3, B1-R1): passing it
+    in, rather than this function creating its own, is what keeps `run_id` and `seq` the same
+    across everything a run ever emits, including an error that comes from outside this
+    function's own `try` (a `session_scope` commit failing on the way out, after
+    `RUN_FINISHED` already reached the wire). A caller that does not supply one — every direct
+    test in this repo — gets a fresh one built here; the one-builder-per-*run* promise still
+    holds, because each call to `run_nura` is exactly one run.
+
+    `RUN_STARTED` is the first event yielded. Every outcome after it — the wrapped call
+    succeeding, a `Refusal`, an unknown intent, or any other exception — ends the run in
+    exactly one terminal event, `RUN_FINISHED` or `RUN_ERROR`; never an exception past this
+    function (§4; B1, B1-R1)."""
+    # `str(intent)`, not `intent.value`: a `StrEnum` member's `str()` is its own value, and a
+    # caller that (like `app.channels.api.runs.start_run`, and this module's own tests) hands
+    # in a plain string for an intent this runtime does not know needs that string to reach
+    # `UnknownIntent` below, not an `AttributeError` from `.value` on a bare `str`.
+    builder = builder or EventBuilder(intent=str(intent))
+    yield builder.run_started(subject=str(subject.profile_id))
+    try:
+        handler = _INTENTS.get(intent)
+        if handler is None:
+            raise UnknownIntent(f"no such intent: {intent!r}")
+        async for event in handler(subject, context, session, engine, builder):
+            yield event
+    except Exception as exc:
+        log.exception("nura run %s (%s)", builder.run_id, builder.intent)
+        message, code = await _calm_error_message(session, context, exc)
+        error = builder.run_error(message=message, code=code)
+        if error is not None:
+            yield error
 
 
 __all__ = ["Engine", "Intent", "RunSubject", "UnknownIntent", "run_nura"]

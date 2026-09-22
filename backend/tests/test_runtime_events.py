@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.runtime.events import EventBuilder, ToolResult, to_sse
-from app.runtime.run import Engine, Intent, RunSubject, UnknownIntent, run_nura
+from app.runtime.run import Engine, Intent, RunSubject, run_nura
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.capture_support import photo
 from tests.conftest import Deployment
@@ -39,6 +39,7 @@ def test_every_event_carries_run_id_intent_and_a_monotonic_seq() -> None:
     builder = EventBuilder(intent="answer_question")
     started = builder.run_started()
     finished = builder.run_finished()
+    assert finished is not None
     assert started.envelope.run_id == finished.envelope.run_id
     assert started.envelope.intent == "answer_question"
     assert finished.envelope.seq == started.envelope.seq + 1
@@ -96,15 +97,24 @@ def test_custom_refuses_an_unclosed_payload() -> None:
 
 
 async def test_run_nura_refuses_an_unknown_intent() -> None:
-    with pytest.raises(UnknownIntent):
-        async for _ in run_nura(
+    """`run_nura` never lets `UnknownIntent` — or any other exception — past itself (§4;
+    B1, B1-R1): it is caught by the same `try` every wrapped call's own failure is, and
+    reported as the run's one terminal event, not raised to the caller."""
+    events = [
+        e
+        async for e in run_nura(
             "not_a_real_intent",  # type: ignore[arg-type]
             RunSubject(profile_id=uuid.uuid4(), payload={}),
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
             None,  # type: ignore[arg-type]
-        ):
-            pass
+        )
+    ]
+    types = [e.envelope.type.value for e in events]
+    assert types == ["RUN_STARTED", "RUN_ERROR"]
+    assert events[-1].data["code"] == "unknown_intent"
+    assert events[0].envelope.run_id == events[-1].envelope.run_id
+    assert [e.envelope.seq for e in events] == [1, 2]
 
 
 # --- fixture / live parity, at the port run_nura actually wraps -----------------------------
@@ -195,34 +205,89 @@ async def test_fixture_and_live_askers_produce_the_same_event_type_sequence(
             assert set(result.data["content"]) <= {"key", "count"}
 
 
-async def test_rule_and_claude_analysts_produce_the_same_event_type_sequence(sg: AsyncSession) -> None:
-    """F2: the same property, for the Analyst port (`app.reasoning.analyst.rule.RuleAnalyst`
-    vs `app.reasoning.analyst.claude_adapter.ClaudeAnalyst`) that `run_nura`'s
-    `generate_analysis` intent wraps. `report_stream` yields every `Step` from the same
-    deterministic reads before it ever reaches the one model call — real for both adapters —
-    so a `Step, Step, …, Report` sequence is the honest shape to compare, mirroring
-    `tests/test_analyst_claude.py::test_falls_back_to_the_rule_report_on_a_refusal_stop_reason`,
-    which this reuses the fixture for."""
+class _AnalysisStubProviders:
+    """Just enough of `Providers` for `_generate_analysis`: `drug_registry` is the only
+    attribute it reads off `engine` before calling `analyst_for` — patched out below, so
+    `engine.settings`'s own value is never actually consulted."""
+
+    def __init__(self, drug_registry: object) -> None:
+        self.drug_registry = drug_registry
+
+
+async def test_rule_and_claude_analysts_produce_the_same_event_type_sequence_through_run_nura(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F2 (independent review of #331, round 3): `ClaudeAnalyst.report_stream` delegates
+    every non-`Report` event to the `RuleAnalyst` it wraps, so comparing the two adapters
+    directly — the previous version of this test — proves nothing about `report_stream`'s own
+    Claude-specific branch, and never exercised `run_nura` at all. This drives **both**
+    adapters through `run_nura(GENERATE_ANALYSIS)` itself (`app.reasoning.analyst.provider.
+    analyst_for` monkeypatched, since it needs a live `Settings`/API key `_generate_analysis`
+    is never given in a test), for three cases: `RuleAnalyst`, `ClaudeAnalyst` falling back on
+    a refusal stop reason, and `ClaudeAnalyst` taking its genuine live path (a real
+    choose-and-rephrase response, `stop_reason` `"end_turn"` — reusing `tests.
+    test_analyst_claude`'s own duplicate-therapy fixture and payload shape). All three
+    produce the same `run_nura` event-type sequence."""
+    import app.reasoning.analyst.provider as analyst_provider
     from app.reasoning.analyst.claude_adapter import ClaudeAnalyst
-    from app.reasoning.analyst.port import Step
     from app.reasoning.analyst.rule import RuleAnalyst
     from tests.medicines_support import REGISTRY
-    from tests.test_analyst_claude import FakeClient, FakeMessage
-
-    owner = (await record(sg)).owner
-
-    async def _shape(analyst: object) -> list[str]:
-        return [
-            "Step" if isinstance(e, Step) else "Report"
-            async for e in analyst.report_stream(sg, context=owner, language="en")  # type: ignore[attr-defined]
-        ]
-
-    shape_rule = await _shape(RuleAnalyst(registry=REGISTRY))
-    shape_claude = await _shape(
-        ClaudeAnalyst(client=FakeClient([FakeMessage(content=[], stop_reason="refusal")]), registry=REGISTRY)
+    from tests.test_analyst_claude import (
+        FakeClient,
+        FakeMessage,
+        _duplicate_report,
+        _section,
+        _text_block,
     )
-    assert shape_rule == shape_claude
-    assert shape_rule[-1] == "Report"
+
+    rule_report, owner = await _duplicate_report(sg)
+    section = _section(rule_report, "medicines_and_supplements")
+    assert section is not None
+    from app.reasoning.analyst.port import InsightKind
+
+    duplicate = next(i for i in section.insights if i.kind is InsightKind.MEDICINE)
+    subject = RunSubject(profile_id=owner.profile_id, payload={})
+    engine = Engine(providers=_AnalysisStubProviders(REGISTRY), settings=object())  # type: ignore[arg-type]
+
+    def _use(analyst: object) -> None:
+        monkeypatch.setattr(analyst_provider, "analyst_for", lambda *_a, **_k: analyst)
+
+    _use(RuleAnalyst(registry=REGISTRY))
+    events_rule = [e async for e in run_nura(Intent.GENERATE_ANALYSIS, subject, owner, sg, engine)]
+
+    _use(ClaudeAnalyst(client=FakeClient([FakeMessage(content=[], stop_reason="refusal")]), registry=REGISTRY))
+    events_claude_fallback = [e async for e in run_nura(Intent.GENERATE_ANALYSIS, subject, owner, sg, engine)]
+
+    live_client = FakeClient(
+        [
+            FakeMessage(
+                content=[
+                    _text_block(
+                        {
+                            "insights": [
+                                {
+                                    "insight_id": duplicate.insight_id,
+                                    "text": "2 of your medicines are written down under the same kind.",
+                                    "why_plain": "This compares the kind written down for each medicine.",
+                                }
+                            ]
+                        }
+                    )
+                ]
+            )
+        ]
+    )
+    _use(ClaudeAnalyst(client=live_client, registry=REGISTRY))
+    events_claude_live = [e async for e in run_nura(Intent.GENERATE_ANALYSIS, subject, owner, sg, engine)]
+
+    shape_rule = _collapse(_event_types(events_rule))
+    shape_fallback = _collapse(_event_types(events_claude_fallback))
+    shape_live = _collapse(_event_types(events_claude_live))
+    assert "RUN_ERROR" not in shape_rule + shape_fallback + shape_live
+    assert shape_rule == shape_fallback == shape_live
+    assert shape_rule[0] == "RUN_STARTED"
+    assert shape_rule[-1] == "RUN_FINISHED"
+    assert "TOOL_CALL_START" in shape_rule
 
 
 # --- the HTTP route -----------------------------------------------------------------------------
@@ -291,6 +356,7 @@ async def test_a_caregiver_without_ask_is_refused_as_run_error_not_500(deploymen
     assert events[-1]["type"] == "RUN_ERROR"
     message = str(events[-1]["message"])
     assert "500" not in message and "OutOfScope" not in message
+    assert events[-1]["code"] == "refused"  # closed ErrorCode (round 3, fix 2), never a class name
 
 
 async def test_understand_paper_over_http_streams_tool_calls_then_a_card(deployment: Deployment) -> None:
@@ -388,7 +454,10 @@ async def test_b1_a_stream_with_no_final_answer_ends_as_run_error_not_a_crash(
     events = [e async for e in run_nura(Intent.ANSWER_QUESTION, subject, rec.owner, sg, engine)]
     types = [e.envelope.type.value for e in events]
     assert types == ["RUN_STARTED", "RUN_ERROR"]
-    assert events[-1].data["message"] == "Nura could not finish that just now. Please try again."
+    assert events[-1].data["message"] == "Nura could not finish that just now."
+    assert events[-1].data["code"] == "internal"
+    assert events[0].envelope.run_id == events[-1].envelope.run_id
+    assert [e.envelope.seq for e in events] == [1, 2]
 
 
 async def test_b1_a_payload_missing_a_required_field_ends_as_run_error_not_a_500(
@@ -405,6 +474,7 @@ async def test_b1_a_payload_missing_a_required_field_ends_as_run_error_not_a_500
     assert types == ["RUN_STARTED", "RUN_ERROR"]
     message = events[-1].data["message"]
     assert "ValidationError" not in message and "question" not in message
+    assert events[-1].data["code"] == "bad_request"
 
 
 async def test_b1_prepare_visit_with_no_appointment_id_ends_as_run_error_not_a_keyerror(
@@ -420,6 +490,7 @@ async def test_b1_prepare_visit_with_no_appointment_id_ends_as_run_error_not_a_k
     types = [e.envelope.type.value for e in events]
     assert types == ["RUN_STARTED", "RUN_ERROR"]
     assert "KeyError" not in events[-1].data["message"]
+    assert events[-1].data["code"] == "bad_request"
     assert [e.envelope.seq for e in events] == [1, 2]
 
 
@@ -515,7 +586,8 @@ async def test_a_caregiver_refusal_message_is_patient_words_not_engine_language(
     message = str(events[-1]["message"])
     for engine_word in ("does not cover", "OutOfScope", "key", "scope"):
         assert engine_word not in message
-    assert message == "The people looking after this cannot see that part yet."
+    assert message == "The people looking after this cannot do that yet."
+    assert events[-1]["code"] == "refused"
 
 
 async def test_an_unknown_intent_over_http_is_a_well_formed_run_not_a_raw_422(
@@ -538,3 +610,173 @@ async def test_an_unknown_intent_over_http_is_a_well_formed_run_not_a_raw_422(
     types = [e["type"] for e in events]
     assert types == ["RUN_STARTED", "RUN_ERROR"]
     assert events[-1]["message"] == "Nura does not know how to do that yet."
+    assert events[-1]["code"] == "unknown_intent"
+    assert events[0]["run_id"] == events[-1]["run_id"]
+    assert [e["seq"] for e in events] == [1, 2]
+
+
+# --- B1-R1: one EventBuilder per run, always (independent review of #331, round 3) -----------
+
+
+async def test_b1_r1_p3_a_state_read_failure_before_the_handlers_own_try_keeps_one_builder(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P3: a `RuntimeError` reading State — `_state_before` only ever catches `Refusal` — used
+    to escape a handler before its own `try` even started (each handler built its own
+    `EventBuilder` and called `_state_before` before entering `try`), surfacing as `RUN_ERROR`
+    under a **fresh** `run_id` with `seq` back at 1. `_state_before` now runs inside the
+    handler's own `try`, using the one builder `run_nura` already yielded `RUN_STARTED` with."""
+    import app.runtime.run as run_module
+
+    async def _broken_current_state(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("the database fell over")
+
+    monkeypatch.setattr(run_module, "current_state", _broken_current_state)
+    rec = await record(sg)
+    subject = RunSubject(
+        profile_id=rec.owner.profile_id,
+        payload={"question": "what is my medicine", "mode": "text"},
+    )
+    engine = Engine(
+        providers=_StubProviders(_NeverAnswers(), retriever=None, object_store=None, drug_registry=None),  # type: ignore[arg-type]
+        settings=None,  # type: ignore[arg-type]
+    )
+    events = [e async for e in run_nura(Intent.ANSWER_QUESTION, subject, rec.owner, sg, engine)]
+    types = [e.envelope.type.value for e in events]
+    assert types == ["RUN_STARTED", "RUN_ERROR"]
+    assert events[0].envelope.run_id == events[-1].envelope.run_id
+    assert [e.envelope.seq for e in events] == [1, 2]
+    assert "RuntimeError" not in events[-1].data["message"]
+    assert events[-1].data["code"] == "internal"
+
+
+async def test_b1_r1_p2_nothing_after_run_finished_builds_a_second_terminal(
+    sg: AsyncSession,
+) -> None:
+    """P2: `session_scope`'s own commit can fail on the way out of the `async with` in
+    `app.channels.api.runs.start_run`'s `pump`, after `run_nura` already yielded
+    `RUN_FINISHED` — reachable, not hypothetical (`app/channels/api/deps.py` commits there).
+    Simulated directly: drain a real `run_nura` call to `RUN_FINISHED`, holding the same
+    builder `pump` would hold, then call `run_error` on it again exactly as `pump`'s own
+    `except` would on that later failure — it must build nothing, the same guarantee
+    `test_runtime_events.py`'s own `EventBuilder` tests already pin, now proven through a real
+    run."""
+    from app.runtime.events import ErrorCode, EventBuilder
+
+    rec = await record(sg)
+    subject = RunSubject(profile_id=rec.owner.profile_id, payload={})
+    engine = Engine(providers=None, settings=None)  # type: ignore[arg-type]
+    builder = EventBuilder(intent=Intent.GENERATE_RECOMMENDATIONS.value)
+    events = [
+        e
+        async for e in run_nura(
+            Intent.GENERATE_RECOMMENDATIONS, subject, rec.owner, sg, engine, builder=builder
+        )
+    ]
+    assert events[-1].envelope.type.value == "RUN_FINISHED"
+    assert builder.terminated
+    again = builder.run_error(message="should never reach the wire", code=ErrorCode.INTERNAL)
+    assert again is None
+    # The stream itself is unaffected: still exactly one terminal, still every seq unique.
+    assert [e.envelope.seq for e in events] == list(range(1, len(events) + 1))
+
+
+# --- round 3, fix 1: a broken tool call is always closed before RUN_ERROR --------------------
+
+
+async def test_fix1_generate_recommendations_closes_the_open_tool_call_before_run_error(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gap `generate_recommendations`/`prepare_visit` have between `TOOL_CALL_START` and
+    the real `await` that `TOOL_CALL_END`/`RESULT` depend on (round 3, fix 1: measured
+    `RUN_STARTED, TOOL_CALL_START, RUN_ERROR` — one START, zero END, before this)."""
+
+    async def _broken_jobs_looking_today(*args: object, **kwargs: object) -> bool:
+        raise RuntimeError("the search index is down")
+
+    rec = await record(sg)
+    subject = RunSubject(profile_id=rec.owner.profile_id, payload={})
+    engine = Engine(providers=None, settings=None)  # type: ignore[arg-type]
+    monkeypatch.setattr(
+        "app.delivery.feed.search.jobs_looking_today", _broken_jobs_looking_today
+    )
+    events = [
+        e
+        async for e in run_nura(Intent.GENERATE_RECOMMENDATIONS, subject, rec.owner, sg, engine)
+    ]
+    types = [e.envelope.type.value for e in events]
+    assert types[0] == "RUN_STARTED"
+    assert types[-1] == "RUN_ERROR"
+    starts = types.count("TOOL_CALL_START")
+    ends = types.count("TOOL_CALL_END")
+    assert starts == 1
+    assert ends == 1, f"a TOOL_CALL_START was left with no matching END: {types}"
+    end_event = events[types.index("TOOL_CALL_END")]
+    assert end_event.data.get("error") is True
+
+
+async def test_fix1_prepare_visit_closes_the_open_tool_call_before_run_error(
+    sg: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _broken_brief_for(*args: object, **kwargs: object) -> object:
+        raise RuntimeError("the brief could not be built")
+
+    rec = await record(sg)
+    subject = RunSubject(profile_id=rec.owner.profile_id, payload={"appointment_id": str(uuid.uuid4())})
+    engine = Engine(providers=None, settings=None)  # type: ignore[arg-type]
+    monkeypatch.setattr("app.reasoning.visits.brief.brief_for", _broken_brief_for)
+    events = [e async for e in run_nura(Intent.PREPARE_VISIT, subject, rec.owner, sg, engine)]
+    types = [e.envelope.type.value for e in events]
+    assert types[0] == "RUN_STARTED"
+    assert types[-1] == "RUN_ERROR"
+    assert types.count("TOOL_CALL_START") == types.count("TOOL_CALL_END") == 1
+    end_event = events[types.index("TOOL_CALL_END")]
+    assert end_event.data.get("error") is True
+
+
+# --- round 3, fix 2: RUN_ERROR.code is a closed enum, never a class name ---------------------
+
+
+def test_fix2_run_error_code_must_be_an_error_code() -> None:
+    from app.runtime.events import ErrorCode
+
+    builder = EventBuilder(intent="answer_question")
+    with pytest.raises(TypeError):
+        builder.run_error(message="x", code="RuntimeError")  # type: ignore[arg-type]
+    event = builder.run_error(message="x", code=ErrorCode.INTERNAL)
+    assert event is not None
+    assert event.data["code"] == "internal"
+
+
+async def test_fix2_an_arbitrary_exception_maps_to_internal(sg: AsyncSession) -> None:
+    from app.runtime.run import _error_code
+
+    assert _error_code(RuntimeError("anything")).value == "internal"
+    assert _error_code(ZeroDivisionError()).value == "internal"
+
+
+# --- round 3, fix 3: ToolResult/StepCustom fields are validated against closed sets -----------
+
+
+def test_fix3_tool_result_key_rejects_free_text_even_as_the_right_type() -> None:
+    """F3, round 3: `ToolResult.key` was typed `str`, so a value of the right *type* — not
+    only the wrong type — could still carry free text. `ToolResult(key="LDL 3.8 mmol/L,
+    borderline high — consider a statin")` is the reviewer's own example."""
+    with pytest.raises(ValueError, match="closed step keys"):
+        ToolResult(key="LDL 3.8 mmol/L, borderline high — consider a statin")
+    # A real, closed key still works.
+    assert ToolResult(key="medicines").key == "medicines"
+
+
+def test_fix3_card_custom_notice_rejects_free_text() -> None:
+    from app.runtime.events import CardCustom
+
+    with pytest.raises(ValueError, match="closed Notice"):
+        CardCustom(notice="this page is definitely not a health paper, trust me")
+
+
+def test_fix3_report_custom_language_rejects_free_text() -> None:
+    from app.runtime.events import ReportCustom
+
+    with pytest.raises(ValueError, match="en/ms/zh"):
+        ReportCustom(sections=3, language="klingon")
