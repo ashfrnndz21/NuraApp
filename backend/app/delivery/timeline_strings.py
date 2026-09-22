@@ -550,6 +550,37 @@ READING: Mapping[str, Lines] = {
 itself carries two numbers, so the numbers are a second line (rule 10)."""
 
 # @patient
+VALUE: Mapping[str, Mapping[str, Lines]] = {
+    "en": {
+        "no_range": ("Your {what} was {value} on {date}.", "No range is printed on the paper."),
+        "within_range": ("Your {what} was {value} on {date}.", "It is within the range printed on the paper."),
+        "above_range": ("Your {what} was {value} on {date}.", "It is above the range printed on the paper."),
+        "below_range": ("Your {what} was {value} on {date}.", "It is below the range printed on the paper."),
+    },
+    "ms": {
+        "no_range": ("{what} anda ialah {value} pada {date}.", "Kertas itu tidak mencetak julat untuknya."),
+        "within_range": ("{what} anda ialah {value} pada {date}.", "Ia dalam julat yang dicetak pada kertas."),
+        "above_range": ("{what} anda ialah {value} pada {date}.", "Ia melebihi julat yang dicetak pada kertas."),
+        "below_range": ("{what} anda ialah {value} pada {date}.", "Ia di bawah julat yang dicetak pada kertas."),
+    },
+    "zh": {
+        "no_range": ("您{date}的{what}是{value}。", "这张纸上没有印范围。"),
+        "within_range": ("您{date}的{what}是{value}。", "这在纸上印的范围之内。"),
+        "above_range": ("您{date}的{what}是{value}。", "这高于纸上印的范围。"),
+        "below_range": ("您{date}的{what}是{value}。", "这低于纸上印的范围。"),
+    },
+}
+"""D-1: the catalogue's only other template that can state a measured value was `READING`,
+blood-pressure-only — so a lab number (cholesterol, a kidney number, anything with one figure
+and, sometimes, a range printed beside it on the paper) had nowhere to live and the rule-based
+asker fell back to `RECALL["paper"]`, which never touches the value at all. Four keys, one per
+answer the paper itself can support: whether it prints a range at all, and — only when it does —
+whether his number sits within, above or below it. Never the app's own guideline opinion
+(`app.reasoning.ranges` answers a different question): the range named here is always the one
+`app.search.printed_range.printed_range_for_fact` read off the paper he confirmed, or nothing,
+never inferred."""
+
+# @patient
 HONEST: Mapping[str, Lines] = {
     "en": ("Nura does not have that written down.", "Ask {doctor}."),
     "ms": ("Nura tidak ada catatan tentang itu.", "Tanya {doctor}."),
@@ -658,6 +689,14 @@ def reading_lines(language: str, *, date: str, top_number: str, bottom_number: s
     return [_fill(line, language, slots) for line in READING[language]]
 
 
+def value_lines(language: str, *, band: str, what: str, value: str, date: str) -> list[str]:
+    """D-1: a measured value said back with its date and, only when the paper printed one, how
+    it sits against it — `band` one of `VALUE`'s own four keys (`"no_range"`, `"within_range"`,
+    `"above_range"`, `"below_range"`), never a guideline table's opinion."""
+    slots = {"what": what, "value": value, "date": date}
+    return [_fill(line, language, slots) for line in VALUE[language][band]]
+
+
 def honest_lines(language: str, doctor: str | None) -> list[str]:
     return [_fill(line, language, {"doctor": doctor or ""}) for line in HONEST[language]]
 
@@ -704,6 +743,8 @@ __all__ = [
     "READING",
     "RECALL",
     "REROUTE",
+    "VALUE",
+    "VALUE_THEIRS",
     "WAITING",
     "WHAT",
     "YOUR_DOCTOR",
@@ -719,6 +760,7 @@ __all__ = [
     "recall_line",
     "reroute_lines",
     "said_date",
+    "value_lines",
     "verified",
     "waiting_line",
     "what_word",
@@ -752,6 +794,29 @@ CHANGED_THEIRS: Mapping[str, Mapping[str, str]] = {
     },
 }
 """What changed, said about him by name; the first look is the reader's own, said with no "your"."""
+
+# @patient
+VALUE_THEIRS: Mapping[str, Mapping[str, Lines]] = {
+    "en": {
+        "no_range": ("{patient}'s {what} was {value} on {date}.", "No range is printed on the paper."),
+        "within_range": ("{patient}'s {what} was {value} on {date}.", "It is within the range printed on the paper."),
+        "above_range": ("{patient}'s {what} was {value} on {date}.", "It is above the range printed on the paper."),
+        "below_range": ("{patient}'s {what} was {value} on {date}.", "It is below the range printed on the paper."),
+    },
+    "ms": {
+        "no_range": ("{what} {patient} ialah {value} pada {date}.", "Kertas itu tidak mencetak julat untuknya."),
+        "within_range": ("{what} {patient} ialah {value} pada {date}.", "Ia dalam julat yang dicetak pada kertas."),
+        "above_range": ("{what} {patient} ialah {value} pada {date}.", "Ia melebihi julat yang dicetak pada kertas."),
+        "below_range": ("{what} {patient} ialah {value} pada {date}.", "Ia di bawah julat yang dicetak pada kertas."),
+    },
+    "zh": {
+        "no_range": ("{date}{patient}的{what}是{value}。", "这张纸上没有印范围。"),
+        "within_range": ("{date}{patient}的{what}是{value}。", "这在纸上印的范围之内。"),
+        "above_range": ("{date}{patient}的{what}是{value}。", "这高于纸上印的范围。"),
+        "below_range": ("{date}{patient}的{what}是{value}。", "这低于纸上印的范围。"),
+    },
+}
+"""`VALUE` said about him by name, for a key that is not his."""
 
 # @patient
 ANCHORS_THEIRS: Mapping[str, Mapping[str, str]] = {

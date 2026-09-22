@@ -29,10 +29,12 @@ from app.clock import FrozenClock
 from app.db import utcnow
 from app.delivery.feed.compress import Found
 from app.delivery.timeline_strings import day_of, honest_lines
-from app.ingestion.extract import FixtureExtractor
+from app.ingestion.extract import DocumentKind, FixtureExtractor
+from app.ingestion.models import FieldState, ReviewCard, ReviewField
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.photos import store_photo
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR, review_photo
+from app.keys.repository import scoped_new
 from app.keys.scopes import KeyRole, Scope
 from app.llm.ask_agent import (
     _CONTROL_CHARS,
@@ -49,16 +51,17 @@ from app.llm.ask_agent import (
     _ToolLine,
     _tools_for,
 )
-from app.memory.models import SourceChannel
+from app.memory.models import ArtifactKind, SourceChannel
+from app.memory.semantic import assert_fact
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.ask import Answer, AskStep, Mode, recall, waiting_papers
 from app.search.asker import AnswerDelta
 from app.search.elapsed import elapsed_phrase
 from app.search.retrieve import KeywordRetriever
-from tests.medicines_support import REGISTRY, let_in
+from tests.medicines_support import REGISTRY, let_in, pa
 from tests.paper import LAB_REPORT_VITALS, PAPER, placeholder_png
-from tests.timeline_support import record, trail
+from tests.timeline_support import artefact, record, trail
 
 
 @dataclass
@@ -225,7 +228,10 @@ def test_a_cite_outside_this_asks_tool_results_is_dropped() -> None:
             },
         ]
     }
-    answer = _answer_from_payload(payload, known, "en", Reader(his=True), Mode.TEXT)
+    dates_given = frozenset({"Wednesday 2 September", "Thursday 1 January"})
+    answer = _answer_from_payload(
+        payload, known, "en", Reader(his=True), Mode.TEXT, dates_given=dates_given
+    )
     assert answer is not None
     # The line whose only cite is not among this ask's own tool results is dropped; the one
     # whose cite is real survives.
@@ -302,13 +308,24 @@ def test_caregiver_voice_drops_a_line_that_still_speaks_to_him() -> None:
     # one `Reader.says` has a registered third-person twin for.
     text = "Your notes say you have been feeling tired since Wednesday 2 September."
     payload = {"lines": [{"text": text, "cites": [f"fact:{good_id}"]}]}
+    dates_given = frozenset({"Wednesday 2 September"})
     # The same line, from his own key, survives: it is only the caregiver's key that drops it.
-    assert _answer_from_payload(payload, known, "en", Reader(his=True), Mode.TEXT) is not None
+    assert (
+        _answer_from_payload(
+            payload, known, "en", Reader(his=True), Mode.TEXT, dates_given=dates_given
+        )
+        is not None
+    )
 
     caregiver = Reader(his=False, name="Pa", language="en")
     # A caregiver's line must never speak to him directly ("your"): `.says()` has no twin for
     # this free-form line, so it is dropped rather than shown as though she were him.
-    assert _answer_from_payload(payload, known, "en", caregiver, Mode.TEXT) is None
+    assert (
+        _answer_from_payload(
+            payload, known, "en", caregiver, Mode.TEXT, dates_given=dates_given
+        )
+        is None
+    )
 
 
 async def test_a_refusal_falls_back_to_the_rule_based_answer(
@@ -840,6 +857,7 @@ def test_a_line_using_the_elapsed_phrase_it_was_given_survives() -> None:
         Reader(his=True),
         Mode.TEXT,
         elapsed_given=frozenset({"about 20 months ago"}),
+        dates_given=frozenset({"Wednesday 21 January"}),
     )
     assert parsed.answer is not None
     assert [line.text for line in parsed.answer.lines] == [text]
@@ -1443,3 +1461,256 @@ async def test_waiting_papers_lets_a_non_scope_refusal_propagate(
     rec = await record(sg)
     with pytest.raises(_SomeOtherRefusal):
         await ask_module.waiting_papers(sg, rec.owner, language="en")
+
+
+# --- D-1/D-3 (audit-2026-09-22.md §3.1/§5): the owner's own case, against the model asker ----
+#
+# Reproduced by the audit: "How is my cholesterol?" answered with no number; "Is it high?"
+# answered "Nura does not have that written down." — about a paper he had already confirmed.
+# Three stacked causes, all in this module: (a) the tool line handed the model an ISO date
+# (`ask_agent.py:716`), which plain-words rule 5 then deletes on sight, number included; (b)
+# a conclusion-language drop recorded no `Finding`, so the repair round never fired and the
+# model was never told why. These fixtures drive the real `_read_records` tool (never a
+# scripted tool result) against a lab fact confirmed with no printed range and one confirmed
+# with a printed range, and script only the model's own *answer* — the part D-1/D-3 are about.
+
+WHEN = datetime(2026, 1, 21, 2, 0, tzinfo=UTC)
+"""10 in the morning, Singapore, Wednesday 21 January 2026 — matches `tests/test_recall.py`'s
+own D-1 fixtures, so both askers are proven against the same calendar fact."""
+
+
+async def _lipid_fact(
+    session: AsyncSession,
+    context: Any,
+    *,
+    attribute: str,
+    value: float,
+    printed_range: dict[str, float | str | None] | None = None,
+) -> Any:
+    """A confirmed lab fact, dated `WHEN`, from its own paper — with the paper's own printed
+    range on file only when `printed_range` says so (`ReviewField.range`), never a guideline
+    table's opinion. Mirrors `tests/test_recall.py`'s own `_lipid_fact`."""
+    paper = await artefact(session, context, kind=ArtifactKind.PHOTO, when=WHEN)
+    fact = await assert_fact(
+        session,
+        context=context,
+        subject="lipid_panel",
+        attribute=attribute,
+        value=value,
+        unit="mg/dL",
+        confidence=0.95,
+        artifact_id=paper.id,
+        valid_from=WHEN,
+    )
+    card = scoped_new(
+        ReviewCard,
+        context,
+        Scope.RECORDS,
+        artifact_id=paper.id,
+        document_kind=DocumentKind.LAB_REPORT,
+        document_date=WHEN.date(),
+        confirmed_at=WHEN,
+        confirmed_by_person_id=context.person_id,
+    )
+    session.add(card)
+    await session.flush()
+    field = scoped_new(
+        ReviewField,
+        context,
+        Scope.RECORDS,
+        card_id=card.id,
+        position=0,
+        subject="lipid_panel",
+        attribute=attribute,
+        value=value,
+        unit="mg/dL",
+        confidence=0.95,
+        range=printed_range,
+        state=FieldState.CONFIRMED,
+        fact_id=fact.id,
+        decided_at=WHEN,
+    )
+    session.add(field)
+    await session.flush()
+    return fact
+
+
+async def test_how_is_my_cholesterol_answers_with_the_value_and_its_date(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D-1(a)/(b) against the model asker: a confirmed cholesterol value with no printed range
+    is read by the real `read_records` tool — which now hands the model a pre-worded date
+    (`_worded_date`, D-1(b)) and the paper's own no-range note — and the model's own line using
+    that exact worded date survives every gate, never silenced."""
+    owner = await pa(sg, language="en")
+    fact = await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final(
+                [
+                    {
+                        "text": "Your cholesterol was 122 on Wednesday 21 January.",
+                        "cites": ["f1"],
+                    }
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "How is my cholesterol?", tmp_path)
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol was 122 on Wednesday 21 January."
+    ]
+    assert ("fact", fact.id) in [(c.kind, c.id) for c in answer.lines[0].cites]
+
+
+async def test_is_it_high_states_the_papers_own_printed_range_never_a_verdict(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D-1(a) against the model asker: a printed range on file lets the model answer "above
+    the range printed on the paper" — the paper's own comparison, never the app's guideline
+    opinion and never the questioner's word "high" (that stays vetoed, next test)."""
+    owner = await pa(sg, language="en")
+    fact = await _lipid_fact(
+        sg, owner, attribute="ldl", value=140, printed_range={"low": None, "high": 130, "text": "<130"}
+    )
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final(
+                [
+                    {
+                        "text": "Your cholesterol was 140 on Wednesday 21 January, above the range printed on the paper.",
+                        "cites": ["f1"],
+                    }
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
+    assert answer.lines, "never a silent fallback for a value with a printed range on file"
+    assert "above the range printed on the paper" in answer.lines[0].text
+    assert ("fact", fact.id) in [(c.kind, c.id) for c in answer.lines[0].cites]
+
+
+async def test_the_conclusion_veto_still_holds_and_now_tells_the_model_why(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D-3, never a loosened veto: the model's own first attempt uses the questioner's word
+    "high" and is dropped exactly as before — but the drop now records a `Finding`
+    (`_CONCLUSION_RULE`), so the repair round the audit found dead (`ask_agent.py:1181` never
+    firing) actually runs, and a corrected second attempt is what reaches him."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(
+        sg, owner, attribute="ldl", value=140, printed_range={"low": None, "high": 130, "text": "<130"}
+    )
+    first = _final([{"text": "Your cholesterol is high.", "cites": ["f1"]}])
+    second = _final(
+        [
+            {
+                "text": "Your cholesterol was 140 on Wednesday 21 January, above the range printed on the paper.",
+                "cites": ["f1"],
+            }
+        ]
+    )
+    client = FakeClient([_tool_call("toolu_1", "read_records"), first, second])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
+    # The repair round actually fired: a second `messages.create` call happened at all (proof
+    # the fix works — before it, `failed_findings` stayed empty and the loop fell straight to
+    # the rule-based fallback with the model never asked to try again).
+    assert len(client.messages.calls) == 3
+    repair_hint = client.messages.calls[2]["messages"][-1]["content"]
+    assert "_CONCLUSION_RULE" not in repair_hint  # the number, not the Python name
+    assert "app's own verdict" in repair_hint or "verdict" in repair_hint
+    assert len(answer.lines) == 1  # exactly one line survives, from the repaired attempt
+    assert "high" not in answer.lines[0].text.lower()
+    assert "above the range printed on the paper" in answer.lines[0].text
+
+
+async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card_value(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """None of D-1/D-3's new machinery loosens a single veto (task instruction: prove it).
+    Three independent asks, three independent drops, the rule-based fallback answering every
+    one of them — exactly the pre-existing behaviour `_has_conclusion_language`,
+    `_claims_a_value_from_an_unconfirmed_card` and the dose-change reroute already held."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=230)
+
+    # No diagnosis: the model's own conclusion word drops the line, same as before D-3 — and,
+    # D-3's own fix, the drop now records a `Finding` so a repair round is offered (this is
+    # what changed); the model reaching for the same vetoed word again on that one chance is
+    # what proves the veto itself was never loosened, whichever answer the ask ultimately
+    # gives (its own repaired line, or the rule-based fallback once the repair also fails).
+    diagnosis_client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final([{"text": "Your cholesterol is dangerously high.", "cites": ["f1"]}]),
+            _final([{"text": "Your cholesterol is still high.", "cites": ["f1"]}]),
+        ]
+    )
+    _, _, diagnosis_answer = await _drive(
+        ClaudeAsker(diagnosis_client, searcher=FakeSearcher()),
+        sg,
+        owner,
+        "Is my cholesterol high?",
+        tmp_path,
+    )
+    assert all("high" not in line.text.lower() for line in diagnosis_answer.lines)
+    assert all("dangerous" not in line.text.lower() for line in diagnosis_answer.lines)
+
+    # No dose change: whatever the model composed is thrown away and the reroute to the
+    # doctor is given instead — the check `ask_agent.py:1459` runs on the model's own answer,
+    # never trusting it to have rerouted itself.
+    dose_client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final([{"text": "Stop the cholesterol tablet.", "cites": ["f1"]}]),
+        ]
+    )
+    _, _, dose_answer = await _drive(
+        ClaudeAsker(dose_client, searcher=FakeSearcher()),
+        sg,
+        owner,
+        "should I stop the cholesterol tablet",
+        tmp_path,
+    )
+    assert dose_answer.lines == ()
+    assert dose_answer.honest != ()
+    assert "Stop" not in " ".join(dose_answer.honest)
+
+    # No value from an unconfirmed card: a waiting paper's own date is safe to say, a number
+    # about it is not, whatever put it there.
+    waiting_paper = await artefact(sg, owner, kind=ArtifactKind.PHOTO, when=WHEN)
+    scoped_new(
+        ReviewCard,
+        owner,
+        Scope.RECORDS,
+        artifact_id=waiting_paper.id,
+        document_kind=DocumentKind.LAB_REPORT,
+        document_date=WHEN.date(),
+    )
+    unconfirmed_client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_waiting_papers"),
+            _final(
+                [
+                    {
+                        "text": "Your blood test dated Wednesday 21 January said 230, not yet checked.",
+                        "cites": ["w1"],
+                    }
+                ]
+            ),
+        ]
+    )
+    _, _, unconfirmed_answer = await _drive(
+        ClaudeAsker(unconfirmed_client, searcher=FakeSearcher()),
+        sg,
+        owner,
+        "what does my new blood test say",
+        tmp_path,
+    )
+    assert unconfirmed_answer.lines == ()

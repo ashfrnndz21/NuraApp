@@ -55,7 +55,7 @@ from app.ingestion.notes import NoteView, recallable_notes
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.scopes import Scope
-from app.medicines.models import MedicationLine
+from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.strings import PLAIN_NAME, say_date
 from app.memory.episodic import fact_cites_only_what_is_held_here, hears_consults, held_here
 from app.memory.models import (
@@ -75,6 +75,7 @@ from app.memory.timeline import language_for
 from app.reasoning.visits.models import ItemState, SummaryItem, SummaryItemKind, VisitSummary
 from app.regions import guard_region
 from app.safety.boundary import Surface, boundary_lines
+from app.search.printed_range import band_of_printed, printed_range_for_fact
 from app.search.retrieve import Candidate, Retriever
 
 ASK_TARGET = "ask"
@@ -460,7 +461,10 @@ async def _corpus_stream(
             MedicationLine,
             context,
             Scope.MEDICINES,
-            where=(MedicationLine.superseded_at.is_(None),),
+            where=(
+                MedicationLine.superseded_at.is_(None),
+                MedicationLine.status == LineStatus.ACTIVE,
+            ),
         )
         for line in lines:
             corpus.medicines[line.id] = line
@@ -801,7 +805,14 @@ def _day(moment: datetime, context: KeyContext, language: str) -> str:
     return words.said_date(moment, context.region, language)
 
 
-def _compose(
+def _say_value(value: float) -> str:
+    """A measured value as he'd read it: a whole number with no trailing zero, otherwise as
+    printed — never more precision than the paper gave (rule 10: few, plain numbers)."""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+async def _compose(
+    session: AsyncSession,
     hits: Sequence[Candidate],
     corpus: _Corpus,
     context: KeyContext,
@@ -815,7 +826,14 @@ def _compose(
     groups: list[list[AnswerLine]] = []
     papers_said: set[uuid.UUID] = set()
     visits_heard: set[uuid.UUID] = set()
-    for hit in hits:
+    # D-1: a "paper" candidate and a "fact" candidate on the same artifact score identically on
+    # every phrase they share (a fact's own subject is folded into its paper's candidate names
+    # too, `_corpus_stream`'s own RECORDS loop) — a tie the retriever then breaks on nothing
+    # more meaningful than the two candidates' random ids. Ordered last here, so a same-artifact
+    # "fact" hit always claims `papers_said` first: a specific value is always more useful than
+    # "it is in your papers", never the reverse, so it must never lose that tie by chance.
+    ordered_hits = sorted(hits, key=lambda hit: hit.kind == "paper")
+    for hit in ordered_hits:
         if hit.kind == "reading":
             fact = corpus.facts[hit.ref]
             value: dict[str, Any] = fact.value
@@ -838,14 +856,38 @@ def _compose(
                 if source is not None and (f.artifact_id == source or f.event_id == source)
             ] or [fact]
             papers_said.add(source or fact.id)
+            fact_cites = tuple(dict.fromkeys(c for f in together for c in _cites_of_fact(f)))
+            if isinstance(fact.value, int | float):
+                # D-1: a measured value (a lab analyte, a body measurement — never the dict a
+                # blood-pressure reading carries, handled above as "reading") said with its
+                # date and, only when the paper itself printed one, how it sits against it —
+                # never a guideline table's own opinion (`printed_range_for_fact`'s own
+                # docstring).
+                printed = await printed_range_for_fact(session, context, fact)
+                if printed is None or (printed.low is None and printed.high is None):
+                    band = "no_range"
+                else:
+                    band = band_of_printed(float(fact.value), printed)
+                texts = words.value_lines(
+                    language,
+                    band=band,
+                    what=words.what_word(fact.subject, language),
+                    # Plain words rule 12: never a unit he does not use ("mg/dL", "mmol/L") —
+                    # the bare number, exactly as `READING` already says a blood pressure with
+                    # no "mmHg" (the audit's own finding (b): the app's own onboarding
+                    # read-back already gets this right, "Your cholesterol was 212 on …").
+                    value=_say_value(fact.value),
+                    date=_day(fact.valid_from, context, language),
+                )
+                groups.append([AnswerLine(text, fact_cites) for text in texts])
+                continue
             text = words.recall_line(
                 "paper",
                 language,
                 what=words.what_word(fact.subject, language),
                 date=_day(fact.valid_from, context, language),
             )
-            fact_cites = [c for f in together for c in _cites_of_fact(f)]
-            groups.append([AnswerLine(text, tuple(dict.fromkeys(fact_cites)))])
+            groups.append([AnswerLine(text, fact_cites)])
         elif hit.kind == "visit":
             visit = corpus.visits[hit.ref]
             provider = corpus.providers.get(visit.provider_id)
@@ -1207,7 +1249,11 @@ async def recall_stream(
         elif not skip_clarify and not _would_change_treatment(text, hits):
             reader = await reader_of(session, context, lang)
             clarify = _clarify_for(text, corpus, context, lang, reader)
-        groups = [] if clarify is not None else _compose(hits, corpus, context, lang, registry)
+        groups = (
+            []
+            if clarify is not None
+            else await _compose(session, hits, corpus, context, lang, registry)
+        )
         passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
         dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)
         said: list[AnswerLine] = []

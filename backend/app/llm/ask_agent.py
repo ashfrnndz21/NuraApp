@@ -110,8 +110,8 @@ from app.llm.call_counter import record_call
 from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.narrate import _has_conclusion_language
 from app.llm.prompts import load_prompt
-from app.medicines.models import MedicationLine
-from app.medicines.strings import say_date
+from app.medicines.models import LineStatus, MedicationLine
+from app.medicines.strings import DAY_NAMES, MONTH_NAMES, say_date
 from app.memory.models import Appointment, AppointmentStatus, Provider
 from app.memory.spine import UPCOMING
 from app.memory.timeline import language_for
@@ -148,6 +148,7 @@ from app.search.ask import (
 from app.search.asker import AnswerDelta
 from app.search.conversation import ConversationMemory
 from app.search.elapsed import elapsed_phrase
+from app.search.printed_range import band_of_printed, printed_range_for_fact
 from app.search.retrieve import Retriever
 
 log = logging.getLogger("nura.llm.ask_agent")
@@ -516,6 +517,19 @@ def _elapsed(context: KeyContext, language: str, moment: date, seen: set[str]) -
     return phrase
 
 
+def _worded_date(language: str, moment: date, seen: set[str]) -> str:
+    """The said-date for a dated tool line, pre-worded exactly the way `_elapsed` pre-words
+    elapsed time, and for the same reason (D-1(b), audit-2026-09-22.md §3.1): handed an ISO
+    date (`moment.isoformat()`) the model would dutifully echo it back, and plain-words rule 5
+    — the date rule, not a units rule — deletes the whole line, number included, for using it.
+    `seen` collects every worded date handed out this ask, the same `elapsed_seen`-style
+    bookkeeping, so a date the model invents rather than copies is still caught
+    (`_dated_claim`)."""
+    phrase = say_date(moment, language)
+    seen.add(phrase)
+    return phrase
+
+
 async def _read_medicines(
     session: AsyncSession,
     context: KeyContext,
@@ -523,6 +537,7 @@ async def _read_medicines(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     found = await audited_read(
@@ -530,7 +545,10 @@ async def _read_medicines(
         MedicationLine,
         context,
         Scope.MEDICINES,
-        where=(MedicationLine.superseded_at.is_(None),),
+        where=(
+            MedicationLine.superseded_at.is_(None),
+            MedicationLine.status == LineStatus.ACTIVE,
+        ),
     )
     lines: list[_ToolLine] = []
     for line in found:
@@ -538,13 +556,14 @@ async def _read_medicines(
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
         started_on = day_of(line.started_at, context.region)
         elapsed = _elapsed(context, language, started_on, elapsed_seen)
+        said = _worded_date(language, started_on, dates_seen)
         label, label_safe = _medicine_clarify_label(line, name, reader, language)
         _register(
             lines,
             counter,
             "medication_line",
             line.id,
-            f"{name}, {who}, started {started_on.isoformat()} ({elapsed})",
+            f"{name}, {who}, started {said} ({elapsed})",
             label=label,
             label_safe=label_safe,
         )
@@ -636,6 +655,7 @@ async def _read_readings(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
@@ -643,12 +663,13 @@ async def _read_readings(
     for fact in facts:
         on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
+        said = _worded_date(language, on, dates_seen)
         if _is_reading(fact):
             value = fact.value
-            text = f"blood pressure {value['systolic']}/{value['diastolic']} on {on.isoformat()} ({elapsed})"
+            text = f"blood pressure {value['systolic']}/{value['diastolic']} on {said} ({elapsed})"
             catalogue_word: str | None = WHAT[language].get("blood_pressure")
         else:
-            text = f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})"
+            text = f"{fact.subject} {fact.attribute} = {fact.value} on {said} ({elapsed})"
             # Review B3: the raw subject is an extractor-written code (validated only as
             # `^[a-z][a-z0-9_]{0,63}$` — it may itself contain digits, "sugar_11_4"), never
             # shown as a label. Only a real, closed-catalogue word for it may be offered as a
@@ -670,6 +691,7 @@ async def _read_visits(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int, list[Appointment], dict[uuid.UUID, Provider]]:
     providers = {p.id: p for p in await audited_read(session, Provider, context, Scope.VISITS)}
@@ -680,12 +702,25 @@ async def _read_visits(
         who = provider.name if provider is not None else "an unnamed provider"
         when = day_of(visit.scheduled_at, context.region)
         elapsed = _elapsed(context, language, when, elapsed_seen)
-        text = f"with {who} on {when.isoformat()} ({elapsed}), status {visit.status.value}"
+        said = _worded_date(language, when, dates_seen)
+        text = f"with {who} on {said} ({elapsed}), status {visit.status.value}"
         label, label_safe = _dated_clarify_label(f"visit with {who}", when, language, reader)
         _register(
             lines, counter, "appointment", visit.id, text, label=label, label_safe=label_safe
         )
     return lines, len(visits), list(visits), providers
+
+
+_RANGE_NOTE: Final[dict[str, str]] = {
+    "within_range": "within the range printed on the paper",
+    "above_range": "above the range printed on the paper",
+    "below_range": "below the range printed on the paper",
+}
+"""D-1: the words a records tool line adds after a measured value, so the model can answer
+"is it high" truthfully without doing the comparison itself — the same "never the model's
+arithmetic" rule `_elapsed` already holds, applied here to a printed range instead of elapsed
+time. Never the app's own guideline opinion (`printed_range_for_fact`'s own docstring): the
+band named here is always read off the paper he confirmed, or absent."""
 
 
 async def _read_records(
@@ -694,6 +729,7 @@ async def _read_records(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
@@ -701,6 +737,7 @@ async def _read_records(
     for fact in facts:
         on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
+        said = _worded_date(language, on, dates_seen)
         # Review B3: only a real, closed-catalogue word for the subject may ever be a clarify
         # candidate's label — never the raw, extractor-written subject code.
         catalogue_word = WHAT[language].get(str(fact.subject))
@@ -708,12 +745,23 @@ async def _read_records(
         label_safe: frozenset[str] = frozenset()
         if catalogue_word is not None:
             label, label_safe = _dated_clarify_label(catalogue_word, on, language, reader)
+        text = f"{fact.subject} {fact.attribute} = {fact.value} on {said} ({elapsed})"
+        if isinstance(fact.value, int | float):
+            # D-1: a measured value's own printed range, read off the paper it was confirmed
+            # from — never asked for or computed by the model — so "is it high?" can be
+            # answered from what the paper actually says.
+            printed = await printed_range_for_fact(session, context, fact)
+            if printed is not None and (printed.low is not None or printed.high is not None):
+                band = band_of_printed(float(fact.value), printed)
+                text = f"{text}; {_RANGE_NOTE[band]}"
+            else:
+                text = f"{text}; the paper prints no range for it"
         _register(
             lines,
             counter,
             "fact",
             fact.id,
-            f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})",
+            text,
             label=label,
             label_safe=label_safe,
         )
@@ -740,6 +788,7 @@ async def _read_waiting_papers(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     card_safe_text: dict[uuid.UUID, set[str]],
 ) -> tuple[list[_ToolLine], int]:
     """A paper he has added but not yet checked (fix 2, this module's docstring): only the
@@ -761,6 +810,7 @@ async def _read_waiting_papers(
         said: str | None = None
         if paper.document_date is not None:
             said = say_date(paper.document_date, language)
+            dates_seen.add(said)
             doc_elapsed = _elapsed(context, language, paper.document_date, elapsed_seen)
             safe.add(said)
             # Never the bare year: `say_date` says no year (plain words rule 5), and with it in
@@ -1079,6 +1129,10 @@ class ClaudeAsker:
             """Every elapsed phrase actually handed to the model this ask (fix: "how long
             ago" is computed once here, never guessed by the model — `_parse_answer`'s
             invented-elapsed check catches a line that says one this ask never gave it)."""
+            dates_seen: set[str] = set()
+            """Every worded date (D-1(b)) actually handed to the model this ask, the same
+            bookkeeping as `elapsed_seen` and for the same reason: `_parse_answer`'s
+            invented-date check catches a line that states a date this ask never gave it."""
             card_safe_text: dict[uuid.UUID, set[str]] = {}
             """Every date/elapsed string actually rendered for each waiting card this ask
             (`_read_waiting_papers`), so a line citing it can be told apart from one that
@@ -1175,6 +1229,7 @@ class ClaudeAsker:
                                 mode,
                                 failed_findings,
                                 frozenset(elapsed_seen),
+                                frozenset(dates_seen),
                                 {card: frozenset(safe) for card, safe in card_safe_text.items()},
                             )
                         )
@@ -1308,6 +1363,7 @@ class ClaudeAsker:
                             counter=counter,
                             proposals=proposals,
                             elapsed_seen=elapsed_seen,
+                            dates_seen=dates_seen,
                             card_safe_text=card_safe_text,
                             reader=reader,
                         )
@@ -1458,24 +1514,29 @@ class ClaudeAsker:
         counter: _TokenCounter,
         proposals: list[Proposal],
         elapsed_seen: set[str],
+        dates_seen: set[str],
         card_safe_text: dict[uuid.UUID, set[str]],
         reader: Reader,
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
             return await _read_medicines(
-                session, context, registry, language, counter, elapsed_seen, reader
+                session, context, registry, language, counter, elapsed_seen, dates_seen, reader
             )
         if name == "read_readings":
-            return await _read_readings(session, context, language, counter, elapsed_seen, reader)
+            return await _read_readings(
+                session, context, language, counter, elapsed_seen, dates_seen, reader
+            )
         if name == "read_visits":
             lines, count, visits, providers = await _read_visits(
-                session, context, language, counter, elapsed_seen, reader
+                session, context, language, counter, elapsed_seen, dates_seen, reader
             )
             visits_seen.extend(visits)
             providers_seen.update(providers)
             return lines, count
         if name == "read_records":
-            return await _read_records(session, context, language, counter, elapsed_seen, reader)
+            return await _read_records(
+                session, context, language, counter, elapsed_seen, dates_seen, reader
+            )
         if name == "read_feelings":
             return await _read_feelings(session, context, counter)
         if name == "search_online":
@@ -1489,7 +1550,7 @@ class ClaudeAsker:
             return await _read_plan(session, context, language, counter)
         if name == "read_waiting_papers":
             return await _read_waiting_papers(
-                session, context, language, counter, elapsed_seen, card_safe_text
+                session, context, language, counter, elapsed_seen, dates_seen, card_safe_text
             )
         if name == "propose_action":
             kind = str(args.get("kind") or "")
@@ -1700,6 +1761,38 @@ def _elapsed_claim(text: str, language: str, elapsed_given: frozenset[str]) -> s
     return None
 
 
+def _build_date_claim_pattern(language: str) -> re.Pattern[str]:
+    """The shape of a *worded* date this app itself ever produces (`say_date`), one pattern
+    per language, built from the same weekday and month names `say_date` writes from
+    (`app.medicines.strings.DAY_NAMES`/`MONTH_NAMES`) — never a bare ISO or ordinal date, which
+    plain-words rule 5 already refuses outright regardless of whether this ask gave it."""
+    weekdays = "|".join(re.escape(name) for name in DAY_NAMES[language])
+    months = "|".join(re.escape(name) for name in MONTH_NAMES[language])
+    if language == "zh":
+        return re.compile(rf"(?:{months})\d{{1,2}}日(?:{weekdays})")
+    return re.compile(rf"\b(?:{weekdays})\s+\d{{1,2}}\s+(?:{months})\b")
+
+
+_DATE_CLAIM: Final[dict[str, re.Pattern[str]]] = {
+    language: _build_date_claim_pattern(language) for language in ("en", "ms", "zh")
+}
+
+
+def _dated_claim(text: str, language: str, dates_given: frozenset[str]) -> str | None:
+    """D-1(b): the first worded date (`_DATE_CLAIM`'s own shape) `text` states that this ask
+    never actually gave it — the same "computed here, never guessed by the model" rule
+    `_elapsed_claim` already holds for elapsed time, applied to the date itself now that it
+    reaches the model pre-worded (`_worded_date`) rather than as an ISO string rule 5 would
+    catch on its own. `None` when the line states no such date, or every one it states was
+    really given."""
+    pattern = _DATE_CLAIM.get(language, _DATE_CLAIM["en"])
+    given_lower = {phrase.lower() for phrase in dates_given}
+    for match in pattern.finditer(text):
+        if match.group().lower() not in given_lower:
+            return match.group()
+    return None
+
+
 _ELAPSED_RULE: Final = 90
 """Never a real `docs/plain-words.md` rule number (those run 1-14): a pseudo-rule so an
 invented or vague elapsed claim can still ride the same `Finding`-based repair-hint machinery
@@ -1734,6 +1827,84 @@ def _unconfirmed_card_value_finding(language: str) -> Finding:
             "not even one you are sure of"
         ),
         text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_CONCLUSION_RULE: Final = 92
+"""Another pseudo-rule (see `_ELAPSED_RULE`). Audit finding D-3: this drop used to record no
+`Finding` at all, so a question like "Is it high?" — whose every candidate line uses the
+questioner's own word and is dropped by `_has_conclusion_language` — could empty the answer
+with `failed_findings` still empty, and the repair round at `_round`'s own `and failed_findings`
+check never fired: the model was never told why, and the ask silently fell back to keyword
+search. Recorded here exactly as `_VALUE_RULE` already is, so the repair round runs."""
+
+
+def _conclusion_language_finding(language: str) -> Finding:
+    return Finding(
+        rule=_CONCLUSION_RULE,
+        problem='the line gives the app\'s own verdict ("high", "normal", "worse", …) instead of what the paper says',
+        rewrite=(
+            "say the value and its date, or — when the paper prints no range for it — say so "
+            "and say to ask the doctor; never judge the number yourself"
+        ),
+        text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_CAREGIVER_VOICE_RULE: Final = 93
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for a line rejected because it speaks to the
+patient himself ("you"/"your") on a caregiver's own key — recorded (D-3) so the repair round
+runs instead of the line simply vanishing with the reader never told why."""
+
+
+def _caregiver_voice_finding(language: str) -> Finding:
+    return Finding(
+        rule=_CAREGIVER_VOICE_RULE,
+        problem='a line for a family member still says "you"/"your" to the patient himself',
+        rewrite="say his name instead of \"you\"/\"your\" — this reader is not him",
+        text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_NO_CITE_RULE: Final = 94
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for a line whose cites matched nothing this ask
+actually read — recorded (D-3) so the repair round runs instead of the line simply vanishing
+with the reader never told why."""
+
+
+def _no_cite_matched_finding(language: str) -> Finding:
+    return Finding(
+        rule=_NO_CITE_RULE,
+        problem="the line cites nothing this ask actually read",
+        rewrite="cite only the ids a tool call in this ask returned — never leave a line uncited",
+        text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_DATE_RULE: Final = 95
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for `_dated_claim`: a worded date the line
+states that this ask never actually gave it (D-1(b)) — recorded so the repair round runs
+instead of the line simply vanishing with the reader never told why."""
+
+
+def _dated_claim_finding(phrase: str, language: str) -> Finding:
+    return Finding(
+        rule=_DATE_RULE,
+        problem=f'"{phrase}" is not one of the dates this ask actually gave you',
+        rewrite="use one of the dates given beside a value or a line exactly, word for word",
+        text=phrase,
         severity="fail",
         language=language,
         kind="ask",
@@ -1827,6 +1998,7 @@ def _parse_answer(
     mode: Mode,
     failed_findings: dict[int, Finding] | None = None,
     elapsed_given: frozenset[str] = frozenset(),
+    dates_given: frozenset[str] = frozenset(),
     card_safe_text: Mapping[uuid.UUID, frozenset[str]] = MappingProxyType({}),
 ) -> _Parsed:
     raw_lines = payload.get("lines")
@@ -1868,6 +2040,13 @@ def _parse_answer(
                 _drop("plain_words_failed", rules=rules)
                 continue
         if _has_conclusion_language(text, language):
+            # D-3: recorded as a `Finding` (a pseudo-rule, `_CONCLUSION_RULE`) — the same
+            # machinery `invented_elapsed_phrase` and `value_from_unconfirmed_card` already
+            # use below — so a question like "Is it high?" still tells the model why every
+            # candidate line was dropped, instead of emptying the answer in silence.
+            if failed_findings is not None:
+                finding = _conclusion_language_finding(language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("conclusion_language")
             continue
         elapsed_problem = _elapsed_claim(text, language, elapsed_given)
@@ -1882,8 +2061,25 @@ def _parse_answer(
                 failed_findings.setdefault(finding.rule, finding)
             _drop("invented_elapsed_phrase")
             continue
+        dated_problem = _dated_claim(text, language, dates_given)
+        if dated_problem is not None:
+            # D-1(b): the same treatment as `invented_elapsed_phrase` just above, for a worded
+            # date instead of an elapsed phrase — the model wrote a date in this app's own
+            # said-date shape that this ask never actually gave it, so it is neither a copy of
+            # a real date nor something rule 5 alone would catch (rule 5 only refuses an
+            # unworded one).
+            if failed_findings is not None:
+                finding = _dated_claim_finding(dated_problem, language)
+                failed_findings.setdefault(finding.rule, finding)
+            _drop("invented_date")
+            continue
         heard = reader.says(text)
         if not reader.his and reader.speaks_to_him(heard):
+            # D-3: recorded as a `Finding` (`_CAREGIVER_VOICE_RULE`), same reason as
+            # `conclusion_language` above.
+            if failed_findings is not None:
+                finding = _caregiver_voice_finding(language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("caregiver_voice")
             continue
         cites = tuple(
@@ -1894,6 +2090,11 @@ def _parse_answer(
             )
         )
         if not cites:
+            # D-3: recorded as a `Finding` (`_NO_CITE_RULE`), same reason as
+            # `conclusion_language` above.
+            if failed_findings is not None:
+                finding = _no_cite_matched_finding(language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("no_cite_matched")
             continue
         safe_for_card: set[str] = set()
@@ -2109,10 +2310,14 @@ def _answer_from_payload(
     reader: Reader,
     mode: Mode,
     failed_findings: dict[int, Finding] | None = None,
+    elapsed_given: frozenset[str] = frozenset(),
+    dates_given: frozenset[str] = frozenset(),
 ) -> Answer | None:
     """`_parse_answer`'s answer alone — kept as its own name for the callers (and the unit
     tests) that only ever wanted the answer, never the coherence flags."""
-    return _parse_answer(payload, known, language, reader, mode, failed_findings).answer
+    return _parse_answer(
+        payload, known, language, reader, mode, failed_findings, elapsed_given, dates_given
+    ).answer
 
 
 def _whole_answer_repair_message(raw_lines: Sequence[Any], parsed: _Parsed) -> str:
