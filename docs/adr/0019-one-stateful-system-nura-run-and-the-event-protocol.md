@@ -85,4 +85,7 @@ mobile-architecture.md` (native stack), `docs/design/experience-blueprint-v2.htm
   Xcode is installed) and in Expo Go. No builder may start EAS or signing work before the owner says
   the app is complete. The order of build: 0 Expo/RN locally → 1 Home spike → 2 animation and
   interaction system → 3 connect the FastAPI backend → 4 the golden path (paper → state → Home →
-  Ask) → 5 test thoroughly in the Simulator → 6 Apple Developer + EAS, last.
+  Ask), then the full app with all its functionality → 5 test everything against
+  `docs/design/end-to-end-acceptance.md`. **There is no step 6 in the build plan** (owner, 22 Sep
+  23:40): the Apple Developer / EAS signed build is not a build stage — it is the closing action
+  after the plan is complete and the owner has signed off the acceptance sheet.
