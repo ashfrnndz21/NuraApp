@@ -280,13 +280,13 @@ function InsightHeader({ title, onBack, backLabel, meLabel }: { title: string; o
   );
 }
 
-/** The Record's Papers flow (`onDone`, `screens/record/Papers.tsx`'s `PaperScreen`): a full,
- *  Shell-wrapped screen, tab bar included, reached with `go({ name: "insight", card })`.
- *  Onboarding reaches the same content through its own bare step instead
- *  (`screens/onboarding/Insight.tsx`), never this wrapper — onboarding has no tab bar until it
- *  is done. The way back is always "back to your papers": the one place this screen is ever
- *  reached from, so its own leaving is never asked of a caller the way `PaperInsightView`'s
- *  other prop, `card`, is. */
+/** The Record's Papers flow (`onDone`, `screens/record/Papers.tsx`'s `PaperScreen`) and Home's
+ *  own single-report "Add a paper" (`screens/Papers.tsx`, D-5): a full, Shell-wrapped screen,
+ *  tab bar included, reached with `go({ name: "insight", card })`. Onboarding reaches the same
+ *  content through its own bare step instead (`screens/onboarding/Insight.tsx`), never this
+ *  wrapper — onboarding has no tab bar until it is done. The way back is always "back to your
+ *  papers", from both callers, so its own leaving is never asked of a caller the way
+ *  `PaperInsightView`'s other prop, `card`, is. */
 export function InsightScreen({ card }: { card: ReviewCardOut }): JSX.Element {
   const s = t();
   const papers = profile.value;

@@ -28,6 +28,7 @@ from app.audit.models import Action
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -92,6 +93,16 @@ async def store_pdf(
         scope=Scope.RECORDS,
     )
     digest = sha256_of(data)
+    # The same PDF again for this profile — a retried import, the onboarding sitting's own
+    # PDF path (`app.onboarding.biography`), which does not go through `POST .../imports`'s
+    # own D-4a check first — is the same bytes: migration 0055's `(profile_id, sha256)` index
+    # makes a second row of them impossible, so this reuses the artefact already on file
+    # rather than writing it twice (D-4a's pattern, `app.ingestion.duplicates`).
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.RECORDS, kind=ArtifactKind.PDF, sha256=digest
+    )
+    if existing is not None:
+        return existing
     key = import_key(context.profile_id, digest)
     await store.put(key, data)
     return await store_artifact(

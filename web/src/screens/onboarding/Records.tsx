@@ -7,12 +7,25 @@ import * as nura from "../../api/nura";
 import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
-import { decisionsFor, hasNumericResults, kindLine, readable, startingEdits, type FieldEdit } from "../../onboarding/review";
+import {
+  decisionsFor,
+  duplicateChips,
+  duplicateQuestionLead,
+  hasNumericResults,
+  kindLine,
+  readable,
+  startingEdits,
+  whoseChips,
+  whoseQuestionAsk,
+  whoseQuestionLead,
+  whoseSetAsideLine,
+  type FieldEdit,
+} from "../../onboarding/review";
 import { biography, finish, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { language, LOCALE, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
 import { Glass, Icon, Orb, SoftText, ThreeStateButton, type IconName } from "../../ui/kit";
-import { PaperBubble, ReadingProgress, ReadingResult } from "./PaperReading";
+import { ClarifyTurn, PaperBubble, ReadingProgress, ReadingResult } from "./PaperReading";
 import { usePaperTrace } from "./paperTrace";
 import { ReportTable } from "./ReportTable";
 import { Capture, Sheet, Status, StepTitle } from "./parts";
@@ -246,6 +259,33 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
   const paper = usePaperTrace();
   const back = onBack ?? (() => to({ name: returnTo.value }));
 
+  // D-2/D-4b: a card reached straight from the many-paper grid never showed the reading
+  // screen at all (`PaperBatch.tsx`'s own `onReview` opens this step directly), so its one
+  // pending question — otherwise only ever asked there (`PaperReading.tsx`'s `ReadingResult`)
+  // — has to be asked here too, before the report table, or a batch upload's mismatch or
+  // likely duplicate would reach "Looks right" and only then learn from a bare refusal that
+  // nothing was ever going to be filed.
+  const [clarifyCard, setClarifyCard] = useState(card);
+  const [clarifyBusy, setClarifyBusy] = useState(false);
+  const [clarifyError, setClarifyError] = useState<unknown>(null);
+  // The question's own kind, kept beside the card: once answered, `clarify` itself goes back
+  // to null, so this is the only way left to know which calm line a set-aside answer earns.
+  const [askedKind, setAskedKind] = useState(card.clarify?.kind ?? null);
+  const answerClarify = async (value: string) => {
+    setClarifyBusy(true);
+    setClarifyError(null);
+    try {
+      const { bearer, profileId } = who();
+      setAskedKind(clarifyCard.clarify?.kind ?? askedKind);
+      setClarifyCard(await nura.answerReviewCardQuestion(bearer, profileId, clarifyCard.card_id, value));
+    } catch (failure) {
+      setClarifyError(failure);
+    } finally {
+      setClarifyBusy(false);
+    }
+  };
+  const { self: isSelf, name: patientName } = whose();
+
   const upload = async (file: File) => {
     setBusy(true);
     setError(null);
@@ -261,6 +301,49 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
       setBusy(false);
     }
   };
+
+  if (clarifyCard.clarify?.kind === "whose_paper") {
+    const clarify = clarifyCard.clarify;
+    return (
+      <main class="screen onboarding" data-stage="review">
+        <ClarifyTurn
+          lead={whoseQuestionLead(clarify, s, isSelf ? "" : patientName)}
+          question={whoseQuestionAsk(s, isSelf ? "" : patientName)}
+          chips={whoseChips(s, isSelf ? "" : patientName)}
+          onPick={(value) => (value === "not_sure" ? back() : void answerClarify(value))}
+          busy={clarifyBusy}
+          error={clarifyError}
+          testId="review-whose-paper"
+        />
+      </main>
+    );
+  }
+  if (clarifyCard.clarify?.kind === "duplicate_paper") {
+    const clarify = clarifyCard.clarify;
+    return (
+      <main class="screen onboarding" data-stage="review">
+        <ClarifyTurn
+          lead={duplicateQuestionLead(clarify, s, locale, isSelf ? "" : patientName)}
+          question={r.duplicateQuestion}
+          chips={duplicateChips(s)}
+          onPick={(value) => void answerClarify(value)}
+          busy={clarifyBusy}
+          error={clarifyError}
+          testId="review-duplicate-paper"
+        />
+      </main>
+    );
+  }
+
+  if (clarifyCard.discarded) {
+    const setAsideLine = askedKind === "duplicate_paper" ? r.duplicateSetAside : whoseSetAsideLine(s, isSelf ? "" : patientName);
+    return (
+      <main class="screen onboarding" data-stage="review">
+        <Sheet lines={[setAsideLine]} testId="review-set-aside" />
+        <Pill onClick={back}>{s.onboarding.back}</Pill>
+      </main>
+    );
+  }
 
   if (!readable(card)) {
     return (

@@ -936,6 +936,20 @@ READ_ROUTES: tuple[Walk, ...] = (
         json={"question": "what papers do I have", "mode": "text"},
         stream=True,
     ),
+    # Nura Run (ADR 0019): the same `answer_question` guard `POST …/ask/stream` holds
+    # (`app.runtime.run`'s own module doc — every intent calls the identical guarded function
+    # its plain route calls), over the new typed event vocabulary instead of the old `step`/
+    # `answer` shape. `run_id`/`tool_call_id` are freshly minted per request, never a seeded
+    # row id, so this walk exercises the same scope property the plain stream above does.
+    Walk(
+        "POST",
+        f"{P}/runs",
+        json={
+            "intent": "answer_question",
+            "payload": {"question": "what papers do I have", "mode": "text"},
+        },
+        stream=True,
+    ),
     Walk("GET", f"{P}/grants"),
     Walk("GET", f"{P}/helpers"),
     Walk("GET", f"{P}/thread"),
@@ -1072,6 +1086,10 @@ NOT_WALKED: dict[tuple[str, str], str] = {
         "POST",
         f"{P}/review-cards/{{card_id}}/fields/{{field_id}}/type",
     ): "types a field; returns the card",
+    (
+        "POST",
+        f"{P}/review-cards/{{card_id}}/answer",
+    ): "answers a card's one pending question (D-2, D-4b); returns the card",
     (
         "POST",
         f"{P}/review-cards/{{card_id}}/confirm",
@@ -1649,6 +1667,11 @@ def test_the_migration_backfills_the_written_scope_from_what_is_known() -> None:
 
         def artifact(name: str, kind: str, key: str, source: str) -> str:
             ids[name] = uuid.uuid4().hex
+            # `_fill` only randomizes a CHAR(32) column; `sha256` is a VARCHAR(64), so left to
+            # `_fill`'s own default every row would get the same literal "x" — harmless before
+            # migration 0055 added `(profile_id, sha256)` as unique, a collision after it,
+            # since every row here shares one `profile`. A distinct digest per row keeps this
+            # migration test independent of that later, unrelated migration.
             _fill(
                 connection,
                 "artifact",
@@ -1658,6 +1681,7 @@ def test_the_migration_backfills_the_written_scope_from_what_is_known() -> None:
                 storage_key=key,
                 source_channel=source,
                 region="SG",
+                sha256=uuid.uuid4().hex + uuid.uuid4().hex,
             )
             return ids[name]
 

@@ -246,7 +246,10 @@ class PaperOut(BaseModel):
             artifact_id=view.paper.artifact_id,
             card_id=view.card.id,
             document_kind=view.card.document_kind.value,
-            confirmed=not view.card.is_open,
+            # `is_confirmed`, never `not is_open`: a card set aside on its own question is
+            # not open either, but was never said yes to (independent safety review, B2/B3
+            # — the wire must never say `confirmed: true` for one).
+            confirmed=view.card.is_confirmed,
         )
 
 

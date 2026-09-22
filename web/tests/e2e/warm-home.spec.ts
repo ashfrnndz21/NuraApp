@@ -119,10 +119,15 @@ test("Add a health report: a PDF or a photo, through the one upload path, straig
   await expect(page.getByTestId("review-card")).toContainText("Hospital letter");
   expect(sent).toEqual(["imports"]);
   await page.getByTestId("looks-right").click();
-  await expect(page.getByTestId("paper-checked")).toHaveText("Nura wrote it down.");
+
+  // D-5: Home's own "Add a paper" reaches "What it means for you" on its yes — it used to end
+  // on the batch screen (`paper-checked`) and never open the insight screen at all.
+  await expect(page.getByTestId("insight-screen")).toBeVisible();
+  await expect(page.locator("h1")).toHaveText("What it means for you");
+  await page.getByTestId("insight-back").click();
 
   // One it cannot read: the backend's own words, never a claim that it was read.
-  await page.getByTestId("papers-finish").click();
+  await page.getByTestId("tab-home").click();
   await todayReady(page);
   await page.getByTestId("report-input").setInputFiles(paperPhoto("receipt-2026-09-01"));
   await page.getByTestId("report-send").click();

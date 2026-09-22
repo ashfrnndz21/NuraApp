@@ -78,6 +78,7 @@ async def _persisted_paper(sg: AsyncSession, context: Any, when: datetime) -> Ar
     """A real, written `Artifact` row (review S2: `resolve_clarify_value` now re-checks that a
     resolved cite's own item still exists under its scope, so a token-resolution test needs a
     row that is actually there — a synthetic, never-persisted `_paper()` no longer resolves)."""
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
     return await audited_write(
         sg,
         Artifact,
@@ -86,7 +87,7 @@ async def _persisted_paper(sg: AsyncSession, context: Any, when: datetime) -> Ar
         kind=ArtifactKind.PDF,
         storage_key=f"papers/{uuid.uuid4()}",
         content_type="application/pdf",
-        sha256="0" * 64,
+        sha256=digest,
         captured_at=when,
         source_channel=SourceChannel.APP,
         region=Region.SG,

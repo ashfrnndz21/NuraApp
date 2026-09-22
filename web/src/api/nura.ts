@@ -736,6 +736,16 @@ export const confirmReviewCard = (
     body: { decisions, confirmation_id },
   });
 
+/** D-2, D-4b: answer a card's one pending question — the chip he tapped, its own `value`
+ *  (`ReviewClarifyOut`), never free text. "I'm not sure" never calls this: it leaves the
+ *  card exactly as it is, still pending, and the reading screen just goes back. */
+export const answerReviewCardQuestion = (token: string, profileId: string, cardId: string, value: string) =>
+  api<ReviewCardOut>(`/profiles/${profileId}/review-cards/${cardId}/answer`, {
+    method: "POST",
+    token,
+    body: { value },
+  });
+
 // --- E01: onboarding (#117) ---------------------------------------------------------------------
 
 /** The word cloud: public, in his language. */

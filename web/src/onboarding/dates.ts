@@ -17,6 +17,20 @@ export function dayLine(iso: string, locale: string): string {
   return localDay(iso).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
 }
 
+/** "Monday 22 September": the weekday and the date, no comma and no year — rule 5's own
+ *  example, exactly (`docs/plain-words.md`, `app.medicines.strings.say_date`'s own backend
+ *  twin). `Intl`'s "long" weekday format inserts a comma by default (`paperDate`/`dayLine`
+ *  above both carry one, a paper's date carrying its year on purpose) — this formats the
+ *  weekday and the day/month separately and joins them without one, for the one line a
+ *  comma would be D-12's own defect in miniature (a re-upload's "you added this on …",
+ *  never the paper's own printed date, so no year either). */
+export function saidDate(iso: string, locale: string): string {
+  const day = localDay(iso);
+  const weekday = day.toLocaleDateString(locale, { weekday: "long" });
+  const monthDay = day.toLocaleDateString(locale, { day: "numeric", month: "long" });
+  return locale.startsWith("zh") ? `${monthDay}${weekday}` : `${weekday} ${monthDay}`;
+}
+
 /** An ISO date, matched loosely so a value the paper prints with a clock time on it
  *  ("2025-01-21T21:16") is caught too, not only a bare day. Group 4/5 hold the hour and
  *  minute when the value carries a time at all. */

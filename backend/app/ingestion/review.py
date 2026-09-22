@@ -40,12 +40,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited, audited_read, audited_write
+from app.audit.conclusions import ConclusionResponseKind, record_dropped_conclusion
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
+from app.delivery.timeline_strings import day_of
 from app.drafts import DecidedField, FactDraft, ReviewDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
+from app.identity.models import Profile
 from app.ingestion.extract import (
     DocumentKind,
     ExtractedField,
@@ -61,6 +64,7 @@ from app.ingestion.models import (
     REVIEW_IN_PROGRESS,
     DocumentSource,
     FieldState,
+    PendingQuestion,
     ReviewCard,
     ReviewField,
 )
@@ -73,6 +77,7 @@ from app.ingestion.readings import (
     SYSTOLIC,
     reading_from,
 )
+from app.ingestion.whose_paper import IdentityOutcome, check_whose_paper
 from app.keys.confirm import confirm, consume_confirmation
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_select
@@ -86,6 +91,7 @@ from app.memory.working import require_open_episode
 from app.regions import REGION_TZ, guard_region
 from app.safety.high_risk import high_risk_class
 from app.safety.red_flags import FlagKind, red_flags_in, write_red_flag
+from app.state.health_context import active_medicines
 
 CARD = ReviewCard.__tablename__
 FIELD = ReviewField.__tablename__
@@ -139,6 +145,29 @@ class NotADecision(Refusal):
 
 class UnreadableField(Refusal):
     """A field Nura could not read is typed in, or rejected. It is never confirmed as read."""
+
+
+class QuestionUnanswered(Refusal):
+    """D-2/D-4b: this card asked a plain question (`ReviewCard.pending_question`) and it has
+    not been answered yet. Nothing is filed from it — not a fact, not a `person.*` field —
+    until it is (`POST .../review-cards/{id}/answer`)."""
+
+
+class CardSetAside(Refusal):
+    """This card's question was answered in a way that keeps its paper out of the record —
+    "someone else's", or "yes, the same paper" — for good. It can never be confirmed."""
+
+
+class QuestionAlreadyAnswered(Refusal):
+    """This card's question was already answered once. An answer does not change."""
+
+
+class NoQuestionToAnswer(Refusal):
+    """This card never asked a question, so there is nothing to answer."""
+
+
+class NotAnAnswer(Refusal):
+    """The value sent is not one of this question's own choices."""
 
 
 class Notice(StrEnum):
@@ -361,13 +390,11 @@ async def _linked_match(
     )
     if isinstance(named, str) and named.strip() and context.allows(Scope.MEDICINES):
         word = named.strip().lower()
-        lines = await audited_read(
-            session,
-            MedicationLine,
-            context,
-            Scope.MEDICINES,
-            where=(MedicationLine.superseded_at.is_(None),),
-        )
+        # The Health Graph's one reader (`app.state.health_context.active_medicines`, ADR
+        # 0019 point 3; independent review of #331, follow-up 1): `status == ACTIVE`, not
+        # `superseded_at IS NULL` alone — a paper must not link itself to a medicine he has
+        # stopped or paused.
+        lines = await active_medicines(session, context=context)
         for line in lines:
             if word in line.generic.lower() or (
                 line.brand is not None and word in line.brand.lower()
@@ -664,6 +691,90 @@ def _flagged_insurance_essentials(
     ]
 
 
+_HEADER_FIELD_KEYS = frozenset(
+    {
+        ("lab_report", "patient_name"),
+        ("lab_report", "patient_id"),
+        ("lab_report", "ordering_doctor"),
+        ("lab_report", "facility"),
+        ("lab_report", "lab"),
+    }
+)
+"""Every field D-4b's semantic key leaves out: who the paper says it is about, not what it
+says (`app.ingestion.whose_paper` already covers the identity fields on their own terms).
+`person`-subject fields (birth year, sex) are excluded the same way, by subject alone."""
+
+
+def _content_keys(fields: Sequence[ExtractedField]) -> frozenset[tuple[str, str]]:
+    """The set of (subject, attribute) pairs a paper's own results are named under — D-4b's
+    "the set of analytes/attributes" — everything except the identity header."""
+    return frozenset(
+        (field.subject, field.attribute)
+        for field in fields
+        if field.subject != "person" and (field.subject, field.attribute) not in _HEADER_FIELD_KEYS
+    )
+
+
+def _facility_of(fields: Sequence[ExtractedField] | Sequence[ReviewField]) -> str | None:
+    found = next(
+        (
+            field.value
+            for field in fields
+            if field.subject == "lab_report" and field.attribute == "facility"
+        ),
+        None,
+    )
+    return found.strip().lower() if isinstance(found, str) else None
+
+
+async def _semantic_duplicate_of(
+    session: AsyncSession,
+    *,
+    context: KeyContext,
+    extraction: Extraction,
+    fields: Sequence[ExtractedField],
+    exclude_artifact_id: uuid.UUID,
+) -> ReviewCard | None:
+    """D-4b: a card already on file, confirmed and not set aside, with the same document
+    kind, the same printed date, the same facility (when both name one) and exactly the same
+    set of results — the case a re-photographed paper makes, under a digest that will never
+    match the first photo's own. `None` when nothing on file matches, including when this
+    paper's own content set is empty (nothing to key on)."""
+    if extraction.document_date is None:
+        return None
+    my_keys = _content_keys(fields)
+    if not my_keys:
+        return None
+    my_facility = _facility_of(fields)
+    candidates = await audited_read(
+        session,
+        ReviewCard,
+        context,
+        Scope.RECORDS,
+        where=(
+            ReviewCard.document_kind == extraction.document_kind,
+            ReviewCard.document_date == extraction.document_date,
+            ReviewCard.artifact_id != exclude_artifact_id,
+            ReviewCard.confirmed_at.is_not(None),
+            ReviewCard.discarded_at.is_(None),
+            _cards_held_here(context),
+        ),
+    )
+    for candidate in candidates:
+        candidate_fields = await card_fields(session, context=context, card_id=candidate.id)
+        candidate_facility = _facility_of(candidate_fields)
+        if my_facility is not None and candidate_facility is not None and my_facility != candidate_facility:
+            continue
+        candidate_keys = frozenset(
+            (field.subject, field.attribute)
+            for field in candidate_fields
+            if field.subject != "person" and (field.subject, field.attribute) not in _HEADER_FIELD_KEYS
+        )
+        if candidate_keys and candidate_keys == my_keys:
+            return candidate
+    return None
+
+
 async def card_from(
     session: AsyncSession,
     *,
@@ -676,7 +787,13 @@ async def card_from(
 ) -> ReviewCard:
     """Write the card and its fields for an extraction of this artefact. Every field is
     checked (`ExtractedField.checked`) before it is written: codes are codes, values short.
-    A page no field may be taken from (`_nothing_to_take`) is a card with no fields."""
+    A page no field may be taken from (`_nothing_to_take`) is a card with no fields.
+
+    D-2 and D-4b, in order: the identity check runs first (`check_whose_paper`) — a mismatch
+    is always the more urgent question, since it is the one a wrong answer could put another
+    person's birth year and sex onto this profile. Only when identity matches (or there is
+    nothing on either side to compare) does the semantic-duplicate check run at all. Either
+    way, at most one question is ever pending — the card asks one plain thing, never two."""
     fields = [field.checked() for field in extraction.fields]
     if _nothing_to_take(extraction, asked_as):
         fields = []
@@ -695,6 +812,51 @@ async def card_from(
         (field.value for field in fields if (field.subject, field.attribute) == MEDICINE_NAME),
         None,
     )
+
+    pending_question: PendingQuestion | None = None
+    question_payload: dict[str, Any] | None = None
+    if fields:
+        profile = await session.get(Profile, context.profile_id)
+        identity = await check_whose_paper(
+            session,
+            context=context,
+            fields=fields,
+            document_date=extraction.document_date,
+            profile_display_name=profile.display_name if profile is not None else "",
+        )
+        if identity.outcome is IdentityOutcome.MISMATCH:
+            pending_question = PendingQuestion.WHOSE_PAPER
+            # FIX BEFORE MERGE, the independent safety review: the paper's own printed name
+            # (and, in the same spirit, its year of birth and sex) never leaves this
+            # function's own return value from here on. `ReviewClarifyOut` names only which
+            # *fields* disagreed (`mismatched`, the closed `IdentitySignal.kind` enum) — the
+            # sentence built from it is Nura's own words, never a quote of what an
+            # unconfirmed page happened to print (extracted text is hostile until confirmed;
+            # a page printing an instruction in the name field must never become a headline).
+            # The paper's own printed values stay visible only behind "See the paper itself",
+            # the photo — never composed into text here.
+            question_payload = {
+                "mismatches": [{"kind": m.kind} for m in identity.mismatches],
+            }
+        else:
+            duplicate = await _semantic_duplicate_of(
+                session,
+                context=context,
+                extraction=extraction,
+                fields=fields,
+                exclude_artifact_id=artifact.id,
+            )
+            if duplicate is not None:
+                pending_question = PendingQuestion.DUPLICATE_PAPER
+                question_payload = {
+                    "existing_card_id": str(duplicate.id),
+                    # The day on his own clock, not UTC's (the independent safety review's
+                    # FIX BEFORE MERGE): `ReviewClarifyOut.of` only ever keeps the first ten
+                    # characters of this string as a date, and a naive UTC `.isoformat()`
+                    # names the wrong day near midnight in Singapore or Malaysia.
+                    "existing_added_on": day_of(duplicate.created_at, context.region).isoformat(),
+                }
+
     card = await audited_write(
         session,
         ReviewCard,
@@ -707,6 +869,8 @@ async def card_from(
         asked_as=asked_as,
         source=source,
         created_at=utcnow(),
+        pending_question=pending_question,
+        question_payload=question_payload,
     )
     for position, field in enumerate(fields):
         await audited_write(
@@ -733,10 +897,13 @@ async def card_from(
 async def list_review_cards(
     session: AsyncSession, *, context: KeyContext, open_only: bool = False
 ) -> Sequence[ReviewCard]:
-    """The profile's cards, newest first; with `open_only`, the ones still waiting."""
+    """The profile's cards, newest first; with `open_only`, the ones still waiting — a card
+    set aside on its own question is resolved, not waiting, so it is excluded from
+    `open_only` the same way a confirmed one already is (B2)."""
     where: list[Any] = [_cards_held_here(context)]
     if open_only:
         where.append(ReviewCard.confirmed_at.is_(None))
+        where.append(ReviewCard.discarded_at.is_(None))
     found = await audited_read(session, ReviewCard, context, Scope.RECORDS, where=where)
     return sorted(found, key=lambda card: (as_utc(card.created_at), str(card.id)), reverse=True)
 
@@ -755,6 +922,34 @@ async def require_review_card(
     if not found:
         raise NoSuchReviewCard(f"no review card {card_id} on profile {context.profile_id}")
     return found[0]
+
+
+@audited(Action.READ, Scope.RECORDS, CARD)
+async def card_for_artifact(
+    session: AsyncSession, *, context: KeyContext, artifact_id: uuid.UUID
+) -> ReviewCard | None:
+    """The one card an artefact was read into, if it was (D-4a): every artefact gets at most
+    one card (`card_from` runs once per upload), so this is the card a duplicate-bytes upload
+    is shown instead of reading anything again (`app.channels.api.capture`).
+
+    FOLLOW-UP, the independent safety review: the "at most one card" invariant this
+    docstring states is not actually kept everywhere — `POST /readings/photo` and the
+    WhatsApp photo branch can each mint a second card for the same artefact (documented, not
+    fixed here, in the PR body). Without an explicit order this `limit=1` picked whichever
+    row the database happened to return first — silently a different card on a re-run, on a
+    different engine, or after an unrelated change to how SQLite orders ties. Ordered by
+    `created_at` so a duplicate-bytes upload is shown consistently the *earliest* card on
+    file, the same "earliest survives" rule migration `0055`'s own collapse already keeps."""
+    found = await audited_read(
+        session,
+        ReviewCard,
+        context,
+        Scope.RECORDS,
+        where=(ReviewCard.artifact_id == artifact_id, _cards_held_here(context)),
+        order_by=(ReviewCard.created_at.asc(),),
+        limit=1,
+    )
+    return found[0] if found else None
 
 
 @audited(Action.READ, Scope.RECORDS, CARD)
@@ -803,6 +998,8 @@ async def type_field(
     beside it; nothing is a fact until the card's yes, which binds to the typed value and to
     who typed it. Typing again replaces the typed value, and names the new typist."""
     card = await require_review_card(session, context=context, card_id=card_id)
+    if card.discarded_at is not None:
+        raise CardSetAside(f"review card {card_id} was set aside at {card.discarded_at}")
     if not card.is_open:
         raise AlreadyConfirmed(f"review card {card_id} was confirmed at {card.confirmed_at}")
     fields = await card_fields(session, context=context, card_id=card_id)
@@ -892,6 +1089,8 @@ async def review_draft_for(
     decision — and, when he named one, the open episode the card goes into (E03-02). The
     surface mints the confirmation over this; the confirm recomputes it."""
     card = await require_review_card(session, context=context, card_id=card_id)
+    if card.discarded_at is not None:
+        raise CardSetAside(f"review card {card_id} was set aside at {card.discarded_at}")
     if not card.is_open:
         raise AlreadyConfirmed(f"review card {card_id} was confirmed at {card.confirmed_at}")
     fields = await card_fields(session, context=context, card_id=card_id)
@@ -997,6 +1196,14 @@ async def confirm_review_card(
     if episode_id is not None:
         await require_open_episode(session, context=context, episode_id=episode_id)
     card = await require_review_card(session, context=context, card_id=card_id)
+    # D-2/D-4b: nothing is written from a card that asked a question and has not been
+    # answered — not a fact, not a `person.*` field, ever (`ReviewCard.awaiting_answer`).
+    # Checked before the yes is even consumed, so a stale confirmation minted before the
+    # question was asked is refused the same way a fresh one would be.
+    if card.awaiting_answer:
+        raise QuestionUnanswered(f"review card {card_id} is waiting on {card.pending_question}")
+    if card.discarded_at is not None:
+        raise CardSetAside(f"review card {card_id} was set aside and cannot be confirmed")
     artifact = await require_artifact(session, context=context, artifact_id=card.artifact_id)
     fields = await card_fields(session, context=context, card_id=card_id)
     yes = await consume_confirmation(session, context, confirmation_id, draft)
@@ -1048,6 +1255,28 @@ async def confirm_review_card(
                 target_id=field.id,
                 rows=1,
             )
+            # D3 (ADR 0019 point 7): a "No" (`REJECTED`) or a "Fix" (kept, but corrected) on a
+            # field the extractor proposed is a rejected or corrected AI conclusion, recorded
+            # the same way a dropped Ask line is — never the extracted or corrected value
+            # itself, only the closed response kind and which field.
+            if field.state is FieldState.REJECTED:
+                await record_dropped_conclusion(
+                    session,
+                    context=context,
+                    response_kind=ConclusionResponseKind.USER_NO,
+                    target=FIELD,
+                    target_id=field.id,
+                    scope=Scope.RECORDS,
+                )
+            elif field.state is FieldState.CORRECTED:
+                await record_dropped_conclusion(
+                    session,
+                    context=context,
+                    response_kind=ConclusionResponseKind.USER_FIX,
+                    target=FIELD,
+                    target_id=field.id,
+                    scope=Scope.RECORDS,
+                )
         card.confirmed_at = moment
         card.confirmed_by_person_id = yes.person_id
         await session.flush()
@@ -1071,6 +1300,70 @@ async def confirm_review_card(
             by_person_id=yes.person_id,
         )
     return card, fields, written
+
+
+WHOSE_PAPER_ANSWERS = frozenset({"mine", "someone_elses"})
+"""D-2's two answers that reach the backend at all. "I'm not sure" is the third chip the
+reading screen offers, and it never calls this door — it leaves the card exactly as it is,
+pending, which is what "keeps the card open" means (the owner requirement's own words)."""
+
+DUPLICATE_PAPER_ANSWERS = frozenset({"same", "different"})
+
+
+@audited(Action.WRITE, Scope.RECORDS, CARD)
+async def answer_review_card_question(
+    session: AsyncSession, *, context: KeyContext, card_id: uuid.UUID, value: str
+) -> ReviewCard:
+    """Answer a card's one pending question (D-2, D-4b).
+
+    `WHOSE_PAPER`: `"mine"` records the answer and lets `confirm_review_card` proceed —
+    including the `person.birth_year`/`person.sex` facts the audit found being written
+    unchecked; `"someone_elses"` sets the card aside (`discarded_at`) — its paper never
+    reaches the record, calmly, and for good (`CardSetAside` on any later confirm attempt).
+    There is no backend call for "I'm not sure" (see `WHOSE_PAPER_ANSWERS`).
+
+    `DUPLICATE_PAPER`: `"same"` sets the card aside the same way — it is not a new paper;
+    `"different"` records the answer and lets confirmation proceed as an ordinary new one.
+    """
+    card = await require_review_card(session, context=context, card_id=card_id)
+    if card.pending_question is None:
+        raise NoQuestionToAnswer(f"review card {card_id} has no pending question")
+    if card.question_answer is not None:
+        raise QuestionAlreadyAnswered(f"review card {card_id}'s question was already answered")
+    valid = (
+        WHOSE_PAPER_ANSWERS
+        if card.pending_question is PendingQuestion.WHOSE_PAPER
+        else DUPLICATE_PAPER_ANSWERS
+    )
+    if value not in valid:
+        raise NotAnAnswer(f"{value!r} is not a choice on this question")
+    moment = utcnow()
+    session.info[REVIEW_IN_PROGRESS] = card.id
+    try:
+        card.question_answer = value
+        card.question_answered_at = moment
+        card.question_answered_by_person_id = context.person_id
+        if value in {"someone_elses", "same"}:
+            card.discarded_at = moment
+        await session.flush()
+        # FIX BEFORE MERGE, the independent safety review: `@audited` above only writes a
+        # line on a refusal, so the decision this whole package exists to make safe used to
+        # leave no trail on success at all. `value` is already checked against the closed
+        # set above (`NotAnAnswer` otherwise) — never the paper's own printed name, which
+        # this table never held in the first place.
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=CARD,
+            target_id=card.id,
+            rows=1,
+            answered_with=value,
+        )
+    finally:
+        session.info.pop(REVIEW_IN_PROGRESS, None)
+    return card
 
 
 async def close_card_for_artifact(
@@ -1110,7 +1403,14 @@ async def close_card_for_artifact(
     except OutOfScope:
         return
     for card in found:
-        if card.confirmed_at is not None:
+        if card.confirmed_at is not None or card.discarded_at is not None:
+            continue
+        if card.awaiting_answer:
+            # This artefact's card is asking its own question (D-2/D-4b) — the same rule
+            # `confirm_review_card` holds applies to this side door too: nothing on the card
+            # is treated as settled, medicine fact included, until it is answered. The card
+            # stays open; the add-a-medicine screen's own write already went through
+            # (independent of this card), so nothing is lost either way.
             continue
         # Only a card this add accounted for in full. A closed card leaves the papers screen
         # for good and none of its other fields is ever written: a pharmacy's name and phone

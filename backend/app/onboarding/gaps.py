@@ -260,8 +260,10 @@ async def what_is_known(session: AsyncSession, *, context: KeyContext) -> Known:
         if context.allows(scope_for_subject(fact.subject))
     ]
     subjects = frozenset(fact.subject for fact in facts)
+    # `is_confirmed`, never `not is_open`: a set-aside card was never said yes to and must
+    # not count toward what is confirmed (independent safety review, B2).
     confirmed = [
-        card for card in await list_review_cards(session, context=context) if not card.is_open
+        card for card in await list_review_cards(session, context=context) if card.is_confirmed
     ]
     papers = await audited_read(session, BiographyPaper, context, Scope.RECORDS)
     visit_events = await audited_read(

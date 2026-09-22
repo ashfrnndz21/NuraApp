@@ -69,6 +69,7 @@ from app.state.models import Dimension, StateTrigger
 from app.state.service import current_state
 from tests.paper import (
     BP_CUFF,
+    BP_CUFF_AGAIN,
     CLINIC_LETTER_HYPERTENSION,
     CLINIC_SLIP,
     DISCHARGE_LETTER,
@@ -77,11 +78,13 @@ from tests.paper import (
     INSURANCE_CLAIM,
     INSURANCE_POLICY,
     INSURANCE_POLICY_NO_EXCLUSIONS,
+    LAB_REPORT_NOT_HIS,
     LAB_REPORT_RED_FLAG,
     LAB_REPORT_VITALS,
     LIPID_GLUCOSE_PANEL,
     LIPID_PANEL,
     LIPID_PANEL_2025,
+    LIPID_PANEL_2025_AGAIN,
     METABOLIC_PANEL,
     PAPER,
     PHARMACY_RECEIPT,
@@ -213,8 +216,14 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
     word; and the lipid and glucose panel the report table's range bars are drawn from
     (redesign checkpoint 2), also synthetic. One more, also synthetic: a cholesterol-tablet
     box printing only its drug family (STATIN 20 mg, 28 tablets, no brand or generic anywhere
-    on it), for `app.medicines.classify` (#302). The labelled answers beside them (`*.expected.json`) are the accuracy harness's and
-    name no digest."""
+    on it), for `app.medicines.classify` (#302). Two more, also synthetic, for D-2 and D-4b
+    (audit-2026-09-22.md, "whose paper is it" and duplicates): a demo-style lab sheet naming
+    someone who is not the profile, and the lipid panel above re-photographed under a
+    different digest. One more, also synthetic: the blood pressure screen re-photographed a
+    few minutes on (`tests/test_device_screens.py`), the same reading under a different digest
+    too, since migration 0055 makes the same bytes twice for one profile reuse the first
+    artefact rather than write a second one. The labelled answers beside them
+    (`*.expected.json`) are the accuracy harness's and name no digest."""
     labels = papers()
     assert set(labels) == {
         LIPID_PANEL,
@@ -224,6 +233,7 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         DISCHARGE_LETTER,
         RECEIPT,
         BP_CUFF,
+        BP_CUFF_AGAIN,
         GLUCOMETER,
         LIPID_PANEL_2025,
         LAB_REPORT_VITALS,
@@ -238,6 +248,8 @@ def test_every_paper_fixture_names_the_digest_of_its_placeholder() -> None:
         PHARMACY_RECEIPT,
         PHARMACY_RECEIPT_RED_FLAG,
         STATIN_BOX,
+        LAB_REPORT_NOT_HIS,
+        LIPID_PANEL_2025_AGAIN,
     }
     for label in labels:
         paper = fixture(label)
