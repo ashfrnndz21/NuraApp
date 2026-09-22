@@ -77,3 +77,36 @@ mobile-architecture.md` (native stack), `docs/design/experience-blueprint-v2.htm
   decision on the phone; the golden path (scenes 1–8) on the chosen client. **Day 3+** — Home + Ask +
   medicine connection (the loop), then Tier 2.
 - Anything that would need the model to decide a §6 matter is a defect, whatever it passes.
+- **The signed build is the extreme last step (owner, 22 Sep 23:30).** Apple Developer + EAS → a
+  build on the owner's phone happens only after the entire app works end to end — every Tier 1, 2
+  and 3 moment; the register path; papers, Ask, medicines, insurance, feed, Health, not-well, Connect,
+  Mei, Profile; the four hard gates; whose-paper and duplicates; reduced motion, accessibility,
+  offline; the evaluation set at a pass rate the owner accepts — verified in the iOS Simulator (once
+  Xcode is installed) and in Expo Go. No builder may start EAS or signing work before the owner says
+  the app is complete. The order of build: 0 Expo/RN locally → 1 Home spike → 2 animation and
+  interaction system → 3 connect the FastAPI backend → 4 the golden path (paper → state → Home →
+  Ask), then the full app with all its functionality → 5 test everything against
+  `docs/design/end-to-end-acceptance.md`. **There is no step 6 in the build plan** (owner, 22 Sep
+  23:40): the Apple Developer / EAS signed build is not a build stage — it is the closing action
+  after the plan is complete and the owner has signed off the acceptance sheet.
+
+**23 Sep 00:35 — superseded in part by ADR 0021.** The owner's `docs/design/NURA-BUILD-MASTER-SPEC.md`
+is now the binding brief; where it and this ADR differ, the master spec wins, and its §3 / §43 step 14
+restate the rule above: the signed build is the closing action after the whole app is complete and
+tested, and Expo Go is the development vehicle until then, not that step.
+
+## The design is baked into every builder (owner, 23 Sep 00:15)
+
+The experience specification (`design-build-2.md` §1) is not a separate track. Every builder delivers
+against named sections of it, imports `docs/design/DESIGN_SYSTEM.md`, `docs/design/MOTION_SYSTEM.md`
+and ADR 0020 (component architecture), and is rejected if a capture differs from its blueprint-v2
+frame or the motion lint finds a literal value.
+
+| Builder / step | Spec sections baked in | Checked against |
+|---|---|---|
+| Home spike (steps 0–2) | §2, §4, §5, §6–7, §8, §9, §11, §13, §16, §17, §18, §20, §24, §25, §28, §29 | v2 frames 15/28/29/30/32/33; walkthrough; motion lint; acceptance A-158…A-179 |
+| Design system (steps 3–5) | §2, §5, §24, §27, §28 as importable artefacts; contrast measured | every later builder imports them |
+| Runtime (step 3, backend) | §8 orb from real events; §21 loading from real stages; §28 AI states; §10 tool calls surfaced | event tests; fixtures emit the same events; A-143…A-157 |
+| Engine A (D0/D1) | §10 context-first answers with values, date, printed range; §23 calm errors | Opus review; A-074…A-090 |
+| Engine B (D2, D4–D6) | §10 clarifying questions at intake in the v2 conversation shape; §22; §3 on the reading screen | captures vs v2 frames 05–07; Opus review; A-040…A-062, A-097 |
+| Golden path (steps 3–4, client) | §1–§32 in full for Tier 1 (scenes 1–8, 15–16, 19–20), composed only from ADR 0020 primitives on the tokens | v2 frame per scene, both engines, frame-time trace, reduced motion; A-010…A-106 |
