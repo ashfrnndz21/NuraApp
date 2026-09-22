@@ -723,6 +723,17 @@ time. Never the app's own guideline opinion (`printed_range_for_fact`'s own docs
 band named here is always read off the paper he confirmed, or absent."""
 
 
+def _value_strings(value: float) -> frozenset[str]:
+    """Every plain string this app would consider the same confirmed number: `122` and
+    `122.0` both name the same value (`fact.value`'s own JSON round-trip can give either
+    shape), so both are registered against `values_given` — never a reason a true value
+    reads as invented."""
+    forms = {str(value)}
+    if float(value).is_integer():
+        forms.add(str(int(value)))
+    return frozenset(forms)
+
+
 async def _read_records(
     session: AsyncSession,
     context: KeyContext,
@@ -730,6 +741,8 @@ async def _read_records(
     counter: _TokenCounter,
     elapsed_seen: set[str],
     dates_seen: set[str],
+    bands_given: dict[uuid.UUID, str],
+    values_given: dict[uuid.UUID, frozenset[str]],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
@@ -749,11 +762,19 @@ async def _read_records(
         if isinstance(fact.value, int | float):
             # D-1: a measured value's own printed range, read off the paper it was confirmed
             # from — never asked for or computed by the model — so "is it high?" can be
-            # answered from what the paper actually says.
+            # answered from what the paper actually says. `values_given`/`bands_given` record
+            # exactly what this fact was actually handed out as (review blockers 1/2): the
+            # model's own vocabulary for a band ("above the range printed on the paper") is
+            # neutral prose that passes `_has_conclusion_language` on sight, and a wrong
+            # number is not caught by any existing rule either — both are checked afterwards
+            # against these, per fact, the same "computed here, never guessed" rule `_elapsed`
+            # already holds.
+            values_given[fact.id] = _value_strings(float(fact.value))
             printed = await printed_range_for_fact(session, context, fact)
-            if printed is not None and (printed.low is not None or printed.high is not None):
-                band = band_of_printed(float(fact.value), printed)
+            band = None if printed is None else band_of_printed(float(fact.value), printed)
+            if band is not None:
                 text = f"{text}; {_RANGE_NOTE[band]}"
+                bands_given[fact.id] = _RANGE_NOTE[band]
             else:
                 text = f"{text}; the paper prints no range for it"
         _register(
@@ -1133,6 +1154,17 @@ class ClaudeAsker:
             """Every worded date (D-1(b)) actually handed to the model this ask, the same
             bookkeeping as `elapsed_seen` and for the same reason: `_parse_answer`'s
             invented-date check catches a line that states a date this ask never gave it."""
+            bands_given: dict[uuid.UUID, str] = {}
+            """Per fact (`_read_records`), the one range-band phrase (`_RANGE_NOTE`) this ask
+            actually handed out for it, when the paper printed a range at all — review blocker
+            1: those phrases are neutral prose that passes `_has_conclusion_language` on
+            sight, so a forged verdict ("above the range…" for a fact with no printed range,
+            or the wrong band for one that does) is caught here instead, per fact, never by a
+            global set a claim about any fact could satisfy."""
+            values_given: dict[uuid.UUID, frozenset[str]] = {}
+            """Per fact (`_read_records`), the value string(s) this ask actually handed out
+            for it — review blocker 2: a wrong number for a real, cited, confirmed fact is
+            caught here, the same per-fact discipline as `bands_given`."""
             card_safe_text: dict[uuid.UUID, set[str]] = {}
             """Every date/elapsed string actually rendered for each waiting card this ask
             (`_read_waiting_papers`), so a line citing it can be told apart from one that
@@ -1230,6 +1262,8 @@ class ClaudeAsker:
                                 failed_findings,
                                 frozenset(elapsed_seen),
                                 frozenset(dates_seen),
+                                dict(bands_given),
+                                dict(values_given),
                                 {card: frozenset(safe) for card, safe in card_safe_text.items()},
                             )
                         )
@@ -1364,6 +1398,8 @@ class ClaudeAsker:
                             proposals=proposals,
                             elapsed_seen=elapsed_seen,
                             dates_seen=dates_seen,
+                            bands_given=bands_given,
+                            values_given=values_given,
                             card_safe_text=card_safe_text,
                             reader=reader,
                         )
@@ -1515,6 +1551,8 @@ class ClaudeAsker:
         proposals: list[Proposal],
         elapsed_seen: set[str],
         dates_seen: set[str],
+        bands_given: dict[uuid.UUID, str],
+        values_given: dict[uuid.UUID, frozenset[str]],
         card_safe_text: dict[uuid.UUID, set[str]],
         reader: Reader,
     ) -> tuple[list[_ToolLine], int]:
@@ -1535,7 +1573,15 @@ class ClaudeAsker:
             return lines, count
         if name == "read_records":
             return await _read_records(
-                session, context, language, counter, elapsed_seen, dates_seen, reader
+                session,
+                context,
+                language,
+                counter,
+                elapsed_seen,
+                dates_seen,
+                bands_given,
+                values_given,
+                reader,
             )
         if name == "read_feelings":
             return await _read_feelings(session, context, counter)
@@ -1911,6 +1957,107 @@ def _dated_claim_finding(phrase: str, language: str) -> Finding:
     )
 
 
+def _band_claim(
+    text: str, cites: Sequence[Cite], bands_given: Mapping[uuid.UUID, str]
+) -> str | None:
+    """Review blocker 1: the first range-band phrase (`_RANGE_NOTE`'s own three — "above/
+    below/within the range printed on the paper") `text` states that was never actually
+    handed out for a fact this line cites. Checked per fact — `bands_given` is keyed by fact
+    id, never a global set — so a band given for one fact can never license a forged claim
+    about a different one, and a fact the tool printed no range for (no entry at all) makes
+    every band phrase about it a forgery, not only a mismatched one. The phrases are ordinary
+    English words ("above", "range", "paper") that pass `_has_conclusion_language` on sight,
+    which is exactly why the model was free to write one at will until this existed. `None`
+    when the line states no such phrase, or the one it states really was given for a fact it
+    cites."""
+    allowed = {
+        bands_given[cite.id] for cite in cites if cite.kind == "fact" and cite.id in bands_given
+    }
+    low = text.lower()
+    for phrase in _RANGE_NOTE.values():
+        if phrase in low and phrase not in allowed:
+            return phrase
+    return None
+
+
+_BAND_RULE: Final = 96
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for `_band_claim`: a range-band verdict the
+line states that this ask never actually gave for that fact (review blocker 1) — recorded so
+the repair round runs instead of a forged verdict simply reaching him."""
+
+
+def _band_claim_finding(phrase: str, language: str) -> Finding:
+    return Finding(
+        rule=_BAND_RULE,
+        problem=f'"{phrase}" is not a range comparison this ask actually gave you for that fact',
+        rewrite=(
+            "say only the range comparison the tool line gave for that fact, or that the "
+            "paper prints no range for it"
+        ),
+        text=phrase,
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_VALUE_NUMBER: Final = re.compile(r"\b\d+(?:\.\d+)?\b")
+"""A bare number, digits only — never a word ("twelve"), never one already inside a longer
+alphanumeric token ("3mg", no boundary between the digit and the letter). `_value_claim` only
+ever runs this against what is left once the ask's own given elapsed phrases, worded dates and
+known-good values for the cited fact(s) are stripped away, so a date's own day-of-month or an
+elapsed phrase's own count never itself reads as an invented value."""
+
+
+def _value_claim(
+    text: str,
+    cites: Sequence[Cite],
+    values_given: Mapping[uuid.UUID, frozenset[str]],
+    elapsed_given: frozenset[str],
+    dates_given: frozenset[str],
+) -> str | None:
+    """Review blocker 2: the first number `text` states, once the ask's own given elapsed
+    phrases, worded dates and the known-good value string(s) for the fact(s) this line cites
+    are stripped away, that still looks like a value — a wrong number for a real, confirmed,
+    cited fact, which no other check catches: plain words rule 10 only counts numbers, never
+    checks them, and the elapsed/date claims are a different kind of number entirely. Checked
+    only when at least one cited fact is one `values_given` actually tracks (`_read_records`'s
+    own facts): a line citing something this check has no known-good value for at all (a
+    reading, a visit, a medicine) is left alone here rather than risk a false drop on a
+    number this check was never given the means to judge. `None` when the line states no such
+    number, when it is not one of `_read_records`'s tracked facts, or the number it states
+    really was given for the fact it cites."""
+    allowed: set[str] = set()
+    tracked = False
+    for cite in cites:
+        if cite.kind == "fact" and cite.id in values_given:
+            tracked = True
+            allowed |= values_given[cite.id]
+    if not tracked:
+        return None
+    stripped = _strip_safe_substrings(text, elapsed_given | dates_given | frozenset(allowed))
+    match = _VALUE_NUMBER.search(stripped)
+    return match.group() if match is not None else None
+
+
+_VALUE_CLAIM_RULE: Final = 97
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for `_value_claim`: a number the line states
+for a confirmed fact that this ask never actually gave (review blocker 2) — recorded so the
+repair round runs instead of a wrong value simply reaching him."""
+
+
+def _value_claim_finding(number: str, language: str) -> Finding:
+    return Finding(
+        rule=_VALUE_CLAIM_RULE,
+        problem=f'"{number}" is not the value this ask actually gave you for that fact',
+        rewrite="use the exact number the tool line gave for the fact you are citing",
+        text=number,
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
 _EN_NUMBER_WORDS: Final[frozenset[str]] = frozenset(
     {
         "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
@@ -1999,6 +2146,8 @@ def _parse_answer(
     failed_findings: dict[int, Finding] | None = None,
     elapsed_given: frozenset[str] = frozenset(),
     dates_given: frozenset[str] = frozenset(),
+    bands_given: Mapping[uuid.UUID, str] = MappingProxyType({}),
+    values_given: Mapping[uuid.UUID, frozenset[str]] = MappingProxyType({}),
     card_safe_text: Mapping[uuid.UUID, frozenset[str]] = MappingProxyType({}),
 ) -> _Parsed:
     raw_lines = payload.get("lines")
@@ -2110,6 +2259,29 @@ def _parse_answer(
                 finding = _unconfirmed_card_value_finding(language)
                 failed_findings.setdefault(finding.rule, finding)
             _drop("value_from_unconfirmed_card")
+            continue
+        band_problem = _band_claim(heard, cites, bands_given)
+        if band_problem is not None:
+            # Review blocker 1: a range-band phrase (`_RANGE_NOTE`'s own words — "above the
+            # range printed on the paper") is neutral vocabulary that passes
+            # `_has_conclusion_language` on sight, so a forged verdict about a fact this ask
+            # either never printed a range for, or printed a different one for, is caught
+            # here — per the fact it is actually cited against, never a global set any claim
+            # about any fact could satisfy.
+            if failed_findings is not None:
+                finding = _band_claim_finding(band_problem, language)
+                failed_findings.setdefault(finding.rule, finding)
+            _drop("invented_band")
+            continue
+        value_problem = _value_claim(heard, cites, values_given, elapsed_given, dates_given)
+        if value_problem is not None:
+            # Review blocker 2: a wrong number for a real, cited, confirmed fact — never
+            # caught by plain words (rule 10 counts numbers, it does not check them) or by
+            # the elapsed/date claims (a different kind of number).
+            if failed_findings is not None:
+                finding = _value_claim_finding(value_problem, language)
+                failed_findings.setdefault(finding.rule, finding)
+            _drop("invented_value")
             continue
         lines.append(AnswerLine(text=heard, cites=cites))
         origins.append(index)
@@ -2312,11 +2484,22 @@ def _answer_from_payload(
     failed_findings: dict[int, Finding] | None = None,
     elapsed_given: frozenset[str] = frozenset(),
     dates_given: frozenset[str] = frozenset(),
+    bands_given: Mapping[uuid.UUID, str] = MappingProxyType({}),
+    values_given: Mapping[uuid.UUID, frozenset[str]] = MappingProxyType({}),
 ) -> Answer | None:
     """`_parse_answer`'s answer alone — kept as its own name for the callers (and the unit
     tests) that only ever wanted the answer, never the coherence flags."""
     return _parse_answer(
-        payload, known, language, reader, mode, failed_findings, elapsed_given, dates_given
+        payload,
+        known,
+        language,
+        reader,
+        mode,
+        failed_findings,
+        elapsed_given,
+        dates_given,
+        bands_given,
+        values_given,
     ).answer
 
 

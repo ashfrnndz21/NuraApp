@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
@@ -34,7 +35,7 @@ from app.ingestion.objects import LocalObjectStore
 from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_new
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
-from app.medicines.models import MedicationLine
+from app.medicines.models import LineStatus, MedicationLine
 from app.memory.models import (
     Appointment,
     Artifact,
@@ -55,7 +56,7 @@ from app.search.retrieve import (
     Retriever,
     question_digest,
 )
-from tests.medicines_support import REGISTRY, let_in, pa
+from tests.medicines_support import REGISTRY, add, label, let_in, pa
 from tests.timeline_support import SITI_PHONE, again, artefact, keep_only_me, record, trail
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "recall"
@@ -410,3 +411,41 @@ async def test_a_measured_value_against_its_printed_range_never_the_apps_own_jud
     assert answer.lines[-1].text == band_line
     for line in answer.spoken:
         assert verified(line, "en"), line
+
+
+# --- D-7 (audit-2026-09-22.md §3.3): Ask reads medicines without status == ACTIVE ------------
+
+
+async def test_a_stopped_medicine_never_appears_in_the_rule_based_answer(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D-7: before the fix, `_corpus_stream`'s medicines read filtered only `superseded_at`
+    (`search/ask.py`), so a line marked STOPPED or HELD — current on the table, just not one
+    he is taking — still answered as though it were his medicine today. A stopped line and a
+    held line are both written here (the app has no service call that changes a line's status
+    yet, per the review; the status is set directly, the same shape a real one would carry)."""
+    owner = await pa(sg, language="en")
+    active = await add(sg, owner, label("amlodipine", "5 mg"))
+    stopped = await add(sg, owner, label("atorvastatin", "20 mg"))
+    held = await add(sg, owner, label("metformin", "500 mg"))
+    active_id, stopped_id, held_id = active.line.id, stopped.line.id, held.line.id
+    # `MedicationLine` rows are immutable through the ORM (`app.db`'s own `before_update`
+    # guard, "the one change a line takes is being superseded") — there is no service call
+    # yet that stops or holds a line (the review notes this), so the status is moved with a
+    # Core-level UPDATE, the same bypass `test_confirm_race.py` already uses for the same
+    # reason, never through ORM attribute assignment. `expire_all` then makes the next read
+    # see it — the ids above were captured first, since an expired attribute cannot be
+    # lazy-loaded outside the session's own async context.
+    await sg.execute(update(MedicationLine).where(MedicationLine.id == stopped_id).values(status=LineStatus.STOPPED))
+    await sg.execute(update(MedicationLine).where(MedicationLine.id == held_id).values(status=LineStatus.HELD))
+    sg.expire_all()
+
+    answer = await ask(sg, owner, "what are my medicines", tmp_path)
+    texts = " ".join(line.text for line in answer.lines)
+    assert "blood pressure tablet" in texts  # the active line, still answered
+    assert "cholesterol tablet" not in texts  # stopped
+    assert "sugar tablet" not in texts  # held
+    cited_ids = {cite.id for line in answer.lines for cite in line.cites if cite.kind == "medication_line"}
+    assert active_id in cited_ids
+    assert stopped_id not in cited_ids
+    assert held_id not in cited_ids

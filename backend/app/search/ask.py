@@ -829,10 +829,22 @@ async def _compose(
     # D-1: a "paper" candidate and a "fact" candidate on the same artifact score identically on
     # every phrase they share (a fact's own subject is folded into its paper's candidate names
     # too, `_corpus_stream`'s own RECORDS loop) — a tie the retriever then breaks on nothing
-    # more meaningful than the two candidates' random ids. Ordered last here, so a same-artifact
-    # "fact" hit always claims `papers_said` first: a specific value is always more useful than
-    # "it is in your papers", never the reverse, so it must never lose that tie by chance.
-    ordered_hits = sorted(hits, key=lambda hit: hit.kind == "paper")
+    # more meaningful than the two candidates' random ids. Review item 9: reordering every
+    # "paper" hit to the end, globally, would also demote one with no competing fact at all —
+    # discarding the retriever's own score and recency for a paper that was never actually
+    # tied with anything. Scoped instead to the artefacts that really do have a same-artefact
+    # "fact" hit in this same result set: only a paper hit for one of THOSE artefacts moves
+    # after its fact hit, so a same-artefact "fact" always claims `papers_said` first — a
+    # specific value is always more useful than "it is in your papers" — while every other
+    # paper hit keeps the rank the retriever itself gave it.
+    fact_artifacts = {
+        corpus.facts[hit.ref].artifact_id
+        for hit in hits
+        if hit.kind == "fact" and corpus.facts[hit.ref].artifact_id is not None
+    }
+    ordered_hits = sorted(
+        hits, key=lambda hit: hit.kind == "paper" and hit.ref in fact_artifacts
+    )
     for hit in ordered_hits:
         if hit.kind == "reading":
             fact = corpus.facts[hit.ref]
@@ -864,10 +876,8 @@ async def _compose(
                 # never a guideline table's own opinion (`printed_range_for_fact`'s own
                 # docstring).
                 printed = await printed_range_for_fact(session, context, fact)
-                if printed is None or (printed.low is None and printed.high is None):
-                    band = "no_range"
-                else:
-                    band = band_of_printed(float(fact.value), printed)
+                band = None if printed is None else band_of_printed(float(fact.value), printed)
+                band = band or "no_range"
                 texts = words.value_lines(
                     language,
                     band=band,

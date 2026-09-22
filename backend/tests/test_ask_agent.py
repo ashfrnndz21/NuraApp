@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
@@ -51,6 +52,7 @@ from app.llm.ask_agent import (
     _ToolLine,
     _tools_for,
 )
+from app.medicines.models import LineStatus, MedicationLine
 from app.memory.models import ArtifactKind, SourceChannel
 from app.memory.semantic import assert_fact
 from app.regions import Region
@@ -59,7 +61,7 @@ from app.search.ask import Answer, AskStep, Mode, recall, waiting_papers
 from app.search.asker import AnswerDelta
 from app.search.elapsed import elapsed_phrase
 from app.search.retrieve import KeywordRetriever
-from tests.medicines_support import REGISTRY, let_in, pa
+from tests.medicines_support import REGISTRY, add, label, let_in, pa
 from tests.paper import LAB_REPORT_VITALS, PAPER, placeholder_png
 from tests.timeline_support import artefact, record, trail
 
@@ -1595,6 +1597,129 @@ async def test_is_it_high_states_the_papers_own_printed_range_never_a_verdict(
     assert ("fact", fact.id) in [(c.kind, c.id) for c in answer.lines[0].cites]
 
 
+async def test_a_forged_range_verdict_for_a_fact_with_no_printed_range_is_dropped(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Review blocker 1: `_RANGE_NOTE`'s own three phrases ("above/below/within the range
+    printed on the paper") are ordinary English words that pass `_has_conclusion_language` on
+    sight — nothing before `_band_claim` stopped the model writing one for a fact whose paper
+    printed no range at all. The tool line here says plainly "the paper prints no range for
+    it" (`_read_records`); a model that writes a band verdict anyway is forging one, and the
+    forged line must never reach him, whatever the ask ultimately answers with instead."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    forged = _final(
+        [
+            {
+                "text": "Your cholesterol was 122 on Wednesday 21 January, above the range printed on the paper.",
+                "cites": ["f1"],
+            }
+        ]
+    )
+    corrected = _final(
+        [
+            {
+                "text": "Your cholesterol was 122 on Wednesday 21 January. No range is printed on the paper.",
+                "cites": ["f1"],
+            }
+        ]
+    )
+    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
+    # The repair round actually fired (proof the forged line was caught and a `Finding`
+    # recorded for it, D-3's own machinery) — a second `messages.create` call happened.
+    assert len(client.messages.calls) == 3
+    assert "above the range" not in " ".join(answer.spoken)
+    assert answer.lines and answer.lines[0].text == (
+        "Your cholesterol was 122 on Wednesday 21 January. No range is printed on the paper."
+    )
+
+
+async def test_a_handed_out_band_survives_because_it_really_was_given(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The other half of review blocker 1's test: a band the tool actually handed out for the
+    fact the line cites is not a forgery, and must survive — `bands_given` is a positive
+    allow-list, not a blanket ban on the vocabulary. (`test_is_it_high_states_the_papers_own_
+    printed_range_never_a_verdict` above already proves this for "above"; this proves "within"
+    and "below" too, and that a correct claim needs no repair round at all.)"""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(
+        sg, owner, attribute="ldl", value=100, printed_range={"low": None, "high": 130, "text": "<130"}
+    )
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final(
+                [
+                    {
+                        "text": "Your cholesterol was 100 on Wednesday 21 January, within the range printed on the paper.",
+                        "cites": ["f1"],
+                    }
+                ]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
+    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
+    assert answer.lines and "within the range printed on the paper" in answer.lines[0].text
+
+
+async def test_a_wrong_number_for_a_confirmed_fact_is_dropped_dated_shape(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Review blocker 2, dated shape: fact = 122; the model says 212, with the real worded
+    date and a real fact cite. Nothing before `_value_claim` checked the number itself —
+    `verified()` (rule 10) only counts numbers, `_dated_claim` only checks the date — so this
+    line survived every existing gate intact until now."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    forged = _final([{"text": "Your cholesterol was 212 on Wednesday 21 January.", "cites": ["f1"]}])
+    corrected = _final([{"text": "Your cholesterol was 122 on Wednesday 21 January.", "cites": ["f1"]}])
+    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "What is my total cholesterol?", tmp_path)
+    assert len(client.messages.calls) == 3
+    assert "212" not in " ".join(answer.spoken)
+    assert answer.lines and answer.lines[0].text == "Your cholesterol was 122 on Wednesday 21 January."
+
+
+async def test_a_wrong_number_for_a_confirmed_fact_is_dropped_undated_shape(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Review blocker 2, undated shape: the same forged number with no date in the line at
+    all — `_value_claim` must not depend on a date being present to catch it."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    forged = _final([{"text": "Your cholesterol was 212.", "cites": ["f1"]}])
+    corrected = _final([{"text": "Your cholesterol was 122.", "cites": ["f1"]}])
+    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "What is my total cholesterol?", tmp_path)
+    assert len(client.messages.calls) == 3
+    assert "212" not in " ".join(answer.spoken)
+    assert answer.lines and answer.lines[0].text == "Your cholesterol was 122."
+
+
+async def test_the_correct_value_passes_undated_shape(sg: AsyncSession, tmp_path: Path) -> None:
+    """The positive case of review blocker 2: the real value, undated, is not a false
+    positive of `_value_claim`."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final([{"text": "Your cholesterol was 122.", "cites": ["f1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "What is my total cholesterol?", tmp_path)
+    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
+    assert answer.lines and answer.lines[0].text == "Your cholesterol was 122."
+
+
 async def test_the_conclusion_veto_still_holds_and_now_tells_the_model_why(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
@@ -1683,24 +1808,23 @@ async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card
     assert "Stop" not in " ".join(dose_answer.honest)
 
     # No value from an unconfirmed card: a waiting paper's own date is safe to say, a number
-    # about it is not, whatever put it there.
-    waiting_paper = await artefact(sg, owner, kind=ArtifactKind.PHOTO, when=WHEN)
-    scoped_new(
-        ReviewCard,
-        owner,
-        Scope.RECORDS,
-        artifact_id=waiting_paper.id,
-        document_kind=DocumentKind.LAB_REPORT,
-        document_date=WHEN.date(),
-    )
+    # about it is not, whatever put it there. Review blocker 5: the card must actually be
+    # persisted (`_open_review_card`, the same real ingestion pipeline `test_a_two_digit_
+    # value_from_an_unconfirmed_card_does_not_reach_the_answer` above already drives) — an
+    # object built with `scoped_new` and never `session.add`ed never reaches the database, so
+    # `read_waiting_papers` would find nothing and the drop would be `no_cite_matched`, never
+    # `value_from_unconfirmed_card`, and the veto would go untested.
+    store = LocalObjectStore(tmp_path, Region.SG)
+    await _open_review_card(sg, owner, store)
     unconfirmed_client = FakeClient(
         [
             _tool_call("toolu_1", "read_waiting_papers"),
             _final(
                 [
                     {
-                        "text": "Your blood test dated Wednesday 21 January said 230, not yet checked.",
-                        "cites": ["w1"],
+                        # The fixture's own printed document_date (lab-report-vitals-2026-09-10.json).
+                        "text": "Your blood test dated Thursday 10 September said 230, not yet checked.",
+                        "cites": ["r1"],
                     }
                 ]
             ),
@@ -1713,4 +1837,51 @@ async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card
         "what does my new blood test say",
         tmp_path,
     )
-    assert unconfirmed_answer.lines == ()
+    # The veto held (the model's own line was dropped) — with only one scripted response to
+    # repair with, the ask falls all the way to the rule-based fallback, which answers safely
+    # on its own ("A blood test is waiting for you to check."): never the model's forged
+    # number, however the ask ultimately answers.
+    assert "230" not in " ".join(unconfirmed_answer.spoken)
+
+
+async def test_a_stopped_or_held_medicine_never_reaches_the_model(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """Review blocker 6 / D-7: before the fix, `_read_medicines` filtered only
+    `superseded_at`, so a line marked STOPPED or HELD — current on the table, just not one he
+    is taking — still reached the model's own tool result (`ask_agent.py`), and so could still
+    be described as current. Checked directly against the JSON the tool hands the model, never
+    only the finished answer."""
+    owner = await pa(sg, language="en")
+    active = await add(sg, owner, label("amlodipine", "5 mg"))
+    stopped = await add(sg, owner, label("atorvastatin", "20 mg"))
+    held = await add(sg, owner, label("metformin", "500 mg"))
+    _active_id, stopped_id, held_id = active.line.id, stopped.line.id, held.line.id
+    # Immutable through the ORM (see the rule-based test above, `test_recall.py`'s own
+    # `test_a_stopped_medicine_never_appears_in_the_rule_based_answer`) — the same Core-level
+    # bypass, never ORM attribute assignment.
+    await sg.execute(
+        update(MedicationLine).where(MedicationLine.id == stopped_id).values(status=LineStatus.STOPPED)
+    )
+    await sg.execute(
+        update(MedicationLine).where(MedicationLine.id == held_id).values(status=LineStatus.HELD)
+    )
+    sg.expire_all()
+
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final(
+                [{"text": "Your blood pressure tablet is on your list of medicines.", "cites": ["m1"]}]
+            ),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    await _drive(asker, sg, owner, "what are my medicines", tmp_path)
+
+    tool_result = client.messages.calls[1]["messages"][-1]["content"][0]["content"]
+    assert "blood pressure tablet" in tool_result  # the active line
+    assert "cholesterol tablet" not in tool_result  # stopped (atorvastatin)
+    assert "sugar tablet" not in tool_result  # held (metformin)
+    assert str(stopped_id) not in tool_result
+    assert str(held_id) not in tool_result

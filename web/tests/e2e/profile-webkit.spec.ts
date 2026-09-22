@@ -9,10 +9,22 @@ import { fixClock, seedOwner, signInThroughTheApp } from "./helpers";
  *  (`page.evaluate(() => 1)` raced against a deadline) — so a regression here fails loudly
  *  instead of just timing out somewhere downstream with no clue which screen caused it.
  *
- *  WebKit is opt-in only (`playwright.config.ts`'s own comment): `NURA_E2E_WEBKIT=1 npx
- *  playwright test --project=webkit`. On chromium this walk still runs (the screens themselves
- *  are worth walking), but the freeze probe cannot fail chromium the way it could webkit, so
- *  the test is skipped there — the other specs already cover these screens on chromium. */
+ *  Honestly, three limits on what this guards (review item 7):
+ *  1. It runs in no automated gate today. WebKit is opt-in only (`playwright.config.ts`'s own
+ *     comment): `NURA_E2E_WEBKIT=1 npx playwright test --project=webkit`. CI's own runner has
+ *     no WebKit browser installed and installing one is off limits here (`.github` changes are
+ *     not this task's to make) — so this walk currently only runs on a developer's own machine,
+ *     on purpose, by hand.
+ *  2. `test.skip` below means it does not run on chromium at all — it is not "the same walk,
+ *      also run there for coverage"; chromium is skipped outright, because the freeze this
+ *      guards against has no chromium equivalent to catch. The other chromium specs
+ *      (`insurance.spec.ts`, `emergency.spec.ts`, `today.spec.ts`) already walk these same
+ *      screens for their own reasons; this file adds nothing on chromium.
+ *  3. The 10 s deadline in `stillResponsive` below catches a SUSTAINED freeze — the audit's
+ *      own measurement was as long as 149 s in one run — not necessarily the first 500 ms of
+ *      one that self-resolves before the check after that tap ever runs. A block shorter than
+ *      whatever gap sits between the tap and the next `stillResponsive` call would not be
+ *      caught here. */
 test.beforeEach(async ({ page }) => {
   await fixClock(page);
 });
