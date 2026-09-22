@@ -106,6 +106,9 @@ const card = (over: Partial<ReviewCardOut> = {}): ReviewCardOut => ({
   created_at: "2026-09-14T00:00:00Z",
   confirmed_at: "2026-09-14T00:10:00Z",
   fields: [],
+  clarify: null,
+  discarded: false,
+  duplicate_of_added_on: null,
   ...over,
 });
 

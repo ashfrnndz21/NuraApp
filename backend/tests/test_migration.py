@@ -19,7 +19,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 
@@ -256,7 +256,7 @@ def test_the_chain_has_one_head(revisions: dict[str, ModuleType]) -> None:
     """Heads built side by side are joined by a merge revision, so upgrade knows where to go."""
     parents = {parent for module in revisions.values() for parent in _parents(module)}
     heads = sorted(rev for rev in revisions if rev not in parents)
-    assert heads == ["0054_insurance_policy_essentials"]
+    assert heads == ["0056_answered_with"]
 
 
 async def test_the_migrations_build_the_tables_the_models_declare(
@@ -444,6 +444,132 @@ async def test_0005_will_not_drop_a_persons_word_or_an_events_source_on_the_way_
         assert "source_channel" not in {c["name"] for c in inspect(connection).get_columns("event")}
         _apply(connection, review, "upgrade")
         assert connection.execute(select(Artifact.__table__.c.id)).scalar_one() == photo
+
+    await on_an_empty_database(walk)
+
+
+async def test_0055_collapses_duplicate_artifacts_before_the_unique_index_and_repoints_a_confirmed_facts_chain(
+    revisions: dict[str, ModuleType],
+) -> None:
+    """B4, the independent safety review: `0055_whose_paper_and_duplicates`'s unique index on
+    `(profile_id, sha256)` cannot simply be created on a database that already has duplicate
+    groups — the owner's own has nine. Three rows share one digest here, the earliest the
+    survivor by construction (`stored_at`); a review card and a confirmed fact sit on the
+    LATEST (the row that would be deleted as a loser) — the exact shape the collapse must get
+    right: the reference moves to the survivor before the loser is ever deleted, so the
+    confirmed fact is never orphaned and the card is never dropped. Proven up, down and up
+    again on SQLite."""
+    ordered = _in_order(revisions)
+    whose_paper = revisions["0055_whose_paper_and_duplicates"]
+    before = ordered[: ordered.index(whose_paper)]
+
+    def walk(connection: Connection) -> None:
+        for migration in before:
+            _apply(connection, migration, "upgrade")
+
+        pa, profile = uuid.uuid4(), uuid.uuid4()
+        earliest, middle, latest = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        digest = "d" * 64
+        t0 = datetime(2026, 9, 1, 8, 0, tzinfo=UTC)
+        connection.execute(
+            Person.__table__.insert().values(
+                id=pa, region="SG", display_name="Pa", language="en", created_at=t0
+            )
+        )
+        connection.execute(
+            Profile.__table__.insert().values(
+                id=profile,
+                region="SG",
+                display_name="Pa",
+                language="en",
+                owner_person_id=pa,
+                created_at=t0,
+            )
+        )
+        for ident, when in ((earliest, t0), (middle, t0 + timedelta(minutes=1)), (latest, t0 + timedelta(minutes=2))):
+            connection.execute(
+                Artifact.__table__.insert().values(
+                    written_scope="records",
+                    id=ident,
+                    profile_id=profile,
+                    kind="photo",
+                    storage_key=f"sg/{ident}.jpg",
+                    content_type="image/jpeg",
+                    sha256=digest,
+                    captured_at=when,
+                    source_channel="app",
+                    region="SG",
+                    stored_at=when,
+                )
+            )
+        card = uuid.uuid4()
+        connection.execute(
+            ReviewCard.__table__.insert().values(
+                id=card,
+                profile_id=profile,
+                artifact_id=latest,
+                document_kind="lab_report",
+                created_at=t0,
+                confirmed_at=t0,
+                confirmed_by_person_id=pa,
+            )
+        )
+        fact = uuid.uuid4()
+        connection.execute(
+            Fact.__table__.insert().values(
+                id=fact,
+                profile_id=profile,
+                subject="lipid_panel",
+                attribute="total_cholesterol",
+                value=212,
+                confidence=1.0,
+                confidence_state="confirmed_by_person",
+                artifact_id=latest,
+                valid_from=t0,
+                asserted_at=t0,
+                confirmed_by_person_id=pa,
+            )
+        )
+
+        _apply(connection, whose_paper, "upgrade")
+
+        remaining = connection.execute(
+            select(Artifact.__table__.c.id).where(Artifact.__table__.c.profile_id == profile)
+        ).scalars().all()
+        assert remaining == [earliest], "only the earliest row survives the collapse"
+        assert (
+            connection.execute(
+                select(ReviewCard.__table__.c.artifact_id).where(ReviewCard.__table__.c.id == card)
+            ).scalar_one()
+            == earliest
+        ), "the card's reference moved to the survivor, never dropped"
+        assert (
+            connection.execute(
+                select(Fact.__table__.c.artifact_id).where(Fact.__table__.c.id == fact)
+            ).scalar_one()
+            == earliest
+        ), "the confirmed fact's own provenance moved too — never left dangling on a deleted row"
+        indexes = {ix["name"] for ix in inspect(connection).get_indexes("artifact")}
+        assert "ix_artifact_profile_sha256" in indexes
+
+        # Down: the index and the new columns go; the collapse itself is not undone (there
+        # were never two rows that were both right — only ever one paper, twice).
+        _apply(connection, whose_paper, "downgrade")
+        assert "ix_artifact_profile_sha256" not in {
+            ix["name"] for ix in inspect(connection).get_indexes("artifact")
+        }
+        assert (
+            connection.execute(
+                select(ReviewCard.__table__.c.artifact_id).where(ReviewCard.__table__.c.id == card)
+            ).scalar_one()
+            == earliest
+        )
+
+        # Up again: nothing left to collapse, the index is created cleanly.
+        _apply(connection, whose_paper, "upgrade")
+        assert connection.execute(
+            select(Artifact.__table__.c.id).where(Artifact.__table__.c.profile_id == profile)
+        ).scalars().all() == [earliest]
 
     await on_an_empty_database(walk)
 

@@ -286,7 +286,10 @@ async def _confirmed_paper(
         Scope.RECORDS,
         where=(ReviewCard.artifact_id == artifact_id,),
     )
-    confirmed = [card for card in found if not card.is_open]
+    # `is_confirmed`, never `not is_open`: a card set aside on its own question ("someone
+    # else's paper") is not open either, but it was never said yes to — its fields are not
+    # facts, and this must never narrate them as if they were (independent safety review).
+    confirmed = [card for card in found if card.is_confirmed]
     if not confirmed:
         raise NotAConfirmedPaper(
             f"no confirmed paper {artifact_id} on profile {context.profile_id}"

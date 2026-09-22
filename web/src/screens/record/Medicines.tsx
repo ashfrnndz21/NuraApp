@@ -619,8 +619,31 @@ export function AddMedicineScreen(): JSX.Element {
       setStep("confirm");
     });
 
-  /** "Looks right.": classify the name against the register before anything is checked —
-   *  a class such as "STATIN" asks which one (#302) instead of being taken as a product. */
+  // D-6: classify the name against the register before anything is checked — a class such
+  // as "STATIN" asks which one (#302) instead of being taken as a product. Both ways into
+  // the confirm/check step run through this — the photo read-back's one-tap "Looks right"
+  // (`looksRight`) and the typed/edited label's "Check it" (`check`, `add-label`'s own
+  // form) — since a class name typed by hand is exactly as unsafe to file as one read off a
+  // box: `classify_name` (`app.medicines.classify`) is the one gate, never a per-caller
+  // guess, and a name it cannot classify at all (`NameKind.UNKNOWN`) still reaches the
+  // register's own `NotIdentified` refusal downstream, unchanged.
+  const classifyThenCheck = async (ready: NonNullable<ReturnType<typeof tidyLabel>>) => {
+    const { bearer, profileId } = session();
+    const found = await nura.medicineClassify(bearer, profileId, ready.generic ?? "");
+    const question = classQuestionFor(found);
+    if (question.kind === "ask") {
+      setCandidates(question.candidates);
+      setStep("which");
+      return;
+    }
+    // The register may know this name only as a brand ("Norvasc") — `identify()` only
+    // ever matches a `LabelIn.generic` against a product's own generic, never against its
+    // brand, so replaying the same text back would find nothing even though classify just
+    // said "medicine" (#10). Settle on the register's own generic before drafting.
+    const settled = found.resolved_generic ? { ...ready, generic: found.resolved_generic } : ready;
+    await checkWith(settled);
+  };
+
   const looksRight = () =>
     run(async () => {
       const ready = tidyLabel(label);
@@ -628,20 +651,7 @@ export function AddMedicineScreen(): JSX.Element {
         setStep("label");
         return;
       }
-      const { bearer, profileId } = session();
-      const found = await nura.medicineClassify(bearer, profileId, ready.generic ?? "");
-      const question = classQuestionFor(found);
-      if (question.kind === "ask") {
-        setCandidates(question.candidates);
-        setStep("which");
-        return;
-      }
-      // The register may know this name only as a brand ("Norvasc") — `identify()` only
-      // ever matches a `LabelIn.generic` against a product's own generic, never against its
-      // brand, so replaying the same text back would find nothing even though classify just
-      // said "medicine" (#10). Settle on the register's own generic before drafting.
-      const settled = found.resolved_generic ? { ...ready, generic: found.resolved_generic } : ready;
-      await checkWith(settled);
+      await classifyThenCheck(ready);
     });
 
   const pick = (candidate: ClassCandidateOut) =>
@@ -671,7 +681,7 @@ export function AddMedicineScreen(): JSX.Element {
     run(async () => {
       const ready = tidyLabel(label);
       if (!ready) return;
-      await checkWith(ready);
+      await classifyThenCheck(ready);
     });
 
   const save = () =>

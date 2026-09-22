@@ -1880,6 +1880,60 @@ export const zh = {
       titlePharmacyReceipt: "药房收据",
       // @patient phrase
       titleUnknown: "页面",
+      // @patient phrase
+      whoseFieldName: "姓名",
+      // @patient phrase
+      whoseFieldPatientId: "证件号",
+      // @patient phrase
+      whoseFieldBirthYear: "出生年份",
+      // @patient phrase
+      whoseFieldSex: "性别",
+      // @patient phrase
+      whoseFieldAnd: "和",
+      // @patient headline
+      whoseMismatchLeadIsSelf: "这份文件上的{fields}不是您的。",
+      // @patient headline
+      whoseMismatchLeadAreSelf: "这份文件上的{fields}不是您的。",
+      // @patient headline
+      whoseMismatchLeadIsOther: "这份文件上的{fields}不是{patient}的。",
+      // @patient headline
+      whoseMismatchLeadAreOther: "这份文件上的{fields}不是{patient}的。",
+      // @patient headline
+      whoseLeadGeneric: "这份文件上的资料和您的不相符。",
+      // @patient headline
+      whoseLeadGenericOther: "这份文件上的资料和{patient}的不相符。",
+      // @patient
+      whoseQuestion: "这是您的文件吗？",
+      // @patient
+      whoseQuestionOther: "这是{patient}的文件吗？",
+      // @patient phrase
+      whoseMine: "是的，是我的",
+      // @patient phrase
+      whoseMineOther: "是的，是{patient}的",
+      // @patient phrase
+      whoseSomeoneElses: "不是，是别人的",
+      // @patient phrase
+      whoseNotSure: "我不确定",
+      // @patient
+      whoseSetAside: "Nura 不会保留这份文件。",
+      // @patient
+      whoseSetAsideOther: "Nura 不会把这份文件放进{patient}的文件里。",
+      // @patient headline
+      duplicateLead: "这看起来像您在{date}添加过的文件。",
+      // @patient headline
+      duplicateLeadOther: "这看起来像{patient}在{date}添加过的文件。",
+      // @patient
+      duplicateQuestion: "是同一份文件吗？",
+      // @patient phrase
+      duplicateSame: "是的，是同一份",
+      // @patient phrase
+      duplicateDifferent: "不是，是另一份",
+      // @patient
+      duplicateSetAside: "Nura 已经有这份文件了。",
+      // @patient
+      duplicateAddedOn: "您在{date}添加过这份文件。",
+      // @patient
+      duplicateAddedOnOther: "{patient}在{date}添加过这份文件。",
     },
     questions: {
       // @patient headline
@@ -2025,7 +2079,7 @@ export const zh = {
         patient_id: "报告上的证件号",
         ordering_doctor: "哪位医生要求做的",
       },
-      person: { birth_year: "出生年份", sex: "男或女" },
+      person: { birth_year: "出生年份", age: "报告上的年龄", sex: "男或女" },
       medicine: {
         name: "这种药",
         strength: "药有多强",

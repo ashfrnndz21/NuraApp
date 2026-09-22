@@ -46,6 +46,7 @@ async def record(
     rows: int = 0,
     target_id: uuid.UUID | None = None,
     refused_because: str | None = None,
+    answered_with: str | None = None,
     shared_with_person_id: uuid.UUID | None = None,
     shared_with_label: str | None = None,
 ) -> AuditEntry:
@@ -78,6 +79,7 @@ async def record(
         "rows": rows,
         "outcome": outcome,
         "refused_because": refused_because,
+        "answered_with": answered_with,
         "shared_with_person_id": shared_with_person_id,
         "shared_with_label": shared_with_label,
     }

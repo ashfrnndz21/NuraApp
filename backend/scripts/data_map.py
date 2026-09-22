@@ -190,6 +190,12 @@ CLASSES: dict[str, str] = {
     "audit_entry.rows": AUDIT,
     "audit_entry.outcome": AUDIT,
     "audit_entry.refused_because": AUDIT,
+    # A card's own answer to its one pending question — "mine", "someone_elses", "same" or
+    # "different" — from the closed set it was checked against before the line was written
+    # (`WHOSE_PAPER_ANSWERS`/`DUPLICATE_PAPER_ANSWERS`, `app.ingestion.review`). A code from
+    # a fixed enum, not a name or any other free text, the same shape as `refused_because`
+    # right above it.
+    "audit_entry.answered_with": AUDIT,
     "audit_entry.shared_with_person_id": IDENTIFIER,
     "audit_entry.shared_with_label": IDENTIFIER,
     # --- the health graph: memory ---------------------------------------------------------------
@@ -294,6 +300,15 @@ CLASSES: dict[str, str] = {
     "review_card.created_at": OPERATIONAL,
     "review_card.confirmed_at": OPERATIONAL,
     "review_card.confirmed_by_person_id": IDENTIFIER,
+    # D-2/D-4b (audit-2026-09-22.md): the one pending question a card may ask before it may
+    # be filed. `question_payload` can carry the paper's own printed name (D-2's mismatch),
+    # so it is HEALTH like the rest of what a card holds, not merely OPERATIONAL.
+    "review_card.pending_question": OPERATIONAL,
+    "review_card.question_payload": HEALTH,
+    "review_card.question_answer": OPERATIONAL,
+    "review_card.question_answered_at": OPERATIONAL,
+    "review_card.question_answered_by_person_id": IDENTIFIER,
+    "review_card.discarded_at": OPERATIONAL,
     "review_field.card_id": HEALTH,
     "review_field.position": OPERATIONAL,
     "review_field.subject": HEALTH,

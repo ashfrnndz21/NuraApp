@@ -1,0 +1,31 @@
+{
+  "placeholder": "lab-report-not-his-2026-09-20",
+  "note": "What the paper says, labelled by hand: every field printed clearly, so every one should be read right.",
+  "document_kind": "lab_report",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "patient_name",
+      "value": "Demo Patient Name",
+      "unit": null
+    },
+    {
+      "subject": "person",
+      "attribute": "age",
+      "value": 40,
+      "unit": null
+    },
+    {
+      "subject": "person",
+      "attribute": "sex",
+      "value": "male",
+      "unit": null
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 190,
+      "unit": "mg/dL"
+    }
+  ]
+}

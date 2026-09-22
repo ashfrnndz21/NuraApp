@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { ReviewCardOut, ReviewFieldOut } from "../../src/api/types";
+import type { ReviewCardOut, ReviewClarifyOut, ReviewFieldOut } from "../../src/api/types";
 import { fieldValueDate } from "../../src/onboarding/dates";
 import {
   canCorrect,
   confidenceLine,
   decide,
   decisionsFor,
+  duplicateAddedOnLine,
+  duplicateQuestionLead,
   effectiveValue,
   facilityField,
   fieldLabel,
@@ -30,6 +32,7 @@ import {
   startingEdits,
   valueText,
   readableValueText,
+  whoseQuestionLead,
 } from "../../src/onboarding/review";
 import { en } from "../../src/strings/en";
 import { ms } from "../../src/strings/ms";
@@ -66,6 +69,9 @@ const card = (fields: ReviewFieldOut[], kind: ReviewCardOut["document_kind"] = "
   created_at: "2026-09-14T08:00:00Z",
   confirmed_at: null,
   fields,
+  clarify: null,
+  discarded: false,
+  duplicate_of_added_on: null,
 });
 
 const tg = field("f-tg", "triglycerides", 64, true, 3);
@@ -601,5 +607,74 @@ describe("a value that already opens with the paper's own label (22 Sep 2026, th
     expect(saysItself("RM360", "Hospital Room & Board Charges")).toBe(false);
     expect(saysItself("Overall Annual Limit", "Overall Annual Limit")).toBe(false);
     expect(saysItself("", "Overall Annual Limit")).toBe(false);
+  });
+});
+
+describe("whoseQuestionLead: which fields disagreed, never what the paper printed there (FIX BEFORE MERGE, the independent safety review)", () => {
+  const mismatch = (mismatched: ReviewClarifyOut["mismatched"]): ReviewClarifyOut => ({
+    kind: "whose_paper",
+    mismatched,
+    existing_card_id: null,
+    existing_added_on: null,
+  });
+
+  it("names one field, in his own voice", () => {
+    expect(whoseQuestionLead(mismatch(["birth_year"]), en, "")).toBe(
+      "The year of birth on this paper is not yours.",
+    );
+  });
+
+  it("joins two fields with 'and', and picks 'are' for more than one", () => {
+    expect(whoseQuestionLead(mismatch(["name", "birth_year"]), en, "")).toBe(
+      "The name and the year of birth on this paper are not yours.",
+    );
+  });
+
+  it("speaks the caregiver's voice by his own name, never 'you'", () => {
+    expect(whoseQuestionLead(mismatch(["name"]), en, "Pa")).toBe(
+      "The name on this paper is not Pa's.",
+    );
+  });
+
+  it("never renders any value the paper itself printed — only field names, whatever the card carries", () => {
+    const withExtraneousFields = {
+      ...mismatch(["name"]),
+      // A malformed or old-shaped payload might still carry raw text; the type no longer
+      // declares these fields at all, but the function must still never reach for them by
+      // any other name.
+    } as ReviewClarifyOut & { paper_name?: string };
+    const lead = whoseQuestionLead(withExtraneousFields, en, "");
+    expect(lead).not.toContain("Demo Patient Name");
+    expect(lead).toBe("The name on this paper is not yours.");
+  });
+
+  it("falls back to the generic line when nothing is named as mismatched", () => {
+    expect(whoseQuestionLead(mismatch([]), en, "")).toBe("This paper's details do not match your own.");
+    expect(whoseQuestionLead(mismatch([]), en, "Pa")).toBe("This paper's details do not match Pa's own.");
+  });
+
+  it("says the same thing in Malay, field names and all", () => {
+    expect(whoseQuestionLead(mismatch(["sex"]), ms, "")).toBe("Jantina pesakit pada surat ini bukan milik anda.");
+  });
+});
+
+describe("duplicateQuestionLead / duplicateAddedOnLine: the caregiver twin (FIX BEFORE MERGE, the independent safety review)", () => {
+  const clarify: ReviewClarifyOut = {
+    kind: "duplicate_paper",
+    mismatched: [],
+    existing_card_id: "existing-1",
+    existing_added_on: "2026-09-14",
+  };
+
+  it("reads 'you' in the patient's own voice", () => {
+    expect(duplicateQuestionLead(clarify, en, "en-SG")).toContain("you added");
+    expect(duplicateAddedOnLine("2026-09-14", en, "en-SG")).toBe("You added this paper on Monday 14 September.");
+  });
+
+  it("reads his own name in the caregiver's voice, never 'you'", () => {
+    const lead = duplicateQuestionLead(clarify, en, "en-SG", "Pa");
+    expect(lead).toContain("Pa added");
+    expect(lead).not.toContain("you added");
+    expect(duplicateAddedOnLine("2026-09-14", en, "en-SG", "Pa")).toBe("Pa added this paper on Monday 14 September.");
   });
 });

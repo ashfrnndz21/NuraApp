@@ -606,6 +606,9 @@ async def _papers(run: Run) -> None:
         Scope.RECORDS,
         where=(
             ReviewCard.confirmed_at.is_(None),
+            # A card set aside is resolved, not waiting for a yes: never counted as a
+            # paper the chief still needs to check (B2's `is_open`/`is_confirmed` split).
+            ReviewCard.discarded_at.is_(None),
             ReviewCard.created_at > run.at - timedelta(days=1),
         ),
         channel=Channel.SYSTEM,

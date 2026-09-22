@@ -248,14 +248,14 @@ async def test_after_the_window_nothing_of_his_remains_but_the_record_of_it(
     await store.put("evidence/someone-elses.pdf", b"not his")
     other = uuid.uuid4()
     await store.put(f"photos/{other}/theirs", b"another profile's bytes")
-    for key in (f"photos/{other}/theirs", "Not A Key!"):
+    for index, key in enumerate((f"photos/{other}/theirs", "Not A Key!")):
         sg.add(
             Artifact(
                 profile_id=profile_id,
                 kind=ArtifactKind.PDF,
                 storage_key=key,
                 content_type="application/pdf",
-                sha256="1" * 64,
+                sha256=f"{index}" + "1" * 63,
                 captured_at=utcnow(),
                 source_channel=SourceChannel.APP,
                 region=Region.SG,

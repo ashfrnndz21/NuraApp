@@ -45,6 +45,7 @@ from app.audit.models import Action
 from app.db import as_utc, nested_unit_of_work, utcnow
 from app.drugs.registry import DrugRegistry
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.models import ConsultRecording, ConsultSegment
 from app.ingestion.objects import NoSuchObject, ObjectStore, sha256_of
 from app.ingestion.speakers import Aligned, SegmentsDoNotFit, SpeakerSeparator, Unseparated, align
@@ -230,21 +231,33 @@ async def record_consult(
     )
     digest = sha256_of(data)
     key = consult_key(context.profile_id, digest)
-    # The row first, then the bytes: a refusal where the bytes land leaves nothing in the
-    # store. `store_artifact` asks the RECORDING consent again, for a consult, whoever writes.
-    artifact = await store_artifact(
-        session,
-        context=context,
-        kind=ArtifactKind.VOICE,
-        recording=Recording.CONSULT,
-        storage_key=key,
-        content_type=kind,
-        sha256=digest,
-        captured_at=began,
-        source_channel=SourceChannel.APP,
-        region=store.region,
+    # A retried upload of the same recording — the same visit, resent after a dropped
+    # connection — is the same bytes: migration 0055's `(profile_id, sha256)` index makes a
+    # second row of them impossible, so this reuses the artefact already on file rather than
+    # writing it twice. `ConsultRecording` below is still written on every call, naming
+    # whichever appointment this call is for — the row that makes this "a visit's own
+    # recording", not the artefact.
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.VISITS, kind=ArtifactKind.VOICE, sha256=digest
     )
-    await store.put(key, data)
+    if existing is not None:
+        artifact = existing
+    else:
+        # The row first, then the bytes: a refusal where the bytes land leaves nothing in the
+        # store. `store_artifact` asks the RECORDING consent again, for a consult, whoever writes.
+        artifact = await store_artifact(
+            session,
+            context=context,
+            kind=ArtifactKind.VOICE,
+            recording=Recording.CONSULT,
+            storage_key=key,
+            content_type=kind,
+            sha256=digest,
+            captured_at=began,
+            source_channel=SourceChannel.APP,
+            region=store.region,
+        )
+        await store.put(key, data)
 
     heard = await transcriber.transcribe(data, kind, visit.language, context.region)
     transcript: Artifact | None = None

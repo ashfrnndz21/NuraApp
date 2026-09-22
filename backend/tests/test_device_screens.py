@@ -22,7 +22,7 @@ from app.regions import REGION_TZ, Region
 from tests.api import bearer, own_profile, register_by_phone
 from tests.capture_support import confirm, decide, photo, refusals
 from tests.conftest import Deployment
-from tests.paper import BP_CUFF, GLUCOMETER, LIPID_PANEL
+from tests.paper import BP_CUFF, BP_CUFF_AGAIN, GLUCOMETER, LIPID_PANEL
 
 PA = "+6591200001"
 LATER_THAT_DAY = datetime(2026, 9, 14, 6, 0, tzinfo=UTC)
@@ -163,7 +163,11 @@ async def test_a_time_on_the_screen_later_than_now_is_refused_and_rejecting_it_u
     assert refused.status_code == 400 and refused.json() == {"refusal": "NotAWholeReading"}
     clock.set(datetime(2026, 9, 3, 9, 0, tzinfo=UTC))
     card = await _screen(deployment, pa, profile_id, BP_CUFF)
-    body = {**photo(BP_CUFF, at="2026-09-03T08:30:00Z")}
+    # D-4a: the same bytes twice for one profile now reuse the first artefact (migration
+    # 0055's `(profile_id, sha256)` index), so the corrected capture is photographed again
+    # under a different digest (`BP_CUFF_AGAIN`) — a genuinely new artefact, the way a second,
+    # later photo of the same screen always is.
+    body = {**photo(BP_CUFF_AGAIN, at="2026-09-03T08:30:00Z")}
     posted = await deployment.client.post(
         f"/profiles/{profile_id}/readings/photo", json=body, headers=bearer(pa["token"])
     )

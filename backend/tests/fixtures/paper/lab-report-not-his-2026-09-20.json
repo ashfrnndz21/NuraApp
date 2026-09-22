@@ -1,0 +1,41 @@
+{
+  "placeholder": "lab-report-not-his-2026-09-20",
+  "sha256": "70bd9cfaa311faccb8dd1c594f56ec96c1a04c2ab0791cb3d40b21108591307d",
+  "note": "D-2 test fixture (audit-2026-09-22.md, 'whose paper is it'): a demo-style lab sheet, the owner's own example — a printed name that is not the profile's, and an age forty years younger than a profile born in the 1950s. Built to prove the identity check asks a plain question rather than writing person.birth_year/person.sex off a header nobody compared. Wholly synthetic, no real patient.",
+  "document_kind": "lab_report",
+  "document_date": "2026-09-20",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "patient_name",
+      "value": "Demo Patient Name",
+      "unit": null,
+      "confidence": 0.95,
+      "span": { "x0": 0.1, "y0": 0.08, "x1": 0.55, "y1": 0.11 }
+    },
+    {
+      "subject": "person",
+      "attribute": "age",
+      "value": 40,
+      "unit": null,
+      "confidence": 0.93,
+      "span": { "x0": 0.57, "y0": 0.08, "x1": 0.72, "y1": 0.11 }
+    },
+    {
+      "subject": "person",
+      "attribute": "sex",
+      "value": "male",
+      "unit": null,
+      "confidence": 0.93,
+      "span": { "x0": 0.74, "y0": 0.08, "x1": 0.85, "y1": 0.11 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 190,
+      "unit": "mg/dL",
+      "confidence": 0.96,
+      "span": { "x0": 0.62, "y0": 0.3, "x1": 0.74, "y1": 0.325 }
+    }
+  ]
+}
