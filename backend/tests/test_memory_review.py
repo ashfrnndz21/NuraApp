@@ -103,13 +103,14 @@ async def _pa(session: AsyncSession, phone: str = "+6591110001") -> KeyContext:
 
 
 async def _photo(session: AsyncSession, context: KeyContext) -> Artifact:
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
     return await store_artifact(
         session,
         context=context,
         kind=ArtifactKind.PHOTO,
         storage_key="sg/profiles/pa/bp-book.jpg",
         content_type="image/jpeg",
-        sha256=SHA,
+        sha256=digest,
         captured_at=SEPT_3,
         source_channel=SourceChannel.APP,
         region=Region.SG,

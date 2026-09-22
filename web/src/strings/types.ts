@@ -961,6 +961,25 @@ export interface Strings {
       titlePillPhoto: string;
       titlePharmacyReceipt: string;
       titleUnknown: string;
+      whoseLeadBoth: string;
+      whoseLeadNameOnly: string;
+      whoseLeadYearOnly: string;
+      whoseLeadGeneric: string;
+      whoseLeadGenericOther: string;
+      whoseQuestion: string;
+      whoseQuestionOther: string;
+      whoseMine: string;
+      whoseMineOther: string;
+      whoseSomeoneElses: string;
+      whoseNotSure: string;
+      whoseSetAside: string;
+      whoseSetAsideOther: string;
+      duplicateLead: string;
+      duplicateQuestion: string;
+      duplicateSame: string;
+      duplicateDifferent: string;
+      duplicateSetAside: string;
+      duplicateAddedOn: string;
     };
     questions: {
       titleSelf: string;

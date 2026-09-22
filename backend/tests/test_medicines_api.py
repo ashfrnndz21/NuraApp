@@ -509,6 +509,56 @@ async def test_the_label_must_name_a_medicine_and_say_the_dose_one_way(
     assert missing.status_code == 404 and missing.json() == {"refusal": "NoSuchLine"}
 
 
+async def test_a_class_name_is_never_stored_as_a_medicine_D6(deployment: Deployment) -> None:
+    """D-6, the write side: the register alone decides whether a name is a product, and
+    "STATIN" is a class it files three products under (`app.medicines.classify`), never a
+    product of its own — `identify(LabelFields(generic="STATIN"))` finds nothing
+    (`tests/test_medicines_classify.py`), so `_one_product` refuses it with the same
+    `NotIdentified` any other unmatched name gets, in `plan()` (`app.medicines.service:384`),
+    which both `POST …/medicines/draft` and `POST …/confirmations` run before either shows or
+    mints anything. There is no path — draft, mint, or a straight write with a hand-built
+    confirmation id — that ends with "STATIN" on a person's medicine list; the screen's own
+    "which one is it?" step (`record/Medicines.tsx:791`) is what a person is offered instead
+    of ever reaching this refusal in the ordinary walk."""
+    client = deployment.client
+    pa = await register_by_phone(deployment, PA, "Pa")
+    profile_id = await own_profile(deployment, pa)
+    his = bearer(pa["token"])
+    photo = await _artefact(client, profile_id, pa)
+    statin = _label("STATIN", "20 mg", "1 tab ON")
+
+    refused = await client.post(
+        f"/profiles/{profile_id}/medicines/draft",
+        json={"label": statin, "source_artifact_id": photo},
+        headers=his,
+    )
+    assert refused.status_code == 400 and refused.json() == {"refusal": "NotIdentified"}
+
+    # Nor can a yes even be minted for it — `POST /confirmations` classifies the same label
+    # the same way, so there is no confirmation id a client could go on to replay at `POST
+    # …/medicines` either.
+    mint_refused = await client.post(
+        f"/profiles/{profile_id}/confirmations",
+        json={"subject": "medicine", "label": statin, "source_artifact_id": photo},
+        headers=his,
+    )
+    assert mint_refused.status_code == 400 and mint_refused.json() == {"refusal": "NotIdentified"}
+
+    # A hand-built write, no real confirmation behind it at all, is refused before the
+    # confirmation id is even looked at — `plan()` runs first.
+    write_refused = await client.post(
+        f"/profiles/{profile_id}/medicines",
+        json={
+            "label": statin,
+            "source_artifact_id": photo,
+            "confirmation_id": "00000000-0000-0000-0000-000000000001",
+        },
+        headers=his,
+    )
+    assert write_refused.status_code == 400 and write_refused.json() == {"refusal": "NotIdentified"}
+    assert (await client.get(f"/profiles/{profile_id}/medicines", headers=his)).json() == []
+
+
 async def test_a_dose_from_a_pdf_is_not_a_label_photo_either(deployment: Deployment) -> None:
     pa = await register_by_phone(deployment, PA, "Pa")
     profile_id = await own_profile(deployment, pa)

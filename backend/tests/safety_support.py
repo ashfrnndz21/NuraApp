@@ -36,7 +36,6 @@ def transcriber_for(region: Region) -> FixtureTranscriber:
 
 
 SEPT_3 = datetime(2026, 9, 3, 8, 0, tzinfo=UTC)
-SHA = "a" * 64
 
 
 async def pa(
@@ -87,13 +86,14 @@ async def fact(
     valid_to: datetime | None = None,
 ) -> Fact:
     """A fact on a letter photo: the way a clinician's control word or an allergy lands."""
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
     photo = await store_artifact(
         session,
         context=context,
         kind=ArtifactKind.PHOTO,
         storage_key=f"{context.region.value.lower()}/profiles/pa/{subject}-{attribute}-{uuid.uuid4()}.jpg",
         content_type="image/jpeg",
-        sha256=SHA,
+        sha256=digest,
         captured_at=SEPT_3,
         source_channel=SourceChannel.APP,
         region=context.region,

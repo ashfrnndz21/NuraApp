@@ -42,6 +42,11 @@ RECEIPT = "receipt-2026-09-01"
 BP_CUFF = "bp-cuff-2026-09-14"
 """A blood pressure machine's screen, 14 September 2026 at 7.42: 138/84, pulse 72."""
 
+BP_CUFF_AGAIN = "bp-cuff-2026-09-14-again"
+"""D-4a, the same screen photographed again (audit-2026-09-22.md): the same reading as
+`BP_CUFF` — same numbers, same time on the screen — re-photographed under a different digest,
+so a second, later capture of it is a genuinely new artefact rather than the same bytes."""
+
 GLUCOMETER = "glucometer-2026-09-14"
 """A glucometer's screen, 14 September 2026 at 6.55: 6.8 mmol/L."""
 
@@ -102,6 +107,16 @@ STATIN_BOX = "statin-box-2026-09-19"
 """A cholesterol-tablet box printing only its drug family — STATIN 20 mg, 28 tablets — with
 no brand and no generic anywhere on it, 19 September 2026 (#302, the owner's own case: 'a box
 that says only STATIN 20 mg, 28 tablets ... asks which statin it is'). Synthetic."""
+
+LAB_REPORT_NOT_HIS = "lab-report-not-his-2026-09-20"
+"""D-2, "whose paper is it" (audit-2026-09-22.md): a demo-style lab sheet naming a patient
+who is not the profile's own — a different printed name, and an age forty years younger than
+a profile born in the 1950s, 20 September 2026. Synthetic."""
+
+LIPID_PANEL_2025_AGAIN = "lipid-panel-2025-08-29-again"
+"""D-4b, duplicates (audit-2026-09-22.md): the same lipid panel as `LIPID_PANEL_2025` —
+same lab, same printed date, same four analytes — re-photographed under a different digest,
+so D-4a's exact-bytes check can never catch it and only the semantic key can. Synthetic."""
 
 PDF_HEADER = b"%PDF-1.4\n"
 

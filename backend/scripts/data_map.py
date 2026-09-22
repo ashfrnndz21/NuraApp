@@ -294,6 +294,15 @@ CLASSES: dict[str, str] = {
     "review_card.created_at": OPERATIONAL,
     "review_card.confirmed_at": OPERATIONAL,
     "review_card.confirmed_by_person_id": IDENTIFIER,
+    # D-2/D-4b (audit-2026-09-22.md): the one pending question a card may ask before it may
+    # be filed. `question_payload` can carry the paper's own printed name (D-2's mismatch),
+    # so it is HEALTH like the rest of what a card holds, not merely OPERATIONAL.
+    "review_card.pending_question": OPERATIONAL,
+    "review_card.question_payload": HEALTH,
+    "review_card.question_answer": OPERATIONAL,
+    "review_card.question_answered_at": OPERATIONAL,
+    "review_card.question_answered_by_person_id": IDENTIFIER,
+    "review_card.discarded_at": OPERATIONAL,
     "review_field.card_id": HEALTH,
     "review_field.position": OPERATIONAL,
     "review_field.subject": HEALTH,

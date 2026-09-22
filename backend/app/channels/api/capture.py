@@ -11,6 +11,8 @@
                                                       on a card reopened read-only (E02-07 library)
     POST /profiles/{id}/review-cards/{card_id}/fields/{field_id}/type
                                                       type in a field Nura could not read
+    POST /profiles/{id}/review-cards/{card_id}/answer  answer the card's one pending question
+                                                      (D-2 whose paper, D-4b a likely duplicate)
     POST /profiles/{id}/review-cards/{card_id}/confirm  close it with the yes minted for it
     GET  /profiles/{id}/facts?subject=                the current facts, by subject
     POST /profiles/{id}/events/{event_id}/notes       a voice note or a scribble on an event
@@ -48,6 +50,7 @@ from app.channels.api.schemas import (
     FactOut,
     ImportIn,
     PhotoIn,
+    ReviewAnswerIn,
     ReviewCardOut,
     ReviewConfirmedOut,
     ReviewConfirmIn,
@@ -58,15 +61,19 @@ from app.channels.strings import language_of
 from app.delivery.timeline_strings import DOCUMENT_KIND_WORD, IMPORT_STEPS
 from app.errors import Refusal
 from app.ingestion.documents import store_pdf
+from app.ingestion.duplicates import find_artifact_by_digest
 from app.ingestion.extract import DocumentKind
 from app.ingestion.models import NoteKind, ReviewCard
 from app.ingestion.notes import add_scribble, add_voice_note, note_content, notes_for
+from app.ingestion.objects import sha256_of
 from app.ingestion.photos import store_photo
 from app.ingestion.review import (
     ImportStep,
     ImportStepKey,
+    answer_review_card_question,
     card_artifact,
     card_fields,
+    card_for_artifact,
     confirm_review_card,
     list_review_cards,
     require_review_card,
@@ -134,9 +141,35 @@ async def capture_language(session: AsyncSession, context: KeyContext) -> str:
     return language_of(await his_language(session, context=context))
 
 
-async def _card_out(session: AsyncSession, context: KeyContext, card: ReviewCard) -> ReviewCardOut:
+async def _card_out(
+    session: AsyncSession,
+    context: KeyContext,
+    card: ReviewCard,
+    *,
+    duplicate_of_added_on: str | None = None,
+) -> ReviewCardOut:
     fields = await card_fields(session, context=context, card_id=card.id)
-    return ReviewCardOut.of(card, fields, language=await capture_language(session, context))
+    return ReviewCardOut.of(
+        card,
+        fields,
+        language=await capture_language(session, context),
+        duplicate_of_added_on=duplicate_of_added_on,
+    )
+
+
+async def _existing_paper_card(
+    session: AsyncSession, context: KeyContext, data: bytes
+) -> ReviewCard | None:
+    """D-4a: the card already on file for these exact bytes, if this profile has seen them
+    before (`find_artifact_by_digest`) — checked before a byte is stored or a page is read,
+    so a re-upload costs no new artefact, no second read and no second model call. `None`
+    when this really is new, or (defensively) when a matching artefact somehow carries no
+    card of its own — a state normal ingestion never produces, since `card_from` runs in the
+    same request that writes the artefact."""
+    existing = await find_artifact_by_digest(session, context=context, sha256=sha256_of(data))
+    if existing is None:
+        return None
+    return await card_for_artifact(session, context=context, artifact_id=existing.id)
 
 
 @router.post("/{profile_id}/photos", status_code=status.HTTP_201_CREATED)
@@ -147,13 +180,21 @@ async def add_photo(
     extractor reads it — told, if he says, what kind of paper it is — and the answer is the
     review card: every field with its confidence, the ones below the threshold marked
     `needs_confirm`, and a field Nura could not read marked `unreadable` with the lines that
-    ask for it. Nothing is a fact yet."""
+    ask for it. Nothing is a fact yet.
+
+    D-4a: these exact bytes, already on file for this profile, are never read again — the
+    existing card comes straight back, with `duplicate_of_added_on` set, no store, no
+    extractor, no second review card (`_existing_paper_card`)."""
     providers = providers_of(request)
+    data = body.as_bytes()
+    duplicate = await _existing_paper_card(session, context, data)
+    if duplicate is not None:
+        return await _card_out(session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat())
     artifact = await store_photo(
         session,
         context=context,
         store=providers.object_store,
-        data=body.as_bytes(),
+        data=data,
         content_type=body.content_type,
         captured_at=body.captured_at,
         source_channel=SourceChannel.APP,
@@ -179,13 +220,20 @@ async def import_pdf(
     big — `NotAPdf` 400, `PdfTooLarge` 413), kept in the region's store as a PDF artefact,
     read page by page with the kind he says it is as a hint, and answered with a review card
     whose fields say the page each was read on. A PDF that is not a health paper is an open
-    card with no fields and a `notice` saying so."""
+    card with no fields and a `notice` saying so.
+
+    D-4a: the same PDF bytes already on file come back as the existing card unchanged, the
+    same as `add_photo`."""
     providers = providers_of(request)
+    data = body.as_bytes()
+    duplicate = await _existing_paper_card(session, context, data)
+    if duplicate is not None:
+        return await _card_out(session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat())
     artifact = await store_pdf(
         session,
         context=context,
         store=providers.object_store,
-        data=body.as_bytes(),
+        data=data,
         content_type=body.content_type,
         captured_at=body.captured_at,
     )
@@ -222,11 +270,21 @@ async def add_photo_stream(
         try:
             async with session_scope(request) as session:
                 providers = providers_of(request)
+                data = body.as_bytes()
+                # D-4a: the same bytes already on file skip straight to their existing
+                # card — no store, no step trace, no second read.
+                duplicate = await _existing_paper_card(session, context, data)
+                if duplicate is not None:
+                    card_out = await _card_out(
+                        session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat()
+                    )
+                    yield _sse({"type": "card", "card": card_out.model_dump(mode="json")})
+                    return
                 artifact = await store_photo(
                     session,
                     context=context,
                     store=providers.object_store,
-                    data=body.as_bytes(),
+                    data=data,
                     content_type=body.content_type,
                     captured_at=body.captured_at,
                     source_channel=SourceChannel.APP,
@@ -267,11 +325,19 @@ async def import_pdf_stream(
         try:
             async with session_scope(request) as session:
                 providers = providers_of(request)
+                data = body.as_bytes()
+                duplicate = await _existing_paper_card(session, context, data)
+                if duplicate is not None:
+                    card_out = await _card_out(
+                        session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat()
+                    )
+                    yield _sse({"type": "card", "card": card_out.model_dump(mode="json")})
+                    return
                 artifact = await store_pdf(
                     session,
                     context=context,
                     store=providers.object_store,
-                    data=body.as_bytes(),
+                    data=data,
                     content_type=body.content_type,
                     captured_at=body.captured_at,
                 )
@@ -374,6 +440,20 @@ async def type_in(
     `AlreadyConfirmed` (409)."""
     await type_field(session, context=context, card_id=card_id, field_id=field_id, value=body.value)
     card = await require_review_card(session, context=context, card_id=card_id)
+    return await _card_out(session, context, card)
+
+
+@router.post("/{profile_id}/review-cards/{card_id}/answer")
+async def answer_card_question(
+    card_id: uuid.UUID, body: ReviewAnswerIn, context: Context, session: Db
+) -> ReviewCardOut:
+    """D-2, D-4b: answer the one plain question a card is asking (`ReviewCardOut.clarify`),
+    by the `value` on the chip he tapped — never free text, the same `ClarifyOut` shape the
+    Ask surface already uses. "Mine"/"different" lets the card go on to an ordinary confirm;
+    "someone else's"/"same paper" sets it aside for good (`CardSetAside` on any later
+    confirm). There is no call for "I'm not sure": that chip leaves the card exactly as it
+    is, pending — the screen it is on simply goes back."""
+    card = await answer_review_card_question(session, context=context, card_id=card_id, value=body.value)
     return await _card_out(session, context, card)
 
 

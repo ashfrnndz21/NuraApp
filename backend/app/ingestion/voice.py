@@ -25,6 +25,7 @@ from app.audit.models import Action
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -143,6 +144,15 @@ async def store_words(
         scope=Scope.RECORDS,
     )
     digest = sha256_of(data)
+    # The same words typed again for this profile are the same bytes: migration 0055's
+    # `(profile_id, sha256)` index makes a second row of them impossible, so this reuses the
+    # artefact already on file rather than writing the words twice (D-4a's pattern, extended
+    # past the paper kinds it was written for — `app.ingestion.duplicates`).
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.RECORDS, kind=ArtifactKind.MESSAGE, sha256=digest
+    )
+    if existing is not None:
+        return existing
     key = words_key(context.profile_id, digest)
     artifact = await store_artifact(
         session,

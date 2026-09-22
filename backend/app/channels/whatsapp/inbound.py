@@ -110,6 +110,7 @@ from app.errors import Refusal
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.models import CONFIDENCE_THRESHOLD
 from app.ingestion.notes import MAX_VOICE_BYTES, NoteView, keep_voice_message
 from app.ingestion.objects import check_key, sha256_of
@@ -356,7 +357,6 @@ async def _keep_text(
     store = work.providers.object_store
     guard_region(held_in=store.region, asked_from=work.context.region)
     digest = sha256_of(data)
-    key = check_key(f"messages/{work.context.profile_id}/{digest}")
     await require_consent(
         session,
         context=work.context,
@@ -364,6 +364,16 @@ async def _keep_text(
         scope=scope,
         channel=Channel.WHATSAPP,
     )
+    # The same words in from WhatsApp again ("yes", a repeated report) are the same bytes for
+    # this profile: migration 0055's `(profile_id, sha256)` index makes a second row of them
+    # impossible, so this reuses the artefact already on file (D-4a's pattern, extended past
+    # the paper kinds it was written for — `app.ingestion.duplicates`).
+    existing = await find_own_artifact_by_digest(
+        session, context=work.context, scope=scope, kind=ArtifactKind.MESSAGE, sha256=digest
+    )
+    if existing is not None:
+        return existing
+    key = check_key(f"messages/{work.context.profile_id}/{digest}")
     await store.put(key, data)
     return await audited_write(
         session,

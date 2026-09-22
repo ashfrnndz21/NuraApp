@@ -25,6 +25,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     String,
     Time,
     UniqueConstraint,
@@ -123,10 +124,22 @@ class Artifact(ProfileScoped, RowScoped, Base):
     under the record's, the family's WhatsApp message under the family's, the words of a fall
     under the emergency scope, a question asked of Nura under the ask scope. A key reads the
     artefacts written under the scopes it holds, whatever door it reads them through.
+
+    D-4a (`docs/design/audit-2026-09-22.md` §3.2, §5): `(profile_id, sha256)` is unique —
+    the same exact bytes can never become two rows for one profile, whichever writer tries
+    (`app.ingestion.duplicates.find_artifact_by_digest` is the application-level check that
+    means this constraint is normally never even reached; it is the backstop for whatever
+    reaches `store_artifact` around it). Mirrored in migration
+    `0055_whose_paper_and_duplicates` — declared here too, not only there, so a test database
+    built straight from these models (`Base.metadata.create_all`) enforces it exactly the
+    same as a deployment upgraded through Alembic.
     """
 
     __tablename__ = "artifact"
-    __table_args__ = (_row_of_profile("artifact"),)
+    __table_args__ = (
+        _row_of_profile("artifact"),
+        Index("ix_artifact_profile_sha256", "profile_id", "sha256", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[ArtifactKind] = mapped_column(enum_column(ArtifactKind, "artifact_kind"))

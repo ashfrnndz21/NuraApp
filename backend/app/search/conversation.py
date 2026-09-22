@@ -40,6 +40,7 @@ from app.audit.models import Action, AuditEntry, Outcome
 from app.audit.trail import record as record_audit
 from app.db import utcnow
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.models import ReviewCard
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.keys.context import KeyContext, OutOfScope
@@ -230,6 +231,17 @@ async def _keep_answer(
         }
     data = json.dumps(payload).encode("utf-8")
     digest = sha256_of(data)
+    # The same answer again for this profile (a repeated question, now itself deduped by
+    # `_keep_question`, naturally composes the same answer) is the same bytes: migration
+    # 0055's `(profile_id, sha256)` index makes a second row of them impossible, so this
+    # reuses the artefact already on file rather than writing the answer twice (D-4a's
+    # pattern, extended past the paper kinds it was written for —
+    # `app.ingestion.duplicates`). The turn that cites it is still recorded every time.
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.ASK, kind=ArtifactKind.MESSAGE, sha256=digest
+    )
+    if existing is not None:
+        return existing
     key = f"answers/{context.profile_id}/{digest}"
     await store.put(key, data)
     moment = utcnow()

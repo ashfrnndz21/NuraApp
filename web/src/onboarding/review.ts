@@ -1,5 +1,5 @@
-import type { DecisionIn, FieldRange, ReviewCardOut, ReviewFieldOut } from "../api/types";
-import { fieldValueDate } from "./dates";
+import type { DecisionIn, FieldRange, ReviewCardOut, ReviewClarifyOut, ReviewFieldOut } from "../api/types";
+import { fieldValueDate, saidDate } from "./dates";
 import { fill, type Strings } from "../strings";
 
 /** The capture review card (E02-07) as the onboarding records step shows it: what each line
@@ -555,4 +555,75 @@ export function spokenLine(field: ReviewFieldOut, s: Strings): string[] {
   if (text.length === 0) return [label, s.onboarding.records.valueUnreadable, confidenceLine(field, s)];
   const unit = field.unit ? ` ${field.unit}` : "";
   return [label, `${text}${unit}`, confidenceLine(field, s)];
+}
+
+// --- D-2, "whose paper is it", and D-4, duplicates (audit-2026-09-22.md §3.2, §5) ---------
+
+/** The reading screen's one clarifying question for a whose-paper mismatch (D-2): the lead
+ *  line names what the paper itself said — whichever of name/birth year it actually has —
+ *  and the question always follows, in the caller's own voice (patient or caregiver, by
+ *  `isSelf`). Pure and deterministic: the same card and the same language always produce the
+ *  same two lines. */
+export function whoseQuestionLead(clarify: ReviewClarifyOut, s: Strings, patient: string): string {
+  const r = s.onboarding.records;
+  const { paper_name: name, paper_birth_year: year } = clarify;
+  if (name && year) return fill(r.whoseLeadBoth, { name, year: String(year) });
+  if (name) return fill(r.whoseLeadNameOnly, { name });
+  if (year) return fill(r.whoseLeadYearOnly, { year: String(year) });
+  return patient ? fill(r.whoseLeadGenericOther, { patient }) : r.whoseLeadGeneric;
+}
+
+export function whoseQuestionAsk(s: Strings, patient: string): string {
+  const r = s.onboarding.records;
+  return patient ? fill(r.whoseQuestionOther, { patient }) : r.whoseQuestion;
+}
+
+export interface WhoseChip {
+  value: "mine" | "someone_elses" | "not_sure";
+  label: string;
+}
+
+/** The three chips the owner's own requirement names, in order: mine, someone else's, not
+ *  sure — "not sure" never reaches the backend at all (it leaves the card open). */
+export function whoseChips(s: Strings, patient: string): WhoseChip[] {
+  const r = s.onboarding.records;
+  return [
+    { value: "mine", label: patient ? fill(r.whoseMineOther, { patient }) : r.whoseMine },
+    { value: "someone_elses", label: r.whoseSomeoneElses },
+    { value: "not_sure", label: r.whoseNotSure },
+  ];
+}
+
+export function whoseSetAsideLine(s: Strings, patient: string): string {
+  const r = s.onboarding.records;
+  return patient ? fill(r.whoseSetAsideOther, { patient }) : r.whoseSetAside;
+}
+
+/** D-4b's own lead line: "This looks like the paper you added on {date}." — the date is the
+ *  existing card's own `existing_added_on` (an ISO date the backend sent, never a string it
+ *  composed itself), said in his own language (`saidDate`, "Monday 22 September" — no
+ *  comma, no year: D-12's own defect, never repeated here on purpose). */
+export function duplicateQuestionLead(clarify: ReviewClarifyOut, s: Strings, locale: string): string {
+  const r = s.onboarding.records;
+  const date = clarify.existing_added_on ? saidDate(clarify.existing_added_on, locale) : "";
+  return fill(r.duplicateLead, { date });
+}
+
+export interface DuplicateChip {
+  value: "same" | "different";
+  label: string;
+}
+
+export function duplicateChips(s: Strings): DuplicateChip[] {
+  const r = s.onboarding.records;
+  return [
+    { value: "same", label: r.duplicateSame },
+    { value: "different", label: r.duplicateDifferent },
+  ];
+}
+
+/** D-4a's own calm line: the same bytes, shown back with the existing card, never a second
+ *  read — "You added this paper on Monday 22 September." */
+export function duplicateAddedOnLine(addedOn: string, s: Strings, locale: string): string {
+  return fill(s.onboarding.records.duplicateAddedOn, { date: saidDate(addedOn, locale) });
 }

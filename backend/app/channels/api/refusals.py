@@ -96,7 +96,7 @@ from app.ingestion.consult import (
 from app.ingestion.documents import PdfTooLarge
 from app.ingestion.notes import NoSuchEventNote, NoteTooLarge
 from app.ingestion.photos import PhotoTooLarge
-from app.ingestion.review import AlreadyConfirmed, NoSuchReviewCard
+from app.ingestion.review import AlreadyConfirmed, CardSetAside, NoSuchReviewCard, QuestionAlreadyAnswered
 from app.ingestion.voice import VoiceNoteTooLong
 from app.insurance.claim import (
     NoSuchClaim,
@@ -370,6 +370,10 @@ STATUS: tuple[tuple[type[Refusal], int], ...] = (
     # A card is confirmed once; its facts are facts now, superseded and never re-confirmed.
     (AlreadyConfirmed, 409),
     (SummaryAlreadyConfirmed, 409),
+    # D-2/D-4b: a card set aside by its own answer stays set aside; a question answered once
+    # does not change (`app.ingestion.review.answer_review_card_question`).
+    (CardSetAside, 409),
+    (QuestionAlreadyAnswered, 409),
     # The same label twice, or one that adds nothing, changes nothing.
     (AlreadyRecorded, 409),
     # "Ask the family to order." with nobody on duty and no chief to give the task to (E04-05).

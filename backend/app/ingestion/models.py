@@ -71,6 +71,19 @@ def _review_is_in_progress(session: Any, row: Any) -> bool:
     return session is not None and session.info.get(REVIEW_IN_PROGRESS) == card_id
 
 
+class PendingQuestion(StrEnum):
+    """A card that files nothing until a person answers one plain question (D-2, D-4b): the
+    reading screen's own clarify shape (`ClarifyOut`), never a stack of chips and never model
+    text. `WHOSE_PAPER` — the card's own identity fields disagree with the profile's
+    (`app.ingestion.whose_paper`); `DUPLICATE_PAPER` — the same document kind, date, facility
+    and set of results as one already on file, under a different digest (a re-photograph, not
+    a re-upload — the exact-bytes case never reaches a card at all, see
+    `app.ingestion.duplicates`)."""
+
+    WHOSE_PAPER = "whose_paper"
+    DUPLICATE_PAPER = "duplicate_paper"
+
+
 class ReviewCard(ProfileScoped, Base):
     """One photo, read into fields, waiting for — or closed by — a person's yes.
 
@@ -81,6 +94,15 @@ class ReviewCard(ProfileScoped, Base):
     `asked_as` is the kind the page was offered as — by the person, or by the route (a
     machine's screen) — beside `document_kind`, what it was read as; where the two disagree
     in a way that matters the card says so. `source` is where an imported PDF came from.
+
+    `pending_question` is set at read time (`app.ingestion.review.card_from`) and, while it
+    is set and `question_answer` is still `None`, `confirm_review_card` refuses outright
+    (`QuestionUnanswered`) — nothing is filed until a person answers. `question_payload`
+    carries what the question needs to say (the mismatched fields, or the candidate paper it
+    may duplicate) as plain JSON, never free text an extractor wrote. `discarded_at` is set
+    when the answer keeps the paper out of the record entirely ("someone else's", "yes, the
+    same paper") — a discarded card can never be confirmed either (`CardSetAside`), but it is
+    kept, not deleted, so the audit trail and the photo both still exist.
     """
 
     __tablename__ = "review_card"
@@ -105,10 +127,24 @@ class ReviewCard(ProfileScoped, Base):
     confirmed_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None
     )
+    pending_question: Mapped[PendingQuestion | None] = mapped_column(
+        enum_column(PendingQuestion, "pending_question"), default=None
+    )
+    question_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    question_answer: Mapped[str | None] = mapped_column(String(32), default=None)
+    question_answered_at: Mapped[datetime | None] = mapped_column(default=None)
+    question_answered_by_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("person.id"), default=None
+    )
+    discarded_at: Mapped[datetime | None] = mapped_column(default=None)
 
     @property
     def is_open(self) -> bool:
-        return self.confirmed_at is None
+        return self.confirmed_at is None and self.discarded_at is None
+
+    @property
+    def awaiting_answer(self) -> bool:
+        return self.pending_question is not None and self.question_answer is None
 
 
 class ReviewField(ProfileScoped, Base):
@@ -188,11 +224,23 @@ class ReviewField(ProfileScoped, Base):
         return self.corrected_value if self.state is FieldState.CORRECTED else self.value
 
 
-# A card takes one change, its close; a field takes one, its decision. Both only while the
-# review service is making them.
+# A card takes three kinds of change, each only while the review service is making it: its
+# close (confirmed_at/confirmed_by_person_id), the read-time question it may be set at
+# birth (pending_question/question_payload, written once, in the same insert `card_from`
+# does — before-update never sees them at all, so they need no place here), and its one
+# answer (D-2, D-4b: question_answer and what came with it, `answer_review_card_question`).
 frozen(
     ReviewCard,
-    except_for=frozenset({"confirmed_at", "confirmed_by_person_id"}),
+    except_for=frozenset(
+        {
+            "confirmed_at",
+            "confirmed_by_person_id",
+            "question_answer",
+            "question_answered_at",
+            "question_answered_by_person_id",
+            "discarded_at",
+        }
+    ),
     only_when=_review_is_in_progress,
 )
 frozen(

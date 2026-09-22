@@ -1084,6 +1084,28 @@ export type DocumentKind =
 /** Where an imported PDF came from, in the backend's words (E02-03). */
 export type DocumentSource = "portal" | "email" | "share";
 
+/** One field the card's identity disagreed with the profile's own on (D-2,
+ *  `app.ingestion.whose_paper.IdentitySignal.kind`): "name", "patient_id", "birth_year" or
+ *  "sex". */
+export type WhosePaperMismatch = "name" | "patient_id" | "birth_year" | "sex";
+
+/** The one plain question a card is asking (D-2, D-4b) — raw, structured data the reading
+ *  screen builds the sentence and the chips from (`web/src/strings`), never a sentence the
+ *  backend composed: the same division of labour the rest of a review card already keeps.
+ *  `kind === "whose_paper"`: `paper_name`/`paper_birth_year`/`paper_sex` are what the paper
+ *  itself said, `mismatched` names which of them disagreed with the record.
+ *  `kind === "duplicate_paper"`: `existing_card_id`/`existing_added_on` name the paper this
+ *  one looks like. */
+export interface ReviewClarifyOut {
+  kind: "whose_paper" | "duplicate_paper";
+  mismatched: WhosePaperMismatch[];
+  paper_name: string | null;
+  paper_birth_year: number | null;
+  paper_sex: string | null;
+  existing_card_id: string | null;
+  existing_added_on: string | null;
+}
+
 export interface ReviewCardOut {
   card_id: string;
   profile_id: string;
@@ -1100,6 +1122,16 @@ export interface ReviewCardOut {
   created_at: string;
   confirmed_at: string | null;
   fields: ReviewFieldOut[];
+  /** D-2/D-4b: set while the card is waiting on its one question; files nothing until it is
+   *  answered (`POST .../review-cards/{id}/answer`). Null once answered, or if it never
+   *  asked one. */
+  clarify: ReviewClarifyOut | null;
+  /** The answer kept the paper out of the record for good ("someone else's", "yes, the same
+   *  paper") — the card can never be confirmed. */
+  discarded: boolean;
+  /** D-4a: set only when this response is the profile's existing card for bytes already on
+   *  file — an ISO date, the day it was first added, never a fresh read. */
+  duplicate_of_added_on: string | null;
 }
 
 export interface DecisionIn {

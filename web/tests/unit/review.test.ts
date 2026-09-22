@@ -65,6 +65,9 @@ const card = (fields: ReviewFieldOut[], kind: ReviewCardOut["document_kind"] = "
   created_at: "2026-09-14T08:00:00Z",
   confirmed_at: null,
   fields,
+  clarify: null,
+  discarded: false,
+  duplicate_of_added_on: null,
 });
 
 const tg = field("f-tg", "triglycerides", 64, true, 3);
