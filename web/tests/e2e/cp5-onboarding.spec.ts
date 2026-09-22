@@ -130,12 +130,12 @@ for (const size of [
   });
 }
 
-test("who is this for: two choose-cards, and the caregiver path names him rather than saying 'your'", async ({ page, request }) => {
+test("who is this for: a conversation with chips, and the caregiver path names him rather than saying 'your'", async ({ page, request }) => {
   const phone = freshPhone("+659872");
   await throughSignIn(page, phone, "Ash");
 
   await expect(page.getByTestId("who-greeting")).toBeVisible();
-  await expect(page.locator(".choose-card")).toHaveCount(2);
+  await expect(page.getByTestId("who-chips")).toBeVisible();
   for (const testId of ["door-for-me", "door-for-someone"]) {
     const box = (await page.getByTestId(testId).boundingBox())!;
     expect(box.height, testId).toBeGreaterThanOrEqual(44);
@@ -168,6 +168,21 @@ test("who is this for: two choose-cards, and the caregiver path names him rather
   await expect(ack).toBeVisible();
   await expect(ack).toContainText("Pa");
   await expect(ack).not.toContainText(/\byour\b/i);
+});
+
+/** Choosing "Me" (docs/design/experience-blueprint.html `who`): his own reply, then Nura's,
+ *  then one privacy sentence and one Continue — before the versioned consent words, never an
+ *  instant jump from a tap to a form. */
+test("who is this for, choosing 'Me': his reply, Nura's welcome, one Continue, then consent", async ({ page }) => {
+  const phone = freshPhone("+659881");
+  await throughSignIn(page, phone, "Tan");
+
+  await page.getByTestId("door-for-me").click();
+  await expect(page.getByTestId("who-me-reply")).toContainText("Me. My name is Tan.");
+  await expect(page.getByTestId("who-met")).toContainText("Good to meet you, Tan.");
+  await expect(page.getByTestId("consent-words")).toHaveCount(0);
+  await page.getByTestId("who-continue").click();
+  await expect(page.getByTestId("consent-words")).toBeVisible();
 });
 
 test("sign-in: wrong code, then a real resend, then the right one", async ({ page }) => {
@@ -252,6 +267,7 @@ test("the cloud saves exactly the same payload it always did", async ({ page, re
   const phone = freshPhone("+659875");
   await throughSignIn(page, phone, "Tan");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Tan");
   await page.getByTestId("about-next").click();
@@ -284,8 +300,14 @@ test("the cloud saves exactly the same payload it always did", async ({ page, re
  *  inside a fixed 390px frame, so the cloud itself never actually grows past that, but the test
  *  runs the geometry check at the wide viewport too to prove nothing outside the frame breaks
  *  it). No two bubbles' boxes intersect by more than 4px, and every bubble's label stays inside
- *  the scrolling region — never clipped. */
+ *  the scrolling region — never clipped.
+ *
+ *  `evaluateAll` never auto-waits the way a locator action does — called the instant the graph's
+ *  own fetch (`Cloud.tsx`) is still in flight, it used to read the container's own real, honest
+ *  ZERO circles, not a timing bug in this test (review of #318: this red about a third of runs).
+ *  Waiting on `data-loaded="true"` first is the fix, not a longer guessed sleep. */
 async function cloudGeometryHolds(page: Page): Promise<void> {
+  await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
   const boxes = await page.getByTestId("cloud").locator('[data-testid^="word-"]').evaluateAll((nodes) =>
     nodes.map((node) => {
       const rect = node.getBoundingClientRect();
@@ -321,6 +343,7 @@ for (const size of [
     const phone = freshPhone("+65987" + (600 + size.width));
     await throughSignIn(page, phone, "Tan");
     await page.getByTestId("door-for-me").click();
+    await page.getByTestId("who-continue").click();
     await page.getByTestId("agree").click();
     await page.getByLabel("The name Nura uses").fill("Tan");
     await page.getByTestId("about-next").click();
@@ -341,6 +364,7 @@ test("the cloud is walkable by keyboard alone, in reading order", async ({ page 
   const phone = freshPhone("+659876");
   await throughSignIn(page, phone, "Tan");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Tan");
   await page.getByTestId("about-next").click();
@@ -369,6 +393,7 @@ test("the cloud respects prefers-reduced-motion: nothing keeps running", async (
   const phone = freshPhone("+659877");
   await throughSignIn(page, phone, "Tan");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Tan");
   await page.getByTestId("about-next").click();
@@ -380,6 +405,8 @@ test("the cloud respects prefers-reduced-motion: nothing keeps running", async (
   for (const item of SWITCHES) await page.getByTestId(`${item}-no`).click();
   await page.getByTestId("density-simple").click();
   await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "cloud");
+  // `evaluateAll` never auto-waits — the graph's own fetch may still be in flight.
+  await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
 
   const running = await page.getByTestId("cloud").locator('[data-testid^="word-"]').evaluateAll((nodes) =>
     nodes.flatMap((node) => (node as HTMLElement).getAnimations().filter((a) => a.playState === "running")),

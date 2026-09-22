@@ -161,6 +161,7 @@ test("onboarding: 'Looks right' opens the insight screen first, and its own 'Not
   const phone = freshPhone("+659889");
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Pa");
   await page.getByTestId("about-next").click();

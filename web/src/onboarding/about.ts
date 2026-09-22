@@ -1,6 +1,6 @@
 import type { ProfileOut, SettingsIn, SettingsOut } from "../api/types";
 import type { Density } from "../store/session";
-import { isLanguage, type Language } from "../strings";
+import { fill, isLanguage, type Language, type Strings } from "../strings";
 
 /** About you (E01-03, #117's settings): the questions, in order, and what his answers change on
  *  the phone. Pure, so it is unit-tested (`tests/unit/about.test.ts`). One question per switch
@@ -71,4 +71,29 @@ export function deviceEffects(settings: SettingsIn, standing: ProfileOut["standi
   if (standing !== "owner") return { language: null, density: null };
   const simpler = settings.large_text || settings.big_targets || settings.one_thing_per_screen || settings.density === "simple";
   return { language: isLanguage(settings.language) ? settings.language : null, density: simpler ? "patient" : null };
+}
+
+/** What he answered, in plain words, for the conversation transcript a patient-density About
+ *  you leaves behind it (`About.tsx`): the turn he already settled, read back as a line under
+ *  the question rather than a form field — never a raw code, never "true"/"false". `s.onboarding
+ *  .notNow` stands in for anything skipped or not yet typed (a typed field's own "not answered"
+ *  is honest, not invented: nothing here guesses what he would have said). Pure, so it is
+ *  unit-tested (`tests/unit/about.test.ts`) rather than only ever seen through the component. */
+export function answerLabel(item: AboutItem, draft: SettingsIn, s: Strings): string {
+  const a = s.onboarding.about;
+  if (isSwitch(item)) return draft[item] ? a.yes : a.no;
+  switch (item) {
+    case "name":
+      return draft.preferred_name || s.onboarding.notNow;
+    case "language":
+      return isLanguage(draft.language) ? { en: s.me.en, ms: s.me.ms, zh: s.me.zh }[draft.language] : draft.language;
+    case "born":
+      return draft.birth_decade ? fill(a.decade, { decade: draft.birth_decade }) : s.onboarding.notNow;
+    case "doctor":
+      return draft.doctor_name || s.onboarding.notNow;
+    case "breakfast":
+      return isBreakfastTime(draft.breakfast_time) ? a.times[draft.breakfast_time] : s.onboarding.notNow;
+    case "density":
+      return draft.density === "simple" ? a.densitySimple : a.densityDetailed;
+  }
 }
