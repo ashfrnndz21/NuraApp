@@ -936,6 +936,20 @@ READ_ROUTES: tuple[Walk, ...] = (
         json={"question": "what papers do I have", "mode": "text"},
         stream=True,
     ),
+    # Nura Run (ADR 0019): the same `answer_question` guard `POST …/ask/stream` holds
+    # (`app.runtime.run`'s own module doc — every intent calls the identical guarded function
+    # its plain route calls), over the new typed event vocabulary instead of the old `step`/
+    # `answer` shape. `run_id`/`tool_call_id` are freshly minted per request, never a seeded
+    # row id, so this walk exercises the same scope property the plain stream above does.
+    Walk(
+        "POST",
+        f"{P}/runs",
+        json={
+            "intent": "answer_question",
+            "payload": {"question": "what papers do I have", "mode": "text"},
+        },
+        stream=True,
+    ),
     Walk("GET", f"{P}/grants"),
     Walk("GET", f"{P}/helpers"),
     Walk("GET", f"{P}/thread"),

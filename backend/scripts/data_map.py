@@ -198,6 +198,19 @@ CLASSES: dict[str, str] = {
     "audit_entry.answered_with": AUDIT,
     "audit_entry.shared_with_person_id": IDENTIFIER,
     "audit_entry.shared_with_label": IDENTIFIER,
+    # D3 (ADR 0019 point 7): a rejected or corrected AI conclusion, recorded beside the
+    # `audit_entry` it sits next to — `profile_id` is the same identifier link every
+    # profile-scoped table has (`*.profile_id` above); everything else here is the audit
+    # trail's own discipline carried one table further: an id, a reference to another row's
+    # id, or a closed code — never the conclusion itself, never a rule's own words
+    # (`app.audit.conclusions`'s own module doc).
+    "conclusion_review.id": AUDIT,
+    "conclusion_review.audit_entry_id": AUDIT,
+    "conclusion_review.response_kind": AUDIT,
+    "conclusion_review.reason_code": AUDIT,
+    "conclusion_review.rule_id": AUDIT,
+    "conclusion_review.resulting_state_id": AUDIT,
+    "conclusion_review.at": AUDIT,
     # --- the health graph: memory ---------------------------------------------------------------
     "artifact.kind": HEALTH,
     "artifact.storage_key": HEALTH,

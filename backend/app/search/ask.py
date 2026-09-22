@@ -77,6 +77,7 @@ from app.reasoning.visits.models import ItemState, SummaryItem, SummaryItemKind,
 from app.regions import guard_region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.retrieve import Candidate, Retriever
+from app.state.health_context import active_medicines
 
 ASK_TARGET = "ask"
 """The trail's name for an ask: one line per question, naming the kept question."""
@@ -456,13 +457,10 @@ async def _corpus_stream(
         corpus.withhold(Scope.READINGS)
     # medicines
     if context.allows(Scope.MEDICINES):
-        lines = await audited_read(
-            session,
-            MedicationLine,
-            context,
-            Scope.MEDICINES,
-            where=(MedicationLine.superseded_at.is_(None),),
-        )
+        # The Health Graph's one reader (`app.state.health_context.active_medicines`,
+        # ADR 0019 point 3): `status == ACTIVE`, not `superseded_at IS NULL` alone — a line
+        # marked stopped or held is not superseded, and this ask must not name it current.
+        lines = await active_medicines(session, context=context)
         for line in lines:
             corpus.medicines[line.id] = line
             names = _plain_names(registry, line.generic) | set(MEDICINE_WORDS)
