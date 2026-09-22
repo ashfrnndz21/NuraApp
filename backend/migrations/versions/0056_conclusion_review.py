@@ -7,17 +7,19 @@ who rejected it (a gate, or a person's "No" or "Fix"); `reason_code` and `rule_i
 gate, for a gate's own drop; `resulting_state_id` points at the State this profile stood at
 afterwards.
 
-Numbered 0056: 0055 (`whose_paper_and_duplicates`) is Engine B's, on `intake-whose-paper`,
-built in parallel — coordinated by number rather than by a shared branch. `down_revision`
-below chains onto 0054, the head this branch was cut from, because 0055 does not exist on
-this branch's own history yet (it is uncommitted on `intake-whose-paper` at the time this was
-written) and `tests/test_migration.py`'s own chain-order property needs every revision it
-scans to resolve within the branch it runs on. **Whoever merges this branch with
-`intake-whose-paper` must repoint `down_revision` to `"0055_whose_paper_and_duplicates"`** —
-an ordinary two-branch migration merge, not a defect in either migration.
+Numbered 0056: 0055 (`whose_paper_and_duplicates`, PR #330, Engine B on `intake-whose-paper`)
+chains onto the same 0054 this branch was cut from and touches `review_card` plus
+`ix_artifact_profile_sha256` only — no table this migration creates or touches. `down_revision`
+below chains directly onto it, so **PR #331 (this branch) merges after PR #330**, not before:
+`nura-runtime` does not carry 0055's own file, so `tests/test_migration.py`'s chain-order and
+single-head tests are red on this branch in isolation (there is no earlier revision named
+"0055_whose_paper_and_duplicates" for `down_revision` to resolve against) and green again the
+moment #330 lands on `redesign` first. Verified by merging `origin/intake-whose-paper` into a
+throwaway worktree off this branch and running `tests/test_migration.py` there — passed, no
+table overlap.
 
 Revision ID: 0056_conclusion_review
-Revises: 0054_insurance_policy_essentials
+Revises: 0055_whose_paper_and_duplicates
 Create Date: 2026-09-23
 """
 
@@ -27,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0056_conclusion_review"
-down_revision = "0054_insurance_policy_essentials"
+down_revision = "0055_whose_paper_and_duplicates"
 branch_labels = None
 depends_on = None
 

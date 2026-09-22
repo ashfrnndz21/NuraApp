@@ -541,6 +541,26 @@ after the red-flag path has already run its course (module docstring: "the trace
 delay it"), so `checking` is the first byte on the wire, never the first thing that happens."""
 
 # @patient
+RUN_STAGE_WORDS: Mapping[str, Mapping[str, str]] = {
+    "en": {
+        "jobs_looking_today": "Checking today's finds.",
+        "brief_for": "Getting your visit ready.",
+    },
+    "ms": {
+        "jobs_looking_today": "Menyemak carian hari ini.",
+        "brief_for": "Menyediakan lawatan anda.",
+    },
+    "zh": {
+        "jobs_looking_today": "正在查看今天的搜寻结果。",
+        "brief_for": "正在准备您的看诊。",
+    },
+}
+"""`app.runtime.run`'s own two plain runs with no stream of their own
+(`generate_recommendations`, `prepare_visit`): the one `TOOL_CALL_START.stage` each sends
+(master-spec §29 — never the bare function name, `jobs_looking_today` or `brief_for`, on the
+wire as the line a loading state shows)."""
+
+# @patient
 READING: Mapping[str, Lines] = {
     "en": ("Your blood pressure on {date} was {top_number} over {bottom_number}.",),
     "ms": ("Tekanan darah anda pada {date} ialah {top_number} atas {bottom_number}.",),
@@ -704,6 +724,7 @@ __all__ = [
     "READING",
     "RECALL",
     "REROUTE",
+    "RUN_STAGE_WORDS",
     "WAITING",
     "WHAT",
     "YOUR_DOCTOR",

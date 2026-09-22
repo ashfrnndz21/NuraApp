@@ -27,7 +27,7 @@ import itertools
 import json
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Any
 
@@ -54,6 +54,68 @@ class EventType(StrEnum):
     STATE_DELTA = "STATE_DELTA"
 
     CUSTOM = "CUSTOM"
+
+
+def _closed_json(value: object) -> dict[str, Any]:
+    """A closed, frozen dataclass's own fields as JSON, `None` ones dropped. The one place
+    this module turns a typed payload into wire JSON — never a caller's own dict, which is
+    exactly the seam F3 closed: before this, `tool_call_result`/`custom` accepted any
+    `Mapping[str, Any]` or a bare `str`, and nothing stopped a caller from putting a model's
+    or an extractor's own sentence there."""
+    return {key: val for key, val in asdict(value).items() if val is not None}  # type: ignore[call-overload]
+
+
+@dataclass(frozen=True, slots=True)
+class ToolResult:
+    """The closed shape a `TOOL_CALL_RESULT`'s content may take (F3, independent review of
+    #331): every field is an id, a key from a closed enum, a count or a boolean — never a
+    string a model or an extractor wrote. A caller with prose to report uses
+    `TEXT_MESSAGE_CONTENT`, which is what those events are for; a caller that needs a field
+    not listed here is telling this vocabulary it is missing a case, not that this dataclass
+    should grow a free-text one."""
+
+    key: str | None = None
+    """Which read this was: `app.search.ask.AskStep.key`, `app.reasoning.analyst.port.
+    StepKey.value`, `app.ingestion.review.ImportStepKey.value` or `app.safety.
+    not_feeling_well.NfwStepKey.value` — always a closed enum's own value, never free text."""
+    count: int | None = None
+    document_kind: str | None = None
+    linked_kind: str | None = None
+    looking: bool | None = None
+    lines: int | None = None
+    sections: int | None = None
+    red_flag: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StepCustom:
+    """`CUSTOM("step", …)`: the existing routes' own `{"type": "step", "key": …}` shape,
+    unchanged, riding inside the new envelope."""
+
+    key: str
+
+
+@dataclass(frozen=True, slots=True)
+class CardCustom:
+    """`CUSTOM("card", …)`: a review card or a not-feeling-well card's own closed summary —
+    never the card's own fields, which a client already holds from the plain route's own
+    response shape, or will read from `GET /review-cards/{id}` by the id here."""
+
+    card_id: str | None = None
+    notice: str | None = None
+    red_flag: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReportCustom:
+    """`CUSTOM("report", …)`: the weekly Health Analyst report's own closed summary — never
+    a section's own text, which a client reads from `GET /insights/{id}`."""
+
+    sections: int
+    language: str
+
+
+CustomPayload = StepCustom | CardCustom | ReportCustom
 
 
 class SeqCounter:
@@ -181,16 +243,18 @@ class EventBuilder:
     def tool_call_end(self, *, tool_call_id: str) -> Event:
         return self._event(EventType.TOOL_CALL_END, {"tool_call_id": tool_call_id})
 
-    def tool_call_result(
-        self, *, tool_call_id: str, content: Mapping[str, Any] | Sequence[Any] | int | str
-    ) -> Event:
-        """`content` is a short, closed summary — a count, a key, a list of ids — never a row
-        and never free text off an extractor or a paper (the rule `run.py` names for every
-        intent it wraps). Callers that need a stronger guarantee than "please don't" should
-        build `content` from a dataclass field already typed as an id or a count, never from
-        a string field that could hold prose."""
+    def tool_call_result(self, *, tool_call_id: str, content: ToolResult) -> Event:
+        """`content` is a `ToolResult` — a short, closed summary, never a row and never free
+        text off an extractor, a paper or a model (F3: `content` used to accept any mapping
+        or a bare string; nothing stopped a caller from putting prose there). Checked at
+        runtime, not only by the type hint: a caller that passes anything else is refused
+        with `TypeError` before it ever reaches the wire."""
+        if not isinstance(content, ToolResult):
+            raise TypeError(
+                f"a TOOL_CALL_RESULT's content must be a ToolResult, not {type(content).__name__}"
+            )
         return self._event(
-            EventType.TOOL_CALL_RESULT, {"tool_call_id": tool_call_id, "content": content}
+            EventType.TOOL_CALL_RESULT, {"tool_call_id": tool_call_id, "content": _closed_json(content)}
         )
 
     # --- state ------------------------------------------------------------------------------
@@ -206,21 +270,28 @@ class EventBuilder:
 
     # --- migration escape -----------------------------------------------------------------------
 
-    def custom(self, *, name: str, value: Mapping[str, Any]) -> Event:
-        """The existing route's own payload, unchanged, riding inside the new envelope: a
-        `step`, a `card`, a `report`, an `answer`, a `results` or a `refusal` event exactly as
-        `app.channels.api.timeline._sse` (and its four siblings) already send it — so a
-        client mid-migration reads the old shape from `data` while a new client reads the
-        typed events around it. Retired once every screen reads the typed vocabulary and
-        nothing else."""
-        return self._event(EventType.CUSTOM, {"name": name, "value": value})
+    def custom(self, *, name: str, value: CustomPayload) -> Event:
+        """The existing route's own payload, closed to one of `CustomPayload`'s three shapes
+        (F3) — never an arbitrary mapping a caller could put a model's or an extractor's own
+        sentence into. Riding inside the new envelope so a client mid-migration reads the old
+        shape from `data` while a new client reads the typed events around it; retired once
+        every screen reads the typed vocabulary and nothing else. Checked at runtime: a
+        caller that passes anything else is refused with `TypeError`."""
+        if not isinstance(value, StepCustom | CardCustom | ReportCustom):
+            raise TypeError(f"a CUSTOM value must be one of CustomPayload, not {type(value).__name__}")
+        return self._event(EventType.CUSTOM, {"name": name, "value": _closed_json(value)})
 
 
 __all__ = [
+    "CardCustom",
+    "CustomPayload",
     "Envelope",
     "Event",
     "EventBuilder",
     "EventType",
+    "ReportCustom",
     "SeqCounter",
+    "StepCustom",
+    "ToolResult",
     "to_sse",
 ]

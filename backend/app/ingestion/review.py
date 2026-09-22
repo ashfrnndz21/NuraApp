@@ -87,6 +87,7 @@ from app.memory.working import require_open_episode
 from app.regions import REGION_TZ, guard_region
 from app.safety.high_risk import high_risk_class
 from app.safety.red_flags import FlagKind, red_flags_in, write_red_flag
+from app.state.health_context import active_medicines
 
 CARD = ReviewCard.__tablename__
 FIELD = ReviewField.__tablename__
@@ -362,13 +363,11 @@ async def _linked_match(
     )
     if isinstance(named, str) and named.strip() and context.allows(Scope.MEDICINES):
         word = named.strip().lower()
-        lines = await audited_read(
-            session,
-            MedicationLine,
-            context,
-            Scope.MEDICINES,
-            where=(MedicationLine.superseded_at.is_(None),),
-        )
+        # The Health Graph's one reader (`app.state.health_context.active_medicines`, ADR
+        # 0019 point 3; independent review of #331, follow-up 1): `status == ACTIVE`, not
+        # `superseded_at IS NULL` alone — a paper must not link itself to a medicine he has
+        # stopped or paused.
+        lines = await active_medicines(session, context=context)
         for line in lines:
             if word in line.generic.lower() or (
                 line.brand is not None and word in line.brand.lower()

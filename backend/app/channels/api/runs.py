@@ -15,10 +15,8 @@ every profile route already goes through and this route adds no other."""
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -26,11 +24,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.channels.api.deps import Context, providers_of, session_scope, settings_of
-from app.channels.api.refusals import refused
 from app.channels.api.sse_pump import stream_with_background_pump
-from app.errors import Refusal
 from app.runtime.events import EventBuilder, to_sse
-from app.runtime.run import Engine, Intent, RunSubject, run_nura
+from app.runtime.run import Engine, RunSubject, _calm_error_message, run_nura
 
 log = logging.getLogger("nura.channels.api.runs")
 
@@ -40,23 +36,18 @@ router = APIRouter(prefix="/profiles", tags=["runtime"])
 class RunIn(BaseModel):
     """A Nura Run's own request: which intent, and that intent's own payload — parsed against
     the existing Pydantic model for the route it wraps (`PhotoIn`, `AskIn`, `SaidIn`, …)
-    inside `app.runtime.run`'s own per-intent function, never trusted unparsed past it."""
+    inside `app.runtime.run`'s own per-intent function, never trusted unparsed past it.
 
-    intent: Intent
+    `intent` is a plain `str`, not the `Intent` enum, on purpose: a `RunIn.intent: Intent`
+    field makes FastAPI's own request-body validation reject an unknown intent before this
+    route ever runs, with a raw 422 body — a run that never even reaches `RUN_STARTED`,
+    breaking the promise every other bad input on this route keeps (independent review of
+    #331, follow-up 3). An unrecognised value here still becomes a well-formed run instead:
+    `run_nura` raises `UnknownIntent` (a `Refusal`) the moment it is asked to dispatch it,
+    caught by `start_run`'s own `pump` exactly like any other exception."""
+
+    intent: str
     payload: dict[str, Any] = Field(default_factory=dict)
-
-
-async def _refusal_events(request: Request, intent_value: str, refusal: Refusal) -> AsyncIterator[bytes]:
-    """A refusal before or during a run, as a well-formed run: `RUN_STARTED` (so a client
-    always sees a start for a run it started), then `RUN_ERROR` with the refusal's own calm
-    message — never the HTTP body `app.channels.api.refusals.refused` would otherwise answer
-    with, and never a status code in the text (master-spec §29)."""
-    builder = EventBuilder(intent=intent_value)
-    yield to_sse(builder.run_started())
-    response = await refused(request, refusal)
-    body = json.loads(bytes(response.body))
-    message = str(body.get("message") or refusal) or "Nura could not finish that just now."
-    yield to_sse(builder.run_error(message=message, code=type(refusal).__name__))
 
 
 @router.post("/{profile_id}/runs")
@@ -70,6 +61,14 @@ async def start_run(
     where `POST …/photos/stream` would, and so on for every intent, because each one calls the
     identical guarded function the existing route calls (`app.runtime.run`'s own module doc).
 
+    A run always terminates (§4; independent review of #331, B1): `run_nura` itself already
+    turns every exception a wrapped call raises into `RUN_ERROR` before it ever reaches here
+    (`app.runtime.run`'s own module doc). `pump` below catches `Exception` one more time
+    anyway — never `str(exc)` on the wire, always `_calm_error_message` — so a bug in
+    `run_nura`'s own dispatch (an unknown intent, say — raised before its first event) still
+    ends the stream as a well-formed run, and `stream_with_background_pump`'s `finally`
+    (`app.channels.api.sse_pump`) never has anything left to re-raise once bytes are out.
+
     Opens its own session (`session_scope`), never `Depends(db)`, for the reason
     `app.channels.api.timeline.ask_stream` gives: a `StreamingResponse` is handed back, and so
     a `yield` dependency closed, well before Starlette actually drives the pump."""
@@ -77,13 +76,25 @@ async def start_run(
     subject = RunSubject(profile_id=profile_id, payload=body.payload)
 
     async def pump(queue: Any) -> None:
+        builder = EventBuilder(intent=body.intent)
+        started = False
         try:
             async with session_scope(request) as session:
-                async for event in run_nura(body.intent, subject, context, session, engine):
+                # `body.intent` is a plain `str` by design (its own docstring); `Intent` is a
+                # `StrEnum`, so `_INTENTS.get(intent)` inside `run_nura` matches it by value
+                # exactly as it would a real `Intent` member, and any string that is not one
+                # of the six raises `UnknownIntent` the same way — never a type error at
+                # runtime, only at the type-checker, which this line tells so on purpose.
+                async for event in run_nura(body.intent, subject, context, session, engine):  # type: ignore[arg-type]
+                    started = started or event.envelope.type.value == "RUN_STARTED"
                     await queue.put(to_sse(event))
-        except Refusal as refusal:
-            async for chunk in _refusal_events(request, body.intent.value, refusal):
-                await queue.put(chunk)
+        except Exception as exc:
+            log.exception("nura run %s: an event never reached the wire", body.intent)
+            if not started:
+                await queue.put(to_sse(builder.run_started()))
+            await queue.put(
+                to_sse(builder.run_error(message=_calm_error_message(exc), code=type(exc).__name__))
+            )
 
     return StreamingResponse(stream_with_background_pump(pump), media_type="text/event-stream")
 
