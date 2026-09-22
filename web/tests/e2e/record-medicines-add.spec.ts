@@ -142,6 +142,37 @@ test("typed entry: no photo at all, its own source, and the register still scree
   expect(line!.source).toContain("typed");
 });
 
+test("D-6: typing a family name, no photo at all, asks which one it is too — the class check is not only a photo-read thing", async ({ page, request }) => {
+  const pa = await openOwn(request);
+  await signInAs(page, pa, "Pa");
+  await openRecord(page);
+  await page.getByTestId("record-medicines").click();
+  await page.getByTestId("add-medicine").click();
+  await page.getByTestId("add-type-it").click();
+
+  await page.getByLabel("The name on the label").fill("statin");
+  await page.getByLabel("How strong it is").fill("20 mg");
+  await page.getByLabel("How to take it").fill("1 tab ON");
+  await page.getByTestId("check-medicine").click();
+
+  // "The medicine: STATIN" never gets a one-tap accept, typed or read off a box: the same
+  // "which one is it?" question, offered from the register alone.
+  const which = page.getByTestId("add-which");
+  await expect(which).toBeVisible();
+  await expect(which).toContainText("Which one is it?");
+  await expect(page.getByTestId("which-atorvastatin")).toBeVisible();
+  await expect(page.getByTestId("add-check")).toHaveCount(0);
+
+  await page.getByTestId("which-atorvastatin").click();
+  await expect(page.getByTestId("add-check")).toBeVisible();
+  await expect(page.getByTestId("chemical")).toContainText("atorvastatin");
+  await page.getByTestId("add-it").click();
+  await expect(page.getByTestId("add-done")).toBeVisible();
+
+  const [line] = (await (await request.get(`${API}/profiles/${pa.profileId}/medicines?language=en`, auth(pa.token))).json()) as Line[];
+  expect(line!.generic).toBe("atorvastatin");
+});
+
 test("adding the same medicine twice: put to him as a question, not a bare refusal", async ({ page, request }) => {
   const pa = await openOwn(request);
   await seedMedicine(request, pa.token, pa.profileId, { generic: "amlodipine", strength: "5 mg", dose_text: "1 tab OD", quantity: 30 });

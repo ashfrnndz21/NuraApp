@@ -1,5 +1,6 @@
-import type { DecisionIn, FieldRange, ReviewCardOut, ReviewFieldOut } from "../api/types";
-import { fieldValueDate } from "./dates";
+import type { DecisionIn, FieldRange, ReviewCardOut, ReviewClarifyOut, ReviewFieldOut } from "../api/types";
+import { joinNames } from "./cloud";
+import { fieldValueDate, saidDate } from "./dates";
 import { fill, type Strings } from "../strings";
 
 /** The capture review card (E02-07) as the onboarding records step shows it: what each line
@@ -570,4 +571,117 @@ export function spokenLine(field: ReviewFieldOut, s: Strings): string[] {
   if (text.length === 0) return [label, s.onboarding.records.valueUnreadable, confidenceLine(field, s)];
   const unit = field.unit ? ` ${field.unit}` : "";
   return [label, `${text}${unit}`, confidenceLine(field, s)];
+}
+
+// --- D-2, "whose paper is it", and D-4, duplicates (audit-2026-09-22.md §3.2, §5) ---------
+
+const MISMATCH_FIELD_WORD: Record<string, (r: Strings["onboarding"]["records"]) => string> = {
+  name: (r) => r.whoseFieldName,
+  patient_id: (r) => r.whoseFieldPatientId,
+  birth_year: (r) => r.whoseFieldBirthYear,
+  sex: (r) => r.whoseFieldSex,
+};
+
+/** The reading screen's one clarifying question for a whose-paper mismatch (D-2): the lead
+ *  line names which *fields* disagreed — never what the paper itself printed there. The
+ *  independent safety review's FIX BEFORE MERGE: the paper's own name, year of birth or sex
+ *  is extracted text, hostile until confirmed (a page printing an instruction in its name
+ *  field must never become a sentence Nura composes), so `ReviewClarifyOut` no longer even
+ *  carries those raw values — only the closed `mismatched` enum this reads. The question
+ *  always follows, in the caller's own voice (patient or caregiver, by `isSelf`). Pure and
+ *  deterministic: the same card and the same language always produce the same two lines.
+ *
+ *  Every `whoseMismatchLead*` template opens on the `{fields}` slot itself (English's own
+ *  fixed lead word, "The", is folded into `whoseFieldName`/`whoseFieldSex` so a joined pair
+ *  reads "the name and the year of birth", never "The the name ..."), so the filled line is
+ *  capitalised here the same way a line always is at its own start — the same rule
+ *  `timeline_strings.day_of`'s own `_fill` keeps on the backend for a slot-initial line, kept
+ *  here for the one line on the web client that needs it. A no-op on Chinese, which has no
+ *  case to change. */
+export function whoseQuestionLead(clarify: ReviewClarifyOut, s: Strings, patient: string): string {
+  const r = s.onboarding.records;
+  const fields = clarify.mismatched
+    .map((kind) => MISMATCH_FIELD_WORD[kind]?.(r))
+    .filter((word): word is string => Boolean(word));
+  if (fields.length === 0) {
+    return patient ? fill(r.whoseLeadGenericOther, { patient }) : r.whoseLeadGeneric;
+  }
+  const list = joinNames(fields, r.whoseFieldAnd);
+  const template =
+    fields.length === 1
+      ? patient
+        ? r.whoseMismatchLeadIsOther
+        : r.whoseMismatchLeadIsSelf
+      : patient
+        ? r.whoseMismatchLeadAreOther
+        : r.whoseMismatchLeadAreSelf;
+  const line = fill(template, { fields: list, patient });
+  return line.charAt(0).toUpperCase() + line.slice(1);
+}
+
+export function whoseQuestionAsk(s: Strings, patient: string): string {
+  const r = s.onboarding.records;
+  return patient ? fill(r.whoseQuestionOther, { patient }) : r.whoseQuestion;
+}
+
+export interface WhoseChip {
+  value: "mine" | "someone_elses" | "not_sure";
+  label: string;
+}
+
+/** The three chips the owner's own requirement names, in order: mine, someone else's, not
+ *  sure — "not sure" never reaches the backend at all (it leaves the card open). */
+export function whoseChips(s: Strings, patient: string): WhoseChip[] {
+  const r = s.onboarding.records;
+  return [
+    { value: "mine", label: patient ? fill(r.whoseMineOther, { patient }) : r.whoseMine },
+    { value: "someone_elses", label: r.whoseSomeoneElses },
+    { value: "not_sure", label: r.whoseNotSure },
+  ];
+}
+
+export function whoseSetAsideLine(s: Strings, patient: string): string {
+  const r = s.onboarding.records;
+  return patient ? fill(r.whoseSetAsideOther, { patient }) : r.whoseSetAside;
+}
+
+/** D-4b's own lead line: "This looks like the paper you added on {date}." — the date is the
+ *  existing card's own `existing_added_on` (an ISO date the backend sent, never a string it
+ *  composed itself), said in his own language (`saidDate`, "Monday 22 September" — no
+ *  comma, no year: D-12's own defect, never repeated here on purpose). `patient` is the
+ *  caregiver twin's own name, empty for the patient's own voice — the same convention
+ *  `whoseQuestionLead` already keeps, added here (FIX BEFORE MERGE, the independent safety
+ *  review): a chief reading his papers reads "Pa added this paper on ...", never "you". */
+export function duplicateQuestionLead(
+  clarify: ReviewClarifyOut,
+  s: Strings,
+  locale: string,
+  patient = "",
+): string {
+  const r = s.onboarding.records;
+  const date = clarify.existing_added_on ? saidDate(clarify.existing_added_on, locale) : "";
+  return patient ? fill(r.duplicateLeadOther, { date, patient }) : fill(r.duplicateLead, { date });
+}
+
+export interface DuplicateChip {
+  value: "same" | "different";
+  label: string;
+}
+
+export function duplicateChips(s: Strings): DuplicateChip[] {
+  const r = s.onboarding.records;
+  return [
+    { value: "same", label: r.duplicateSame },
+    { value: "different", label: r.duplicateDifferent },
+  ];
+}
+
+/** D-4a's own calm line: the same bytes, shown back with the existing card, never a second
+ *  read — "You added this paper on Monday 22 September." `patient`: see
+ *  `duplicateQuestionLead` — the caregiver twin, "Pa added this paper on ..." (FIX BEFORE
+ *  MERGE, the independent safety review). */
+export function duplicateAddedOnLine(addedOn: string, s: Strings, locale: string, patient = ""): string {
+  const r = s.onboarding.records;
+  const date = saidDate(addedOn, locale);
+  return patient ? fill(r.duplicateAddedOnOther, { date, patient }) : fill(r.duplicateAddedOn, { date });
 }

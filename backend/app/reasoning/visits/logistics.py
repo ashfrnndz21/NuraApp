@@ -236,6 +236,11 @@ async def _has_letter(session: AsyncSession, context: KeyContext) -> bool:
         where=(
             ReviewCard.document_kind.in_([kind.value for kind in LETTER_KINDS]),
             ReviewCard.confirmed_at.is_not(None),
+            # Belt and suspenders with `ReviewCard.is_confirmed` (reviewer follow-up):
+            # `confirmed_at`/`discarded_at` are meant to be mutually exclusive, spelled out
+            # here rather than assumed, so a bug that ever set both would not read a
+            # set-aside letter as one that was said yes to.
+            ReviewCard.discarded_at.is_(None),
         ),
     )
     return bool(cards)

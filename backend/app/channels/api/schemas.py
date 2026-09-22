@@ -58,6 +58,7 @@ from app.ingestion.models import (
     DocumentSource,
     FieldState,
     NoteKind,
+    PendingQuestion,
     ReviewCard,
     ReviewField,
 )
@@ -1010,6 +1011,10 @@ class AuditOut(BaseModel):
     rows: int
     outcome: Outcome
     refused_because: str | None
+    answered_with: str | None
+    """A card's own answer to its one pending question (D-2, D-4b) — "mine", "someone_elses",
+    "same" or "different", from the closed set it was checked against before the line was
+    written. Never the paper's own printed name, or any other free text."""
     shared_with_person_id: uuid.UUID | None
     shared_with_label: str | None
     withheld: list[str] = []
@@ -1032,6 +1037,7 @@ class AuditOut(BaseModel):
             rows=entry.rows,
             outcome=entry.outcome,
             refused_because=entry.refused_because,
+            answered_with=entry.answered_with,
             shared_with_person_id=entry.shared_with_person_id,
             shared_with_label=entry.shared_with_label,
             withheld=list(withheld),
@@ -1870,6 +1876,14 @@ class TypedIn(BaseModel):
         return value
 
 
+class ReviewAnswerIn(BaseModel):
+    """The chip he tapped on a card's one pending question (D-2, D-4b): `value` is one of
+    the choices named on `ReviewClarifyOut` — never free text, the same discipline
+    `AskIn.value` already holds a clarify answer to."""
+
+    value: str
+
+
 class ReviewFieldOut(BaseModel):
     """One proposed statement on the card: what was read, how sure, whether it needs the
     person's eye (`needs_confirm`: shown dotted), and what he said about it."""
@@ -1940,11 +1954,59 @@ NOTICE_LINES: dict[Notice, str] = {
 """The key in `app.channels.strings.TEXT` of the lines each notice is said in."""
 
 
+class ReviewClarifyOut(BaseModel):
+    """The one plain question a card is asking (D-2, D-4b) — raw, structured data, never a
+    pre-composed sentence: the reading screen (`web/src/strings`, tagged `@patient`) builds
+    the sentence and offers the chips in his own language, the same division of labour the
+    rest of a review card already keeps (the backend names a field's subject and value, the
+    web client says it in words). `kind` is `ReviewCard.pending_question`'s own value.
+
+    For `"whose_paper"`: `mismatched` names which of name/patient_id/birth_year/sex disagreed
+    (`app.ingestion.whose_paper.IdentitySignal.kind`) — the closed enum only, never the
+    paper's own printed value: the FIX BEFORE MERGE the independent safety review named,
+    `paper_name` rendered whatever an unconfirmed page's own name field happened to say as
+    if it were Nura's own words, and is gone from here entirely, not only unset. The reading
+    screen composes its own sentence from the field names alone ("The name and the year of
+    birth on this paper are not Pa's."); the paper's own printed values are never text Nura
+    composes, only what "See the paper itself" (the photo) shows. For `"duplicate_paper"`:
+    `existing_card_id` and `existing_added_on` name the paper on file this one looks like —
+    "This looks like the paper you added on {existing_added_on}."
+    """
+
+    kind: str
+    mismatched: list[str] = []
+    existing_card_id: uuid.UUID | None = None
+    existing_added_on: date | None = None
+
+    @classmethod
+    def of(cls, card: ReviewCard) -> ReviewClarifyOut | None:
+        if card.pending_question is None or card.question_answer is not None:
+            return None
+        payload = card.question_payload or {}
+        if card.pending_question is PendingQuestion.WHOSE_PAPER:
+            return cls(
+                kind=card.pending_question.value,
+                mismatched=[m["kind"] for m in payload.get("mismatches", [])],
+            )
+        existing_added_on = payload.get("existing_added_on")
+        return cls(
+            kind=card.pending_question.value,
+            existing_card_id=payload.get("existing_card_id"),
+            existing_added_on=date.fromisoformat(existing_added_on[:10]) if existing_added_on else None,
+        )
+
+
 class ReviewCardOut(BaseModel):
     """A review card: the photo or PDF it came from, what kind of paper and its date, what
     it was offered as and where it came from, whether the label rule guards the drug it
     names, a notice where the page is not what it was offered as, its fields, and — once
-    confirmed — by whom."""
+    confirmed — by whom.
+
+    `clarify` is set while the card is asking a question (D-2, D-4b) and files nothing until
+    it is answered (`POST .../answer`); `discarded` is set once the answer keeps the paper
+    out of the record for good. `duplicate_of_added_on` is set only on D-4a's exact-bytes
+    case — a re-upload that never became a card of its own at all, shown the existing one
+    instead."""
 
     card_id: uuid.UUID
     profile_id: uuid.UUID
@@ -1959,9 +2021,19 @@ class ReviewCardOut(BaseModel):
     confirmed_at: datetime | None
     confirmed_by_person_id: uuid.UUID | None
     fields: list[ReviewFieldOut]
+    clarify: ReviewClarifyOut | None = None
+    discarded: bool = False
+    duplicate_of_added_on: date | None = None
 
     @classmethod
-    def of(cls, card: ReviewCard, fields: Sequence[ReviewField], *, language: str) -> ReviewCardOut:
+    def of(
+        cls,
+        card: ReviewCard,
+        fields: Sequence[ReviewField],
+        *,
+        language: str,
+        duplicate_of_added_on: str | None = None,
+    ) -> ReviewCardOut:
         """The card, its notice and its fields' prompts in `language`: his settings' (the
         channel reads them, `app.channels.api.capture.capture_language`)."""
         return cls(
@@ -1974,6 +2046,9 @@ class ReviewCardOut(BaseModel):
             source=card.source,
             notice=_notice_lines(card, language),
             high_risk_class=card.high_risk_class,
+            clarify=ReviewClarifyOut.of(card),
+            discarded=card.discarded_at is not None,
+            duplicate_of_added_on=date.fromisoformat(duplicate_of_added_on) if duplicate_of_added_on else None,
             created_at=utc(card.created_at),
             confirmed_at=None if card.confirmed_at is None else utc(card.confirmed_at),
             confirmed_by_person_id=card.confirmed_by_person_id,

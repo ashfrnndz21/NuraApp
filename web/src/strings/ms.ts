@@ -1880,6 +1880,60 @@ export const ms = {
       titlePharmacyReceipt: "Resit farmasi",
       // @patient phrase
       titleUnknown: "Halaman",
+      // @patient phrase
+      whoseFieldName: "nama pesakit",
+      // @patient phrase
+      whoseFieldPatientId: "nombor pesakit",
+      // @patient phrase
+      whoseFieldBirthYear: "tahun lahir",
+      // @patient phrase
+      whoseFieldSex: "jantina pesakit",
+      // @patient phrase
+      whoseFieldAnd: " dan ",
+      // @patient headline
+      whoseMismatchLeadIsSelf: "{fields} pada surat ini bukan milik anda.",
+      // @patient headline
+      whoseMismatchLeadAreSelf: "{fields} pada surat ini bukan milik anda.",
+      // @patient headline
+      whoseMismatchLeadIsOther: "{fields} pada surat ini bukan milik {patient}.",
+      // @patient headline
+      whoseMismatchLeadAreOther: "{fields} pada surat ini bukan milik {patient}.",
+      // @patient headline
+      whoseLeadGeneric: "Butiran surat ini tidak sepadan dengan butiran anda.",
+      // @patient headline
+      whoseLeadGenericOther: "Butiran surat ini tidak sepadan dengan butiran {patient}.",
+      // @patient
+      whoseQuestion: "Adakah ini surat anda?",
+      // @patient
+      whoseQuestionOther: "Adakah ini surat {patient}?",
+      // @patient phrase
+      whoseMine: "Ya, ini surat saya",
+      // @patient phrase
+      whoseMineOther: "Ya, ini surat {patient}",
+      // @patient phrase
+      whoseSomeoneElses: "Tidak, ini surat orang lain",
+      // @patient phrase
+      whoseNotSure: "Saya tidak pasti",
+      // @patient
+      whoseSetAside: "Nura akan mengetepikan surat ini.",
+      // @patient
+      whoseSetAsideOther: "Nura akan mengetepikan surat ini daripada surat-surat {patient}.",
+      // @patient headline
+      duplicateLead: "Ini kelihatan seperti surat yang anda tambah pada {date}.",
+      // @patient headline
+      duplicateLeadOther: "Ini kelihatan seperti surat yang {patient} tambah pada {date}.",
+      // @patient
+      duplicateQuestion: "Adakah ini surat yang sama?",
+      // @patient phrase
+      duplicateSame: "Ya, surat yang sama",
+      // @patient phrase
+      duplicateDifferent: "Tidak, surat yang lain",
+      // @patient
+      duplicateSetAside: "Nura sudah mempunyai surat ini.",
+      // @patient
+      duplicateAddedOn: "Anda menambah surat ini pada {date}.",
+      // @patient
+      duplicateAddedOnOther: "{patient} menambah surat ini pada {date}.",
     },
     questions: {
       // @patient headline
@@ -2025,7 +2079,7 @@ export const ms = {
         patient_id: "Nombor pesakit pada laporan",
         ordering_doctor: "Doktor mana yang memintanya",
       },
-      person: { birth_year: "Tahun lahir", sex: "Lelaki atau perempuan" },
+      person: { birth_year: "Tahun lahir", age: "Umur pada laporan", sex: "Lelaki atau perempuan" },
       medicine: {
         name: "Ubat itu",
         strength: "Berapa kuat ubat itu",

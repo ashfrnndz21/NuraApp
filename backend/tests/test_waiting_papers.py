@@ -23,9 +23,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
 from app.ingestion.extract import DocumentKind, ExtractedField, Extraction, FixtureExtractor, Hints
+from app.ingestion.models import FieldState
 from app.ingestion.objects import LocalObjectStore
 from app.ingestion.photos import store_photo
-from app.ingestion.review import review_photo
+from app.ingestion.review import (
+    Decision,
+    answer_review_card_question,
+    card_fields,
+    confirm_review_card,
+    review_draft_for,
+    review_photo,
+)
+from app.keys.confirm import confirm as mint_confirmation
 from app.keys.context import KeyContext
 from app.keys.scopes import KeyRole, Scope
 from app.memory.models import SourceChannel
@@ -34,7 +43,13 @@ from app.search.ask import Cite, Mode, recall_stream
 from app.search.ask import waiting_papers as waiting_papers_read
 from app.search.retrieve import KeywordRetriever
 from tests.medicines_support import let_in
-from tests.paper import LAB_REPORT_VITALS, PAPER, placeholder_png
+from tests.paper import (
+    LAB_REPORT_NOT_HIS,
+    LAB_REPORT_VITALS,
+    LIPID_PANEL_2025,
+    PAPER,
+    placeholder_png,
+)
 from tests.timeline_support import record, trail
 
 SG = Region.SG
@@ -122,6 +137,33 @@ async def test_a_hostile_facility_field_never_reaches_waiting_papers_at_all(
     rendered = repr(waiting)
     for leaked in ("Bukit Lab", "11.4", "sugar", "r2:", "ignore previous instructions"):
         assert leaked not in rendered
+
+
+async def test_a_set_aside_paper_never_shows_as_waiting(sg: AsyncSession, tmp_path: Path) -> None:
+    """B2: a card set aside on its own whose-paper question is resolved, not waiting —
+    `waiting_papers` used to select every card with no `confirmed_at`, which a set-aside card
+    still has, so Ask would say a stranger's rejected paper was "still waiting to be read"."""
+    rec = await record(sg)
+    store = LocalObjectStore(tmp_path, SG)
+    # His own first paper, confirmed: the record now holds a confirmed birth year to mismatch
+    # the second paper against.
+    first = await _waiting_card(sg, rec.owner, store, label=LIPID_PANEL_2025)
+    fields = await card_fields(sg, context=rec.owner, card_id=first.id)
+    decisions = [Decision(f.id, FieldState.CONFIRMED) for f in fields]
+    draft = await review_draft_for(sg, context=rec.owner, card_id=first.id, decisions=decisions)
+    yes = await mint_confirmation(sg, rec.owner, draft)
+    await confirm_review_card(
+        sg, context=rec.owner, card_id=first.id, decisions=decisions, confirmation_id=yes.id
+    )
+
+    mismatched = await _waiting_card(sg, rec.owner, store, label=LAB_REPORT_NOT_HIS)
+    assert mismatched.awaiting_answer
+    answered = await answer_review_card_question(
+        sg, context=rec.owner, card_id=mismatched.id, value="someone_elses"
+    )
+    assert answered.is_set_aside
+
+    assert await waiting_papers_read(sg, rec.owner, language="en") == []
 
 
 async def test_a_key_without_the_records_scope_gets_no_waiting_list(

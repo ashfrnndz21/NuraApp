@@ -92,6 +92,11 @@ from anthropic import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.access import audited_guard, audited_read
+from app.audit.conclusions import (
+    ConclusionReasonCode,
+    ConclusionResponseKind,
+    record_dropped_conclusion,
+)
 from app.audit.models import Action
 from app.audit.trail import record as record_audit
 from app.channels.about_him import Reader, reader_of
@@ -149,6 +154,7 @@ from app.search.asker import AnswerDelta
 from app.search.conversation import ConversationMemory
 from app.search.elapsed import elapsed_phrase
 from app.search.retrieve import Retriever
+from app.state.health_context import active_medicines
 
 log = logging.getLogger("nura.llm.ask_agent")
 
@@ -525,13 +531,11 @@ async def _read_medicines(
     elapsed_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
-    found = await audited_read(
-        session,
-        MedicationLine,
-        context,
-        Scope.MEDICINES,
-        where=(MedicationLine.superseded_at.is_(None),),
-    )
+    # The Health Graph's one reader (`app.state.health_context.active_medicines`, ADR 0019
+    # point 3): `status == ACTIVE`, not `superseded_at IS NULL` alone — this was the read the
+    # audit named as one of the two Ask paths that let a stopped or held line still answer as
+    # current.
+    found = await active_medicines(session, context=context)
     lines: list[_ToolLine] = []
     for line in found:
         name = _plain_name(registry, line.generic, language)
@@ -1045,6 +1049,11 @@ class ClaudeAsker:
             # W2: the fallback holds the same "never twice in a row" and "already resolved"
             # signals the model's own attempt did — a bad or missing proposal from the model
             # never gives the rule-based safety net a second free clarifying question either.
+            # `kept_question=kept`: this is not a fresh question — `kept` below already holds
+            # the artefact this exact text was kept as, before the model was ever asked, so
+            # the fallback must not call `_keep_question` a second time for it (audit-2026-09-
+            # 22.md's coordinator note on the (profile_id, sha256) index: reuse the bytes,
+            # never let a caller that should not be re-asking skip straight past why).
             focus = None if history is None else history.resolved_focus
             return await recall(
                 session,
@@ -1057,6 +1066,7 @@ class ClaudeAsker:
                 language=language,
                 focus=focus,
                 skip_clarify=already_clarified,
+                kept_question=kept,
             )
 
         async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):
@@ -1178,6 +1188,14 @@ class ClaudeAsker:
                                 {card: frozenset(safe) for card, safe in card_safe_text.items()},
                             )
                         )
+                        if parsed is not None and parsed.dropped:
+                            # D3 (ADR 0019 point 7): every line one of the four gates dropped
+                            # this round, recorded now — whether or not a repair round below
+                            # goes on to produce a line that survives. A drop that happened is
+                            # a drop that happened; the repair round is a second try, not an
+                            # undo. Never the line itself, never a cite: the closed reason
+                            # only, and which plain-words rule for a `plain_words` drop.
+                            await _record_dropped_answer_lines(session, context, kept.id, parsed.dropped)
                         if parsed is not None and parsed.answer is None and failed_findings and not line_repaired:
                             # One repair round (defect: "the agent still returns an empty
                             # answer"): tell the model which rules its lines broke, in the
@@ -1498,6 +1516,38 @@ class ClaudeAsker:
         return [], 0
 
 
+_D3_REASON_CODE: dict[str, ConclusionReasonCode] = {
+    "plain_words": ConclusionReasonCode.PLAIN_WORDS,
+    "conclusion_language": ConclusionReasonCode.CONCLUSION_LANGUAGE,
+    "caregiver_voice": ConclusionReasonCode.CAREGIVER_VOICE,
+    "no_cite_matched": ConclusionReasonCode.NO_CITE_MATCHED,
+}
+
+
+async def _record_dropped_answer_lines(
+    session: AsyncSession,
+    context: KeyContext,
+    question_artifact_id: uuid.UUID,
+    dropped: Sequence[tuple[str, int | None]],
+) -> None:
+    """D3's own write, for every line `_parse_answer` dropped this round (module doc,
+    `app.audit.conclusions.record_dropped_conclusion`) — never the line, never its cites."""
+    for reason, rule_id in dropped:
+        code = _D3_REASON_CODE.get(reason)
+        if code is None:
+            continue
+        await record_dropped_conclusion(
+            session,
+            context=context,
+            response_kind=ConclusionResponseKind.GATE_DROPPED,
+            target="turn",
+            target_id=question_artifact_id,
+            scope=Scope.ASK,
+            reason_code=code,
+            rule_id=rule_id,
+        )
+
+
 def _drop(reason: str, *, rules: Sequence[int] = ()) -> None:
     """One line logged, its reason class only — never its text, never a cite, never a value
     off his record (defect: "the agent's answer reached the phone empty", fixed by knowing,
@@ -1812,11 +1862,20 @@ class _Parsed:
     is true when the model's own first line did not survive but at least one later line did —
     the live defect ("What your papers DO hold…" with no lead). `dangling` is true when a
     surviving line opens as though answering something that is no longer there, whether or not
-    the lead specifically was the one dropped."""
+    the lead specifically was the one dropped.
+
+    `dropped` is D3's own list (ADR 0019 point 7; `docs/design/NURA-BUILD-MASTER-SPEC.md` §39):
+    one `(reason, rule)` pair for every line this function dropped for one of the four gates
+    that D3 covers — never the line itself, never its cites, only the closed reason code and,
+    for a plain-words drop, which rule number. The caller, which holds the session and the
+    context this module never does, is who actually records it
+    (`app.audit.conclusions.record_dropped_conclusion`) — this function stays exactly as pure
+    as it always was; it only stops throwing the reason away."""
 
     answer: Answer | None
     lead_dropped: bool = False
     dangling: bool = False
+    dropped: tuple[tuple[str, int | None], ...] = ()
 
 
 def _parse_answer(
@@ -1832,13 +1891,14 @@ def _parse_answer(
     raw_lines = payload.get("lines")
     if not isinstance(raw_lines, list):
         log.info("claude asker: payload had no 'lines' list")
-        return _Parsed(None)
+        return _Parsed(None, dropped=())
     # Case-insensitive, so `M1` or `m1 ` matches the `m1` a tool result actually carried —
     # the model is asked to copy a short id back, not retype a uuid, but it still may not get
     # the case exactly right, and a line should not be thrown away over that alone.
     known_ci = {token.strip().lower(): line for token, line in known.items()}
     lines: list[AnswerLine] = []
     origins: list[int] = []
+    dropped: list[tuple[str, int | None]] = []
     for index, entry in enumerate(raw_lines):
         if not isinstance(entry, Mapping):
             _drop("malformed_entry")
@@ -1866,9 +1926,11 @@ def _parse_answer(
                 text = rewritten
             else:
                 _drop("plain_words_failed", rules=rules)
+                dropped.append(("plain_words", rules[0] if rules else None))
                 continue
         if _has_conclusion_language(text, language):
             _drop("conclusion_language")
+            dropped.append(("conclusion_language", None))
             continue
         elapsed_problem = _elapsed_claim(text, language, elapsed_given)
         if elapsed_problem is not None:
@@ -1885,6 +1947,7 @@ def _parse_answer(
         heard = reader.says(text)
         if not reader.his and reader.speaks_to_him(heard):
             _drop("caregiver_voice")
+            dropped.append(("caregiver_voice", None))
             continue
         cites = tuple(
             dict.fromkeys(
@@ -1895,6 +1958,7 @@ def _parse_answer(
         )
         if not cites:
             _drop("no_cite_matched")
+            dropped.append(("no_cite_matched", None))
             continue
         safe_for_card: set[str] = set()
         for cite in cites:
@@ -1916,7 +1980,7 @@ def _parse_answer(
         log.info(
             "claude asker: no line survived out of %d the model offered", len(raw_lines)
         )
-        return _Parsed(None)
+        return _Parsed(None, dropped=tuple(dropped))
     kept_lines = lines[:1] if mode is Mode.VOICE else lines[:TEXT_LINES]
     kept_origins = origins[: len(kept_lines)]
     lead_dropped = bool(raw_lines) and (not kept_origins or kept_origins[0] != 0)
@@ -1936,7 +2000,7 @@ def _parse_answer(
         withheld=(),
         dropped=len(raw_lines) - len(kept_lines),
     )
-    return _Parsed(answer, lead_dropped=lead_dropped, dangling=dangling)
+    return _Parsed(answer, lead_dropped=lead_dropped, dangling=dangling, dropped=tuple(dropped))
 
 
 MIN_CLARIFY_CANDIDATES: Final = 2

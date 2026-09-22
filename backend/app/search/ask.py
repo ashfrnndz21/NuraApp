@@ -50,6 +50,7 @@ from app.db import as_utc, utcnow
 from app.delivery import timeline_strings as words
 from app.drugs.registry import DrugRegistry, UnknownDrug
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.models import ReviewCard
 from app.ingestion.notes import NoteView, recallable_notes
 from app.ingestion.objects import ObjectStore, sha256_of
@@ -76,6 +77,7 @@ from app.reasoning.visits.models import ItemState, SummaryItem, SummaryItemKind,
 from app.regions import guard_region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.retrieve import Candidate, Retriever
+from app.state.health_context import active_medicines
 
 ASK_TARGET = "ask"
 """The trail's name for an ask: one line per question, naming the kept question."""
@@ -455,13 +457,10 @@ async def _corpus_stream(
         corpus.withhold(Scope.READINGS)
     # medicines
     if context.allows(Scope.MEDICINES):
-        lines = await audited_read(
-            session,
-            MedicationLine,
-            context,
-            Scope.MEDICINES,
-            where=(MedicationLine.superseded_at.is_(None),),
-        )
+        # The Health Graph's one reader (`app.state.health_context.active_medicines`,
+        # ADR 0019 point 3): `status == ACTIVE`, not `superseded_at IS NULL` alone — a line
+        # marked stopped or held is not superseded, and this ask must not name it current.
+        lines = await active_medicines(session, context=context)
         for line in lines:
             corpus.medicines[line.id] = line
             names = _plain_names(registry, line.generic) | set(MEDICINE_WORDS)
@@ -598,7 +597,14 @@ async def waiting_papers(
     (review defect #3, second pass: `except Refusal` was too wide)."""
     try:
         cards = await audited_read(
-            session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
+            session,
+            ReviewCard,
+            context,
+            Scope.RECORDS,
+            # A card set aside on its own question ("someone else's paper") is resolved,
+            # not waiting: never told to him as a paper still to be read (B2, the same
+            # `is_open`/`is_confirmed` distinction).
+            where=(ReviewCard.confirmed_at.is_(None), ReviewCard.discarded_at.is_(None)),
         )
     except OutOfScope:
         return []
@@ -1110,13 +1116,24 @@ async def _keep_question(
     session: AsyncSession, context: KeyContext, store: ObjectStore, text: str
 ) -> Artifact:
     """The question's words to the region's store; a MESSAGE artefact under the ask scope
-    names them by key and digest. No row holds the words."""
+    names them by key and digest. No row holds the words.
+
+    The exact same question, asked again — by him, or by a second holder walking the same
+    words (`tests/test_row_scope.py`'s matrix, `app/search/ask.py`) — is the same bytes for
+    this profile: migration 0055's `(profile_id, sha256)` index makes a second row of them
+    impossible, so this checks first and reuses the artefact already on file (D-4a's own
+    pattern, `app.ingestion.duplicates`), rather than writing the question twice."""
     guard_region(held_in=store.region, asked_from=context.region)
     await require_consent(
         session, context=context, purpose=ConsentPurpose.HOLD_HEALTH_RECORD, scope=Scope.ASK
     )
     data = text.encode("utf-8")
     digest = sha256_of(data)
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.ASK, kind=ArtifactKind.MESSAGE, sha256=digest
+    )
+    if existing is not None:
+        return existing
     key = f"questions/{context.profile_id}/{digest}"
     await store.put(key, data)
     moment = utcnow()
@@ -1148,6 +1165,7 @@ async def recall_stream(
     language: str | None = None,
     focus: Cite | None = None,
     skip_clarify: bool = False,
+    kept_question: Artifact | None = None,
 ) -> AsyncIterator[AskStep | Answer]:
     """Answer a question from his own record, with citations, the boundary last — streamed: an
     `AskStep` the moment each part of the record is actually read (`_corpus_stream`), then the
@@ -1171,14 +1189,22 @@ async def recall_stream(
     composed about that one thing alone, never re-asked. `skip_clarify` (W2): true when the
     turn right before this one was itself a clarifying question on the same thread — never two
     clarifying questions in a row about the same thing; this turn answers with the
-    best-grounded reading instead (the caller says which reading was taken)."""
+    best-grounded reading instead (the caller says which reading was taken).
+
+    `kept_question`: the model asker's own fallback (`app.llm.ask_agent.ClaudeAsker.ask_stream`)
+    has already kept this exact question as a MESSAGE artefact before it ever reaches here —
+    the same words, the same digest, the same profile. Passed in, this skips a second
+    `_keep_question` call entirely, rather than relying on the `(profile_id, sha256)` index
+    (migration 0055) to make that second call a harmless no-op read-and-reuse: the fallback
+    is not a fresh question, and should not read or write as if it were one. Omitted (every
+    other caller), `_keep_question` runs exactly as it always did."""
     async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):
         context.require(Scope.ASK)
         text = question.strip()
         if not text or len(text) > QUESTION_LENGTH or "\n" in text or "\r" in text:
             raise NotAQuestion(f"a question is one line of one to {QUESTION_LENGTH} characters")
         lang = await language_for(session, context, language)
-        kept = await _keep_question(session, context, store, text)
+        kept = kept_question if kept_question is not None else await _keep_question(session, context, store, text)
         corpus: _Corpus | None = None
         async for item in _corpus_stream(session, context, registry, store):
             if isinstance(item, AskStep):
@@ -1280,6 +1306,7 @@ async def recall(
     language: str | None = None,
     focus: Cite | None = None,
     skip_clarify: bool = False,
+    kept_question: Artifact | None = None,
 ) -> Answer:
     """`recall_stream`, drained: the answer alone, for a caller that does not stream (the
     existing `POST /profiles/{id}/ask` route, unchanged)."""
@@ -1295,6 +1322,7 @@ async def recall(
         language=language,
         focus=focus,
         skip_clarify=skip_clarify,
+        kept_question=kept_question,
     ):
         if isinstance(event, Answer):
             result = event

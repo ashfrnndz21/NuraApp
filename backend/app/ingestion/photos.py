@@ -17,6 +17,7 @@ from app.audit.models import Action
 from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.objects import ObjectStore, photo_key, sha256_of
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
@@ -69,6 +70,16 @@ async def store_photo(
         scope=Scope.RECORDS,
     )
     digest = sha256_of(data)
+    # The same photo again for this profile — a device screen re-captured, the same page
+    # re-sent — is the same bytes: migration 0055's `(profile_id, sha256)` index makes a
+    # second row of them impossible for any photo, not only the paper kinds `POST .../photos`
+    # already checks before calling here, so this reuses the artefact already on file rather
+    # than writing it twice (D-4a's pattern, `app.ingestion.duplicates`).
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.RECORDS, kind=ArtifactKind.PHOTO, sha256=digest
+    )
+    if existing is not None:
+        return existing
     key = photo_key(context.profile_id, digest)
     await store.put(key, data)
     return await store_artifact(

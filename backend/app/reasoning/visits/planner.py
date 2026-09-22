@@ -80,6 +80,7 @@ from app.memory.models import Appointment, ConfidenceState, EventKind, ProviderK
 from app.memory.semantic import assert_fact, current_facts
 from app.reasoning.visits.strings import day_and_date, say
 from app.regions import Region
+from app.state.health_context import age_band
 
 __all__ = [
     "DECLINE_WINDOW",
@@ -164,8 +165,6 @@ by source, in `app.reasoning.ranges`'s own shape. Two rows only, kept deliberate
 this story; a third source (or a licensed guideline feed) is a later story's, behind the same
 shape, not a caller-visible change."""
 
-_SETTING_BIRTH_DECADE = ("setting", "birth_decade")
-_PERSON = "person"
 _CONDITION_SUBJECT = "condition"
 
 
@@ -334,31 +333,14 @@ async def _test_coming_proposals(
 
 
 async def _age(session: AsyncSession, *, context: KeyContext, now: datetime) -> tuple[int | None, Evidence | None]:
-    """His age today and the fact it rests on, reading the same two facts
-    `app.reasoning.trends.birth_decade` reads first, here directly so the evidence id
-    survives (module doc)."""
-    said = await current_facts(
-        session, context=context, subject=_SETTING_BIRTH_DECADE[0], attribute=_SETTING_BIRTH_DECADE[1]
-    )
-    if said:
-        fact = said[-1]
-        try:
-            decade = int(fact.value)
-        except (TypeError, ValueError):
-            decade = None
-        if decade is not None:
-            return now.year - (decade + 5), Evidence(kind="fact", id=fact.id, scope=Scope.RECORDS)
-    born = await current_facts(session, context=context, subject=_PERSON, attribute="birth_year")
-    if born:
-        fact = born[-1]
-        try:
-            year = int(fact.value)
-        except (TypeError, ValueError):
-            year = None
-        if year is not None:
-            decade = year // 10 * 10
-            return now.year - (decade + 5), Evidence(kind="fact", id=fact.id, scope=Scope.RECORDS)
-    return None, None
+    """His age today and the fact it rests on. The Health Graph's one age rule (ADR 0019
+    point 3, `app.state.health_context.age_band`) does the actual read now — this function
+    only adapts its result to the `(age, Evidence)` shape the rest of this module already
+    expects, so every caller below is unchanged."""
+    result = await age_band(session, context=context, on=now)
+    if result.exact is None or result.fact_id is None:
+        return None, None
+    return result.exact, Evidence(kind="fact", id=result.fact_id, scope=Scope.RECORDS)
 
 
 async def _screening_proposals(

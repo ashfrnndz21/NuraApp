@@ -110,6 +110,7 @@ from app.errors import Refusal
 from app.family.thread import post_message
 from app.identity.models import Person, Profile
 from app.identity.service import find_person_by_phone
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.models import CONFIDENCE_THRESHOLD
 from app.ingestion.notes import MAX_VOICE_BYTES, NoteView, keep_voice_message
 from app.ingestion.objects import check_key, sha256_of
@@ -356,7 +357,6 @@ async def _keep_text(
     store = work.providers.object_store
     guard_region(held_in=store.region, asked_from=work.context.region)
     digest = sha256_of(data)
-    key = check_key(f"messages/{work.context.profile_id}/{digest}")
     await require_consent(
         session,
         context=work.context,
@@ -364,6 +364,16 @@ async def _keep_text(
         scope=scope,
         channel=Channel.WHATSAPP,
     )
+    # The same words in from WhatsApp again ("yes", a repeated report) are the same bytes for
+    # this profile: migration 0055's `(profile_id, sha256)` index makes a second row of them
+    # impossible, so this reuses the artefact already on file (D-4a's pattern, extended past
+    # the paper kinds it was written for — `app.ingestion.duplicates`).
+    existing = await find_own_artifact_by_digest(
+        session, context=work.context, scope=scope, kind=ArtifactKind.MESSAGE, sha256=digest
+    )
+    if existing is not None:
+        return existing
+    key = check_key(f"messages/{work.context.profile_id}/{digest}")
     await store.put(key, data)
     return await audited_write(
         session,
@@ -1253,19 +1263,31 @@ async def _document(session: AsyncSession, work: _Work) -> Handled:
         store = work.providers.object_store
         guard_region(held_in=store.region, asked_from=work.context.region)
         digest = sha256_of(media.data)
-        key = check_key(f"documents/{work.context.profile_id}/{digest}")
-        await store.put(key, media.data)
-        artifact = await store_artifact(
-            session,
-            context=work.context,
-            kind=ArtifactKind.PDF,
-            storage_key=key,
-            content_type=content_type,
-            sha256=digest,
-            captured_at=work.message.at,
-            source_channel=SourceChannel.WHATSAPP,
-            region=store.region,
+        # B5, the independent safety review: the same PDF sent again on WhatsApp is the same
+        # bytes — migration 0055's `(profile_id, sha256)` index makes a second row of them
+        # impossible, and a raw `store_artifact` call with no check first raised
+        # `IntegrityError` straight out of the webhook (a 500, silence for Mei, for resending
+        # exactly the letter she was asked to). Reuses the artefact already on file; the
+        # WhatsApp message itself is still kept below, unconditionally, every time.
+        existing = await find_own_artifact_by_digest(
+            session, context=work.context, scope=Scope.RECORDS, kind=ArtifactKind.PDF, sha256=digest
         )
+        if existing is not None:
+            artifact = existing
+        else:
+            key = check_key(f"documents/{work.context.profile_id}/{digest}")
+            await store.put(key, media.data)
+            artifact = await store_artifact(
+                session,
+                context=work.context,
+                kind=ArtifactKind.PDF,
+                storage_key=key,
+                content_type=content_type,
+                sha256=digest,
+                captured_at=work.message.at,
+                source_channel=SourceChannel.WHATSAPP,
+                region=store.region,
+            )
         said = "kept_letter"
     else:
         raise NotADocument(f"{content_type} is neither a photo nor a PDF")

@@ -639,6 +639,54 @@ async def test_a_line_failing_rule_14_and_another_rule_is_still_dropped(
     assert _BOUNDARY_AND_TOO_LONG_LINE not in " ".join(line.text for line in answer.lines)
 
 
+async def test_a_dropped_plain_words_line_writes_a_content_free_d3_row(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D3 (ADR 0019 point 7): the plain-words gate that dropped `_BOUNDARY_AND_TOO_LONG_LINE`
+    above, twice, leaves an audit trail — a `ConclusionReview` row (`app.audit.conclusions`)
+    beside an `AuditEntry` (`Action.REVIEW`) — and neither carries the dropped line, its
+    words, or any fragment of it."""
+    from sqlalchemy import select
+
+    from app.audit.conclusions import (
+        ConclusionReasonCode,
+        ConclusionResponseKind,
+        ConclusionReview,
+    )
+    from app.audit.models import AuditEntry
+
+    rec = await record(sg)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_medicines"),
+            _final([{"text": _BOUNDARY_AND_TOO_LONG_LINE, "cites": ["m1"]}]),
+            _final([{"text": _BOUNDARY_AND_TOO_LONG_LINE, "cites": ["m1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    await _drive(asker, sg, rec.owner, "what is my medicine", tmp_path)
+
+    rows = (
+        await sg.execute(
+            select(ConclusionReview).where(ConclusionReview.profile_id == rec.owner.profile_id)
+        )
+    ).scalars().all()
+    assert len(rows) >= 1
+    for row in rows:
+        assert row.response_kind is ConclusionResponseKind.GATE_DROPPED
+        assert row.reason_code is ConclusionReasonCode.PLAIN_WORDS
+        assert row.rule_id in (3, 14)
+        # Content-free: every column is an enum, an id, or a timestamp — the dropped line's
+        # own words appear nowhere on the row.
+        for value in (row.response_kind, row.reason_code, row.rule_id):
+            assert _BOUNDARY_AND_TOO_LONG_LINE not in str(value)
+        entry = await sg.get(AuditEntry, row.audit_entry_id)
+        assert entry is not None
+        assert entry.action.value == "review"
+        assert entry.refused_because == "plain_words"
+        assert _BOUNDARY_AND_TOO_LONG_LINE not in (entry.refused_because or "")
+
+
 async def test_every_line_failing_rule_14_still_reaches_him_through_the_fallback(
     sg: AsyncSession, tmp_path: Path, monkeypatch: Any
 ) -> None:

@@ -22,7 +22,7 @@ from app.audit.access import audited_read
 from app.db import as_utc, utcnow
 from app.keys.context import KeyContext
 from app.keys.scopes import Scope
-from app.medicines.models import ChangeKind, MedicationLine
+from app.medicines.models import ChangeKind, LineStatus, MedicationLine
 from app.memory.models import Appointment, Fact, Provider, ProviderKind
 from app.memory.spine import UPCOMING
 from app.reasoning.navigation.models import Need, NeedKind
@@ -111,6 +111,9 @@ async def _new_medicine_needs(session: AsyncSession, *, context: KeyContext) -> 
         where=(
             MedicationLine.change_kind == ChangeKind.NEW_LINE,
             MedicationLine.superseded_at.is_(None),
+            # Independent review of #331, follow-up 1: a new-medicine question is never asked
+            # about a line he has already stopped or paused.
+            MedicationLine.status == LineStatus.ACTIVE,
         ),
     )
     out: list[Need] = []

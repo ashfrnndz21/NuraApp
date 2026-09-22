@@ -28,11 +28,19 @@ from tests.onboarding_support import (
     add_paper,
     answers,
     call,
+    paper,
     refused,
     stewarded,
     through_the_papers,
 )
-from tests.paper import DISCHARGE_LETTER, LIPID_PANEL, WARFARIN_LABEL, placeholder_pdf
+from tests.paper import (
+    DISCHARGE_LETTER,
+    LAB_REPORT_NOT_HIS,
+    LIPID_PANEL,
+    LIPID_PANEL_2025,
+    WARFARIN_LABEL,
+    placeholder_pdf,
+)
 
 READ_BACK_MS = [
     "Anda beritahu kami: Darah tinggi.",
@@ -522,6 +530,48 @@ async def test_the_read_back_one_line_at_a_time(deployment: Deployment) -> None:
     by_line = {line["line"]: line for line in last["read_back"]}
     assert by_line[LDL_MS]["answer"] == "no" and by_line[LDL_MS]["dispute_fact_id"]
     assert last["after_no"] == "Mei akan lihat surat itu sekali lagi."
+
+
+async def test_a_set_aside_paper_never_shows_confirmed_on_the_wire(deployment: Deployment) -> None:
+    """B2/B3, the independent safety review: `PaperOut.of` used to read `confirmed=not
+    view.card.is_open`, which is `True` for a card set aside on its own whose-paper question
+    exactly as it is for one actually confirmed — so a stranger's paper, rejected with
+    "someone else's", would show `confirmed: true` over the wire. Proven directly: a first
+    paper establishes a confirmed birth year in the sitting's own record, a second,
+    mismatching paper is added and never confirmed but answered "someone else's" instead —
+    the sitting's own view must say `confirmed: false` for it, always."""
+    mei, profile_id = await stewarded(deployment)
+    her = mei["token"]
+    base = f"/profiles/{profile_id}/biography"
+    await call(deployment, "POST", base, her, 201)
+    await call(deployment, "PUT", f"/profiles/{profile_id}/settings", her, 200, json=SETTINGS)
+    await add_paper(deployment, her, profile_id, LIPID_PANEL_2025, "lab_result")
+
+    mismatched = await call(
+        deployment,
+        "POST",
+        f"{base}/papers",
+        her,
+        201,
+        json=paper(LAB_REPORT_NOT_HIS, "lab_result"),
+    )
+    assert mismatched["card"]["clarify"] is not None
+    assert mismatched["card"]["clarify"]["kind"] == "whose_paper"
+    assert mismatched["paper"]["confirmed"] is False
+
+    answered = await call(
+        deployment,
+        "POST",
+        f"/profiles/{profile_id}/review-cards/{mismatched['card']['card_id']}/answer",
+        her,
+        200,
+        json={"value": "someone_elses"},
+    )
+    assert answered["discarded"] is True
+
+    view = await call(deployment, "GET", base, her, 200)
+    by_id = {p["card_id"]: p for p in view["papers"]}
+    assert by_id[mismatched["card"]["card_id"]]["confirmed"] is False
 
 
 async def test_a_card_made_through_capture_joins_the_sitting(deployment: Deployment) -> None:

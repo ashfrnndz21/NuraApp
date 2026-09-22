@@ -19,11 +19,17 @@ from app.keys.scopes import KeyRole, Scope
 
 
 class Action(StrEnum):
-    """The three things that can happen to profile data. Every one of them is written down."""
+    """What can happen to profile data. Every one of them is written down."""
 
     READ = "read"
     WRITE = "write"
     SHARE = "share"
+    REVIEW = "review"
+    """D3 (ADR 0019 point 7; `docs/design/NURA-BUILD-MASTER-SPEC.md` §39): a model's own
+    conclusion was rejected — dropped by a gate before it ever reached a person, or dropped by
+    the person himself on a read-back or a review card. `refused_because` names the closed
+    reason (`app.audit.conclusions.ConclusionReasonCode` or `ConclusionResponseKind`); never
+    the conclusion's own words. See `app.audit.conclusions.record_dropped_conclusion`."""
 
 
 class Outcome(StrEnum):
@@ -82,6 +88,12 @@ class AuditEntry(ProfileScoped, Base):
     outcome: Mapped[Outcome] = mapped_column(enum_column(Outcome, "audit_outcome"))
     # The name of the refusal, never what was held back. See `app.errors.Refusal`.
     refused_because: Mapped[str | None] = mapped_column(String(64), default=None)
+    # A card's own answer to its one pending question, from the closed set it was checked
+    # against before this line was written (`WHOSE_PAPER_ANSWERS`/`DUPLICATE_PAPER_ANSWERS`,
+    # `app.ingestion.review`) — "mine", "someone_elses", "same" or "different". Never the
+    # paper's own printed name, or any other free text (FIX BEFORE MERGE, the independent
+    # safety review): this table never says what the thing said.
+    answered_with: Mapped[str | None] = mapped_column(String(32), default=None)
     # Who the copy went to: an account for family, a written name for a clinic or a link.
     shared_with_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None
