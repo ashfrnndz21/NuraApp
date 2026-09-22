@@ -170,8 +170,9 @@ const BUBBLE_PADDING = 12;
 /** The font size a size tier draws its label at, in px — the LARGER of the two densities
  *  tokens.css ever sets (`--word-1/2/3` under `[data-density="patient"]`), since `packCloud`
  *  never knows which density is live and a caregiver's own smaller font then only ever has
- *  more room in the circle, never less. */
-const TIER_FONT_PX: Record<Size, number> = { 1: 20, 2: 22, 3: 24 };
+ *  more room in the circle, never less. Exported so a test can check a real word's own box
+ *  against these same font metrics, not a guessed one. */
+export const TIER_FONT_PX: Record<Size, number> = { 1: 20, 2: 22, 3: 24 };
 
 /** A conservative estimate of how wide a word draws, in px, at a given font size — never a real
  *  measurement (`canvas.measureText`, the usual way): this has to return the exact same number
@@ -187,28 +188,90 @@ function estimateWordWidth(word: string, fontPx: number): number {
   return word.length * fontPx * (isCjk ? CJK_CHAR_WIDTH_EM : AVG_CHAR_WIDTH_EM);
 }
 
-/** The widest single, unbreakable word in a label — `cloudView`'s own names sometimes carry
- *  more than one word ("High blood pressure"); wrapping happens at the spaces between them
- *  (`overflow-wrap: normal`/`word-break: keep-all`, onboarding.css), never inside one, so only
- *  the longest of them ever has to fit a circle's own width on one line. */
-function longestWord(name: string): string {
-  return name.split(/\s+/).reduce((longest, word) => (word.length > longest.length ? word : longest), "");
+/** `.word.bubble`'s own line height (onboarding.css), read here once so this estimate and the
+ *  stylesheet never drift apart. */
+const LINE_HEIGHT_EM = 1.1;
+
+/** However many lines a label is ever asked to wrap across before its circle has to grow
+ *  TALLER for it, not just wider — a fourth line would read as a card, not a bubble ("Can take
+ *  a photo of the medicine bag" reads as three short lines just fine). */
+const MAX_LABEL_LINES = 3;
+
+/** Greedy word-wrap over each word's own estimated width — the same rule a browser applies at
+ *  `overflow-wrap: normal` (a word joins the line it is on while it still fits, otherwise it
+ *  starts the next one) — so this can say, without ever laying real text out, how many lines a
+ *  label wraps to at a given width. Monotonic: never fewer lines at a narrower width. */
+function wrapLineCount(wordWidths: readonly number[], spaceWidth: number, maxWidth: number): number {
+  if (wordWidths.length === 0) return 1;
+  let lines = 1;
+  let lineWidth = wordWidths[0]!;
+  for (let i = 1; i < wordWidths.length; i++) {
+    const width = wordWidths[i]!;
+    if (lineWidth + spaceWidth + width <= maxWidth) lineWidth += spaceWidth + width;
+    else {
+      lines++;
+      lineWidth = width;
+    }
+  }
+  return lines;
 }
 
-/** The smallest a circle can be and still hold this word's longest piece on one line, at that
- *  size tier's own (larger-density) font — with NO regard for the tier's usual size: this is
- *  the one true floor `packCloud`'s own scale-down (below) is never allowed to go under, for
- *  a short word too ("Weight" still needs some real width, just less than its tier gives it by
- *  default). */
+/** The narrowest width a label can wrap to and still fit within `MAX_LABEL_LINES` — never
+ *  narrower than its own longest single word (which can never itself be split,
+ *  `overflow-wrap: normal`/`word-break: keep-all`, onboarding.css). A short label already fits
+ *  within the cap at that narrowest width and gets it back unchanged; a long one ("Kidney
+ *  number checked by a doctor") is asked to spread across the full three lines instead of
+ *  demanding one very wide circle for a single line. `wrapLineCount` only ever falls as width
+ *  grows, so there is exactly one narrowest width where it first reaches the cap — binary
+ *  search finds it without ever laying real text out. */
+function widthForLines(wordWidths: readonly number[], spaceWidth: number): number {
+  const longest = Math.max(...wordWidths, 0);
+  if (wrapLineCount(wordWidths, spaceWidth, longest) <= MAX_LABEL_LINES) return longest;
+  const oneLine = wordWidths.reduce((sum, width) => sum + width, 0) + spaceWidth * Math.max(0, wordWidths.length - 1);
+  let lo = longest;
+  let hi = oneLine;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (wrapLineCount(wordWidths, spaceWidth, mid) <= MAX_LABEL_LINES) hi = mid;
+    else lo = mid;
+  }
+  return hi;
+}
+
+/** The box a label actually draws in at a given font size: never narrower than its longest
+ *  single word, and never wrapped across more than `MAX_LABEL_LINES` — found by looking for the
+ *  narrowest width that keeps it within that many lines, the same trade-off a person laying the
+ *  words out by hand would make (a few lines of a normal width, not one very wide line).
+ *  Exported so a test can check this box, at the bubble's own real font metrics, against a real
+ *  word's `minDiameterFor` — not a synthetic one, the graph #117 actually ships
+ *  (`backend/app/onboarding/conditions.json`, the fixture the e2e suite itself seeds from). */
+export function estimateLabelBox(name: string, fontPx: number): { width: number; height: number } {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return { width: 0, height: fontPx * LINE_HEIGHT_EM };
+  const wordWidths = words.map((word) => estimateWordWidth(word, fontPx));
+  const spaceWidth = estimateWordWidth(" ", fontPx);
+  const width = widthForLines(wordWidths, spaceWidth);
+  const lines = wrapLineCount(wordWidths, spaceWidth, width);
+  return { width, height: lines * fontPx * LINE_HEIGHT_EM };
+}
+
+/** The smallest a circle can be and still hold this word's WHOLE label — every line of it, not
+ *  just its longest single word — at that size tier's own (larger-density) font, with NO regard
+ *  for the tier's usual size: this is the one true floor `packCloud`'s own scale-down (below) is
+ *  never allowed to go under, for a short word too ("Weight" still needs some real width, just
+ *  less than its tier gives it by default). A circle is round in both directions at once, so
+ *  both the label's own width AND its wrapped height have to fit it — whichever of the two asks
+ *  for more room wins. */
 function wordFitOnly(word: Pick<CloudWord, "name" | "size">): number {
-  const widest = estimateWordWidth(longestWord(word.name), TIER_FONT_PX[word.size]);
-  return Math.ceil(widest + BUBBLE_PADDING * 2);
+  const box = estimateLabelBox(word.name, TIER_FONT_PX[word.size]);
+  return Math.ceil(Math.max(box.width, box.height) + BUBBLE_PADDING * 2);
 }
 
-/** The smallest a word's own circle can be and still hold its longest word on one line, AND
- *  read as its own weight tier's usual size — never below either: a short word still draws at
- *  its weight's usual size (`CLOUD_DIAMETER`); a long one grows past it, exactly as far as
- *  `wordFitOnly` says it must. */
+/** The smallest a word's own circle can be and still hold its whole label, AND read as its own
+ *  weight tier's usual size — never below either: a short word still draws at its weight's
+ *  usual size (`CLOUD_DIAMETER`); a long one grows past it, exactly as far as `wordFitOnly`
+ *  says it must. Applies the same way to every word in a cloud view, a revealed one exactly as
+ *  much as a top one — `packCloud` below never special-cases which. */
 export function minDiameterFor(word: Pick<CloudWord, "name" | "size">): number {
   return Math.max(CLOUD_DIAMETER[word.size], wordFitOnly(word));
 }

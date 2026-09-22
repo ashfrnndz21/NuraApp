@@ -37,6 +37,50 @@ async function shoot(page: Page, path: string, wide: boolean): Promise<void> {
   else await page.screenshot({ path, animations: "disabled" });
 }
 
+/** Every cloud bubble's OWN word must stay inside its own circle — a screenshot once caught
+ *  "Kidney number checked by a doctor" and "Stroke in the family" painting text above and below
+ *  the circle's own edge (`onboarding/cloud.ts` `minDiameterFor`/`estimateLabelBox`, sized for
+ *  the whole wrapped label, not just its longest single word). Reads each bubble's own text
+ *  node with a DOM `Range` (never `element.getBoundingClientRect()` alone — that would measure
+ *  the button's own box, which is what this is checking the text stays inside, not the text
+ *  itself) and compares it against the button's real, rendered box — the same real layout a
+ *  screenshot shows, not `packCloud`'s own estimate of it. A tiny tolerance absorbs sub-pixel
+ *  rounding, nothing more. */
+async function assertNoBubbleTextOverflow(page: Page, where: string): Promise<void> {
+  const overflowing = await page.evaluate(() => {
+    const TOLERANCE = 1;
+    const misfits: string[] = [];
+    for (const button of Array.from(document.querySelectorAll('[data-testid^="word-"]'))) {
+      let left = Infinity;
+      let top = Infinity;
+      let right = -Infinity;
+      let bottom = -Infinity;
+      let hasText = false;
+      for (const node of Array.from(button.childNodes)) {
+        if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        for (const rect of Array.from(range.getClientRects())) {
+          if (rect.width === 0 && rect.height === 0) continue;
+          hasText = true;
+          left = Math.min(left, rect.left);
+          top = Math.min(top, rect.top);
+          right = Math.max(right, rect.right);
+          bottom = Math.max(bottom, rect.bottom);
+        }
+      }
+      if (!hasText) continue;
+      const box = button.getBoundingClientRect();
+      const over = Math.max(box.left - left, box.top - top, right - box.right, bottom - box.bottom);
+      if (over > TOLERANCE) {
+        misfits.push(`${button.getAttribute("data-testid")} "${button.textContent?.trim()}" overflows its circle by ${Math.round(over * 10) / 10}px`);
+      }
+    }
+    return misfits;
+  });
+  expect(overflowing, `${where}: every bubble's text must stay inside its own circle`).toEqual([]);
+}
+
 /** One scene at a time, every `pageerror` and `console.error` collected along the way — the
  *  webkit walk this is really for (task: find the blank screen the owner hit in Safari). */
 async function run(page: Page, prefix: string, wide: boolean, errors: string[]): Promise<void> {
@@ -102,6 +146,7 @@ async function run(page: Page, prefix: string, wide: boolean, errors: string[]):
   // 7. The cloud: empty, a floating scatter of different-sized circles.
   await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "cloud");
   await expect(page.getByTestId("cloud").locator('[data-testid^="word-"]').first()).toBeVisible();
+  await assertNoBubbleTextOverflow(page, `${prefix}-09-cloud-empty`);
   await shoot(page, `${OUT}/${prefix}-09-cloud-empty.png`, wide);
 
   // 8. Picked: the tapped word, the words it bloomed in under it, and Nura's one line under
@@ -110,17 +155,20 @@ async function run(page: Page, prefix: string, wide: boolean, errors: string[]):
   await expect(page.getByTestId("cloud-ack")).toBeVisible();
   await page.getByTestId("word-high_blood_pressure").scrollIntoViewIfNeeded();
   await page.mouse.wheel(0, -80); // a little air above the tapped word, its bloom below it
+  await assertNoBubbleTextOverflow(page, `${prefix}-10-cloud-picked`);
   await shoot(page, `${OUT}/${prefix}-10-cloud-picked.png`, wide);
 
   // 9. A word with a follow-up: its question opens right under the cloud, before he answers it.
   await page.getByTestId("word-bp_tablets").click();
   await expect(page.getByTestId("ask-bp_tablets")).toBeVisible();
   await page.getByTestId("ask-bp_tablets").scrollIntoViewIfNeeded();
+  await assertNoBubbleTextOverflow(page, `${prefix}-11-cloud-ask`);
   await shoot(page, `${OUT}/${prefix}-11-cloud-ask.png`, wide);
 
   // 10. The same question, answered — his tap is the whole answer.
   await page.getByTestId("option-one_to_five_years").click();
   await expect(page.getByTestId("option-one_to_five_years")).toHaveAttribute("aria-pressed", "true");
+  await assertNoBubbleTextOverflow(page, `${prefix}-11b-cloud-ask-answered`);
   await shoot(page, `${OUT}/${prefix}-11b-cloud-ask-answered.png`, wide);
   await page.getByTestId("cloud-done").click();
 

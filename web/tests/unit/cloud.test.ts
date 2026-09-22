@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ConditionOut } from "../../src/api/types";
 import {
@@ -7,6 +9,7 @@ import {
   CLOUD_DIAMETER,
   CLOUD_PACK_WIDTH,
   cloudView,
+  estimateLabelBox,
   joinNames,
   lowerFirst,
   minDiameterFor,
@@ -14,6 +17,7 @@ import {
   phaseOf,
   sizeOf,
   tapHint,
+  TIER_FONT_PX,
   toggle,
   topWords,
 } from "../../src/onboarding/cloud";
@@ -364,13 +368,22 @@ describe("packCloud", () => {
     expect(d).toBeGreaterThan(CLOUD_DIAMETER[1]);
   });
 
-  it("minDiameterFor: only the longest UNBREAKABLE word in a multi-word label has to fit — it wraps at spaces", () => {
+  it("minDiameterFor: a short multi-word label wraps to its own few lines and can still stay at tier size — a circle is round both ways, not just wide enough for one line", () => {
+    // "See a GP" wraps to three short lines at tier 3's own font, and even three lines of it
+    // sits comfortably inside the tier's own usual size — nothing here has to grow.
+    expect(minDiameterFor({ name: "See a GP", size: 3 })).toBe(CLOUD_DIAMETER[3]);
+  });
+
+  it("minDiameterFor: a label with no single long word can still need a bigger circle than its longest word alone would — wrapping it makes it TALL, not just wide", () => {
+    // Every one of these words is short (never near tier 1's own width floor alone), but there
+    // are enough of them that wrapping to at most three lines still asks for real height.
+    const d = minDiameterFor({ name: "Kidney number checked by a doctor", size: 1 });
+    expect(d).toBeGreaterThan(CLOUD_DIAMETER[1]);
+  });
+
+  it("minDiameterFor: one long unbreakable word still needs more room than the same letters spread across short, wrappable words", () => {
     const oneLongWord = minDiameterFor({ name: "Hypercholesterolaemia", size: 1 });
-    const manyShortWords = minDiameterFor({ name: "Sit up and eat now", size: 1 });
-    // Every individual word in "Sit up and eat now" is three letters or fewer, so this stays at
-    // the tier floor even though the whole label reads long — only the longest single word
-    // ("Sit"/"and"/"eat") has to fit alone, and none of them is close to needing more room.
-    expect(manyShortWords).toBe(CLOUD_DIAMETER[1]);
+    const manyShortWords = minDiameterFor({ name: "High blood pressure noted here", size: 1 });
     expect(oneLongWord).toBeGreaterThan(manyShortWords);
   });
 
@@ -433,5 +446,40 @@ describe("tapHint", () => {
   it("reads the same on an unpick, whichever word it was", () => {
     expect(tapHint(withRelated(), false, templates)).toBe(`${templates.removed} ${templates.removedSub}`);
     expect(tapHint(withoutRelated(), false, templates)).toBe(`${templates.removed} ${templates.removedSub}`);
+  });
+});
+
+// The real graph (#117) the app actually ships and the e2e suite itself seeds every run from —
+// not a made-up label. A screenshot once showed "Kidney number checked by a doctor" and
+// "Stroke in the family" painting outside their own circle: this checks every name this graph
+// carries, in every language, at every size a pick could ever boost it to, against the box it
+// really draws in at the bubble's own font metrics (`estimateLabelBox`/`TIER_FONT_PX`) — so a
+// future name added to the graph, or a future font-size change, fails here first, not in a
+// screenshot a person has to notice by eye.
+describe("every real condition name fits the circle it is given", () => {
+  const graphPath = fileURLToPath(new URL("../../../backend/app/onboarding/conditions.json", import.meta.url));
+  const graph = JSON.parse(readFileSync(graphPath, "utf-8")) as {
+    conditions: Record<string, { names: Record<string, string> }>;
+  };
+  const names = Object.entries(graph.conditions).flatMap(([code, condition]) =>
+    Object.entries(condition.names).map(([lang, name]) => ({ code, lang, name })),
+  );
+
+  it("read real names from the graph — the fixture did not come back empty", () => {
+    expect(names.length).toBeGreaterThan(50);
+  });
+
+  it("every name, at every size it could ever be boosted to (a pick can push any word up to size 3), never overflows the circle minDiameterFor gives it", () => {
+    const misfits: string[] = [];
+    for (const { code, lang, name } of names) {
+      for (const size of [1, 2, 3] as const) {
+        const diameter = minDiameterFor({ name, size });
+        const box = estimateLabelBox(name, TIER_FONT_PX[size]);
+        if (diameter < box.width || diameter < box.height) {
+          misfits.push(`${code} (${lang}, size ${size}): "${name}" needs ${box.width}x${box.height}px, only got ${diameter}px`);
+        }
+      }
+    }
+    expect(misfits).toEqual([]);
   });
 });
