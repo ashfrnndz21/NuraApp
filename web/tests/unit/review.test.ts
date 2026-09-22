@@ -23,6 +23,7 @@ import {
   readingHeadline,
   readingTally,
   reportRow,
+  saysItself,
   reportSections,
   sharedProvenance,
   spokenLine,
@@ -591,5 +592,17 @@ describe("effectiveValue: a confirmed card's own true value (library part B #3)"
   it("falls back to the read value if corrected but nothing was kept", () => {
     const odd = { ...tg, state: "corrected" as const, corrected_value: null };
     expect(effectiveValue(odd)).toBe(tg.value);
+  });
+});
+
+describe("a value that already opens with the paper's own label (22 Sep 2026, the owner's schedule)", () => {
+  it("does not print the label again above it", () => {
+    expect(saysItself("Overall Annual Limit: RM150,000 (Plan 1) / RM200,000 (Plan 2)", "Overall Annual Limit")).toBe(true);
+    expect(saysItself("overall lifetime limit: No Limit", "Overall Lifetime Limit ")).toBe(true);
+  });
+  it("keeps the label when the value says something else, or nothing more than the label", () => {
+    expect(saysItself("RM360", "Hospital Room & Board Charges")).toBe(false);
+    expect(saysItself("Overall Annual Limit", "Overall Annual Limit")).toBe(false);
+    expect(saysItself("", "Overall Annual Limit")).toBe(false);
   });
 });
