@@ -12,6 +12,8 @@ import Animated, {
 import { cardEnter, pressIn, pressOut, scalePress } from '../motion/motionTokens';
 import { springs } from '../motion/springs';
 import { useReducedMotion } from '../motion/useReducedMotion';
+import { phoneTokens } from '../../design/colors';
+import { radii } from '../../design/tokens';
 
 export type CardVariant =
   | 'insight'
@@ -38,7 +40,11 @@ const ACCENT: Record<CardVariant, string> = {
   alert: '#f3b562',
 };
 
-const RADIUS: Record<CardTier, number> = { primary: 28, secondary: 22, tertiary: 16 };
+const RADIUS: Record<CardTier, number> = {
+  primary: radii.cardPrimary,
+  secondary: radii.cardSecondary,
+  tertiary: radii.cardTertiary,
+};
 const PADDING: Record<CardTier, number> = { primary: 18, secondary: 14, tertiary: 4 };
 
 export interface NuraCardProps {
@@ -124,9 +130,9 @@ export function NuraCard({
         {
           borderRadius: tierRadius,
           padding: tierPadding,
-          backgroundColor: isTertiary ? 'transparent' : 'rgba(255,255,255,0.08)',
+          backgroundColor: isTertiary ? 'transparent' : phoneTokens.g,
           borderWidth: isTertiary ? 0 : 1,
-          borderColor: variant === 'alert' ? 'rgba(243,181,98,0.55)' : 'rgba(255,255,255,0.16)',
+          borderColor: variant === 'alert' ? 'rgba(243,181,98,0.55)' : phoneTokens.gb,
         },
         animatedStyle,
         style,

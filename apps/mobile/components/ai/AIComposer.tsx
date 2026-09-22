@@ -12,7 +12,7 @@ import Animated, {
 import { runAskFixture, runExplainFixture, type AskFixtureAnswer, type NuraEvent } from '../../lib/ai/events';
 import { cardEnter, fadeExit } from '../motion/motionTokens';
 import { useReducedMotion } from '../motion/useReducedMotion';
-import { IntelligenceOrb } from '../ambient/IntelligenceOrb';
+import { AIOrb } from '../ambient/IntelligenceOrb';
 import { useAIState } from './AIState';
 
 interface Message {
@@ -176,7 +176,7 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
               <View style={[StyleSheet.absoluteFill, styles.webBackdrop]} />
             )}
             <View style={styles.askRow}>
-              <IntelligenceOrb size="sm" />
+              <AIOrb size="sm" />
               <TextInput
                 ref={inputRef}
                 style={styles.input}

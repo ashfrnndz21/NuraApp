@@ -3,20 +3,22 @@
  * "A lint fails any literal duration in components" (spike brief) /
  * "Centralised tokens, nothing hard-coded" (design-build-2.md §24).
  *
- * Scans components/, app/ and features/ for numeric literals passed as
- * an animation duration/delay — the second argument of withTiming,
- * withDelay, withRepeat's iteration count is fine but its config isn't,
- * Animated.timing's `duration:` field, and raw setTimeout calls used to
- * fake a wait. Every one of those must read from
- * `components/motion/motionTokens.ts` (or `springs.ts`/`transitions.ts`,
- * which are themselves built only from motionTokens).
+ * Scans components/, app/, features/, lib/ and design/ for numeric
+ * literals passed as an animation duration/delay — the second argument of
+ * withTiming, withDelay, withRepeat's iteration count is fine but its
+ * config isn't, Animated.timing's `duration:` field, and raw setTimeout
+ * calls used to fake a wait. Every one of those must read from
+ * `design/motion.ts` (section 35, the single source of truth) — or
+ * `components/motion/motionTokens.ts`/`springs.ts`/`transitions.ts`,
+ * which re-export/are built from it.
  */
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const SCAN_DIRS = ['components', 'app', 'features'].map((d) => path.join(ROOT, d));
+const SCAN_DIRS = ['components', 'app', 'features', 'lib', 'design'].map((d) => path.join(ROOT, d));
 const EXEMPT_FILES = new Set([
+  path.join(ROOT, 'design/motion.ts'),
   path.join(ROOT, 'components/motion/motionTokens.ts'),
   path.join(ROOT, 'components/motion/springs.ts'),
   path.join(ROOT, 'components/motion/transitions.ts'),

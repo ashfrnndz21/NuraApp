@@ -12,9 +12,11 @@ import Animated, {
 import { motionFast } from '../motion/motionTokens';
 import { springs } from '../motion/springs';
 import { useReducedMotion } from '../motion/useReducedMotion';
+import { sheetDismissDistance, sheetDismissVelocity } from '../../design/motion';
+import { radii } from '../../design/tokens';
 
-const DISMISS_DISTANCE = 110;
-const DISMISS_VELOCITY = 800;
+const DISMISS_DISTANCE = sheetDismissDistance;
+const DISMISS_VELOCITY = sheetDismissVelocity;
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -102,8 +104,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(30,24,44,0.97)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: radii.sheet,
+    borderTopRightRadius: radii.sheet,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 34,

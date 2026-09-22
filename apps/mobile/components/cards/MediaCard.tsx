@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { mediaRun, pressOut } from '../motion/motionTokens';
+import { radii } from '../../design/tokens';
 import { NuraCard } from './NuraCard';
 
 export type MediaState = 'idle' | 'loading' | 'playing' | 'paused' | 'complete';
@@ -119,7 +120,7 @@ export function MediaCard({ title, why, publisher, duration, enterIndex, stagger
 const styles = StyleSheet.create({
   poster: {
     height: 150,
-    borderRadius: 18,
+    borderRadius: radii.mediaPoster,
     overflow: 'hidden',
     justifyContent: 'space-between',
     padding: 14,

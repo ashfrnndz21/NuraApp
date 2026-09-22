@@ -14,7 +14,7 @@ import { useDerivedValue, useSharedValue, withTiming, type SharedValue } from 'r
 
 import type { AIStateName } from '../ai/AIState';
 import { useAIStateName } from '../ai/AIState';
-import { phoneTokens } from '../motion/motionTokens';
+import { phoneTokens } from '../../design/colors';
 import { timing } from '../motion/springs';
 import { useReducedMotion } from '../motion/useReducedMotion';
 
@@ -34,9 +34,13 @@ export interface AmbientBackgroundProps {
 }
 
 /**
- * The dusk gradient + two radial "atmosphere" layers behind Home (spec
- * §2, blueprint `.atmos i.a` / `.atmos i.b`). Translated by scroll,
- * brightened slightly by AIState — never by a timer of its own.
+ * The dusk gradient + three radial "atmosphere" layers behind Home (spec
+ * §2, blueprint `.atmos i.a` / `.atmos i.b` / `.atmos i.c`). The first two
+ * are translated by scroll and brightened slightly by AIState — never by
+ * a timer of its own. The third (`.atmos i.c`) is static in the
+ * reference — no drift animation, no scroll parallax, fixed opacity — a
+ * grounding layer low in the frame. It was missing from the spike
+ * (DESIGN_SYSTEM.md §1.2 "third background layer" finding); added here.
  */
 export function AmbientBackground({ width, height, scrollY }: AmbientBackgroundProps) {
   const aiState = useAIStateName();
@@ -58,8 +62,10 @@ export function AmbientBackground({ width, height, scrollY }: AmbientBackgroundP
 
   const aCenter = vec(width * 0.62, height * -0.05);
   const bCenter = vec(width * 0.05, height * 0.28);
+  const cCenter = vec(width * 0.85, height * 0.72);
   const aR = width * 0.55;
   const bR = width * 0.58;
+  const cR = width * 0.54;
 
   return (
     <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -89,6 +95,16 @@ export function AmbientBackground({ width, height, scrollY }: AmbientBackgroundP
           />
         </Circle>
         <Blur blur={44} />
+      </Group>
+      <Group opacity={phoneTokens.atmosLayerC.opacity}>
+        <Circle c={cCenter} r={cR} color={phoneTokens.atmosLayerC.color}>
+          <RadialGradient
+            c={cCenter}
+            r={cR}
+            colors={[phoneTokens.atmosLayerC.color, `${phoneTokens.atmosLayerC.color}00`]}
+          />
+        </Circle>
+        <Blur blur={48} />
       </Group>
     </Canvas>
   );
