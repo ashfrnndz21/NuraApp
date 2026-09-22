@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiStream, CALL_DEADLINE_MS, Refused, Unreachable } from "../../src/api/client";
+import { apiStream, Refused, STREAM_IDLE_MS, Unreachable } from "../../src/api/client";
 
 /** The ask bar and the feed's web/video search stream over `apiStream` (docs/design-
  *  direction.md "Conversation, waiting and thinking"). The honesty rule tested here at the
  *  wire: a real event is handed to the caller the moment it arrives — no buffering, no
  *  artificial delay — and a stream that stalls still ends in a plain `Unreachable` within
- *  `CALL_DEADLINE_MS`, never spinning for ever (#193).
+ *  `STREAM_IDLE_MS`, never spinning for ever (#193).
  */
 
 afterEach(() => {
@@ -86,7 +86,7 @@ describe("apiStream: a stalled stream ends in a plain failure within the deadlin
       () => "resolved",
       (failure: unknown) => failure,
     );
-    await vi.advanceTimersByTimeAsync(CALL_DEADLINE_MS + 1000);
+    await vi.advanceTimersByTimeAsync(STREAM_IDLE_MS + 1000);
     await expect(settled).resolves.toBeInstanceOf(Unreachable);
   });
 });
