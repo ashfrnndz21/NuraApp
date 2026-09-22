@@ -332,12 +332,17 @@ async def _understand_paper(
         ):
             if isinstance(event, ImportStep):
                 tool_call_id = f"{builder.run_id}:{event.key.value}"
-                open_tool_call_id = tool_call_id
+                # `open_tool_call_id` is set only once `tool_call_start` has actually been
+                # yielded (round 3 review nit): `stage=_stage(...)` is evaluated as part of
+                # building that call's own arguments, before the `yield` — a failure there
+                # (a missing catalogue key, say) never opened a call at all, so the `except`
+                # below must not close one either.
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key.value,
                     stage=_stage(reader, language, event),
                 )
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
                 open_tool_call_id = None
                 yield builder.tool_call_result(
@@ -408,12 +413,14 @@ async def _answer_question(
                 # step's own already-safe count — never the record itself (module doc; this
                 # is the fixture/live parity point the audit named at ask_agent.py:1316).
                 tool_call_id = f"{builder.run_id}:{event.key}:{event.count}"
-                open_tool_call_id = tool_call_id
+                # See `_understand_paper`'s own comment: `open_tool_call_id` is set only once
+                # `tool_call_start` — including its `stage=` argument — has actually run.
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key,
                     stage=reader.says(ASK_STEPS[language][event.key]),
                 )
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
                 open_tool_call_id = None
                 yield builder.tool_call_result(
@@ -469,12 +476,14 @@ async def _generate_analysis(
         async for event in analyst.report_stream(session, context=context, language=language):
             if isinstance(event, Step):
                 tool_call_id = f"{builder.run_id}:{event.key.value}"
-                open_tool_call_id = tool_call_id
+                # See `_understand_paper`'s own comment: `open_tool_call_id` is set only once
+                # `tool_call_start` — including its `stage=` argument — has actually run.
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key.value,
                     stage=reader.says(event.label),
                 )
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
                 open_tool_call_id = None
                 yield builder.tool_call_result(
@@ -521,12 +530,14 @@ async def _generate_recommendations(
         language = await language_for(session, context, None)
         reader = await reader_of(session, context, None)
         tool_call_id = f"{builder.run_id}:jobs_looking_today"
-        open_tool_call_id = tool_call_id
+        # `open_tool_call_id` is set only once `tool_call_start` — including its `stage=`
+        # argument — has actually run (round 3 review nit; see `_understand_paper`'s comment).
         yield builder.tool_call_start(
             tool_call_id=tool_call_id,
             tool_call_name="jobs_looking_today",
             stage=reader.says(RUN_STAGE_WORDS[language]["jobs_looking_today"]),
         )
+        open_tool_call_id = tool_call_id
         # round 3, fix 1: the real work (`await`) happens between START and END here — unlike
         # the streamed intents above, where a step is only ever reported once the read behind
         # it has already finished. A failure here left `TOOL_CALL_START` with no matching
@@ -583,13 +594,15 @@ async def _triage_red_flag(
         ):
             if isinstance(event, NfwStep):
                 tool_call_id = f"{builder.run_id}:{event.key.value}"
-                open_tool_call_id = tool_call_id
                 stage_words = NFW_STEPS.get(language, NFW_STEPS["en"])
+                # `open_tool_call_id` is set only once `tool_call_start` — including its
+                # `stage=` argument — has actually run (see `_understand_paper`'s comment).
                 yield builder.tool_call_start(
                     tool_call_id=tool_call_id,
                     tool_call_name=event.key.value,
                     stage=reader.says(stage_words[event.key.value]),
                 )
+                open_tool_call_id = tool_call_id
                 yield builder.tool_call_end(tool_call_id=tool_call_id)
                 open_tool_call_id = None
                 yield builder.tool_call_result(
@@ -635,12 +648,14 @@ async def _prepare_visit(
         language = await language_for(session, context, None)
         reader = await reader_of(session, context, None)
         tool_call_id = f"{builder.run_id}:brief_for"
-        open_tool_call_id = tool_call_id
+        # `open_tool_call_id` is set only once `tool_call_start` — including its `stage=`
+        # argument — has actually run (round 3 review nit; see `_understand_paper`'s comment).
         yield builder.tool_call_start(
             tool_call_id=tool_call_id,
             tool_call_name="brief_for",
             stage=reader.says(RUN_STAGE_WORDS[language]["brief_for"]),
         )
+        open_tool_call_id = tool_call_id
         # round 3, fix 1: same gap as `generate_recommendations` above — the real work is
         # between START and END, so a failure in `brief_for` used to leave START unmatched.
         brief = await brief_for(

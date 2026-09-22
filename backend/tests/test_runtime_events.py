@@ -780,3 +780,45 @@ def test_fix3_report_custom_language_rejects_free_text() -> None:
 
     with pytest.raises(ValueError, match="en/ms/zh"):
         ReportCustom(sections=3, language="klingon")
+
+
+# --- round 3 review nit: open_tool_call_id must not be set before TOOL_CALL_START is yielded --
+
+
+class _AsksWithABadStepKey:
+    """An `Asker` whose step names a key `ASK_STEPS` does not have — reproduces the round 3
+    review nit: `stage=ASK_STEPS[language][event.key]` raises while `_answer_question` is
+    still building `tool_call_start`'s own arguments, before that call is ever yielded.
+    Before the fix, `open_tool_call_id` was already set at that point (assigned before the
+    `yield`, not after it), so the `except` closed a call that had never opened — measured
+    `RUN_STARTED, TOOL_CALL_END, RUN_ERROR`, no `TOOL_CALL_START` at all."""
+
+    external_processor: str | None = None
+
+    async def ask_stream(self, *args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        from app.search.ask import AskStep
+
+        yield AskStep(key="not_a_real_step_key", count=1)
+
+
+async def test_round3_nit_a_failure_building_stage_never_closes_an_unopened_tool_call(
+    sg: AsyncSession,
+) -> None:
+    rec = await record(sg)
+    subject = RunSubject(
+        profile_id=rec.owner.profile_id,
+        payload={"question": "what is my medicine", "mode": "text"},
+    )
+    engine = Engine(
+        providers=_StubProviders(
+            _AsksWithABadStepKey(), retriever=None, object_store=None, drug_registry=None
+        ),  # type: ignore[arg-type]
+        settings=None,  # type: ignore[arg-type]
+    )
+    events = [e async for e in run_nura(Intent.ANSWER_QUESTION, subject, rec.owner, sg, engine)]
+    types = [e.envelope.type.value for e in events]
+    assert types == ["RUN_STARTED", "RUN_ERROR"]
+    assert "TOOL_CALL_START" not in types
+    assert "TOOL_CALL_END" not in types
+    assert events[0].envelope.run_id == events[-1].envelope.run_id
+    assert [e.envelope.seq for e in events] == [1, 2]
