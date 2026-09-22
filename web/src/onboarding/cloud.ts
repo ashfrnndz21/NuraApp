@@ -152,7 +152,9 @@ export interface CloudCircle extends CloudWord {
 
 /** The diameter each size tier draws at, in px — the same three sizes `onboarding.css`'s
  *  `.word.bubble.s1/s2/s3` already give a bubble (`min-width`/`min-height`), read here once so
- *  the packer and the stylesheet never drift apart. */
+ *  the packer and the stylesheet never drift apart. This is the FLOOR a word's own weight asks
+ *  for; `minDiameterFor` below can only ever grow it, to fit a word too long for it — the tier
+ *  itself never shrinks, so size still reads as weight for every short word. */
 export const CLOUD_DIAMETER: Record<Size, number> = { 1: 60, 2: 90, 3: 126 };
 
 /** The narrowest width any supported viewport actually gives the cloud (360x640's screen: the
@@ -162,23 +164,66 @@ export const CLOUD_DIAMETER: Record<Size, number> = { 1: 60, 2: 90, 3: 126 };
  *  on the right, never a collision. */
 export const CLOUD_PACK_WIDTH = 320;
 
-/** Places every word as a circle, none overlapping, in `view`'s own order (top words heaviest
- *  first, a pick's reveals right after it — `cloudView`, unchanged) so the cloud's DOM order,
- *  and so its Tab order, never depends on where a circle lands. A short outward spiral search
- *  from a seeded start point (the same technique word-cloud layouts use: try a point: on a
- *  collision, step further round and further out; `phaseOf(word.code)` seeds where each word's
- *  own spiral starts, so the same picks always draw the same cloud — no re-shuffle on an
- *  unrelated re-render, the same guarantee `phaseOf`'s own drift-phase use above already gives
- *  the bubble's surface animation). Pure and deterministic, so it is unit-tested
- *  (`tests/unit/cloud.test.ts`) apart from ever measuring a real screen. */
-export function packCloud(view: readonly CloudWord[]): { circles: CloudCircle[]; height: number } {
+/** The bubble's own padding, both sides (`.word.bubble`, onboarding.css). */
+const BUBBLE_PADDING = 12;
+
+/** The font size a size tier draws its label at, in px — the LARGER of the two densities
+ *  tokens.css ever sets (`--word-1/2/3` under `[data-density="patient"]`), since `packCloud`
+ *  never knows which density is live and a caregiver's own smaller font then only ever has
+ *  more room in the circle, never less. */
+const TIER_FONT_PX: Record<Size, number> = { 1: 20, 2: 22, 3: 24 };
+
+/** A conservative estimate of how wide a word draws, in px, at a given font size — never a real
+ *  measurement (`canvas.measureText`, the usual way): this has to return the exact same number
+ *  in the browser and in a headless unit test, where there is no canvas and no loaded font to
+ *  measure against. `AVG_CHAR_WIDTH_EM` errs wide for a proportional sans font at this weight —
+ *  a slightly bigger circle than the word strictly needs is a good trade against ever breaking
+ *  a word mid-word again. A CJK "word" (`cloudView` never splits one on a space) draws wider a
+ *  character, so it gets its own, larger, allowance. */
+const AVG_CHAR_WIDTH_EM = 0.58;
+const CJK_CHAR_WIDTH_EM = 1.05;
+function estimateWordWidth(word: string, fontPx: number): number {
+  const isCjk = /[぀-ヿ㐀-鿿]/.test(word);
+  return word.length * fontPx * (isCjk ? CJK_CHAR_WIDTH_EM : AVG_CHAR_WIDTH_EM);
+}
+
+/** The widest single, unbreakable word in a label — `cloudView`'s own names sometimes carry
+ *  more than one word ("High blood pressure"); wrapping happens at the spaces between them
+ *  (`overflow-wrap: normal`/`word-break: keep-all`, onboarding.css), never inside one, so only
+ *  the longest of them ever has to fit a circle's own width on one line. */
+function longestWord(name: string): string {
+  return name.split(/\s+/).reduce((longest, word) => (word.length > longest.length ? word : longest), "");
+}
+
+/** The smallest a circle can be and still hold this word's longest piece on one line, at that
+ *  size tier's own (larger-density) font — with NO regard for the tier's usual size: this is
+ *  the one true floor `packCloud`'s own scale-down (below) is never allowed to go under, for
+ *  a short word too ("Weight" still needs some real width, just less than its tier gives it by
+ *  default). */
+function wordFitOnly(word: Pick<CloudWord, "name" | "size">): number {
+  const widest = estimateWordWidth(longestWord(word.name), TIER_FONT_PX[word.size]);
+  return Math.ceil(widest + BUBBLE_PADDING * 2);
+}
+
+/** The smallest a word's own circle can be and still hold its longest word on one line, AND
+ *  read as its own weight tier's usual size — never below either: a short word still draws at
+ *  its weight's usual size (`CLOUD_DIAMETER`); a long one grows past it, exactly as far as
+ *  `wordFitOnly` says it must. */
+export function minDiameterFor(word: Pick<CloudWord, "name" | "size">): number {
+  return Math.max(CLOUD_DIAMETER[word.size], wordFitOnly(word));
+}
+
+/** One outward-ring search, in `view`'s own order, at whatever diameter `diameterOf` gives each
+ *  word — the shared engine both passes of `packCloud` below run (once to measure, once for
+ *  real), so the search itself only has to be written once. */
+function ringPack(view: readonly CloudWord[], diameterOf: (word: CloudWord) => number): { circles: CloudCircle[]; height: number } {
   const placed: { x: number; y: number; r: number }[] = [];
   const circles: CloudCircle[] = [];
   const margin = 8;
   const centerX = CLOUD_PACK_WIDTH / 2;
   let bottom = 0;
   for (const word of view) {
-    const diameter = CLOUD_DIAMETER[word.size];
+    const diameter = diameterOf(word);
     const r = diameter / 2;
     const startAngle = phaseOf(word.code) * Math.PI * 2;
     let x = centerX;
@@ -228,6 +273,47 @@ export function packCloud(view: readonly CloudWord[]): { circles: CloudCircle[];
     circles.push({ ...word, leftPercent: ((x - r) / CLOUD_PACK_WIDTH) * 100, top: y - r, diameter });
   }
   return { circles, height: bottom + margin };
+}
+
+/** Places every word as a circle, none overlapping, in `view`'s own order (top words heaviest
+ *  first, a pick's reveals right after it — `cloudView`, unchanged) so the cloud's DOM order,
+ *  and so its Tab order, never depends on where a circle lands — a short outward spiral search
+ *  from a seeded start point (the same technique word-cloud layouts use: try a point: on a
+ *  collision, step further round and further out; `phaseOf(word.code)` seeds where each word's
+ *  own spiral starts, so the same picks always draw the same cloud — no re-shuffle on an
+ *  unrelated re-render).
+ *
+ *  Every circle is at least `minDiameterFor` its own word — never smaller, a word is never
+ *  broken mid-word to fit a circle too small for it. If that alone would pack the cloud taller
+ *  than a tier-sized pack would ever need by much, every circle ABOVE its own word's floor is
+ *  scaled back down together, proportionally, toward that floor (never below it) until the
+ *  height comes back within budget — a long word's own circle still only ever grows as far as
+ *  it truly has to, and the ordinary short words around it shrink back toward their tier's own
+ *  size rather than the whole cloud growing to match the one long word. Pure and deterministic,
+ *  so it is unit-tested (`tests/unit/cloud.test.ts`) apart from ever measuring a real screen. */
+export function packCloud(view: readonly CloudWord[]): { circles: CloudCircle[]; height: number } {
+  if (view.length === 0) return { circles: [], height: 0 };
+  const natural = ringPack(view, (word) => CLOUD_DIAMETER[word.size]);
+  const target = new Map(view.map((word) => [word.code, minDiameterFor(word)]));
+  const needed = ringPack(view, (word) => target.get(word.code) ?? CLOUD_DIAMETER[word.size]);
+  const budget = Math.max(natural.height * 1.35, CLOUD_PACK_WIDTH);
+  if (needed.height <= budget) return needed;
+  // Over budget: every circle shrinks back toward its OWN word's true floor (`wordFitOnly` — no
+  // tier included, so a long word's circle can give back exactly as much as its tier gave it
+  // beyond what the word itself needs, never more) — proportional to how far over the budget
+  // the pack ran against how much "give" exists across the whole cloud to take it from. A short
+  // word already at its own floor already (`target === wordFitOnly`, `minDiameterFor`'s own
+  // `Math.max`) has zero slack and does not move; a long word's circle only ever shrinks back
+  // to the size its own word still needs, never past it.
+  const floor = new Map(view.map((word) => [word.code, wordFitOnly(word)]));
+  const totalSlack = view.reduce((sum, word) => sum + Math.max(0, (target.get(word.code) ?? 0) - (floor.get(word.code) ?? 0)), 0);
+  const overBy = needed.height - budget;
+  const shrinkFraction = totalSlack > 0 ? Math.min(1, overBy / totalSlack) : 0;
+  return ringPack(view, (word) => {
+    const t = target.get(word.code) ?? CLOUD_DIAMETER[word.size];
+    const f = floor.get(word.code) ?? t;
+    return Math.round(t - (t - f) * shrinkFraction);
+  });
 }
 
 /** Nura's one line right under the cloud, changed in place on every tap

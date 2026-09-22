@@ -255,11 +255,17 @@
   justify-content: center;
   gap: 2px;
   /* `left`/`top`/`width`/`height` all come from `packCloud` (inline style, `Cloud.tsx`) — every
-   *  circle is a real circle, sized only by its weight tier, never grown by a long label; a
-   *  label past its circle wraps and shrinks (`overflow-wrap`, `font-size` still the tier's own)
-   *  rather than pushing the circle bigger and risking the pack's own no-overlap guarantee. */
+   *  circle is a real circle, sized so its OWN longest word always fits it (`packCloud`'s own
+   *  `minDiameterFor`), never the other way round: a word is never broken mid-word to fit a
+   *  circle that was too small for it (found looking at this package's own captures —
+   *  "High cholester/ol", `overflow-wrap: anywhere` let the browser split a word anywhere it
+   *  liked). `overflow-wrap: normal` + `word-break: keep-all` only ever break at a real space,
+   *  between two words of a multi-word name ("High blood pressure" wraps to two or three lines,
+   *  never mid-word); the circle itself is what grows to fit the one word that cannot break. */
   padding: 6px;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
   border-radius: 50%;
   text-align: center;
   background: none;
@@ -273,6 +279,19 @@
    *  test). A cloud tops out around 20 bubbles — reliable focus for a keyboard/switch user
    *  matters more here than that paint saving, so this is plain now; `prefers-reduced-motion`
    *  below still stops the drift outright for anyone who asked for it. */
+  /* A freshly-mounted bubble (a pick's own reveal, `cloudView`) fades in as ONE piece — the
+   *  circle and its label are already both in the DOM the instant it mounts, never one arriving
+   *  before the other, but a screenshot caught exactly that look once (found looking at this
+   *  package's own captures: a circle with no label yet, painted mid-frame). `opacity` alone
+   *  (never `display`/`visibility`, which would pull it out of measurement) so `packCloud`'s own
+   *  geometry is never affected by whether a bubble has finished fading in. */
+  opacity: 1;
+  transition: opacity 260ms ease;
+}
+@starting-style {
+  .word.bubble {
+    opacity: 0;
+  }
 }
 .bubble-surface {
   position: absolute;
@@ -345,6 +364,9 @@
 @media (prefers-reduced-motion: reduce) {
   .bubble-surface {
     animation: none !important;
+  }
+  .word.bubble {
+    transition: none !important;
   }
 }
 

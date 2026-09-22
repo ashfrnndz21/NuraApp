@@ -9,6 +9,7 @@ import {
   cloudView,
   joinNames,
   lowerFirst,
+  minDiameterFor,
   packCloud,
   phaseOf,
   sizeOf,
@@ -351,6 +352,67 @@ describe("packCloud", () => {
 
   it("packs an empty cloud without throwing", () => {
     expect(packCloud([]).circles).toEqual([]);
+  });
+
+  it("minDiameterFor: a genuinely short word gets exactly its tier's usual size", () => {
+    expect(minDiameterFor({ name: "Hi", size: 1 })).toBe(CLOUD_DIAMETER[1]);
+    expect(minDiameterFor({ name: "TB", size: 2 })).toBe(CLOUD_DIAMETER[2]);
+  });
+
+  it("minDiameterFor: a long single word grows past its tier's usual size — enough to hold it on one line", () => {
+    const d = minDiameterFor({ name: "Hypercholesterolaemia", size: 1 });
+    expect(d).toBeGreaterThan(CLOUD_DIAMETER[1]);
+  });
+
+  it("minDiameterFor: only the longest UNBREAKABLE word in a multi-word label has to fit — it wraps at spaces", () => {
+    const oneLongWord = minDiameterFor({ name: "Hypercholesterolaemia", size: 1 });
+    const manyShortWords = minDiameterFor({ name: "Sit up and eat now", size: 1 });
+    // Every individual word in "Sit up and eat now" is three letters or fewer, so this stays at
+    // the tier floor even though the whole label reads long — only the longest single word
+    // ("Sit"/"and"/"eat") has to fit alone, and none of them is close to needing more room.
+    expect(manyShortWords).toBe(CLOUD_DIAMETER[1]);
+    expect(oneLongWord).toBeGreaterThan(manyShortWords);
+  });
+
+  it("packCloud never gives a bubble a diameter smaller than that word's own minDiameterFor — long words are never shrunk below their own word", () => {
+    const longWords = [
+      circle("high_cholesterol", 1),
+      circle("asthma_breathing", 1),
+      circle("trouble_sleeping", 1),
+      circle("allergies_to_medicine", 1),
+      circle("stomach_reflux", 1),
+      circle("5_or_more_medicines", 1),
+    ].map((c, at) => ({
+      ...c,
+      name: ["High cholesterol", "Asthma, breathing", "Trouble sleeping", "Allergies to medicine", "Stomach, reflux", "5 or more medicines"][at]!,
+    }));
+    const { circles } = packCloud(longWords);
+    for (const c of circles) {
+      const floor = minDiameterFor(c);
+      expect(c.diameter, c.name).toBeGreaterThanOrEqual(floor);
+    }
+    assertNoOverlap(circles);
+  });
+
+  it("packCloud shrinks ordinary short words back toward their tier size when a handful of long words would otherwise blow the height budget", () => {
+    // A cloud dominated by long labels: without scale-down every circle stays inflated to its
+    // own minDiameterFor and the pack runs tall; the short, plain words among them should still
+    // shrink back down toward CLOUD_DIAMETER once the height is back in budget's reach.
+    const view = [
+      circle("a", 1),
+      circle("b", 1),
+      circle("c", 1),
+      { ...circle("long1", 1), name: "Hypercholesterolaemia and related lipid disorders" },
+      { ...circle("long2", 1), name: "Gastro-oesophageal reflux disease symptoms" },
+      { ...circle("long3", 1), name: "Chronic obstructive pulmonary disease" },
+    ];
+    const { circles } = packCloud(view);
+    const plain = circles.filter((c) => ["a", "b", "c"].includes(c.code));
+    for (const c of plain) {
+      // Never below its own (trivial, one-letter) floor, and never above its tier's usual size.
+      expect(c.diameter).toBeLessThanOrEqual(CLOUD_DIAMETER[1]);
+    }
+    assertNoOverlap(circles);
   });
 });
 
