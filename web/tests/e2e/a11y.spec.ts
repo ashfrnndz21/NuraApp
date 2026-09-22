@@ -132,6 +132,14 @@ for (const [look, banner] of [
 ] as const) {
   test(`every screen in the ${look} density${banner ? ", under the demo banner" : ""}: no serious or critical axe finding`, async ({ page, request }) => {
     test.setTimeout(240_000);
+    // A screen this walk reaches right after a tap, with nothing else to wait on (`who`'s own
+    // reply, `before we start`, the first `about you` turn), can still be mid-`Reveal` (motion.ts
+    // REVEAL_MS, 550ms) the instant `toBeVisible()` resolves — genuinely visible, opacity still
+    // short of 1. Auditing under Reduce Motion (the same mode a real motion-sensitive person
+    // gets, and the mode every transition already collapses to instantly, base.css) is the
+    // faithful check: no screen may read worse with motion off, and it removes a false read of
+    // a frame no one actually rests on.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const where = (name: string) => `${look}${banner ? " + demo banner" : ""}: ${name}`;
     const patient = look === "patient";
     if (banner) await withDemoBanner(page);
@@ -162,6 +170,9 @@ for (const [look, banner] of [
     await expect(page.getByTestId("door-for-me")).toBeVisible();
     await audit(page, where("who is this for"));
     await page.getByTestId("door-for-me").click();
+    await expect(page.getByTestId("who-continue")).toBeVisible();
+    await audit(page, where("who is this for: his reply"));
+    await page.getByTestId("who-continue").click();
     await expect(page.getByTestId("consent-words")).toBeVisible();
     await audit(page, where("before we start"));
     await page.getByTestId("agree").click();
@@ -228,21 +239,16 @@ for (const [look, banner] of [
         read_back: { line: string }[];
         questions: { line: string }[];
       };
-    if (patient) {
-      // One line a screen: each answered once, on its own screen, the answer said in a live region.
-      const line = page.getByTestId("readback-line");
-      for (const [at, each] of (await sittingNow()).read_back.entries()) {
-        await expect(line).toContainText(each.line);
-        await line.getByTestId("readback-yes").click();
-        if (at === 0) await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
-      }
-    } else {
+    // Every line on this one screen now, patient density or not (never a separate paged
+    // step) — each answered once, the first answer said in a live region.
+    {
       const lines = page.getByTestId("readback-line");
-      for (let n = 0; n < (await lines.count()); n++) {
+      const backendLines = (await sittingNow()).read_back;
+      for (const [at, each] of backendLines.entries()) await expect(lines.nth(at)).toContainText(each.line);
+      for (let n = 0; n < backendLines.length; n++) {
         await lines.nth(n).getByTestId("readback-yes").click();
-        await expect(lines.nth(n).getByTestId("readback-yes")).toHaveAttribute("aria-pressed", "true");
+        if (n === 0) await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
       }
-      await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
       await page.getByTestId("readback-next").click();
     }
     await expect(main).toHaveAttribute("data-stage", "questions");
@@ -497,6 +503,58 @@ test("Tab goes through what can be pressed in the order the eye reads, each with
   await expect(page.locator("main h1")).toBeFocused();
   await page.getByRole("button", { name: "Go back" }).click();
   await expect(page.locator("main h1")).toBeFocused();
+});
+
+/** The register path's own first-paper screen (`Records.tsx` `PaperRow`, the `firstpaper` scene)
+ *  never sat on this walk before: an owner reviewing #318 found "take-photo"/"choose-file"
+ *  Tab-reachable with no ring at all — `.paper-row-label` (a `<label>` wrapping a hidden file
+ *  input, or a bare `<button>` sharing that class for "choose-many") matched no `:focus-visible`/
+ *  `:focus-within` rule (`base.css`'s own `label.pill:focus-within` only ever matched a
+ *  `.pill`). This walks the real register path to that screen and checks all three rows the
+ *  same way the warm-home walk above checks its own controls. */
+test("the first-paper row Tab stops each get a ring, the same as every other row-shaped control", async ({ page }) => {
+  const phone = freshPhone("+659896");
+  await signInThroughTheApp(page, phone, "Tan");
+  await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
+  await page.getByTestId("agree").click();
+  await page.getByLabel("The name Nura uses").fill("Tan");
+  await page.getByTestId("about-next").click();
+  await page.getByTestId("about-lang-en").click();
+  await page.getByTestId("decade-1950").click();
+  await page.getByLabel("The doctor's name").fill("Dr Tan");
+  await page.getByTestId("about-next").click();
+  await page.getByTestId("breakfast-07:30").click();
+  for (const item of ["large_text", "high_contrast", "voice_on", "big_targets", "one_thing_per_screen", "read_back", "repeat_prompts"]) {
+    await page.getByTestId(`${item}-no`).click();
+  }
+  await page.getByTestId("density-simple").click();
+  await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "cloud");
+  // The cloud's own graph fetch (#317 review item 2): wait for it to have actually arrived,
+  // never a timing guess, before moving past it.
+  await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
+  await page.getByTestId("cloud-done").click();
+  await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "records");
+  await expect(page.getByTestId("take-photo")).toBeVisible();
+  await expect(page.locator("main h1")).toBeFocused();
+
+  const rings: Record<string, boolean> = {};
+  for (let n = 0; n < 20 && Object.keys(rings).length < 3; n++) {
+    await page.keyboard.press("Tab");
+    const stop = await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement | null;
+      if (!element || element === document.body) return null;
+      // The row that actually took focus: the label wrapping "take-photo"/"choose-file"'s own
+      // hidden input, or "choose-many"'s own button — both carry `.paper-row-label`.
+      const holder = (element.closest(".paper-row-label") as HTMLElement | null) ?? element;
+      const testId = holder.getAttribute("data-testid");
+      const style = getComputedStyle(holder);
+      const ring = (style.outlineStyle !== "none" && style.outlineWidth !== "0px") || style.boxShadow !== "none";
+      return { testId, ring };
+    });
+    if (stop?.testId && ["take-photo", "choose-file", "choose-many"].includes(stop.testId)) rings[stop.testId] = stop.ring;
+  }
+  expect(rings, "every first-paper row must show a Tab ring").toEqual({ "take-photo": true, "choose-file": true, "choose-many": true });
 });
 
 test("Reduce Motion: nothing moves that he did not ask for, and what answers a tap does so at once", async ({ page, request }) => {

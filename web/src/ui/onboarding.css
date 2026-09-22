@@ -105,6 +105,35 @@
   align-self: flex-start;
 }
 
+/* --- Before we start: consent as a conversation, never a form (docs/design/README.md rule 1,
+ *  the `consent` scene has no exact blueprint frame of its own so this follows `signin`'s
+ *  shape) --------------------------------------------------------------------------------- */
+.consent-say {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.consent-say-line {
+  flex: 1;
+  min-width: 0;
+  /* Body text, not a second headline — `Header` above already carries this screen's one `<h1>`
+   *  (the same reasoning as `.signin-say-line`, right above). */
+  font-size: var(--text-body);
+  font-weight: 300;
+  line-height: 1.3;
+  margin: 0;
+}
+.consent-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.consent-line p {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
 /* --- Who is this for: two large choose-cards (docs/design/experience-blueprint.html `who`) */
 .choose-cards {
   display: flex;
@@ -167,27 +196,67 @@
   min-width: 0;
   margin: 0;
 }
+/* His reply and Nura's answer, right after (`WhoMeReply`, `Doors.tsx`): each turn its own
+ *  vertical rhythm, the same gap the screen's own flex column already gives every other block. */
+.who-me {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* `Reveal`'s own wrapper (`.reveal-item`) sits between `.who-me` and the bubble, so the
+ *  bubble's own `align-self: flex-end` (kit.css) has nothing to act on — without this, "Me. My
+ *  name is Tan." stretched the full width instead of sitting right, chat-style (found looking
+ *  at this package's own captures, cp6RegisterShots.spec.ts). */
+.who-me > .reveal-item:has(> .bubble) {
+  align-self: flex-end;
+  width: fit-content;
+  max-width: 86%;
+}
+.who-say-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.who-say-lines .who-say-line {
+  flex: none;
+}
 
 /* --- The bubble cloud (docs/design/experience-blueprint.html `cloud`, `.bub`) -------------- */
-/* `.cloud`/`.word` stay base.css's flex-wrap paper chips for every other caller; `.bubble` is
- *  layered on top of the same `.word` element only inside onboarding's health-cloud step, and
- *  wins on specificity (two classes) without an `!important` or touching the shared file. */
+/* A real floating cloud, not a grid: `onboarding/cloud.ts`'s `packCloud` places every circle
+ *  once, at its own `left`/`top` (set inline, `Cloud.tsx`, since only JS knows the pack for
+ *  this render's own set of words) — the container is only ever this pack's own reference
+ *  frame, never a flex-wrap row. Its `height` is set inline too, to whatever the pack actually
+ *  needed, so the screen's own scroll always has room for the last circle. */
 .cloud.bubble-cloud {
-  gap: 10px;
-  justify-content: center;
-  padding: 6px 0 10px;
-}
-/* The button itself — the real tap target — never moves: its own box is what a pointer, a
- *  screen reader and Playwright's actionability check all measure, and a hit target that keeps
- *  sliding out from under a slow or unsteady finger is a real usability defect, not only a test
- *  one (docs/design/README.md's own body-text-size, big-target rules are written for exactly
- *  this audience). The drift lives on `.bubble-surface`, an absolutely-positioned decorative
- *  child painted first (so the label and the tick sit visually on top of it, no `z-index`
- *  needed) — the glass fill, border and blur move a few px; the button's own layout box, used
- *  for hit-testing, does not. */
-.word.bubble {
   position: relative;
-  /* `z-index: 0` (not just `position: relative`) is what actually opens a stacking context here
+  width: 100%;
+}
+/* While the graph (#117) is still in flight, `Cloud.tsx` swaps `packCloud`'s circles for the
+ *  orb and a loading line, never a childless box at `height: 0` — this is what that read as
+ *  before it had one: something on screen, of a real minimum height, so the layout never
+ *  collapses out from under the head above it for the one paint before the real cloud arrives. */
+.cloud.bubble-cloud.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 260px;
+  text-align: center;
+}
+/* The button itself — the real tap target — never moves once placed: its own box is what a
+ *  pointer, a screen reader and Playwright's actionability check all measure, and a hit target
+ *  that keeps sliding out from under a slow or unsteady finger is a real usability defect, not
+ *  only a test one (docs/design/README.md's own body-text-size, big-target rules are written
+ *  for exactly this audience). The drift lives on `.bubble-surface`, an absolutely-positioned
+ *  decorative child painted first (so the label and the tick sit visually on top of it, no
+ *  `z-index` needed) — the glass fill, border and blur move a few px; the button's own layout
+ *  box, used for hit-testing, does not. */
+.word.bubble {
+  position: absolute;
+  /* `z-index: 0` (not just `position: absolute`) is what actually opens a stacking context here
    *  — without it, a positioned child paints ABOVE this button's own in-flow text regardless of
    *  DOM order (CSS 2.1 Appendix E: positioned descendants paint after in-flow inline content).
    *  With it, `.bubble-surface`'s `z-index: -1` below is scoped to this button alone and stays
@@ -198,30 +267,44 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  /* A fixed diameter (the blueprint's own `.bub`) only works for its own hand-picked, known-
-   *  short demo words. This cloud's words are real data in three languages — "5 or more
-   *  medicines", "腰痛或背痛" — and a fixed height would clip a long one right where the brief
-   *  says a label must never be cut off. `min-width`/`min-height` (the size tiers below) still
-   *  give the small, common words a properly round bubble; a longer label past them grows the
-   *  button downward instead of overflowing it, staying inside a rounded (not perfectly
-   *  circular) shape rather than silently losing text. */
-  min-width: var(--target);
-  min-height: var(--target);
-  max-width: 152px;
-  padding: 12px 10px;
-  border-radius: 999px;
+  /* `left`/`top`/`width`/`height` all come from `packCloud` (inline style, `Cloud.tsx`) — every
+   *  circle is a real circle, sized so its OWN longest word always fits it (`packCloud`'s own
+   *  `minDiameterFor`), never the other way round: a word is never broken mid-word to fit a
+   *  circle that was too small for it (found looking at this package's own captures —
+   *  "High cholester/ol", `overflow-wrap: anywhere` let the browser split a word anywhere it
+   *  liked). `overflow-wrap: normal` + `word-break: keep-all` only ever break at a real space,
+   *  between two words of a multi-word name ("High blood pressure" wraps to two or three lines,
+   *  never mid-word); the circle itself is what grows to fit the one word that cannot break. */
+  padding: 6px;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
+  border-radius: 50%;
   text-align: center;
   background: none;
   border: 0;
   color: var(--ink);
   font-weight: 400;
-  line-height: 1.15;
+  line-height: 1.1;
   /* `content-visibility: auto` (an off-screen-pause optimisation) turned out to fight keyboard
    *  focus in this browser: a bubble it had marked "skipped" would not reliably take
    *  `.focus()` even once back on screen (found by `cp5-onboarding.spec.ts`'s own keyboard-walk
    *  test). A cloud tops out around 20 bubbles — reliable focus for a keyboard/switch user
    *  matters more here than that paint saving, so this is plain now; `prefers-reduced-motion`
    *  below still stops the drift outright for anyone who asked for it. */
+  /* A freshly-mounted bubble (a pick's own reveal, `cloudView`) fades in as ONE piece — the
+   *  circle and its label are already both in the DOM the instant it mounts, never one arriving
+   *  before the other, but a screenshot caught exactly that look once (found looking at this
+   *  package's own captures: a circle with no label yet, painted mid-frame). `opacity` alone
+   *  (never `display`/`visibility`, which would pull it out of measurement) so `packCloud`'s own
+   *  geometry is never affected by whether a bubble has finished fading in. */
+  opacity: 1;
+  transition: opacity 260ms ease;
+}
+@starting-style {
+  .word.bubble {
+    opacity: 0;
+  }
 }
 .bubble-surface {
   position: absolute;
@@ -248,23 +331,12 @@
 }
 /* Three visibly different tiers (operator review: the old 68/86/104 steps read as "a table with
  *  three font sizes", not a cloud) — by commonness/importance, the same ordering `cloudView`
- *  already sizes on (`onboarding/cloud.ts` `sizeOf`: weight plus a boost per related pick). */
-.word.bubble.s1 { min-width: 60px; min-height: 60px; font-size: var(--word-1); padding: 10px 12px; }
-.word.bubble.s2 { min-width: 90px; min-height: 90px; font-size: var(--word-2); padding: 13px 14px; }
-.word.bubble.s3 { min-width: 126px; min-height: 126px; font-size: var(--word-3); font-weight: 500; padding: 16px; }
-/* Patient density's larger targets (tokens.css `--target: 56px`) still fit every size above;
-   a caregiver's screen (`--target: 48px`) has more headroom at the same sizes. A longer label
-   grows past its tier's minimum (never below it) rather than clipping — see the comment on
-   `.word.bubble` above. */
-/* A cloud, not a table: alternating vertical offsets so consecutive bubbles never line up into
- *  neat columns (operator review — "reads as a two-column table of pills"). Only ever a
- *  positive `margin-top`: a negative one could pull a bubble up into the row above it and risk
- *  the "no overlap > 4px" rule; a positive one only ever grows the gap before it, which
- *  `cp5-onboarding.spec.ts`'s geometry test re-checks at all three sizes. Set from the rendered
- *  position (`at % 3`, `Cloud.tsx` — equivalent to `:nth-child(3n+…)` here, just computed
- *  alongside the size/picked/fresh classes already built per word in the same map). */
-.word.bubble.stagger-a { margin-top: 16px; }
-.word.bubble.stagger-b { margin-top: 6px; }
+ *  already sizes on (`onboarding/cloud.ts` `sizeOf`: weight plus a boost per related pick). The
+ *  diameter itself is `packCloud`'s own `CLOUD_DIAMETER` (60/90/126), set inline in `Cloud.tsx`
+ *  so the stylesheet and the packer can never drift apart — only the font grows here. */
+.word.bubble.s1 { font-size: var(--word-1); }
+.word.bubble.s2 { font-size: var(--word-2); }
+.word.bubble.s3 { font-size: var(--word-3); font-weight: 500; }
 .word.bubble.picked {
   color: #2b2140;
   font-weight: 600;
@@ -296,20 +368,9 @@
   gap: 10px;
   align-items: flex-start;
 }
-/* One Nura turn: the acknowledgement and the per-tap status share the orb and stack as two
- *  lines of the same turn (operator review — the status used to sit as an orphan line with no
- *  orb/indent of its own, unrelated to anything above it). */
-.cloud-ack-lines {
+.cloud-ack .status {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.cloud-ack-line {
-  margin: 0;
-}
-.cloud-ack-lines .status {
   margin: 0;
 }
 
@@ -317,4 +378,101 @@
   .bubble-surface {
     animation: none !important;
   }
+  .word.bubble {
+    transition: none !important;
+  }
+}
+
+/* --- Add a paper: three rows, icon + title + hint (docs/design/experience-blueprint.html
+ *  `firstpaper`) ------------------------------------------------------------------------------ */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.paper-row-label {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+/* A ring on Tab, for all three rows: the first two are a `<label>` wrapping a visually-hidden
+ *  file input (`:focus-within`, since the input itself takes focus, not the label), the third
+ *  ("choose-many") a bare `<button>` sharing this same class (`:focus-visible`, since the
+ *  button itself takes focus) — neither pattern is a `.pill`, so `base.css`'s own
+ *  `label.pill:focus-within` rule never matched either one (found: an owner's own Tab walk
+ *  reached "take-photo"/"choose-file"/"choose-many" with no ring at all). Same treatment as
+ *  every other row-shaped tap target already gets (`warm.css` `.action-row:focus-within`). */
+.paper-row-label:focus-within,
+.paper-row-label:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
+}
+.paper-row-label input[type="file"] {
+  /* The real control: visually hidden, never `display:none` (still reachable by a screen
+   *  reader and still opens the OS picker on a tap of the row it sits under, the same
+   *  pattern `Capture` itself already uses). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.paper-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+}
+.paper-row-icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+}
+.paper-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.paper-row-body b {
+  font-size: 15.5px;
+  font-weight: 500;
+}
+.paper-row-body small {
+  font-size: 12.5px;
+  opacity: 0.78;
+}
+
+/* --- About you, patient density: a conversation transcript, never a paged wizard ---------- */
+/* Every turn he has already settled stays on screen (`About.tsx`'s `AnsweredTurn`); the next
+ *  question reveals under it the instant he answers. `.about-transcript` gives the turns their
+ *  own vertical rhythm inside the screen's own flex column (`.screen`, base.css). */
+.about-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.about-turn-settled {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.about-turn-question {
+  margin: 0;
 }

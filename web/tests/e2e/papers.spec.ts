@@ -154,6 +154,7 @@ test("in the sitting: many photos at once, and each paper he checks joins the si
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Pa");
   await page.getByTestId("about-next").click();

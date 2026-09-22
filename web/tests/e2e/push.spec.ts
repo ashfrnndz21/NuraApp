@@ -50,6 +50,7 @@ test("reminders on this phone: nothing asked on load; a tap asks once, subscribe
 
   await signInThroughTheApp(page, freshPhone(), "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
   await page.getByTestId("open-me").click();

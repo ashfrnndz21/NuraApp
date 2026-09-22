@@ -647,6 +647,18 @@ export const en = {
     waitingLine: "{name} made this for you.",
     // @patient phrase
     lookAgain: "Look again",
+    // @patient phrase
+    meIntro: "Me.",
+    // @patient
+    meName: "My name is {name}.",
+    // @patient
+    met: "Good to meet you, {name}.",
+    // @patient
+    privacyKeeps: "Nothing you tell me leaves your own papers.",
+    // @patient
+    privacyChoose: "You decide who else can see them.",
+    // @patient phrase
+    continueWord: "Continue",
   },
   consent: {
     // @patient headline
@@ -1598,6 +1610,12 @@ export const en = {
       titleSelf: "What is part of your health?",
       // @patient headline
       titleOther: "What is part of {name}'s health?",
+      // @patient headline
+      headSelf: "What is part of your health? Tap what fits.",
+      // @patient headline
+      headOther: "What is part of {name}'s health? Tap what fits.",
+      // @patient
+      loading: "Nura is getting your words ready.",
       // @patient
       lead: "Tap each one that is part of it.",
       // @patient
@@ -1608,6 +1626,20 @@ export const en = {
       noted: "Nura wrote that down.",
       // @patient
       removed: "Nura took that off.",
+      // @patient
+      pickedPlainSelf: "{name}, noted.",
+      // @patient
+      pickedPlainOther: "{name}, noted for {who}.",
+      // @patient
+      pickedAddedSelf: "I added what often goes with it.",
+      // @patient
+      pickedAddedOther: "Nura added what often goes with it.",
+      // @patient
+      removedSelf: "Nura took that off.",
+      // @patient
+      removedOther: "Nura took that off for {who}.",
+      // @patient
+      removedSub: "You can tap anything else that applies.",
       // @patient phrase
       more: "Show more words",
       // @patient phrase
@@ -1671,13 +1703,19 @@ export const en = {
     },
     records: {
       // @patient headline
-      titleSelf: "Now, your papers",
+      titleSelf: "Now show me a paper. A blood test helps the most.",
       // @patient headline
-      titleOther: "Now, {name}'s papers",
+      titleOther: "Now show me one of {name}'s papers. A blood test helps the most.",
       // @patient phrase
       photo: "Take a photo",
+      // @patient
+      photoHint: "Hold it flat, in daylight.",
       // @patient phrase
       file: "Choose a file instead",
+      // @patient
+      fileHint: "Choose a document from the hospital, or a photo.",
+      // @patient
+      manyHint: "Nura will read them one by one.",
       // @patient phrase
       allPapers: "That is all my papers",
       // @patient phrase

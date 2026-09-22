@@ -31,21 +31,21 @@ def language_for(code: str | None) -> str:
 SCRIPT_HEADLINE: Mapping[str, Mapping[str, str]] = {
     "en": {
         "about_you": "A few things about you",
-        "papers": "Now, your papers",
+        "papers": "Now show me a paper. A blood test helps the most.",
         "read_back": "Here is what Nura understood",
         "questions": "A few questions about your papers",
         "closed": "Your app is ready",
     },
     "ms": {
         "about_you": "Sedikit tentang anda",
-        "papers": "Sekarang, surat-surat anda",
+        "papers": "Sekarang tunjukkan satu surat. Ujian darah paling membantu.",
         "read_back": "Ini yang Nura faham",
         "questions": "Beberapa soalan tentang surat-surat anda",
         "closed": "Aplikasi anda sudah sedia",
     },
     "zh": {
         "about_you": "关于您的几件事",
-        "papers": "现在，您的文件",
+        "papers": "现在给我看一份文件。验血报告最有用。",
         "read_back": "这是Nura的理解",
         "questions": "关于您的文件的几个问题",
         "closed": "您的应用已经准备好了",

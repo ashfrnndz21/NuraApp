@@ -8,14 +8,42 @@ import type { ReviewCardOut } from "../../api/types";
 import { closeSitting, refreshBiography, refreshPlan, who } from "../../onboarding/actions";
 import { paperDate } from "../../onboarding/dates";
 import { decisionsFor, hasNumericResults, kindLine, readable, startingEdits, type FieldEdit } from "../../onboarding/review";
-import { biography, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
+import { biography, finish, lastPaper, returnTo, say, to, whose } from "../../onboarding/state";
 import { language, LOCALE, t } from "../../strings";
 import { Notice, Pill } from "../../ui/components";
-import { ThreeStateButton } from "../../ui/kit";
+import { Glass, Icon, Orb, SoftText, ThreeStateButton, type IconName } from "../../ui/kit";
 import { PaperBubble, ReadingProgress, ReadingResult } from "./PaperReading";
 import { usePaperTrace } from "./paperTrace";
 import { ReportTable } from "./ReportTable";
 import { Capture, Sheet, Status, StepTitle } from "./parts";
+
+/** One way in to a paper (`firstpaper` scene, docs/design/experience-blueprint.html): an icon,
+ *  its bold title, and a one-line hint — a real file input underneath, the same as `Capture`'s
+ *  own (`photo-input`/`file-input`, unchanged so every existing spec keeps reading them), only
+ *  drawn as the blueprint's row rather than a plain pill. Kept local to this screen: `Capture`
+ *  itself stays a plain pill everywhere else it is used (a gap card's retry, `Plan.tsx`). */
+function PaperRow({ icon, title, hint, onFile, busy, testId, inputTestId, capture }: { icon: IconName; title: string; hint: string; onFile: (file: File) => void; busy: boolean; testId: string; inputTestId: string; capture?: "environment" }): JSX.Element {
+  const chosen = (event: Event) => {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file) onFile(file);
+  };
+  return (
+    <label class="paper-row-label" data-testid={testId} aria-disabled={busy}>
+      <Glass shape="row" className="paper-row">
+        <span class="paper-row-icon" aria-hidden="true">
+          <Icon name={icon} />
+        </span>
+        <span class="paper-row-body">
+          <b>{title}</b>
+          <small>{hint}</small>
+        </span>
+      </Glass>
+      <input type="file" accept="image/*,application/pdf" capture={capture} disabled={busy} onChange={chosen} data-testid={inputTestId} />
+    </label>
+  );
+}
 
 /** A file picked for the reading screen: its name for the bubble, and a thumbnail only for a
  *  photo — revoked the moment it is no longer shown (papers.spec.ts: nothing of a photo stays
@@ -100,18 +128,39 @@ export function RecordsStep(): JSX.Element {
 
   // The sitting's own words for the step address him; a chief reads the app's.
   const inPapers = whose().self && bio?.step === "papers";
+  const title = inPapers ? bio.prompt.headline : say(r.titleSelf, r.titleOther);
   return (
     <main class="screen onboarding" data-stage="records">
-      <StepTitle title={inPapers ? bio.prompt.headline : say(r.titleSelf, r.titleOther)} />
+      {/* `firstpaper` (docs/design/experience-blueprint.html): the orb beside Nura's own line —
+          every scene change goes through it (docs/design/README.md rule 5) — then three rows,
+          each an icon, a bold title and a one-line hint, never a stack of plain pills. */}
+      <div class="who-say">
+        <Orb size="sm" />
+        <SoftText text={title} pace="headline" as="h1" className="who-say-line conversation-head" testId="records-headline" />
+      </div>
       <Status text={lastPaper.value ? r.saved : null} testId="saved" />
       {inPapers && bio.prompt.lines.length > 0 && <Sheet lines={bio.prompt.lines} testId="prompt" />}
       <Notice error={error} />
-      <Capture onFile={(file) => void upload(file)} busy={busy} photoLabel={r.photo} />
-      <Pill onClick={() => to({ name: "batch" })} disabled={busy} testId="choose-many">
-        {s.papers.chooseMany}
-      </Pill>
+      <div class="rows" data-testid="paper-rows">
+        <PaperRow icon="camera" title={r.photo} hint={r.photoHint} onFile={(file) => void upload(file)} busy={busy} testId="take-photo" inputTestId="photo-input" capture="environment" />
+        <PaperRow icon="records" title={r.file} hint={r.fileHint} onFile={(file) => void upload(file)} busy={busy} testId="choose-file" inputTestId="file-input" />
+        <button type="button" class="paper-row-label" onClick={() => to({ name: "batch" })} disabled={busy} data-testid="choose-many">
+          <Glass shape="row" className="paper-row">
+            <span class="paper-row-icon" aria-hidden="true">
+              <Icon name="add" />
+            </span>
+            <span class="paper-row-body">
+              <b>{s.papers.chooseMany}</b>
+              <small>{r.manyHint}</small>
+            </span>
+          </Glass>
+        </button>
+      </div>
       <Pill onClick={() => void enough()} disabled={busy} testId="all-done">
         {r.allPapers}
+      </Pill>
+      <Pill quiet onClick={finish} testId="set-up-later">
+        {s.onboarding.later}
       </Pill>
     </main>
   );

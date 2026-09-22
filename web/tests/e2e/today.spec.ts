@@ -49,6 +49,8 @@ test("sign in, agree, Today, Taken only when due, Hear, sign out clean", async (
   await signInThroughTheApp(page, phone, "Pa");
 
   await page.getByTestId("door-for-me").click();
+  await expect(page.getByTestId("who-me-reply")).toContainText("Me. My name is Pa.");
+  await page.getByTestId("who-continue").click();
   const words = page.getByTestId("consent-words");
   await expect(words).toContainText("Nura keeps your papers, your medicines and your blood pressure book.");
   await expect(words).toContainText("They never leave Singapore.");
@@ -268,6 +270,7 @@ test("a refused session on reopening: nothing of his is drawn, and nothing of hi
   const phone = freshPhone();
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
   await todayReady(page);
@@ -313,6 +316,7 @@ test("a server error on reopening keeps him on Today, never back at sign-in", as
   const phone = freshPhone();
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
   await todayReady(page);
@@ -345,6 +349,7 @@ test("the language picker changes every string and persists on the device", asyn
   const phone = freshPhone();
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("set-up-later").click();
   await page.getByTestId("open-me").click();

@@ -647,6 +647,18 @@ export const zh = {
     waitingLine: "{name} 为您准备好了这些文件。",
     // @patient phrase
     lookAgain: "再看一次",
+    // @patient phrase
+    meIntro: "我自己。",
+    // @patient
+    meName: "我的名字是{name}。",
+    // @patient
+    met: "很高兴认识您，{name}。",
+    // @patient
+    privacyKeeps: "您告诉 Nura 的内容会留在您自己的文件里。",
+    // @patient
+    privacyChoose: "由您决定谁还能看到它。",
+    // @patient phrase
+    continueWord: "继续",
   },
   consent: {
     // @patient headline
@@ -1598,6 +1610,12 @@ export const zh = {
       titleSelf: "您的健康有哪些方面？",
       // @patient headline
       titleOther: "{name} 的健康有哪些方面？",
+      // @patient headline
+      headSelf: "您的健康有哪些方面？点符合的。",
+      // @patient headline
+      headOther: "{name} 的健康有哪些方面？点符合的。",
+      // @patient
+      loading: "Nura 正在准备您的字词。",
       // @patient
       lead: "有的就点一下。",
       // @patient
@@ -1608,6 +1626,20 @@ export const zh = {
       noted: "Nura 记下了。",
       // @patient
       removed: "Nura 拿掉了。",
+      // @patient
+      pickedPlainSelf: "{name}，记下了。",
+      // @patient
+      pickedPlainOther: "{name}，为{who}记下了。",
+      // @patient
+      pickedAddedSelf: "Nura 加上了常常一起出现的。",
+      // @patient
+      pickedAddedOther: "Nura 加上了常常一起出现的。",
+      // @patient
+      removedSelf: "Nura 拿掉了。",
+      // @patient
+      removedOther: "Nura 为{who}拿掉了。",
+      // @patient
+      removedSub: "再点符合的。",
       // @patient phrase
       more: "显示更多",
       // @patient phrase
@@ -1671,13 +1703,19 @@ export const zh = {
     },
     records: {
       // @patient headline
-      titleSelf: "现在，您的文件",
+      titleSelf: "现在给我看一份文件。验血报告最有用。",
       // @patient headline
-      titleOther: "现在，{name} 的文件",
+      titleOther: "现在给我看一份{name}的文件。验血报告最有用。",
       // @patient phrase
       photo: "拍一张照片",
+      // @patient
+      photoHint: "放平，在日光下拍。",
       // @patient phrase
       file: "改为选一个文件",
+      // @patient
+      fileHint: "选一份医院的文件，或一张照片。",
+      // @patient
+      manyHint: "Nura 会一份一份地读。",
       // @patient phrase
       allPapers: "我的文件就这些",
       // @patient phrase

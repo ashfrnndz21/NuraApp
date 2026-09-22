@@ -1,6 +1,26 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { ConditionOut } from "../../src/api/types";
-import { acknowledgementLine, asksFor, boost, cloudView, joinNames, lowerFirst, phaseOf, sizeOf, toggle, topWords } from "../../src/onboarding/cloud";
+import {
+  acknowledgementLine,
+  asksFor,
+  boost,
+  CLOUD_DIAMETER,
+  CLOUD_PACK_WIDTH,
+  cloudView,
+  estimateLabelBox,
+  joinNames,
+  lowerFirst,
+  minDiameterFor,
+  packCloud,
+  phaseOf,
+  sizeOf,
+  tapHint,
+  TIER_FONT_PX,
+  toggle,
+  topWords,
+} from "../../src/onboarding/cloud";
 import type { CloudWord } from "../../src/onboarding/cloud";
 import { en } from "../../src/strings/en";
 import { ms } from "../../src/strings/ms";
@@ -160,7 +180,7 @@ describe("lowerFirst", () => {
 });
 
 describe("acknowledgementLine", () => {
-  const bubble = (name: string): CloudWord => ({ code: name, name, term: null, size: 1, picked: true, fresh: false });
+  const bubble = (name: string): CloudWord => ({ code: name, name, term: null, size: 1, picked: true, fresh: false, hasRelated: false });
 
   it("says nothing when nothing is picked", () => {
     expect(acknowledgementLine([], "You told me about {list}.", " and ")).toBeNull();
@@ -261,5 +281,205 @@ describe("phaseOf", () => {
   it("varies between different codes — the whole point is neighbours do not move in lockstep", () => {
     const phases = new Set(["high_blood_pressure", "cholesterol", "diabetes", "heart"].map(phaseOf));
     expect(phases.size).toBeGreaterThan(1);
+  });
+});
+
+describe("packCloud", () => {
+  const circle = (code: string, size: 1 | 2 | 3, picked = false): CloudWord => ({
+    code,
+    name: code,
+    term: null,
+    size,
+    picked,
+    fresh: false,
+    hasRelated: false,
+  });
+
+  it("places nothing off either edge", () => {
+    const view = ["a", "b", "c", "d", "e", "f", "g", "h"].map((code, at) => circle(code, ((at % 3) + 1) as 1 | 2 | 3));
+    const { circles } = packCloud(view);
+    for (const each of circles) {
+      expect(each.leftPercent, each.code).toBeGreaterThanOrEqual(0);
+      const rightPercent = each.leftPercent + (each.diameter / CLOUD_PACK_WIDTH) * 100;
+      expect(rightPercent, each.code).toBeLessThanOrEqual(100.01);
+      expect(each.top, each.code).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  /** No two BOXES (the real tap targets, `cp5-onboarding.spec.ts`'s own geometry check reads
+   *  exactly these — a button's rendered box is a square, `border-radius` only changes how it
+   *  paints) overlap on both axes at once, wherever they landed. */
+  function assertNoOverlap(circles: ReturnType<typeof packCloud>["circles"]): void {
+    for (let i = 0; i < circles.length; i++) {
+      for (let j = i + 1; j < circles.length; j++) {
+        const a = circles[i]!;
+        const b = circles[j]!;
+        const aLeft = (a.leftPercent / 100) * CLOUD_PACK_WIDTH;
+        const bLeft = (b.leftPercent / 100) * CLOUD_PACK_WIDTH;
+        const overlapX = Math.min(aLeft + a.diameter, bLeft + b.diameter) - Math.max(aLeft, bLeft);
+        const overlapY = Math.min(a.top + a.diameter, b.top + b.diameter) - Math.max(a.top, b.top);
+        if (overlapX > 0 && overlapY > 0) {
+          expect(Math.min(overlapX, overlapY), `${a.code} vs ${b.code}`).toBeLessThanOrEqual(0.01);
+        }
+      }
+    }
+  }
+
+  it("never overlaps two circles — a real floating cloud, not a stack", () => {
+    const view = Array.from({ length: 14 }, (_, at) => circle(`w${at}`, ((at % 3) + 1) as 1 | 2 | 3));
+    assertNoOverlap(packCloud(view).circles);
+  });
+
+  it("never overlaps even when the biggest circles come first — the real graph's own shape: four weight-3 top words, then a run of weight-2 reveals", () => {
+    const view = [
+      ...Array.from({ length: 4 }, (_, at) => circle(`big${at}`, 3)),
+      ...Array.from({ length: 10 }, (_, at) => circle(`mid${at}`, 2)),
+    ];
+    assertNoOverlap(packCloud(view).circles);
+  });
+
+  it("never overlaps a full cloud, 'show more words' included — up to about 30, the most this graph ever shows at once", () => {
+    const view = Array.from({ length: 30 }, (_, at) => circle(`w${at}`, ((at % 3) + 1) as 1 | 2 | 3));
+    assertNoOverlap(packCloud(view).circles);
+  });
+
+  it("gives every size tier the diameter the stylesheet already draws it at", () => {
+    expect(CLOUD_DIAMETER).toEqual({ 1: 60, 2: 90, 3: 126 });
+  });
+
+  it("is deterministic — the same words in the same order pack the same way", () => {
+    const view = ["bp", "chol", "sugar", "heart"].map((code, at) => circle(code, ((at % 3) + 1) as 1 | 2 | 3));
+    const first = packCloud(view);
+    const second = packCloud(view);
+    expect(second.circles).toEqual(first.circles);
+  });
+
+  it("packs an empty cloud without throwing", () => {
+    expect(packCloud([]).circles).toEqual([]);
+  });
+
+  it("minDiameterFor: a genuinely short word gets exactly its tier's usual size", () => {
+    expect(minDiameterFor({ name: "Hi", size: 1 })).toBe(CLOUD_DIAMETER[1]);
+    expect(minDiameterFor({ name: "TB", size: 2 })).toBe(CLOUD_DIAMETER[2]);
+  });
+
+  it("minDiameterFor: a long single word grows past its tier's usual size — enough to hold it on one line", () => {
+    const d = minDiameterFor({ name: "Hypercholesterolaemia", size: 1 });
+    expect(d).toBeGreaterThan(CLOUD_DIAMETER[1]);
+  });
+
+  it("minDiameterFor: a short multi-word label wraps to its own few lines and can still stay at tier size — a circle is round both ways, not just wide enough for one line", () => {
+    // "See a GP" wraps to three short lines at tier 3's own font, and even three lines of it
+    // sits comfortably inside the tier's own usual size — nothing here has to grow.
+    expect(minDiameterFor({ name: "See a GP", size: 3 })).toBe(CLOUD_DIAMETER[3]);
+  });
+
+  it("minDiameterFor: a label with no single long word can still need a bigger circle than its longest word alone would — wrapping it makes it TALL, not just wide", () => {
+    // Every one of these words is short (never near tier 1's own width floor alone), but there
+    // are enough of them that wrapping to at most three lines still asks for real height.
+    const d = minDiameterFor({ name: "Kidney number checked by a doctor", size: 1 });
+    expect(d).toBeGreaterThan(CLOUD_DIAMETER[1]);
+  });
+
+  it("minDiameterFor: one long unbreakable word still needs more room than the same letters spread across short, wrappable words", () => {
+    const oneLongWord = minDiameterFor({ name: "Hypercholesterolaemia", size: 1 });
+    const manyShortWords = minDiameterFor({ name: "High blood pressure noted here", size: 1 });
+    expect(oneLongWord).toBeGreaterThan(manyShortWords);
+  });
+
+  it("packCloud never gives a bubble a diameter smaller than that word's own minDiameterFor — long words are never shrunk below their own word", () => {
+    const longWords = [
+      circle("high_cholesterol", 1),
+      circle("asthma_breathing", 1),
+      circle("trouble_sleeping", 1),
+      circle("allergies_to_medicine", 1),
+      circle("stomach_reflux", 1),
+      circle("5_or_more_medicines", 1),
+    ].map((c, at) => ({
+      ...c,
+      name: ["High cholesterol", "Asthma, breathing", "Trouble sleeping", "Allergies to medicine", "Stomach, reflux", "5 or more medicines"][at]!,
+    }));
+    const { circles } = packCloud(longWords);
+    for (const c of circles) {
+      const floor = minDiameterFor(c);
+      expect(c.diameter, c.name).toBeGreaterThanOrEqual(floor);
+    }
+    assertNoOverlap(circles);
+  });
+
+  it("packCloud shrinks ordinary short words back toward their tier size when a handful of long words would otherwise blow the height budget", () => {
+    // A cloud dominated by long labels: without scale-down every circle stays inflated to its
+    // own minDiameterFor and the pack runs tall; the short, plain words among them should still
+    // shrink back down toward CLOUD_DIAMETER once the height is back in budget's reach.
+    const view = [
+      circle("a", 1),
+      circle("b", 1),
+      circle("c", 1),
+      { ...circle("long1", 1), name: "Hypercholesterolaemia and related lipid disorders" },
+      { ...circle("long2", 1), name: "Gastro-oesophageal reflux disease symptoms" },
+      { ...circle("long3", 1), name: "Chronic obstructive pulmonary disease" },
+    ];
+    const { circles } = packCloud(view);
+    const plain = circles.filter((c) => ["a", "b", "c"].includes(c.code));
+    for (const c of plain) {
+      // Never below its own (trivial, one-letter) floor, and never above its tier's usual size.
+      expect(c.diameter).toBeLessThanOrEqual(CLOUD_DIAMETER[1]);
+    }
+    assertNoOverlap(circles);
+  });
+});
+
+describe("tapHint", () => {
+  const s = en.onboarding.cloud;
+  const templates = { picked: s.pickedPlainSelf, added: s.pickedAddedSelf, removed: s.removedSelf, removedSub: s.removedSub };
+  const withRelated = (): CloudWord => ({ code: "bp", name: "High blood pressure", term: null, size: 3, picked: true, fresh: false, hasRelated: true });
+  const withoutRelated = (): CloudWord => ({ code: "joints", name: "Joints", term: null, size: 1, picked: true, fresh: false, hasRelated: false });
+
+  it("says what picking a word with reveals just did — never everything picked so far", () => {
+    expect(tapHint(withRelated(), true, templates)).toBe("High blood pressure, noted. I added what often goes with it.");
+  });
+
+  it("says a plain word is simply noted, with nothing to add", () => {
+    expect(tapHint(withoutRelated(), true, templates)).toBe("Joints, noted.");
+  });
+
+  it("reads the same on an unpick, whichever word it was", () => {
+    expect(tapHint(withRelated(), false, templates)).toBe(`${templates.removed} ${templates.removedSub}`);
+    expect(tapHint(withoutRelated(), false, templates)).toBe(`${templates.removed} ${templates.removedSub}`);
+  });
+});
+
+// The real graph (#117) the app actually ships and the e2e suite itself seeds every run from —
+// not a made-up label. A screenshot once showed "Kidney number checked by a doctor" and
+// "Stroke in the family" painting outside their own circle: this checks every name this graph
+// carries, in every language, at every size a pick could ever boost it to, against the box it
+// really draws in at the bubble's own font metrics (`estimateLabelBox`/`TIER_FONT_PX`) — so a
+// future name added to the graph, or a future font-size change, fails here first, not in a
+// screenshot a person has to notice by eye.
+describe("every real condition name fits the circle it is given", () => {
+  const graphPath = fileURLToPath(new URL("../../../backend/app/onboarding/conditions.json", import.meta.url));
+  const graph = JSON.parse(readFileSync(graphPath, "utf-8")) as {
+    conditions: Record<string, { names: Record<string, string> }>;
+  };
+  const names = Object.entries(graph.conditions).flatMap(([code, condition]) =>
+    Object.entries(condition.names).map(([lang, name]) => ({ code, lang, name })),
+  );
+
+  it("read real names from the graph — the fixture did not come back empty", () => {
+    expect(names.length).toBeGreaterThan(50);
+  });
+
+  it("every name, at every size it could ever be boosted to (a pick can push any word up to size 3), never overflows the circle minDiameterFor gives it", () => {
+    const misfits: string[] = [];
+    for (const { code, lang, name } of names) {
+      for (const size of [1, 2, 3] as const) {
+        const diameter = minDiameterFor({ name, size });
+        const box = estimateLabelBox(name, TIER_FONT_PX[size]);
+        if (diameter < box.width || diameter < box.height) {
+          misfits.push(`${code} (${lang}, size ${size}): "${name}" needs ${box.width}x${box.height}px, only got ${diameter}px`);
+        }
+      }
+    }
+    expect(misfits).toEqual([]);
   });
 });
