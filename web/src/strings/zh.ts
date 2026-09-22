@@ -647,6 +647,18 @@ export const zh = {
     waitingLine: "{name} 为您准备好了这些文件。",
     // @patient phrase
     lookAgain: "再看一次",
+    // @patient phrase
+    meIntro: "我自己。",
+    // @patient
+    meName: "我的名字是{name}。",
+    // @patient
+    met: "很高兴认识您，{name}。",
+    // @patient
+    privacyKeeps: "您告诉 Nura 的内容会留在您自己的文件里。",
+    // @patient
+    privacyChoose: "由您决定谁还能看到它。",
+    // @patient phrase
+    continueWord: "继续",
   },
   consent: {
     // @patient headline
@@ -1671,13 +1683,19 @@ export const zh = {
     },
     records: {
       // @patient headline
-      titleSelf: "现在，您的文件",
+      titleSelf: "现在给我看一份文件。验血报告最有用。",
       // @patient headline
-      titleOther: "现在，{name} 的文件",
+      titleOther: "现在给我看一份{name}的文件。验血报告最有用。",
       // @patient phrase
       photo: "拍一张照片",
+      // @patient
+      photoHint: "放平，在日光下拍。",
       // @patient phrase
       file: "改为选一个文件",
+      // @patient
+      fileHint: "选一份医院的文件，或一张照片。",
+      // @patient
+      manyHint: "Nura 会一份一份地读。",
       // @patient phrase
       allPapers: "我的文件就这些",
       // @patient phrase

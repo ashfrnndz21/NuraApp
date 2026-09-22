@@ -75,6 +75,8 @@ async function run(page: Page, prefix: string, wide: boolean): Promise<void> {
   await expect(page.getByTestId("door-for-me")).toBeVisible();
   await shoot(page, `${OUT}/${prefix}-who.png`, wide);
   await page.getByTestId("door-for-me").click();
+  await expect(page.getByTestId("who-continue")).toBeVisible();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
 
   // 5. About, one step.
@@ -102,10 +104,7 @@ async function run(page: Page, prefix: string, wide: boolean): Promise<void> {
   // does not touch) already renders exactly this moment on its first paint, before any file is
   // picked; this shot is that moment, not a new screen.
   await page.getByTestId("cloud-done").click();
-  await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", /records|asks/);
-  if ((await page.locator("main.onboarding").getAttribute("data-stage")) === "asks") {
-    await page.getByTestId("asks-next").click();
-  }
+  await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "records");
   await expect(page.getByTestId("take-photo")).toBeVisible();
   await shoot(page, `${OUT}/${prefix}-handoff.png`, wide);
 }
@@ -138,6 +137,7 @@ test.describe("cp5 the bubble cloud at 360x640", () => {
     await page.getByLabel("The code").fill(code);
     await page.getByTestId("verify-code").click();
     await page.getByTestId("door-for-me").click();
+    await page.getByTestId("who-continue").click();
     await page.getByTestId("agree").click();
     await page.getByLabel("The name Nura uses").fill("Tan");
     await throughAbout(page);

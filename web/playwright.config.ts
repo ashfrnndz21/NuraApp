@@ -66,7 +66,13 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Pixel 5"], browserName: "chromium" } }],
+  // chromium stays the CI default; webkit is run explicitly (`--project=webkit`) to catch
+  // engine-specific defects chromium's own walk does not reproduce (e.g. the register-path
+  // blank screen the owner hit in Safari, 2026-09-22).
+  projects: [
+    { name: "chromium", use: { ...devices["Pixel 5"], browserName: "chromium" } },
+    { name: "webkit", use: { ...devices["iPhone 13"], browserName: "webkit" } },
+  ],
   // The backend: `make dev` (its env and its command), on the port the API URL names, with its
   // clock frozen at FROZEN_CLOCK. Build the app first (`make build-web`) so it serves /app.
   // Locally a server already running is reused — start it with NURA_FROZEN_CLOCK too, or stop

@@ -3,11 +3,12 @@ import type { JSX } from "preact";
 import * as nura from "../../api/nura";
 import type { SettingsIn } from "../../api/types";
 import { openSitting, refreshPlan, saveSettings } from "../../onboarding/actions";
-import { ABOUT_ITEMS, BREAKFAST_TIMES, DECADES, isSwitch, startingSettings, type AboutItem } from "../../onboarding/about";
+import { ABOUT_ITEMS, answerLabel, BREAKFAST_TIMES, DECADES, isSwitch, startingSettings, type AboutItem } from "../../onboarding/about";
 import { biography, draft, finish, picked, say, settings, to, whose } from "../../onboarding/state";
 import { density, profile, setLanguage, token } from "../../store/session";
-import { fill, isLanguage, LANGUAGES, language, t, type Language } from "../../strings";
+import { fill, isLanguage, LANGUAGES, language, t, type Language, type Strings } from "../../strings";
 import { Field, Notice, Pill } from "../../ui/components";
+import { MessageBubble, Reveal } from "../../ui/kit";
 import { Sheet, StepTitle } from "./parts";
 
 /** About you (E01-03, #117's settings): name, language, birth decade, the doctor, breakfast,
@@ -75,49 +76,122 @@ export function AboutStep({ only }: { only?: AboutItem } = {}): JSX.Element {
     else to({ name: "cloud" });
   };
 
-  const items = only ? [only] : patient ? [ABOUT_ITEMS[index]!] : [...ABOUT_ITEMS];
   const lead = own && bio.prompt.lines.length > 0 ? bio.prompt.lines : [say(a.leadSelf, a.leadOther)];
-  const typed = ABOUT_ITEMS[index] === "name" || ABOUT_ITEMS[index] === "doctor";
-
-  return (
-    <main class="screen onboarding" data-stage="about" data-item={patient ? items[0] : "all"}>
-      <StepTitle title={title} />
-      {index === 0 &&
-        !only &&
-        lead.map((line, position) => (
-          <p key={position} class="lead" data-testid="about-lead">
-            {line}
-          </p>
-        ))}
-      {items.map((item) => (
-        <Question key={item} item={item} draft={current} answer={answer} patient={patient} />
+  const leadLines = index === 0 && (
+    <>
+      {lead.map((line, position) => (
+        <p key={position} class="lead" data-testid="about-lead">
+          {line}
+        </p>
       ))}
-      <Notice error={error} />
-      {only ? null : patient ? (
-        <>
-          {typed && (
-            <Pill plum onClick={() => (index + 1 < ABOUT_ITEMS.length ? setIndex(index + 1) : to({ name: "cloud" }))} testId="about-next">
-              {s.onboarding.next}
-            </Pill>
-          )}
-          {index > 0 && (
-            <Pill quiet onClick={() => setIndex(index - 1)} testId="about-back">
-              {s.onboarding.back}
-            </Pill>
-          )}
-        </>
-      ) : (
+    </>
+  );
+
+  // A gap card reopening one question (`only`): its own single screen, unchanged — a narrower
+  // context than the register path below, with its own way back (`saveSettings` then the week).
+  if (only) {
+    return (
+      <main class="screen onboarding" data-stage="about" data-item={only}>
+        <StepTitle title={title} />
+        <Question item={only} draft={current} answer={answer} patient />
+        <Notice error={error} />
+      </main>
+    );
+  }
+
+  // The caregiver density: every question on one page, as it always was — she reads faster
+  // than a conversation would let her, and nothing here is a fresh person's first minute.
+  if (!patient) {
+    return (
+      <main class="screen onboarding" data-stage="about" data-item="all">
+        <StepTitle title={title} />
+        {leadLines}
+        {ABOUT_ITEMS.map((item) => (
+          <Question key={item} item={item} draft={current} answer={answer} patient={false} />
+        ))}
+        <Notice error={error} />
         <Pill plum onClick={() => to({ name: "cloud" })} testId="about-next">
           {s.onboarding.next}
         </Pill>
-      )}
-      {index === 0 && !only && (
+        <Pill quiet onClick={finish} testId="set-up-later">
+          {s.onboarding.later}
+        </Pill>
+      </main>
+    );
+  }
+
+  // The register path (docs/design/onboarding-mock.html's own "About you", never a paged
+  // wizard): one continuous conversation. Every turn he has already settled stays on screen,
+  // read back in his own words; the next question reveals under it (`Reveal`) the instant he
+  // answers — never a Next/Go back stack. A typed turn (name, doctor) still needs one tap to
+  // say he is done typing; every other turn advances the moment he taps a choice.
+  const shown = ABOUT_ITEMS.slice(0, index + 1);
+  const currentItem = ABOUT_ITEMS[index]!;
+  const typedNow = currentItem === "name" || currentItem === "doctor";
+  return (
+    <main class="screen onboarding" data-stage="about" data-item={currentItem}>
+      <StepTitle title={title} />
+      {leadLines}
+      <div class="about-transcript" data-testid="about-transcript">
+        {shown.map((item, at) => (
+          <Reveal key={item} className="about-turn">
+            {at < index ? (
+              <AnsweredTurn item={item} draft={current} s={s} />
+            ) : (
+              <>
+                <Question item={item} draft={current} answer={answer} patient />
+                {typedNow && (
+                  <Pill plum onClick={() => (index + 1 < ABOUT_ITEMS.length ? setIndex(index + 1) : to({ name: "cloud" }))} testId="about-next">
+                    {s.onboarding.next}
+                  </Pill>
+                )}
+              </>
+            )}
+          </Reveal>
+        ))}
+      </div>
+      <Notice error={error} />
+      {index === 0 && (
         <Pill quiet onClick={finish} testId="set-up-later">
           {s.onboarding.later}
         </Pill>
       )}
     </main>
   );
+}
+
+/** A turn he already settled: the question, read back small above what he answered — his own
+ *  answer as a chat bubble on the right (`MessageBubble`, the kit's `.bubble[data-from=person]`,
+ *  docs/design/experience-blueprint.html `.me`), never re-shown as an open field. */
+function AnsweredTurn({ item, draft, s }: { item: AboutItem; draft: SettingsIn; s: Strings }): JSX.Element {
+  return (
+    <div class="about-turn-settled" data-testid={`about-answered-${item}`}>
+      <p class="caption about-turn-question">{questionLabel(item, s)}</p>
+      <MessageBubble from="person">{answerLabel(item, draft, s)}</MessageBubble>
+    </div>
+  );
+}
+
+/** The question a turn asked, in the same words `Question` below titles its own Sheet with —
+ *  kept as one small mapping so a settled turn's caption never drifts from what was actually
+ *  asked. */
+function questionLabel(item: AboutItem, s: Strings): string {
+  const a = s.onboarding.about;
+  if (isSwitch(item)) return say(a.switchSelf[item], a.switchOther[item]);
+  switch (item) {
+    case "name":
+      return say(a.nameSelf, a.nameOther);
+    case "language":
+      return say(a.languageSelf, a.languageOther);
+    case "born":
+      return say(a.bornSelf, a.bornOther);
+    case "doctor":
+      return say(a.doctorSelf, a.doctorOther);
+    case "breakfast":
+      return say(a.breakfastSelf, a.breakfastOther);
+    case "density":
+      return say(a.densitySelf, a.densityOther);
+  }
 }
 
 interface QuestionProps {

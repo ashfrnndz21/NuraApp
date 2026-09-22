@@ -9,6 +9,7 @@ test("crossing midnight in Singapore: Today reads the new day and still says no 
   await page.clock.install({ time: new Date("2026-09-14T15:59:00Z") }); // 23:59 in Singapore
   await signInThroughTheApp(page, freshPhone(), "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   // Onboarding comes next (W3); this test is Today's, so set up later.
   await page.getByTestId("set-up-later").click();

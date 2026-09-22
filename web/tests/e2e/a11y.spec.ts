@@ -132,6 +132,14 @@ for (const [look, banner] of [
 ] as const) {
   test(`every screen in the ${look} density${banner ? ", under the demo banner" : ""}: no serious or critical axe finding`, async ({ page, request }) => {
     test.setTimeout(240_000);
+    // A screen this walk reaches right after a tap, with nothing else to wait on (`who`'s own
+    // reply, `before we start`, the first `about you` turn), can still be mid-`Reveal` (motion.ts
+    // REVEAL_MS, 550ms) the instant `toBeVisible()` resolves — genuinely visible, opacity still
+    // short of 1. Auditing under Reduce Motion (the same mode a real motion-sensitive person
+    // gets, and the mode every transition already collapses to instantly, base.css) is the
+    // faithful check: no screen may read worse with motion off, and it removes a false read of
+    // a frame no one actually rests on.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     const where = (name: string) => `${look}${banner ? " + demo banner" : ""}: ${name}`;
     const patient = look === "patient";
     if (banner) await withDemoBanner(page);
@@ -162,6 +170,9 @@ for (const [look, banner] of [
     await expect(page.getByTestId("door-for-me")).toBeVisible();
     await audit(page, where("who is this for"));
     await page.getByTestId("door-for-me").click();
+    await expect(page.getByTestId("who-continue")).toBeVisible();
+    await audit(page, where("who is this for: his reply"));
+    await page.getByTestId("who-continue").click();
     await expect(page.getByTestId("consent-words")).toBeVisible();
     await audit(page, where("before we start"));
     await page.getByTestId("agree").click();
@@ -228,21 +239,16 @@ for (const [look, banner] of [
         read_back: { line: string }[];
         questions: { line: string }[];
       };
-    if (patient) {
-      // One line a screen: each answered once, on its own screen, the answer said in a live region.
-      const line = page.getByTestId("readback-line");
-      for (const [at, each] of (await sittingNow()).read_back.entries()) {
-        await expect(line).toContainText(each.line);
-        await line.getByTestId("readback-yes").click();
-        if (at === 0) await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
-      }
-    } else {
+    // Every line on this one screen now, patient density or not (never a separate paged
+    // step) — each answered once, the first answer said in a live region.
+    {
       const lines = page.getByTestId("readback-line");
-      for (let n = 0; n < (await lines.count()); n++) {
+      const backendLines = (await sittingNow()).read_back;
+      for (const [at, each] of backendLines.entries()) await expect(lines.nth(at)).toContainText(each.line);
+      for (let n = 0; n < backendLines.length; n++) {
         await lines.nth(n).getByTestId("readback-yes").click();
-        await expect(lines.nth(n).getByTestId("readback-yes")).toHaveAttribute("aria-pressed", "true");
+        if (n === 0) await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
       }
-      await expect(page.getByRole("status").filter({ hasText: "Nura will keep that." })).toBeVisible();
       await page.getByTestId("readback-next").click();
     }
     await expect(main).toHaveAttribute("data-stage", "questions");

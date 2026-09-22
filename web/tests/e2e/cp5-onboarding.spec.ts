@@ -130,12 +130,12 @@ for (const size of [
   });
 }
 
-test("who is this for: two choose-cards, and the caregiver path names him rather than saying 'your'", async ({ page, request }) => {
+test("who is this for: a conversation with chips, and the caregiver path names him rather than saying 'your'", async ({ page, request }) => {
   const phone = freshPhone("+659872");
   await throughSignIn(page, phone, "Ash");
 
   await expect(page.getByTestId("who-greeting")).toBeVisible();
-  await expect(page.locator(".choose-card")).toHaveCount(2);
+  await expect(page.getByTestId("who-chips")).toBeVisible();
   for (const testId of ["door-for-me", "door-for-someone"]) {
     const box = (await page.getByTestId(testId).boundingBox())!;
     expect(box.height, testId).toBeGreaterThanOrEqual(44);
@@ -168,6 +168,21 @@ test("who is this for: two choose-cards, and the caregiver path names him rather
   await expect(ack).toBeVisible();
   await expect(ack).toContainText("Pa");
   await expect(ack).not.toContainText(/\byour\b/i);
+});
+
+/** Choosing "Me" (docs/design/experience-blueprint.html `who`): his own reply, then Nura's,
+ *  then one privacy sentence and one Continue — before the versioned consent words, never an
+ *  instant jump from a tap to a form. */
+test("who is this for, choosing 'Me': his reply, Nura's welcome, one Continue, then consent", async ({ page }) => {
+  const phone = freshPhone("+659881");
+  await throughSignIn(page, phone, "Tan");
+
+  await page.getByTestId("door-for-me").click();
+  await expect(page.getByTestId("who-me-reply")).toContainText("Me. My name is Tan.");
+  await expect(page.getByTestId("who-met")).toContainText("Good to meet you, Tan.");
+  await expect(page.getByTestId("consent-words")).toHaveCount(0);
+  await page.getByTestId("who-continue").click();
+  await expect(page.getByTestId("consent-words")).toBeVisible();
 });
 
 test("sign-in: wrong code, then a real resend, then the right one", async ({ page }) => {
@@ -252,6 +267,7 @@ test("the cloud saves exactly the same payload it always did", async ({ page, re
   const phone = freshPhone("+659875");
   await throughSignIn(page, phone, "Tan");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Tan");
   await page.getByTestId("about-next").click();
@@ -321,6 +337,7 @@ for (const size of [
     const phone = freshPhone("+65987" + (600 + size.width));
     await throughSignIn(page, phone, "Tan");
     await page.getByTestId("door-for-me").click();
+    await page.getByTestId("who-continue").click();
     await page.getByTestId("agree").click();
     await page.getByLabel("The name Nura uses").fill("Tan");
     await page.getByTestId("about-next").click();
@@ -341,6 +358,7 @@ test("the cloud is walkable by keyboard alone, in reading order", async ({ page 
   const phone = freshPhone("+659876");
   await throughSignIn(page, phone, "Tan");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Tan");
   await page.getByTestId("about-next").click();
@@ -369,6 +387,7 @@ test("the cloud respects prefers-reduced-motion: nothing keeps running", async (
   const phone = freshPhone("+659877");
   await throughSignIn(page, phone, "Tan");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByLabel("The name Nura uses").fill("Tan");
   await page.getByTestId("about-next").click();

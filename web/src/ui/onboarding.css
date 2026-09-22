@@ -105,6 +105,35 @@
   align-self: flex-start;
 }
 
+/* --- Before we start: consent as a conversation, never a form (docs/design/README.md rule 1,
+ *  the `consent` scene has no exact blueprint frame of its own so this follows `signin`'s
+ *  shape) --------------------------------------------------------------------------------- */
+.consent-say {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.consent-say-line {
+  flex: 1;
+  min-width: 0;
+  /* Body text, not a second headline — `Header` above already carries this screen's one `<h1>`
+   *  (the same reasoning as `.signin-say-line`, right above). */
+  font-size: var(--text-body);
+  font-weight: 300;
+  line-height: 1.3;
+  margin: 0;
+}
+.consent-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.consent-line p {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
 /* --- Who is this for: two large choose-cards (docs/design/experience-blueprint.html `who`) */
 .choose-cards {
   display: flex;
@@ -166,6 +195,32 @@
   flex: 1;
   min-width: 0;
   margin: 0;
+}
+/* His reply and Nura's answer, right after (`WhoMeReply`, `Doors.tsx`): each turn its own
+ *  vertical rhythm, the same gap the screen's own flex column already gives every other block. */
+.who-me {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* `Reveal`'s own wrapper (`.reveal-item`) sits between `.who-me` and the bubble, so the
+ *  bubble's own `align-self: flex-end` (kit.css) has nothing to act on — without this, "Me. My
+ *  name is Tan." stretched the full width instead of sitting right, chat-style (found looking
+ *  at this package's own captures, cp6RegisterShots.spec.ts). */
+.who-me > .reveal-item:has(> .bubble) {
+  align-self: flex-end;
+  width: fit-content;
+  max-width: 86%;
+}
+.who-say-lines {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.who-say-lines .who-say-line {
+  flex: none;
 }
 
 /* --- The bubble cloud (docs/design/experience-blueprint.html `cloud`, `.bub`) -------------- */
@@ -317,4 +372,86 @@
   .bubble-surface {
     animation: none !important;
   }
+}
+
+/* --- Add a paper: three rows, icon + title + hint (docs/design/experience-blueprint.html
+ *  `firstpaper`) ------------------------------------------------------------------------------ */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.paper-row-label {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+}
+.paper-row-label input[type="file"] {
+  /* The real control: visually hidden, never `display:none` (still reachable by a screen
+   *  reader and still opens the OS picker on a tap of the row it sits under, the same
+   *  pattern `Capture` itself already uses). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.paper-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+}
+.paper-row-icon {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  border: var(--glass-border);
+}
+.paper-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.paper-row-body b {
+  font-size: 15.5px;
+  font-weight: 500;
+}
+.paper-row-body small {
+  font-size: 12.5px;
+  opacity: 0.78;
+}
+
+/* --- About you, patient density: a conversation transcript, never a paged wizard ---------- */
+/* Every turn he has already settled stays on screen (`About.tsx`'s `AnsweredTurn`); the next
+ *  question reveals under it the instant he answers. `.about-transcript` gives the turns their
+ *  own vertical rhythm inside the screen's own flex column (`.screen`, base.css). */
+.about-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.about-turn-settled {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.about-turn-question {
+  margin: 0;
 }

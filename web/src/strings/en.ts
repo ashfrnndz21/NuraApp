@@ -647,6 +647,18 @@ export const en = {
     waitingLine: "{name} made this for you.",
     // @patient phrase
     lookAgain: "Look again",
+    // @patient phrase
+    meIntro: "Me.",
+    // @patient
+    meName: "My name is {name}.",
+    // @patient
+    met: "Good to meet you, {name}.",
+    // @patient
+    privacyKeeps: "Nothing you tell me leaves your own papers.",
+    // @patient
+    privacyChoose: "You decide who else can see them.",
+    // @patient phrase
+    continueWord: "Continue",
   },
   consent: {
     // @patient headline
@@ -1671,13 +1683,19 @@ export const en = {
     },
     records: {
       // @patient headline
-      titleSelf: "Now, your papers",
+      titleSelf: "Now show me a paper. A blood test helps the most.",
       // @patient headline
-      titleOther: "Now, {name}'s papers",
+      titleOther: "Now show me one of {name}'s papers. A blood test helps the most.",
       // @patient phrase
       photo: "Take a photo",
+      // @patient
+      photoHint: "Hold it flat, in daylight.",
       // @patient phrase
       file: "Choose a file instead",
+      // @patient
+      fileHint: "Choose a document from the hospital, or a photo.",
+      // @patient
+      manyHint: "Nura will read them one by one.",
       // @patient phrase
       allPapers: "That is all my papers",
       // @patient phrase

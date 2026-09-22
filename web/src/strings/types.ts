@@ -350,6 +350,12 @@ export interface Strings {
     waiting: string;
     waitingLine: string;
     lookAgain: string;
+    meIntro: string;
+    meName: string;
+    met: string;
+    privacyKeeps: string;
+    privacyChoose: string;
+    continueWord: string;
   };
   consent: { title: string; lead: string; agree: string; language: string };
   claim: { title: string; setUpBy: string; keepsSeeing: string; mine: string };
@@ -859,7 +865,10 @@ export interface Strings {
       titleSelf: string;
       titleOther: string;
       photo: string;
+      photoHint: string;
       file: string;
+      fileHint: string;
+      manyHint: string;
       allPapers: string;
       allDone: string;
       looking: string;

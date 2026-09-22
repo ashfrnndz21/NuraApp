@@ -647,6 +647,18 @@ export const ms = {
     waitingLine: "{name} menyediakannya untuk anda.",
     // @patient phrase
     lookAgain: "Cuba lihat lagi",
+    // @patient phrase
+    meIntro: "Saya.",
+    // @patient
+    meName: "Nama saya {name}.",
+    // @patient
+    met: "Baiklah, {name}.",
+    // @patient
+    privacyKeeps: "Apa yang anda beritahu Nura kekal dalam surat-surat anda sendiri.",
+    // @patient
+    privacyChoose: "Anda pilih siapa lagi yang boleh melihatnya.",
+    // @patient phrase
+    continueWord: "Teruskan",
   },
   consent: {
     // @patient headline
@@ -1671,13 +1683,19 @@ export const ms = {
     },
     records: {
       // @patient headline
-      titleSelf: "Sekarang, surat-surat anda",
+      titleSelf: "Sekarang tunjukkan satu surat. Ujian darah paling membantu.",
       // @patient headline
-      titleOther: "Sekarang, surat-surat {name}",
+      titleOther: "Sekarang tunjukkan satu surat {name}. Ujian darah paling membantu.",
       // @patient phrase
       photo: "Ambil gambar",
+      // @patient
+      photoHint: "Pegang rata, di bawah cahaya siang.",
       // @patient phrase
       file: "Pilih dokumen pula",
+      // @patient
+      fileHint: "Pilih dokumen daripada hospital, atau gambar.",
+      // @patient
+      manyHint: "Nura akan membaca satu demi satu.",
       // @patient phrase
       allPapers: "Itu sahaja surat-surat saya",
       // @patient phrase

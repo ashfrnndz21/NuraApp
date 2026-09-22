@@ -8,7 +8,7 @@ import { speak } from "../../speech/speak";
 import { token } from "../../store/session";
 import { fill, language, t } from "../../strings";
 import { Field, Notice, Pill } from "../../ui/components";
-import { Icon, Orb, SoftText } from "../../ui/kit";
+import { Icon, Orb, Reveal, SoftText } from "../../ui/kit";
 import { Sheet, Status, StepTitle } from "./parts";
 
 /** The word cloud (#117's graph): plain words, the most common biggest and first, so they are
@@ -48,6 +48,14 @@ export function CloudStep(): JSX.Element {
     if (nowPicked) speak({ lines: word.term ? [word.name, fill(c.term, { term: word.term })] : [word.name], language: language.value });
   };
 
+  /** A picked word's own follow-up ("For how long?"), answered right here under the cloud
+   *  (docs/design/onboarding-mock.html `renderAsk()`) — never the separate `asks` screen a tap
+   *  used to leave for. A second tap changes the answer; there is no toggle-off, the same as
+   *  the screen this replaces — leaving it unanswered is simply not tapping it. */
+  const chooseAsk = (wordId: string, optionId: string) => {
+    answers.value = { ...answers.value, [wordId]: optionId };
+  };
+
   /** "Or just tell me": free text run through the backend's tagger (`POST /onboarding/tell-
    *  me`). Nothing he typed leaves this function once it returns — only the codes it tagged
    *  are kept, folded into what is already picked, exactly as a tap would leave it. A red word
@@ -84,7 +92,6 @@ export function CloudStep(): JSX.Element {
   };
 
   const done = async () => {
-    if (asksFor(words, picked.value).length > 0) return to({ name: "asks" });
     setBusy(true);
     setError(null);
     try {
@@ -98,6 +105,7 @@ export function CloudStep(): JSX.Element {
 
   const title = say(c.titleSelf, c.titleOther);
   const pickedWords = view.filter((word) => word.picked);
+  const asks = asksFor(words, picked.value);
   // en/ms read a name mid-sentence lower-case ("you told me about high blood pressure"); zh has
   // no letter case to change (`lowerFirst`, `onboarding/cloud.ts`).
   const ack = acknowledgementLine(pickedWords, say(c.ackSelf, c.ackOther), c.and, { slots: { name: whose().name }, lowercase: language.value !== "zh" });
@@ -138,6 +146,28 @@ export function CloudStep(): JSX.Element {
           );
         })}
       </div>
+      {/* A picked word's own follow-up, right under the cloud (docs/design/onboarding-mock.html
+          `renderAsk()`) — never a screen of its own any more (`Asks.tsx` still answers that
+          question when a gap card reopens exactly one of these later). Answering one, or
+          leaving it, never blocks "That is everything" below. */}
+      {asks.length > 0 && (
+        <div class="cloud-asks" data-testid="cloud-asks">
+          <p class="caption">{s.onboarding.asks.lead}</p>
+          {asks.map((word) => (
+            <Reveal key={word.code}>
+              <Sheet caption={word.name} title={word.ask!.question} testId={`ask-${word.code}`}>
+                <div class="choices" role="group">
+                  {word.ask!.options.map((option) => (
+                    <Pill key={option.id} onClick={() => chooseAsk(word.code, option.id)} chosen={answers.value[word.code] === option.id} testId={`option-${option.id}`}>
+                      {option.text}
+                    </Pill>
+                  ))}
+                </div>
+              </Sheet>
+            </Reveal>
+          ))}
+        </div>
+      )}
       {/* One Nura turn, one orb: the acknowledgement and the per-tap status
           ("Nura wrote that down.") are the same turn's two lines, not an orphan status line
           floating with no indent under it (operator review) — `status` alone (nothing picked

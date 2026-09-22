@@ -51,6 +51,7 @@ async function signedInToOnboarding(page: Page, prefix: string, options: { break
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await throughAbout(page, options);
   return phone;
@@ -113,6 +114,11 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await captureSpeech(page);
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  // The `who` scene's own reply (docs/design/experience-blueprint.html): his name comes back as
+  // his own turn, then Nura's, then one Continue on to consent.
+  await expect(page.getByTestId("who-me-reply")).toContainText("Me. My name is Pa.");
+  await expect(page.getByTestId("who-met")).toContainText("Good to meet you, Pa.");
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
 
   // About you: the sitting's own words lead; one question per screen, patient density, 56px.
@@ -167,6 +173,12 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   await page.getByTestId("word-bp_tablets").click();
   await spoken(page);
 
+  // "Blood pressure tablets" carries a follow-up ("For how long?"): it answers right here,
+  // under the cloud (docs/design/onboarding-mock.html `renderAsk()`) — never a screen of its
+  // own.
+  await expect(page.getByTestId("ask-bp_tablets")).toContainText("For how long?");
+  await page.getByTestId("option-one_to_five_years").click();
+
   // "Or just tell me": free text, tagged into the cloud's own words by the backend's tagger —
   // never a new word, never echoed back, only the codes it tagged.
   await page.getByTestId("tell-me-open").click();
@@ -179,15 +191,9 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
   await page.getByTestId("cloud-done").click();
 
-  // "Blood pressure tablets" carries a follow-up ("For how long?"): it comes before the
-  // papers, one question on its own screen for the patient, his tap the whole answer.
-  await expect(main).toHaveAttribute("data-stage", "asks");
-  await expect(page.getByTestId("ask-bp_tablets")).toContainText("For how long?");
-  await page.getByTestId("option-one_to_five_years").click();
-
   // The papers step: the sitting's words; the settings and the words saved in one PUT.
   await expect(main).toHaveAttribute("data-stage", "records");
-  await expect(page.getByRole("heading", { name: "Now, your papers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Now show me a paper. A blood test helps the most." })).toBeVisible();
   await expect(page.getByTestId("prompt")).toContainText("Take a photo of each paper you have.");
   await expect(page.getByTestId("photo-input")).toHaveAttribute("capture", "environment");
   const pa = await profileOf(request, phone);
@@ -263,28 +269,28 @@ test("the patient's own onboarding: about you, the cloud, a paper, the read-back
   expect(byName.has("vldl")).toBe(false);
   for (const fact of facts) expect(fact.artifact_id).toBeTruthy();
 
-  // "That is all my papers": the read-back, one backend line per screen, Yes / No on paper.
+  // "That is all my papers": the read-back, every backend line on this one screen — never a
+  // separate paged step, patient density or not (docs/design/onboarding-mock.html's own "Here's
+  // what I understood") — each with its own Yes and No on paper.
   await page.getByTestId("all-done").click();
   await expect(main).toHaveAttribute("data-stage", "readBack");
   await expect(page.getByRole("heading", { name: "Here is what Nura understood" })).toBeVisible();
-  const line = page.getByTestId("readback-line");
-  await expect(line).toHaveCount(1);
-  await expect(line).toContainText("You told us: High blood pressure.");
-  await expect(line).toContainText(/This is 1 of \d+\./);
-  const total = Number(/This is 1 of (\d+)\./.exec((await line.textContent()) ?? "")![1]);
+  const lines = page.getByTestId("readback-line");
+  await expect(lines.first()).toContainText("You told us: High blood pressure.");
+  const total = await lines.count();
+  expect(total).toBeGreaterThan(2);
   expect(await nothingDrawnOverLines(main, { minTarget: 56 })).toEqual([]);
-  await line.getByTestId("readback-yes").click();
-  await expect(line).toContainText("You told us: High cholesterol.");
-  await line.getByTestId("readback-no").click();
+  await lines.nth(0).getByTestId("readback-yes").click();
+  await lines.nth(1).getByTestId("readback-no").click();
   await expect(page.getByTestId("readback-ack")).toHaveText(/\S/);
   const read: string[] = [];
-  for (let n = 3; n <= total; n++) {
-    await expect(line).toContainText(`This is ${n} of ${total}.`);
-    read.push((await line.textContent()) ?? "");
-    await line.getByTestId("readback-yes").click();
+  for (let n = 2; n < total; n++) {
+    read.push((await lines.nth(n).textContent()) ?? "");
+    await lines.nth(n).getByTestId("readback-yes").click();
   }
   expect(read.join("\n")).toContain("Your doctor is Dr Tan.");
   expect(read.join("\n")).toContain("Your cholesterol was 230 on");
+  await page.getByTestId("readback-next").click();
 
   // The questions the papers raised: one per screen, each with its State and its source line.
   await expect(main).toHaveAttribute("data-stage", "questions");
@@ -419,13 +425,13 @@ test("the caregiver density, for a chief setting up her father", async ({ page }
   await expect(page.getByRole("heading", { name: "What is part of Pa's health?" })).toBeVisible();
   await page.getByTestId("word-high_blood_pressure").click();
   await page.getByTestId("word-bp_at_home").click();
+  // "Check blood pressure at home" carries a follow-up ("Usually?"), right under the cloud —
+  // she moves on without answering it.
+  await expect(page.getByTestId("ask-bp_at_home")).toBeVisible();
   await page.screenshot({ path: shot("word-cloud-caregiver") });
   await page.getByTestId("cloud-done").click();
 
-  // The caregiver density shows every follow-up on one page; she moves on without answering.
-  await expect(main).toHaveAttribute("data-stage", "asks");
-  await page.getByTestId("asks-next").click();
-  await expect(page.getByRole("heading", { name: "Now, Pa's papers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Now show me one of Pa's papers. A blood test helps the most." })).toBeVisible();
 
   // A paper in the caregiver density: the card's header speaks, its lines do not each.
   await page.getByTestId("photo-input").setInputFiles(photo("lipid-panel-2023-09-07"));
@@ -472,6 +478,7 @@ test("his language takes effect the moment he picks it", async ({ page }) => {
   const phone = freshPhone("+659886");
   await signInThroughTheApp(page, phone, "Pa");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
   await page.getByTestId("agree").click();
   await page.getByTestId("about-next").click();
   await page.getByTestId("about-lang-ms").click();
@@ -541,11 +548,12 @@ test("the Ready screen's other actions: breakfast from its card, and one person 
   const phone = await signedInToOnboarding(page, "+659884", { breakfast: false });
   await page.getByTestId("word-allergies").click();
   await page.getByTestId("word-medicine_allergy").click();
+  // "Allergic to a medicine" carries a follow-up ("Which one?"), right under the cloud; his tap
+  // is the whole answer.
+  await expect(page.getByTestId("ask-medicine_allergy")).toBeVisible();
+  await page.getByTestId("option-not_sure").click();
   await page.getByTestId("cloud-done").click();
   const main = page.locator("main.onboarding");
-  // "Allergic to a medicine" carries a follow-up ("Which one?"); his tap is the whole answer.
-  await expect(main).toHaveAttribute("data-stage", "asks");
-  await page.getByTestId("option-not_sure").click();
   // No papers today: the sitting closes straight away, and says so.
   await page.getByTestId("all-done").click();
   await expect(main).toHaveAttribute("data-stage", "plan");
@@ -620,13 +628,12 @@ test("a question kept with a visit booked goes on that visit's list at once (E05
   await throughInsight(page);
   await expect(page.getByTestId("saved")).toBeVisible();
   await page.getByTestId("all-done").click();
-  const line = page.getByTestId("readback-line");
-  await expect(line).toContainText(/This is 1 of \d+\./);
-  const total = Number(/This is 1 of (\d+)\./.exec((await line.textContent()) ?? "")![1]);
-  for (let n = 1; n <= total; n++) {
-    await expect(line).toContainText(`This is ${n} of ${total}.`);
-    await line.getByTestId("readback-yes").click();
-  }
+  const lines = page.getByTestId("readback-line");
+  await expect(lines.first()).toBeVisible();
+  const total = await lines.count();
+  expect(total).toBeGreaterThan(0);
+  for (let n = 0; n < total; n++) await lines.nth(n).getByTestId("readback-yes").click();
+  await page.getByTestId("readback-next").click();
   await expect(main).toHaveAttribute("data-stage", "questions");
   const asked = await sitting(request, pa);
   const question = page.getByTestId("question");
@@ -653,6 +660,7 @@ test("a bare profile always opens onboarding, never Home, and stays that way thr
   // No name at sign in, and none on the "for me" door either: nothing types his name anywhere.
   await signInThroughTheApp(page, phone, "");
   await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-name-skip").click();
   await page.getByTestId("agree").click();
 
   const main = page.locator("main.onboarding");
