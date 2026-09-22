@@ -90,6 +90,11 @@ mobile-architecture.md` (native stack), `docs/design/experience-blueprint-v2.htm
   23:40): the Apple Developer / EAS signed build is not a build stage — it is the closing action
   after the plan is complete and the owner has signed off the acceptance sheet.
 
+**23 Sep 00:35 — superseded in part by ADR 0021.** The owner's `docs/design/NURA-BUILD-MASTER-SPEC.md`
+is now the binding brief; where it and this ADR differ, the master spec wins, and its §3 / §43 step 14
+restate the rule above: the signed build is the closing action after the whole app is complete and
+tested, and Expo Go is the development vehicle until then, not that step.
+
 ## The design is baked into every builder (owner, 23 Sep 00:15)
 
 The experience specification (`design-build-2.md` §1) is not a separate track. Every builder delivers
