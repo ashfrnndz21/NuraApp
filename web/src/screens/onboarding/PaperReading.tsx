@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 import { useState } from "preact/hooks";
 import type { ReviewCardOut } from "../../api/types";
-import { readingChips, readingHeadline, reportRow } from "../../onboarding/review";
+import { isResultRow, readingChips, readingHeadline, reportRow } from "../../onboarding/review";
 import { language, LOCALE, t } from "../../strings";
 import { Chip, ChipRow, Flag, Glass, Icon, Orb, RevealGroup, SoftText, StatusLine } from "../../ui/kit";
 
@@ -70,16 +70,29 @@ export function ReadingResult({ card, onContinue, testId }: ReadingResultProps):
       <RevealGroup testId="reading-rows">
         {rows.map((row) => (
           <Glass key={row.fieldId} shape="row" testId={`reading-row-${row.fieldId}`}>
-            <div class="report-row-top">
-              <div class="report-row-name">
-                <b>{row.label}</b>
+            {isResultRow(row) ? (
+              <div class="report-row-top">
+                <div class="report-row-name">
+                  <b>{row.label}</b>
+                </div>
+                <span class="report-value-num">
+                  {row.valueText}
+                  {row.unit && <small>{row.unit}</small>}
+                </span>
+                {row.flagWord && <Flag state={row.tone === "ok" ? "ok" : "attention"}>{row.flagWord}</Flag>}
               </div>
-              <span class="report-value-num">
-                {row.valueText}
-                {row.unit && <small>{row.unit}</small>}
-              </span>
-              {row.flagWord && <Flag state={row.tone === "ok" ? "ok" : "attention"}>{row.flagWord}</Flag>}
-            </div>
+            ) : (
+              /* A line of words (a policy's benefit, a claim step, a name): the label small
+                 above the value, which wraps — beside a value that never shrinks, "A benefit
+                 or a limit" wrapped letter by letter and the value ran off the screen (the
+                 owner's own policy schedule, 22 Sep 2026). The same split the full table makes. */
+              <div class="report-row-admin">
+                <span class="report-row-admin-label">{row.label}</span>
+                <div class="report-row-admin-value-line">
+                  <span class="report-row-admin-value">{row.valueText}</span>
+                </div>
+              </div>
+            )}
           </Glass>
         ))}
       </RevealGroup>
