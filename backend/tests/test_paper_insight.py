@@ -52,7 +52,13 @@ from app.safety.plain_words import verify
 from tests.conftest import Deployment
 from tests.medicines_support import add as add_medicine
 from tests.medicines_support import label
-from tests.paper import LAB_REPORT_VITALS, LIPID_GLUCOSE_PANEL, LIPID_PANEL
+from tests.paper import (
+    LAB_REPORT_NOT_HIS,
+    LAB_REPORT_VITALS,
+    LIPID_GLUCOSE_PANEL,
+    LIPID_PANEL,
+    LIPID_PANEL_2025,
+)
 from tests.safety_support import clinic, let_in, pa
 from tests.test_ingestion import _card, _decide, _yes
 from tests.timeline_support import book
@@ -368,6 +374,33 @@ async def test_build_insight_says_the_headline_in_the_readers_own_voice(
 async def test_an_unconfirmed_card_is_refused(sg: AsyncSession, store: LocalObjectStore, extractor) -> None:
     owner = await pa(sg, phone="+6591160003")
     card, _fields = await _card(sg, owner, store, extractor, LAB_REPORT_VITALS)  # never confirmed
+
+    with pytest.raises(NotAConfirmedPaper):
+        await _drain(sg, owner, card.artifact_id)
+
+
+async def test_a_set_aside_card_is_refused_never_narrated(
+    sg: AsyncSession, store: LocalObjectStore, extractor
+) -> None:
+    """B2, the independent safety review's own worst finding: `_confirmed_paper` used to read
+    `not card.is_open`, which is `True` for a card set aside on its own whose-paper question
+    exactly as it is for one never said yes to at all — so a stranger's paper, rejected with
+    "someone else's", could still be read into an insight and narrated as his own. Proven
+    directly: confirm his own first paper (so the record holds a confirmed birth year to
+    mismatch against), read a demo-style paper that mismatches it, answer "someone else's",
+    and assert the insight route refuses it exactly as an unconfirmed card is refused —
+    never narrates a line from it."""
+    from app.ingestion.review import answer_review_card_question
+
+    owner = await pa(sg, phone="+6591160006")
+    await _confirm_paper(sg, owner, store, extractor, LIPID_PANEL_2025)
+    card, _fields = await _card(sg, owner, store, extractor, LAB_REPORT_NOT_HIS)
+    assert card.awaiting_answer and card.pending_question is not None
+
+    answered = await answer_review_card_question(
+        sg, context=owner, card_id=card.id, value="someone_elses"
+    )
+    assert answered.is_set_aside and not answered.is_confirmed
 
     with pytest.raises(NotAConfirmedPaper):
         await _drain(sg, owner, card.artifact_id)

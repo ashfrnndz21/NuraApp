@@ -1049,6 +1049,11 @@ class ClaudeAsker:
             # W2: the fallback holds the same "never twice in a row" and "already resolved"
             # signals the model's own attempt did — a bad or missing proposal from the model
             # never gives the rule-based safety net a second free clarifying question either.
+            # `kept_question=kept`: this is not a fresh question — `kept` below already holds
+            # the artefact this exact text was kept as, before the model was ever asked, so
+            # the fallback must not call `_keep_question` a second time for it (audit-2026-09-
+            # 22.md's coordinator note on the (profile_id, sha256) index: reuse the bytes,
+            # never let a caller that should not be re-asking skip straight past why).
             focus = None if history is None else history.resolved_focus
             return await recall(
                 session,
@@ -1061,6 +1066,7 @@ class ClaudeAsker:
                 language=language,
                 focus=focus,
                 skip_clarify=already_clarified,
+                kept_question=kept,
             )
 
         async with audited_guard(session, context, Action.READ, Scope.ASK, ASK_TARGET):

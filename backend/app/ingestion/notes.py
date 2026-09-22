@@ -40,6 +40,7 @@ from app.consent.models import ConsentPurpose
 from app.consent.service import require_consent
 from app.db import as_utc, utcnow
 from app.errors import Refusal
+from app.ingestion.duplicates import find_own_artifact_by_digest
 from app.ingestion.models import EventNote, NoteKind
 from app.ingestion.objects import ObjectStore, sha256_of
 from app.ingestion.photos import PHOTO_CONTENT_TYPES
@@ -164,13 +165,26 @@ async def _keep(
     source_channel: SourceChannel = SourceChannel.APP,
 ) -> Artifact:
     """Bytes into the region's store and the artefact naming them, after the agreement to hold
-    the record: a refusal leaves nothing behind."""
+    the record: a refusal leaves nothing behind.
+
+    The same short voice note or the same scribble, left on two different events (a caregiver
+    saying "she's fine" twice, on two different mornings), is the same bytes for this profile:
+    migration 0055's `(profile_id, sha256)` index makes a second artefact row of them
+    impossible, so this reuses the one already on file — the note each call writes
+    (`_write_note`, below) is its own row regardless, on its own event, naming who left it and
+    when; only the bytes are shared."""
     await require_consent(
         session,
         context=context,
         purpose=ConsentPurpose.HOLD_HEALTH_RECORD,
         scope=Scope.RECORDS,
     )
+    digest = sha256_of(data)
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.RECORDS, kind=kind, sha256=digest
+    )
+    if existing is not None:
+        return existing
     await store.put(key, data)
     return await store_artifact(
         session,

@@ -88,6 +88,12 @@ class AuditEntry(ProfileScoped, Base):
     outcome: Mapped[Outcome] = mapped_column(enum_column(Outcome, "audit_outcome"))
     # The name of the refusal, never what was held back. See `app.errors.Refusal`.
     refused_because: Mapped[str | None] = mapped_column(String(64), default=None)
+    # A card's own answer to its one pending question, from the closed set it was checked
+    # against before this line was written (`WHOSE_PAPER_ANSWERS`/`DUPLICATE_PAPER_ANSWERS`,
+    # `app.ingestion.review`) — "mine", "someone_elses", "same" or "different". Never the
+    # paper's own printed name, or any other free text (FIX BEFORE MERGE, the independent
+    # safety review): this table never says what the thing said.
+    answered_with: Mapped[str | None] = mapped_column(String(32), default=None)
     # Who the copy went to: an account for family, a written name for a clinic or a link.
     shared_with_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("person.id"), default=None

@@ -1880,6 +1880,77 @@ export const en = {
       titlePharmacyReceipt: "Pharmacy receipt",
       // @patient phrase
       titleUnknown: "Page",
+      // D-2, "whose paper is it" (audit-2026-09-22.md §3.2, §5): the reading screen's one
+      // plain clarifying question, in the blueprint's conversation shape (an orb, a lead
+      // line, a question, chips) — never filed until answered. The lead line names which
+      // *fields* disagreed, never what the paper itself printed there (the independent
+      // safety review's FIX BEFORE MERGE: the paper's own name is extracted text, hostile
+      // until confirmed — a page printing an instruction in its name field must never become
+      // a sentence Nura composes). `whoseField*` names each field; `whoseMismatchLead*`
+      // picks "is"/"are" by how many disagreed, and the self/caregiver voice; `whoseQuestion`
+      // always follows.
+      // @patient phrase
+      whoseFieldName: "the name",
+      // @patient phrase
+      whoseFieldPatientId: "the patient number",
+      // @patient phrase
+      whoseFieldBirthYear: "the year of birth",
+      // @patient phrase
+      whoseFieldSex: "the sex",
+      // @patient phrase
+      whoseFieldAnd: " and ",
+      // The line starts with the {fields} slot (`whoseQuestionLead` capitalises the whole
+      // rendered line after filling it, the same way a filled line always reads whatever
+      // case its first word actually needs) so it reads "The name and the year of birth on
+      // this paper are not yours." — never "The the name ...", the double article a fixed
+      // leading "The" here would have doubled onto `whoseFieldName`'s own "the".
+      // @patient headline
+      whoseMismatchLeadIsSelf: "{fields} on this paper is not yours.",
+      // @patient headline
+      whoseMismatchLeadAreSelf: "{fields} on this paper are not yours.",
+      // @patient headline
+      whoseMismatchLeadIsOther: "{fields} on this paper is not {patient}'s.",
+      // @patient headline
+      whoseMismatchLeadAreOther: "{fields} on this paper are not {patient}'s.",
+      // @patient headline
+      whoseLeadGeneric: "This paper's details do not match your own.",
+      // @patient headline
+      whoseLeadGenericOther: "This paper's details do not match {patient}'s own.",
+      // @patient
+      whoseQuestion: "Is it yours?",
+      // @patient
+      whoseQuestionOther: "Is it {patient}'s?",
+      // @patient phrase
+      whoseMine: "Yes, it is mine",
+      // @patient phrase
+      whoseMineOther: "Yes, it is {patient}'s",
+      // @patient phrase
+      whoseSomeoneElses: "No, it is someone else's",
+      // @patient phrase
+      whoseNotSure: "I'm not sure",
+      // @patient
+      whoseSetAside: "Nura will leave this paper out.",
+      // @patient
+      whoseSetAsideOther: "Nura will leave this paper out of {patient}'s papers.",
+      // D-4, duplicates (audit-2026-09-22.md §3.2, §5).
+      // @patient headline
+      duplicateLead: "This looks like the paper you added on {date}.",
+      // The caregiver twin (FIX BEFORE MERGE, the independent safety review): a chief
+      // reading Pa's papers reads "Pa added this paper on ...", never "you".
+      // @patient headline
+      duplicateLeadOther: "This looks like the paper {patient} added on {date}.",
+      // @patient
+      duplicateQuestion: "Is it the same one?",
+      // @patient phrase
+      duplicateSame: "Yes, it's the same paper",
+      // @patient phrase
+      duplicateDifferent: "No, a different one",
+      // @patient
+      duplicateSetAside: "Nura already has this paper.",
+      // @patient
+      duplicateAddedOn: "You added this paper on {date}.",
+      // @patient
+      duplicateAddedOnOther: "{patient} added this paper on {date}.",
     },
     questions: {
       // @patient headline
@@ -2027,7 +2098,7 @@ export const en = {
         patient_id: "The patient number on the report",
         ordering_doctor: "Which doctor asked for it",
       },
-      person: { birth_year: "The year of birth", sex: "Male or female" },
+      person: { birth_year: "The year of birth", age: "The age on the report", sex: "Male or female" },
       medicine: {
         name: "The medicine",
         strength: "How strong it is",

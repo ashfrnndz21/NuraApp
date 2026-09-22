@@ -10,6 +10,7 @@ anything but a photo card, so the refusal is proven here, at the service.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
 import pytest
@@ -47,13 +48,14 @@ async def _pa(session: AsyncSession) -> KeyContext:
 
 
 async def _artifact(session: AsyncSession, context: KeyContext, kind: ArtifactKind) -> Artifact:
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
     return await store_artifact(
         session,
         context=context,
         kind=kind,
-        storage_key=f"sg/{kind.value}",
+        storage_key=f"sg/{kind.value}/{digest}",
         content_type="image/jpeg" if kind is ArtifactKind.PHOTO else "application/pdf",
-        sha256="d" * 64,
+        sha256=digest,
         captured_at=SEPT_3,
         source_channel=SourceChannel.APP,
         region=Region.SG,

@@ -1,0 +1,37 @@
+{
+  "placeholder": "bp-cuff-2026-09-14-again",
+  "note": "What the paper says, labelled by hand from the redacted original: the answer the extractor is measured against (tests/paper_accuracy.py).",
+  "document_kind": "device_screen",
+  "fields": [
+    {
+      "subject": "device",
+      "attribute": "kind",
+      "value": "blood_pressure_monitor",
+      "unit": null
+    },
+    {
+      "subject": "blood_pressure",
+      "attribute": "systolic",
+      "value": 138,
+      "unit": "mmHg"
+    },
+    {
+      "subject": "blood_pressure",
+      "attribute": "diastolic",
+      "value": 84,
+      "unit": "mmHg"
+    },
+    {
+      "subject": "heart_rate",
+      "attribute": "pulse",
+      "value": 72,
+      "unit": "/min"
+    },
+    {
+      "subject": "reading",
+      "attribute": "taken_at",
+      "value": "2026-09-14T07:42",
+      "unit": null
+    }
+  ]
+}

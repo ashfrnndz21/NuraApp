@@ -67,6 +67,9 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
             setReviewing(reading);
             setReading(null);
           }}
+          // D-2: "I'm not sure" leaves the card exactly as it is, still open — back to Home,
+          // never a claim that anything was decided.
+          onLeaveUnanswered={() => go({ name: "today" })}
           testId="reading-result"
         />
       </Shell>
@@ -91,7 +94,17 @@ export function PapersScreen({ report = false }: { report?: boolean }): JSX.Elem
       <ReviewStep
         key={reviewing.card_id}
         card={reviewing}
-        onDone={() => {
+        // D-5: Home's own "Add a paper" (a single report, `report === true`) reaches "What it
+        // means for you" on its yes, the same as the Record library's own paper screen
+        // (`record/Papers.tsx:134`) — before this it ended on the batch screen and the insight
+        // was never reached from Home at all. The multi-paper grid (`report === false`) keeps
+        // marking the card checked and returning to the grid, since there is no one paper to
+        // open an insight for.
+        onDone={(confirmed) => {
+          if (report) {
+            go({ name: "insight", card: confirmed });
+            return;
+          }
           batch.checked(reviewing.card_id);
           setReviewing(null);
         }}

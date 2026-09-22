@@ -1,0 +1,50 @@
+{
+  "placeholder": "bp-cuff-2026-09-14-again",
+  "sha256": "6b938b1044a0da7ce79d15765b393310e6b7085f18a2915948c5d1766a52c070",
+  "format": "png",
+  "note": "Synthetic sample, redacted the way the real ones are (D-4a test fixture, `tests/test_device_screens.py`): the same blood pressure machine's screen as `bp-cuff-2026-09-14`, photographed again a few minutes later after the clock moved on — same numbers, same time on the screen, deliberately different bytes (a different placeholder label, so a different digest) so the second capture is a genuinely new artefact rather than the same bytes re-sent.",
+  "document_kind": "device_screen",
+  "document_date": "2026-09-14",
+  "fields": [
+    {
+      "subject": "device",
+      "attribute": "kind",
+      "value": "blood_pressure_monitor",
+      "unit": null,
+      "confidence": 0.9,
+      "span": { "x0": 0.1, "y0": 0.05, "x1": 0.6, "y1": 0.1 }
+    },
+    {
+      "subject": "blood_pressure",
+      "attribute": "systolic",
+      "value": 138,
+      "unit": "mmHg",
+      "confidence": 0.97,
+      "span": { "x0": 0.1, "y0": 0.25, "x1": 0.6, "y1": 0.3 }
+    },
+    {
+      "subject": "blood_pressure",
+      "attribute": "diastolic",
+      "value": 84,
+      "unit": "mmHg",
+      "confidence": 0.95,
+      "span": { "x0": 0.1, "y0": 0.45, "x1": 0.6, "y1": 0.5 }
+    },
+    {
+      "subject": "heart_rate",
+      "attribute": "pulse",
+      "value": 72,
+      "unit": "/min",
+      "confidence": 0.93,
+      "span": { "x0": 0.1, "y0": 0.65, "x1": 0.6, "y1": 0.7 }
+    },
+    {
+      "subject": "reading",
+      "attribute": "taken_at",
+      "value": "2026-09-14T07:42",
+      "unit": null,
+      "confidence": 0.86,
+      "span": { "x0": 0.1, "y0": 0.85, "x1": 0.6, "y1": 0.9 }
+    }
+  ]
+}

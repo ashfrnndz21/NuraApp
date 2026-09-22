@@ -53,7 +53,6 @@ from app.state.service import (
 from tests.support import OPENING_CONSENT, Note, agree_to_family_sharing, render_card
 
 MONDAY = datetime(2026, 9, 14, 8, 0, tzinfo=UTC)
-SHA = "c" * 64
 
 
 async def _pa(session: AsyncSession, phone: str = "+6591110011") -> KeyContext:
@@ -73,13 +72,14 @@ async def _fact(
     value: object,
     valid_to: datetime | None = None,
 ) -> Fact:
+    digest = uuid.uuid4().hex + uuid.uuid4().hex
     photo = await store_artifact(
         session,
         context=context,
         kind=ArtifactKind.PHOTO,
         storage_key=f"sg/profiles/pa/{subject}-{attribute}-{uuid.uuid4()}.jpg",
         content_type="image/jpeg",
-        sha256=SHA,
+        sha256=digest,
         captured_at=MONDAY,
         source_channel=SourceChannel.APP,
         region=Region.SG,

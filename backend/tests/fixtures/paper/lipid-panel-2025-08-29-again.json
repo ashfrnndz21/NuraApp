@@ -1,0 +1,65 @@
+{
+  "placeholder": "lipid-panel-2025-08-29-again",
+  "sha256": "010ef5fb0f425c6d9ba9e777a15b3f9506303506293b9b6d70bb7b082d33a856",
+  "note": "D-4b test fixture (audit-2026-09-22.md, duplicates): the same lipid panel as `lipid-panel-2025-08-29`, re-photographed — same lab, same printed date, same four analytes, deliberately different bytes (a different placeholder label, so a different digest) so D-4a's exact-bytes check can never catch it and only the semantic key can. Synthetic, like the panel it re-photographs.",
+  "document_kind": "lab_report",
+  "document_date": "2025-08-29",
+  "fields": [
+    {
+      "subject": "lab_report",
+      "attribute": "lab",
+      "value": "bukit_lab",
+      "unit": null,
+      "confidence": 0.95,
+      "span": { "x0": 0.62, "y0": 0.3, "x1": 0.74, "y1": 0.325 }
+    },
+    {
+      "subject": "person",
+      "attribute": "birth_year",
+      "value": 1951,
+      "unit": null,
+      "confidence": 0.93,
+      "span": { "x0": 0.62, "y0": 0.345, "x1": 0.74, "y1": 0.37 }
+    },
+    {
+      "subject": "person",
+      "attribute": "sex",
+      "value": "male",
+      "unit": null,
+      "confidence": 0.94,
+      "span": { "x0": 0.62, "y0": 0.39, "x1": 0.74, "y1": 0.415 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "total_cholesterol",
+      "value": 212,
+      "unit": "mg/dL",
+      "confidence": 0.96,
+      "span": { "x0": 0.62, "y0": 0.435, "x1": 0.74, "y1": 0.46 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "hdl",
+      "value": 58,
+      "unit": "mg/dL",
+      "confidence": 0.94,
+      "span": { "x0": 0.62, "y0": 0.48, "x1": 0.74, "y1": 0.505 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "ldl",
+      "value": 128,
+      "unit": "mg/dL",
+      "confidence": 0.92,
+      "span": { "x0": 0.62, "y0": 0.525, "x1": 0.74, "y1": 0.55 }
+    },
+    {
+      "subject": "lipid_panel",
+      "attribute": "triglycerides",
+      "value": 130,
+      "unit": "mg/dL",
+      "confidence": 0.91,
+      "span": { "x0": 0.62, "y0": 0.57, "x1": 0.74, "y1": 0.595 }
+    }
+  ]
+}

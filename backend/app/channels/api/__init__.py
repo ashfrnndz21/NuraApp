@@ -84,7 +84,7 @@ from app.channels.api import (
     visits,
 )
 from app.channels.api.deps import Providers, settings_of
-from app.channels.api.refusals import refused
+from app.channels.api.refusals import integrity_violation, refused
 from app.channels.api.uploads import UploadCaps
 from app.channels.whatsapp import api as whatsapp
 from app.channels.whatsapp.provider import check_whatsapp_provider
@@ -331,6 +331,13 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.providers = providers
     app.add_exception_handler(Refusal, refused)
+    # B5, the independent safety review: the last-resort backstop for a UNIQUE violation on
+    # `artifact` reaching here past every check-first door — see `integrity_violation`'s own
+    # docstring. `IntegrityError` is registered directly (not a `Refusal`) since it comes
+    # from SQLAlchemy, not from this app's own doors.
+    from sqlalchemy.exc import IntegrityError
+
+    app.add_exception_handler(IntegrityError, integrity_violation)
     # Every JSON upload is read against its cap before the app parses it (#133).
     app.add_middleware(UploadCaps, prefixes=("", API_PREFIX))
     if settings.review_origin is not None:
