@@ -550,6 +550,17 @@ READING: Mapping[str, Lines] = {
 itself carries two numbers, so the numbers are a second line (rule 10)."""
 
 # @patient
+READING_THEIRS: Mapping[str, Lines] = {
+    "en": ("{patient}'s blood pressure on {date} was {top_number} over {bottom_number}.",),
+    "ms": ("Tekanan darah {patient} pada {date} ialah {top_number} atas {bottom_number}.",),
+    "zh": ("{date}{patient}量了血压。", "{patient}的血压是{top_number}比{bottom_number}。"),
+}
+"""`READING` said about him by name, for a key that is not his — round 4: registered in
+`app.channels.about_him._catalogues()` so `Reader.says()` can translate Nura's own
+deterministic reading sentence (`app.llm.ask_agent._deterministic_lines`) for a caregiver,
+the same way `VALUE`/`VALUE_THEIRS` already do for a measured value."""
+
+# @patient
 VALUE: Mapping[str, Mapping[str, Lines]] = {
     "en": {
         "no_range": ("Your {what} was {value} on {date}.", "No range is printed on the paper."),
@@ -741,6 +752,7 @@ __all__ = [
     "NFW_STEPS",
     "NFW_STEPS_THEIRS",
     "READING",
+    "READING_THEIRS",
     "RECALL",
     "REROUTE",
     "VALUE",

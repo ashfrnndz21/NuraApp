@@ -98,6 +98,10 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         (feed_words.WHY, feed_words.WHY_THEIRS),
         (timeline_strings.CHANGED, timeline_strings.CHANGED_THEIRS),
         (timeline_strings.VALUE, timeline_strings.VALUE_THEIRS),
+        # Round 4: registered so a caregiver reading Nura's own deterministic reading
+        # sentence (`app.llm.ask_agent._deterministic_lines`) hears it about him by name,
+        # never in his own "Your blood pressure…" voice.
+        (timeline_strings.READING, timeline_strings.READING_THEIRS),
         (timeline_strings.ANCHORS, timeline_strings.ANCHORS_THEIRS),
         (timeline_strings.ASK_STEPS, timeline_strings.ASK_STEPS_THEIRS),
         (timeline_strings.IMPORT_STEPS, timeline_strings.IMPORT_STEPS_THEIRS),

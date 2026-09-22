@@ -29,7 +29,7 @@ from app.channels.about_him import Reader
 from app.clock import FrozenClock
 from app.db import utcnow
 from app.delivery.feed.compress import Found
-from app.delivery.timeline_strings import WHAT, day_of, honest_lines
+from app.delivery.timeline_strings import day_of, honest_lines, value_lines, what_word
 from app.ingestion.extract import DocumentKind, FixtureExtractor
 from app.ingestion.models import FieldState, ReviewCard, ReviewField
 from app.ingestion.objects import LocalObjectStore
@@ -45,6 +45,7 @@ from app.llm.ask_agent import (
     _answer_from_payload,
     _boundary_rewrite,
     _claims_a_value_from_an_unconfirmed_card,
+    _context_line_problem,
     _dated_claim,
     _parse_answer,
     _register,
@@ -52,7 +53,6 @@ from app.llm.ask_agent import (
     _TokenCounter,
     _ToolLine,
     _tools_for,
-    _value_claim,
 )
 from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.strings import DAY_NAMES, say_date
@@ -230,21 +230,19 @@ def test_a_cite_outside_this_asks_tool_results_is_dropped() -> None:
     payload = {
         "lines": [
             {
-                "text": "Your blood pressure was 138 over 84 on Wednesday 2 September.",
+                "text": "Your blood pressure book from Wednesday 2 September is on file.",
                 "cites": [f"fact:{good_id}"],
             },
             {
-                "text": "Your blood pressure was 999 over 999 on Thursday 1 January.",
+                "text": "Your blood pressure book from Thursday 1 January is on file.",
                 "cites": [f"fact:{uuid.uuid4()}"],
             },
         ]
     }
     dates_given = frozenset({"Wednesday 2 September", "Thursday 1 January"})
-    # B2 (review round 3): `_value_claim` now fails closed — a "fact" cite with no
-    # `values_given` entry at all is no longer skipped, so the real reading's own numbers
-    # must be registered for this line to survive on its own merits (the second line is still
-    # dropped for its cite, not its numbers, since `999`/`999` are never registered either way).
-    values_given = {good_id: frozenset({"138", "84"})}
+    # Round 4: this ask never registered `good_id` as a fact it tracks a deterministic value
+    # for (`value_facts`, empty here), so both lines are plain context lines, neither citing
+    # nor stating a number — the test's own point is the cite gate, not the value machinery.
     answer = _answer_from_payload(
         payload,
         known,
@@ -252,13 +250,12 @@ def test_a_cite_outside_this_asks_tool_results_is_dropped() -> None:
         Reader(his=True),
         Mode.TEXT,
         dates_given=dates_given,
-        values_given=values_given,
     )
     assert answer is not None
     # The line whose only cite is not among this ask's own tool results is dropped; the one
     # whose cite is real survives.
     assert [line.text for line in answer.lines] == [
-        "Your blood pressure was 138 over 84 on Wednesday 2 September."
+        "Your blood pressure book from Wednesday 2 September is on file."
     ]
     assert answer.dropped == 1
 
@@ -924,13 +921,31 @@ def test_dated_claim_catches_a_bare_weekday_not_among_the_given_dates(language: 
     true_weekday, false_weekday = DAY_NAMES[language][2], DAY_NAMES[language][1]  # Wed, Tue
     dates_given = frozenset({given_date})
     if language == "zh":
-        true_text, false_text = f"吃的日子是{true_weekday}。", f"吃的日子是{false_weekday}。"
+        # Round 4: a bare weekday only counts in date position — here, preceded by "于"
+        # (`_DATE_OPENER`) — never any occurrence of the weekday characters anywhere in the
+        # line (the fix for "The Sunday Clinic"-style false positives).
+        true_text, false_text = f"于{true_weekday}服用。", f"于{false_weekday}服用。"
     elif language == "ms":
         true_text, false_text = f"Diambil pada {true_weekday}.", f"Diambil pada {false_weekday}."
     else:
         true_text, false_text = f"It was taken on {true_weekday}.", f"It was taken on {false_weekday}."
     assert _dated_claim(true_text, language, dates_given) is None
     assert _dated_claim(false_text, language, dates_given) is not None
+
+
+def test_a_bare_weekday_outside_date_position_is_never_flagged_as_invented() -> None:
+    """Round 4's own fix: "The Sunday Clinic" and "Monday tablet box" both contain a weekday
+    name, but neither says WHEN anything happened — round 3's flat weekday scan flagged both
+    as an invented date anyway. Counted only when preceded by "on" or followed by a day
+    number (`_weekday_in_date_position`); neither shape appears here, so nothing is flagged,
+    whatever weekday this ask actually gave."""
+    dates_given = frozenset({"Wednesday 21 January"})
+    assert _dated_claim("The Sunday Clinic called about your results.", "en", dates_given) is None
+    assert _dated_claim("Check the Monday tablet box before you leave.", "en", dates_given) is None
+    # The same word, actually in date position, is still caught when it is the wrong day.
+    assert _dated_claim("It was taken on Sunday.", "en", dates_given) is not None
+    # And still passes when it is the day this ask actually gave, in date position.
+    assert _dated_claim("It was taken on Wednesday.", "en", dates_given) is None
 
 
 # --- fix 2: a paper waiting to be checked reaches the model, three fields only, never a
@@ -1579,42 +1594,44 @@ async def _lipid_fact(
     return fact
 
 
-async def test_how_is_my_cholesterol_answers_with_the_value_and_its_date(
+async def test_how_is_my_cholesterol_answers_with_nuras_own_deterministic_sentence(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
-    """D-1(a)/(b) against the model asker: a confirmed cholesterol value with no printed range
-    is read by the real `read_records` tool — which now hands the model a pre-worded date
-    (`_worded_date`, D-1(b)) and the paper's own no-range note — and the model's own line using
-    that exact worded date survives every gate, never silenced."""
+    """Round 4 (master spec §6, "rules decide, models assist"): a confirmed cholesterol value
+    with no printed range is read by the real `read_records` tool, which hands the model a
+    value_fact this ask tracks. Whatever the model's own line says — even a forged number and
+    a made-up date — a line that cites the fact has its own words discarded outright, replaced
+    by Nura's own sentence straight from the `VALUE` catalogue. No repair round is needed: the
+    model's citation alone is enough, and there is nothing left of the model's own words to
+    verify."""
     owner = await pa(sg, language="en")
     fact = await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_records"),
-            _final(
-                [
-                    {
-                        "text": "Your cholesterol was 122 on Wednesday 21 January.",
-                        "cites": ["f1"],
-                    }
-                ]
-            ),
+            _final([{"text": "Your cholesterol was 999.", "cites": ["f1"]}]),
         ]
     )
     asker = ClaudeAsker(client, searcher=FakeSearcher())
     _, _, answer = await _drive(asker, sg, owner, "How is my cholesterol?", tmp_path)
+    assert len(client.messages.calls) == 2, "no repair round: the model's own words never mattered"
     assert [line.text for line in answer.lines] == [
-        "Your cholesterol was 122 on Wednesday 21 January."
+        "Your cholesterol test was 122 on Wednesday 21 January.",
+        "No range is printed on the paper.",
     ]
-    assert ("fact", fact.id) in [(c.kind, c.id) for c in answer.lines[0].cites]
+    assert all(
+        ("fact", fact.id) in [(c.kind, c.id) for c in line.cites] for line in answer.lines
+    )
 
 
 async def test_is_it_high_states_the_papers_own_printed_range_never_a_verdict(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
-    """D-1(a) against the model asker: a printed range on file lets the model answer "above
-    the range printed on the paper" — the paper's own comparison, never the app's guideline
-    opinion and never the questioner's word "high" (that stays vetoed, next test)."""
+    """D-1(a): a printed range on file lets Nura's own sentence say "above the range printed
+    on the paper" — the paper's own comparison, never the app's guideline opinion and never
+    the questioner's word "high" (that stays vetoed, `test_the_conclusion_veto_still_holds_
+    and_now_tells_the_model_why` below). The model's own attempt at the same clause is
+    discarded regardless of whether it happens to say the same thing."""
     owner = await pa(sg, language="en")
     fact = await _lipid_fact(
         sg, owner, attribute="ldl", value=140, printed_range={"low": None, "high": 130, "text": "<130"}
@@ -1622,301 +1639,262 @@ async def test_is_it_high_states_the_papers_own_printed_range_never_a_verdict(
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_records"),
-            _final(
-                [
-                    {
-                        "text": "Your cholesterol was 140 on Wednesday 21 January, above the range printed on the paper.",
-                        "cites": ["f1"],
-                    }
-                ]
-            ),
+            _final([{"text": "Your cholesterol was 999, it said.", "cites": ["f1"]}]),
         ]
     )
     asker = ClaudeAsker(client, searcher=FakeSearcher())
     _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
-    assert answer.lines, "never a silent fallback for a value with a printed range on file"
-    assert "above the range printed on the paper" in answer.lines[0].text
+    assert len(client.messages.calls) == 2
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 140 on Wednesday 21 January.",
+        "It is above the range printed on the paper.",
+    ]
     assert ("fact", fact.id) in [(c.kind, c.id) for c in answer.lines[0].cites]
 
 
-async def test_a_forged_range_verdict_for_a_fact_with_no_printed_range_is_dropped(
-    sg: AsyncSession, tmp_path: Path
-) -> None:
-    """Review blocker 1: `_RANGE_NOTE`'s own three phrases ("above/below/within the range
-    printed on the paper") are ordinary English words that pass `_has_conclusion_language` on
-    sight — nothing before `_band_claim` stopped the model writing one for a fact whose paper
-    printed no range at all. The tool line here says plainly "the paper prints no range for
-    it" (`_read_records`); a model that writes a band verdict anyway is forging one, and the
-    forged line must never reach him, whatever the ask ultimately answers with instead."""
-    owner = await pa(sg, language="en")
-    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
-    forged = _final(
-        [
-            {
-                "text": "Your cholesterol was 122 on Wednesday 21 January, above the range printed on the paper.",
-                "cites": ["f1"],
-            }
-        ]
-    )
-    corrected = _final(
-        [
-            {
-                "text": "Your cholesterol was 122 on Wednesday 21 January. No range is printed on the paper.",
-                "cites": ["f1"],
-            }
-        ]
-    )
-    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
-    asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
-    # The repair round actually fired (proof the forged line was caught and a `Finding`
-    # recorded for it, D-3's own machinery) — a second `messages.create` call happened.
-    assert len(client.messages.calls) == 3
-    assert "above the range" not in " ".join(answer.spoken)
-    assert answer.lines and answer.lines[0].text == (
-        "Your cholesterol was 122 on Wednesday 21 January. No range is printed on the paper."
-    )
-
-
-async def test_a_handed_out_band_survives_because_it_really_was_given(
-    sg: AsyncSession, tmp_path: Path
-) -> None:
-    """The other half of review blocker 1's test: a band the tool actually handed out for the
-    fact the line cites is not a forgery, and must survive — `bands_given` is a positive
-    allow-list, not a blanket ban on the vocabulary. (`test_is_it_high_states_the_papers_own_
-    printed_range_never_a_verdict` above already proves this for "above"; this proves "within"
-    and "below" too, and that a correct claim needs no repair round at all.)"""
-    owner = await pa(sg, language="en")
-    await _lipid_fact(
-        sg, owner, attribute="ldl", value=100, printed_range={"low": None, "high": 130, "text": "<130"}
-    )
-    client = FakeClient(
-        [
-            _tool_call("toolu_1", "read_records"),
-            _final(
-                [
-                    {
-                        "text": "Your cholesterol was 100 on Wednesday 21 January, within the range printed on the paper.",
-                        "cites": ["f1"],
-                    }
-                ]
-            ),
-        ]
-    )
-    asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
-    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
-    assert answer.lines and "within the range printed on the paper" in answer.lines[0].text
-
-
-def _no_range_base_sentence(language: str, value: int) -> str:
-    """A plain, grammatical "value with its date" sentence in each language, matching
-    `VALUE`'s own catalogue shape — the base every forged-band test appends its own
-    (non-catalogue) comparison clause to. Capitalised for en/ms (plain words rule 1: a line
-    starting with a small letter fails verification outright — `WHAT`'s own words are stored
-    lower-case, "ujian kolesterol", since most templates open with "Your"/"…anda" in front of
-    them; this one puts the word first, so it must capitalise it itself)."""
-    date = say_date(WHEN.date(), language)
-    what = WHAT[language]["lipid_panel"]
-    if language == "ms":
-        return f"{what[:1].upper()}{what[1:]} anda ialah {value} pada {date}."
-    if language == "zh":
-        return f"您{date}的{what}是{value}。"
-    return f"Your {what} was {value} on {date}."
-
-
 @pytest.mark.parametrize(
-    ("language", "forged_clause"),
+    "forged_clause",
     [
-        # Round 3's own reproduction, verbatim, in English:
-        ("en", "It is above the printed range."),
-        ("en", "It is over the range on the paper."),
-        ("en", "The paper's range is lower than this."),
-        ("en", "It is outside the range printed on the paper."),
-        # Two more English comparison words, not in `_CONCLUSION_WORDS`, not in `_RANGE_NOTE`:
-        ("en", "It exceeds the range on the paper."),
-        ("en", "It is under the range printed on the paper."),
-        # Round 3's own reproduction, verbatim, in Malay — the catalogue's OWN `VALUE["ms"]`
-        # wording, used in an `en`-language ask in the original report; tested here in its own
-        # `ms`-language ask too, since a forgery is a forgery whichever ask it reaches.
-        ("ms", "Ia melebihi julat yang dicetak pada kertas."),
-        ("ms", "Ia di bawah julat yang dicetak pada kertas."),
-        # Chinese: "blocked only by luck" (conclusion_language) in the original report — proved
-        # directly here instead of by accident.
-        ("zh", "这高于纸上印的范围。"),
-        ("zh", "这低于纸上印的范围。"),
+        # Round 3's own reproduction, verbatim:
+        "It is above the printed range.",
+        "It is over the range on the paper.",
+        "The paper's range is lower than this.",
+        "It is outside the range printed on the paper.",
+        "It exceeds the range on the paper.",
+        "It is under the range printed on the paper.",
+        # Round 4's own nine forgeries, proven this round: none of these words is in any
+        # lexicon round 3 built — there is no lexicon left to be outside of, because the
+        # model's own words for a tracked fact are never kept at all, whatever they say.
+        "It is exceeding what the paper prints.",
+        "It is greater than what the paper allows.",
+        "It is beyond the printed figure.",
+        "It is well elevated compared to the paper.",
+        "It is not in the range the paper prints.",
+        "It does not reach the range printed on the paper.",
+        "It is past the top of the range.",
+        "It stops short of the range printed on the paper.",
+        # The inversion: a single "not" on a value that is LEGITIMATELY within range — round
+        # 3's strip-then-scan let this straight through, because "within the range printed on
+        # the paper" was itself an allowed phrase and the leftover "not" was never re-checked.
+        "It is not within the range printed on the paper.",
     ],
 )
-async def test_a_forged_band_in_any_language_is_dropped_and_repaired(
-    sg: AsyncSession, tmp_path: Path, language: str, forged_clause: str
+async def test_no_forgery_survives_the_model_never_writes_the_verdict(
+    sg: AsyncSession, tmp_path: Path, forged_clause: str
 ) -> None:
-    """B1 (review round 3): the fail-closed comparison lexicon (`_COMPARISON_WORDS`) catches a
-    forged range verdict whatever the wording, whatever the language — never only the
-    catalogue's own three exact English phrases, which is all the first version of
-    `_band_claim` looked for. The fact has NO printed range on file at all
-    (`_lipid_fact`'s own default), so `bands_given` holds nothing for it: every one of these
-    clauses is a forgery from the first word."""
-    owner = await pa(sg, language=language)
-    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
-    base = _no_range_base_sentence(language, 122)
-    forged = _final([{"text": f"{base} {forged_clause}", "cites": ["f1"]}])
-    corrected = _final([{"text": base, "cites": ["f1"]}])
-    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
-    asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "cholesterol", tmp_path, language=language)
-    # The repair round fired (the forgery was caught and a `Finding` recorded for it) and the
-    # corrected line — never the forged clause — is what reaches him.
-    assert len(client.messages.calls) == 3
-    assert answer.lines and answer.lines[0].text == base
-
-
-@pytest.mark.parametrize("language", ["ms", "zh"])
-async def test_a_handed_out_band_survives_in_every_language(
-    sg: AsyncSession, tmp_path: Path, language: str
-) -> None:
-    """The other half of B1, in Malay and Chinese too (the English case is already proved by
-    `test_a_handed_out_band_survives_because_it_really_was_given` and `test_is_it_high_states_
-    the_papers_own_printed_range_never_a_verdict` above): a band the tool actually handed out
-    is not a forgery in any language, and needs no repair round."""
-    owner = await pa(sg, language=language)
-    await _lipid_fact(
+    """Round 4 (master spec §6): none of these clauses is checked against any lexicon at all —
+    a line citing a fact this ask tracks a value for has its own words discarded outright,
+    whatever they say, replaced by Nura's own sentence from the catalogue. Proves the nine
+    round-4 forgeries (each using a word outside every round-3 word list) and the "NOT
+    within…" inversion all land on exactly the same true sentence, every time, because there
+    is nothing left of the model's words to be wrong."""
+    owner = await pa(sg, language="en")
+    fact = await _lipid_fact(
         sg, owner, attribute="ldl", value=100, printed_range={"low": None, "high": 130, "text": "<130"}
     )
-    base = _no_range_base_sentence(language, 100)
-    band = "Ia dalam julat yang dicetak pada kertas." if language == "ms" else "这在纸上印的范围之内。"
     client = FakeClient(
-        [_tool_call("toolu_1", "read_records"), _final([{"text": f"{base} {band}", "cites": ["f1"]}])]
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final([{"text": f"Your cholesterol was 999. {forged_clause}", "cites": ["f1"]}]),
+        ]
     )
     asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "cholesterol", tmp_path, language=language)
-    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
-    assert answer.lines and band.rstrip("。.") in answer.lines[0].text
+    _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
+    assert len(client.messages.calls) == 2, "no repair round: nothing was ever checked to fail"
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 100 on Wednesday 21 January.",
+        "It is within the range printed on the paper.",
+    ]
+    assert ("fact", fact.id) in [(c.kind, c.id) for c in answer.lines[0].cites]
 
 
-async def test_a_wrong_number_for_a_confirmed_fact_is_dropped_dated_shape(
+async def test_the_correct_value_is_said_even_when_the_model_gives_no_date(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
-    """Review blocker 2, dated shape: fact = 122; the model says 212, with the real worded
-    date and a real fact cite. Nothing before `_value_claim` checked the number itself —
-    `verified()` (rule 10) only counts numbers, `_dated_claim` only checks the date — so this
-    line survived every existing gate intact until now."""
-    owner = await pa(sg, language="en")
-    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
-    forged = _final([{"text": "Your cholesterol was 212 on Wednesday 21 January.", "cites": ["f1"]}])
-    corrected = _final([{"text": "Your cholesterol was 122 on Wednesday 21 January.", "cites": ["f1"]}])
-    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
-    asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "What is my total cholesterol?", tmp_path)
-    assert len(client.messages.calls) == 3
-    assert "212" not in " ".join(answer.spoken)
-    assert answer.lines and answer.lines[0].text == "Your cholesterol was 122 on Wednesday 21 January."
-
-
-async def test_a_wrong_number_for_a_confirmed_fact_is_dropped_undated_shape(
-    sg: AsyncSession, tmp_path: Path
-) -> None:
-    """Review blocker 2, undated shape: the same forged number with no date in the line at
-    all — `_value_claim` must not depend on a date being present to catch it."""
-    owner = await pa(sg, language="en")
-    await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
-    forged = _final([{"text": "Your cholesterol was 212.", "cites": ["f1"]}])
-    corrected = _final([{"text": "Your cholesterol was 122.", "cites": ["f1"]}])
-    client = FakeClient([_tool_call("toolu_1", "read_records"), forged, corrected])
-    asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "What is my total cholesterol?", tmp_path)
-    assert len(client.messages.calls) == 3
-    assert "212" not in " ".join(answer.spoken)
-    assert answer.lines and answer.lines[0].text == "Your cholesterol was 122."
-
-
-async def test_the_correct_value_passes_undated_shape(sg: AsyncSession, tmp_path: Path) -> None:
-    """The positive case of review blocker 2: the real value, undated, is not a false
-    positive of `_value_claim`."""
+    """The undated-shape case: the model's own line carries no date at all, only a cite —
+    still enough. Nura's own sentence always carries the worded date, whether or not the
+    model's words did."""
     owner = await pa(sg, language="en")
     await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_records"),
-            _final([{"text": "Your cholesterol was 122.", "cites": ["f1"]}]),
+            _final([{"text": "Your cholesterol was 212.", "cites": ["f1"]}]),
         ]
     )
     asker = ClaudeAsker(client, searcher=FakeSearcher())
     _, _, answer = await _drive(asker, sg, owner, "What is my total cholesterol?", tmp_path)
-    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
-    assert answer.lines and answer.lines[0].text == "Your cholesterol was 122."
+    assert len(client.messages.calls) == 2
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 122 on Wednesday 21 January.",
+        "No range is printed on the paper.",
+    ]
 
 
-async def test_a_wrong_reading_is_dropped_and_repaired(sg: AsyncSession, tmp_path: Path) -> None:
-    """B2 (review round 3), the exact reproduction: fact = 118/76 (`tests/timeline_support.py`'s
-    own `reading`), the model says "190 over 120" with the real date and a real fact cite.
-    Before this, `_read_readings` never populated `values_given` at all, so `_value_claim`
-    skipped every line citing a reading (the old `tracked` gate) — nothing caught it."""
-    owner = await pa(sg, language="en")
-    await reading(sg, owner, 118, 76, WHEN)
-    forged = _final([{"text": "Your blood pressure was 190 over 120 on Wednesday 21 January.", "cites": ["f1"]}])
-    corrected = _final([{"text": "Your blood pressure was 118 over 76 on Wednesday 21 January.", "cites": ["f1"]}])
-    client = FakeClient([_tool_call("toolu_1", "read_readings"), forged, corrected])
-    asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _, _, answer = await _drive(asker, sg, owner, "blood pressure", tmp_path)
-    assert len(client.messages.calls) == 3
-    assert "190" not in " ".join(answer.spoken) and "120" not in " ".join(answer.spoken)
-    assert answer.lines and answer.lines[0].text == "Your blood pressure was 118 over 76 on Wednesday 21 January."
-
-
-async def test_the_true_reading_passes(sg: AsyncSession, tmp_path: Path) -> None:
-    """B2's positive case: the real reading, in the "N over N" shape this app's own templates
-    use, is not a false positive of the now-populated `values_given`/`_value_claim`."""
+async def test_a_reading_is_always_said_from_the_real_numbers(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """B2's own case (review round 3), moot by construction since round 4: fact = 118/76; the
+    model says "190 over 120" — discarded regardless, replaced by Nura's own `READING`
+    catalogue sentence built from the real numbers this ask actually read."""
     owner = await pa(sg, language="en")
     await reading(sg, owner, 118, 76, WHEN)
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_readings"),
-            _final([{"text": "Your blood pressure was 118 over 76 on Wednesday 21 January.", "cites": ["f1"]}]),
+            _final([{"text": "Your blood pressure was 190 over 120.", "cites": ["f1"]}]),
         ]
     )
     asker = ClaudeAsker(client, searcher=FakeSearcher())
     _, _, answer = await _drive(asker, sg, owner, "blood pressure", tmp_path)
-    assert len(client.messages.calls) == 2, "a true claim needs no repair round"
-    assert answer.lines and answer.lines[0].text == "Your blood pressure was 118 over 76 on Wednesday 21 January."
+    assert len(client.messages.calls) == 2
+    assert [line.text for line in answer.lines] == [
+        "Your blood pressure on Wednesday 21 January was 118 over 76."
+    ]
 
 
 @pytest.mark.parametrize(
-    ("kind", "given", "wrong"),
+    ("language", "attribute", "value", "printed_range", "band", "text_placeholder"),
     [
-        # An insurance amount (`_read_costs`'s own "claim" cite): "visits count" itself has no
-        # numeric content in any current tool line to test against (`_read_visits`'s own text
-        # carries who/date/elapsed/status only, grepped and confirmed) — "appointment" is
-        # exercised here instead, the other non-"fact" cite kind this ask can hand a number
-        # out for, to prove the fail-closed default reaches beyond `_read_records`/
-        # `_read_readings` to every reader alike.
-        ("claim", frozenset({"120"}), "The claim was for $250."),
-        ("appointment", frozenset({"3"}), "This is visit number 9."),
+        ("ms", "total_cholesterol", 122, None, "no_range", "Nombor itu salah."),
+        ("zh", "total_cholesterol", 122, None, "no_range", "这个数字不对。"),
+        (
+            "ms",
+            "ldl",
+            100,
+            {"low": None, "high": 130, "text": "<130"},
+            "within_range",
+            "Nombor itu salah.",
+        ),
+        (
+            "zh",
+            "ldl",
+            100,
+            {"low": None, "high": 130, "text": "<130"},
+            "within_range",
+            "这个数字不对。",
+        ),
     ],
 )
-def test_value_claim_fails_closed_on_every_non_exempt_cite_kind(
-    kind: str, given: frozenset[str], wrong: str
+async def test_the_deterministic_sentence_matches_the_catalogue_in_every_language(
+    sg: AsyncSession,
+    tmp_path: Path,
+    language: str,
+    attribute: str,
+    value: int,
+    printed_range: dict[str, float | str | None] | None,
+    band: str,
+    text_placeholder: str,
 ) -> None:
-    """B2 (review round 3): `_value_claim` no longer skips a cite kind it has no
-    `values_given` entry for — a number in a line citing ANYTHING not exempted
-    (`_VALUE_EXEMPT_KINDS`) is now checked, tracked or not. `claim` (`_read_costs`'s insurance
-    amounts) and `appointment` (visits) both pass when the exact number handed out is used,
-    and fail when it is not — proving the default is fail-closed for readers beyond
-    `_read_records`/`_read_readings`, which have their own end-to-end tests above."""
-    fact_id = uuid.uuid4()
-    cites = (Cite(kind=kind, id=fact_id),)
-    values_given = {fact_id: given}
-    correct = next(iter(given))
-    assert _value_claim(f"The amount was {correct}.", cites, values_given, frozenset(), frozenset()) is None
-    assert _value_claim(wrong, cites, values_given, frozenset(), frozenset()) is not None
+    """Round 4, item 5: true answers in ms and zh, unchanged in wording from the catalogue —
+    the same `VALUE[language]` entries `search/ask.py`'s rule-based asker already uses, so the
+    two askers never disagree about what a paper says. The model's own (wrong, irrelevant)
+    words are discarded exactly as in English."""
+    owner = await pa(sg, language=language)
+    await _lipid_fact(sg, owner, attribute=attribute, value=value, printed_range=printed_range)
+    client = FakeClient(
+        [
+            _tool_call("toolu_1", "read_records"),
+            _final([{"text": text_placeholder, "cites": ["f1"]}]),
+        ]
+    )
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "cholesterol", tmp_path, language=language)
+    assert len(client.messages.calls) == 2
+    expected = value_lines(
+        language,
+        band=band,
+        what=what_word("lipid_panel", language),
+        value=str(value),
+        date=say_date(WHEN.date(), language),
+    )
+    assert [line.text for line in answer.lines] == expected
 
 
-def test_value_claim_never_fails_closed_on_an_exempt_kind() -> None:
-    """The named, narrow exemption (`_VALUE_EXEMPT_KINDS`): a "policy" cite's own free-text
-    coverage line may state a number `values_given` never tracked at all, since this app has
-    no reliable way to reduce `_read_insurance`'s own `covers` field to one tracked value yet
-    — failing closed there would drop true, harmless content, not catch a forgery."""
-    cites = (Cite(kind="policy", id=uuid.uuid4()),)
-    assert _value_claim("Covers S$400 per day at a panel hospital.", cites, {}, frozenset(), frozenset()) is None
+def test_everyday_malay_words_no_longer_false_positive_as_a_verdict() -> None:
+    """Round 3's own `_COMPARISON_WORDS["ms"]` included `dalam`/`atas`/`bawah` — "in"/"on"/
+    "under", three of the commonest prepositions in Malay — so an entirely honest line using
+    any of them in its ordinary, non-medical sense was destroyed as `invented_band` (proved
+    this round). Round 4 drops that lexicon: `_context_line_problem` only raises
+    `model_wrote_a_verdict` for the small, specific `julat`/`kertas`/`normal`/`tinggi`/
+    `rendah` set, none of which this line uses."""
+    text = "Ubat itu berada di dalam kotak atas almari, bawah cermin."
+    cites = (Cite(kind="appointment", id=uuid.uuid4()),)
+    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) is None
+
+
+def test_a_web_only_cite_may_not_state_a_number_either() -> None:
+    """Round 3's own `_VALUE_EXEMPT_KINDS` let a `web`/`feeling_note`/`policy` cite state any
+    number at all — proved this round: "Your blood pressure was 190 over 120." with only a
+    `web` cite reached the user under "Nura looked in your papers." Round 4 drops the
+    exemption entirely: a context line — one that cites nothing this ask tracks a
+    deterministic value for — may state no number, whatever kind of thing it cites."""
+    text = "Your blood pressure was 190 over 120."
+    cites = (Cite(kind="web", id=uuid.uuid4()),)
+    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) == "model_wrote_a_value"
+
+
+def test_a_web_only_line_stating_a_number_is_dropped_end_to_end() -> None:
+    """The same proof, end to end through `_parse_answer`/`_answer_from_payload`: a line whose
+    only cite is a `web` hit, stating a specific reading, never reaches the answer at all —
+    never surfaced under "Nura looked in your papers" the way round 3 let it."""
+    web_id = uuid.uuid4()
+    known = {
+        "w1": _ToolLine(
+            token="w1",
+            text="w1: a page about blood pressure — https://example.com (example.com)",
+            cite=Cite(kind="web", id=web_id),
+        )
+    }
+    payload = {"lines": [{"text": "Your blood pressure was 190 over 120.", "cites": ["w1"]}]}
+    assert _answer_from_payload(payload, known, "en", Reader(his=True), Mode.TEXT) is None
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["claim", "appointment", "web", "feeling_note", "policy", "review_card"],
+)
+def test_a_context_line_may_state_no_number_whatever_it_cites(kind: str) -> None:
+    """Round 4: `_VALUE_EXEMPT_KINDS` is gone — there is no cite kind left that licenses a
+    number in the model's own words, `policy`/`web`/`feeling_note` included (round 3's own
+    named exemptions, proved this round to let a forged reading through under a bare `web`
+    cite). A context line — one that cites nothing this ask tracks a deterministic value for
+    — may not state a number regardless of what kind of thing it cites; one with no number at
+    all is never touched by this check either way."""
+    cites = (Cite(kind=kind, id=uuid.uuid4()),)
+    assert (
+        _context_line_problem("The amount was 250.", cites, frozenset(), frozenset(), {})
+        == "model_wrote_a_value"
+    )
+    assert _context_line_problem("Nothing numeric here at all.", cites, frozenset(), frozenset(), {}) is None
+
+
+@pytest.mark.parametrize(
+    ("language", "text"),
+    [
+        ("en", "It was about two hundred and twelve."),
+        ("ms", "Ia kira-kira dua ratus dua belas."),
+        ("zh", "大约是两百一十二。"),
+    ],
+)
+def test_a_number_word_forgery_in_any_language_is_caught_as_a_context_line(
+    language: str, text: str
+) -> None:
+    """Round 4, item 5: a context line may not state a number in ANY shape, including spelled
+    out in words — `_contains_a_number_shape` (reused unchanged from round 3) catches a pair
+    of en/ms number words or a run of two-plus Chinese numerals, never only bare digits, in
+    whichever language this ask happens to be answering in."""
+    cites = (Cite(kind="web", id=uuid.uuid4()),)
+    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) == "model_wrote_a_value"
+
+
+def test_a_zh_verdict_forgery_is_caught_by_the_topic_check() -> None:
+    """A Chinese context line raising the range/verdict topic (`范围`/`纸`, `_RANGE_TOPIC_
+    WORDS["zh"]`) is dropped exactly as an English or Malay one is, never only by an accident
+    of `_has_conclusion_language`."""
+    text = "这超出了纸上印的范围。"  # "this exceeds the range printed on the paper"
+    cites = (Cite(kind="claim", id=uuid.uuid4()),)
+    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) == "model_wrote_a_verdict"
 
 
 async def test_the_conclusion_veto_still_holds_and_now_tells_the_model_why(
@@ -1949,9 +1927,11 @@ async def test_the_conclusion_veto_still_holds_and_now_tells_the_model_why(
     repair_hint = client.messages.calls[2]["messages"][-1]["content"]
     assert "_CONCLUSION_RULE" not in repair_hint  # the number, not the Python name
     assert "app's own verdict" in repair_hint or "verdict" in repair_hint
-    assert len(answer.lines) == 1  # exactly one line survives, from the repaired attempt
-    assert "high" not in answer.lines[0].text.lower()
-    assert "above the range printed on the paper" in answer.lines[0].text
+    # Round 4: a citation to a tracked fact always yields Nura's own two-line catalogue
+    # sentence (the value, then the comparison), never only the one line the model wrote.
+    assert len(answer.lines) == 2
+    assert all("high" not in line.text.lower() for line in answer.lines)
+    assert "above the range printed on the paper" in answer.lines[1].text
 
 
 async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card_value(
