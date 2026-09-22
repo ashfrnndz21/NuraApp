@@ -7,7 +7,7 @@ import { zoneOf } from "../offline/todayCache";
 import type { JSX } from "preact";
 import * as family from "../api/family";
 import * as nura from "../api/nura";
-import type { AppointmentOut, ChangesOut, FeedItemOut, LineOut, LogisticsOut, VisitQuestionOut } from "../api/types";
+import type { AppointmentOut, ChangesOut, FeedItemOut, LineOut, LogisticsOut, VisitQuestionOut, ReviewCardOut } from "../api/types";
 import { batch } from "../capture/session";
 import { ClipCard } from "../day/components";
 import { clipsOf } from "../day/model";
@@ -413,9 +413,19 @@ function useVisitAbout(visit: AppointmentOut | null): string[] {
 
 /** The ranked feed's own flagged insight, if it raised one today — never a plain "today"/"now"
  *  listing card, which is not an insight about anything in particular. */
-function insightOf(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]): FeedItemOut | null {
-  return [...top, ...forYou].find((item) => item.category === "insight") ?? null;
+function insightOf(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]): FeedItemOut[] {
+  // Newest first: the feed's own order is oldest first within a section, so with two papers
+  // checked in one sitting the older one (the owner's policy schedule, 22 Sep 2026) used to
+  // be the day's headline over the blood test he checked a minute later.
+  return [...top, ...forYou]
+    .filter((item) => item.category === "insight")
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
 }
+
+/** The kinds of paper that carry results to compare against a printed range — the ones a
+ *  Home headline can say something about ("Four numbers to raise with your doctor"). A
+ *  policy or a letter is filed, not read for numbers: it never outranks a results paper. */
+const RESULTS_PAPERS: ReadonlySet<string> = new Set(["lab_report", "device_screen"]);
 
 /** A newly confirmed paper's own range summary, read from the review cards (owner review round
  *  3, fix #2): `ready` false until the read has come back at least once — Home's own busy/quiet
@@ -424,20 +434,28 @@ function insightOf(top: readonly FeedItemOut[], forYou: readonly FeedItemOut[]):
  *  because this read had not landed yet). `null` with no insight-category card at all, or with
  *  one whose card is not (yet, or ever) among the review cards this key can read — never a bare
  *  title standing in for a card type with no template (nothing here trusts `item.headline`). */
-function usePaperInsight(item: FeedItemOut | null): { ready: boolean; summary: PaperSummary | null } {
+function usePaperInsight(items: readonly FeedItemOut[]): { ready: boolean; summary: PaperSummary | null } {
   const bearer = token.value;
   const papers = profile.value;
-  const artifactId = typeof (item?.why as { artifact_id?: unknown } | undefined)?.artifact_id === "string" ? ((item!.why as { artifact_id: string }).artifact_id) : null;
+  const artifactOf = (item: FeedItemOut): string | null =>
+    typeof (item.why as { artifact_id?: unknown }).artifact_id === "string" ? (item.why as { artifact_id: string }).artifact_id : null;
+  const candidates = items.filter((item) => artifactOf(item) !== null);
+  const key = candidates.map(artifactOf).join(",");
   const [state, setState] = useState<{ ready: boolean; summary: PaperSummary | null }>({ ready: false, summary: null });
   useEffect(() => {
-    // No paper on this card at all: nothing to wait for — ready at once.
-    if (!artifactId || !item) return setState({ ready: true, summary: null });
+    // No paper on any card at all: nothing to wait for — ready at once.
+    if (candidates.length === 0) return setState({ ready: true, summary: null });
     if (!bearer || !papers) return setState({ ready: true, summary: null });
     setState({ ready: false, summary: null });
     nura.reviewCards(bearer, papers.profile_id, false).then(
       (cards) => {
-        const card = cards.find((each) => each.artifact_id === artifactId) ?? null;
-        if (!card) return setState({ ready: true, summary: null });
+        // A results paper outranks a filed one; among equals, the newest card (already first).
+        const withCard = candidates
+          .map((each) => ({ item: each, card: cards.find((c) => c.artifact_id === artifactOf(each)) ?? null }))
+          .filter((each): each is { item: FeedItemOut; card: ReviewCardOut } => each.card !== null);
+        const chosen = withCard.find((each) => RESULTS_PAPERS.has(each.card.document_kind)) ?? withCard[0] ?? null;
+        if (!chosen) return setState({ ready: true, summary: null });
+        const { item, card } = chosen;
         const known = card.fields.map((field) => rangeStatus(field.value, field.range)).filter((each) => each !== "unknown");
         const outside = known.filter((each) => each === "above" || each === "below").length;
         setState({
@@ -453,7 +471,7 @@ function usePaperInsight(item: FeedItemOut | null): { ready: boolean; summary: P
       },
       () => setState({ ready: true, summary: null }),
     );
-  }, [artifactId, bearer, papers?.profile_id]);
+  }, [key, bearer, papers?.profile_id]);
   return state;
 }
 
@@ -470,8 +488,8 @@ function useHomeHero(v: TodayView, patientName: string, voice: HomeVoice) {
   const flagged = feed.flags.length > 0;
   const { reading, priorSystolic, ready: readingReady } = useTodayReading(now, true);
   const visitAbout = useVisitAbout(nextVisit);
-  const insightItem = insightOf(top, feed.forYou);
-  const { ready: paperReady, summary: paperSummary } = usePaperInsight(insightItem);
+  const insightItems = insightOf(top, feed.forYou);
+  const { ready: paperReady, summary: paperSummary } = usePaperInsight(insightItems);
   const ready = page !== null && visitsReady && readingReady && paperReady;
   const topItem: HomeTopItem | null = ready
     ? homeTopItem(
