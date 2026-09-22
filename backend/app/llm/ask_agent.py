@@ -774,15 +774,20 @@ def _range_note(band: str, language: str) -> str:
 class _ValueFact:
     """Round 4 (master spec §6, "rules decide, models assist"): enough to build Nura's own
     deterministic sentence for a fact or reading this ask read a real number off of — never
-    enough for the model to write that sentence itself. Three rounds of checking the MODEL's
+    enough for the model to write that sentence itself. Four rounds of checking the MODEL's
     own words for a forged value or a forged verdict each found a new hole (a paraphrase
-    outside the allow-list; a bare "not" inverting a stripped-and-scanned allowed phrase; a
-    citation the check had no tracked value for at all) — the fix is not a fourth, wider check:
-    it is that the model never writes the sentence. When a line cites a fact this ask tracks
-    one of these for, the model's own text for that line is discarded outright and replaced
-    by `_deterministic_lines`' own rendering of it; the model's citation is a SELECTION, never
-    a claim. A `"reading"` fact renders through `timeline_strings.reading_lines` (`top`/
-    `bottom`); every other kind renders through `value_lines` (`what`/`value`/`band`)."""
+    outside an allow-list; a bare "not" inverting a stripped-and-scanned allowed phrase; a
+    citation an exempt cite kind had no tracked value for at all; a topic word list that still
+    missed plurals, full-width characters, and whole verdicts using no listed word) — round
+    5's fix is not a fifth, wider check: it is that the model's own words are never checked at
+    all for an answer that cites one of these. `_parse_answer` decides, up front, whether ANY
+    line in the model's whole answer cites a fact this ask tracks one of these for — if so,
+    every model line is discarded, unconditionally, and the answer is built entirely from
+    `_deterministic_lines`' own rendering of each distinct fact cited, deduplicated. The
+    model's citation is a SELECTION, never a claim, and there is no partial credit: a "value
+    ask" has no model prose in it anywhere. A `"reading"` fact renders through
+    `timeline_strings.reading_lines` (`top`/`bottom`); every other kind renders through
+    `value_lines` (`what`/`value`/`band`)."""
 
     kind: Literal["value", "reading"]
     date: str
@@ -999,14 +1004,13 @@ async def _read_costs(
     (`app.insurance.ledger`), never a public price list: this build carries no cost-expectation
     module, so a cost question is answered from his own record or not at all.
 
-    Round 4, an explicit scope-narrowing (named in the PR body, not hidden): a claim amount is
-    a worded string ("S$120"), not a `Fact` this ask can build a `_ValueFact` for, so there is
-    no deterministic sentence to substitute for it the way a value or reading gets. Rather than
-    widen the still-flawed round-3 approach (an allow-list of digits the model was trusted to
-    copy correctly) to cover it too, a line citing a "claim" is now, like any other context
-    line, checked by `_context_line_problem` and may carry no digit at all — an ask about a
-    specific cost currently gets no answer rather than a possibly-wrong one; a deterministic
-    cost sentence is follow-up work, not this round's."""
+    Named limit (PR body, not hidden): a claim amount is a worded string ("S$120"), not a
+    `Fact` this ask can build a `_ValueFact` for, so a "claim" cite is never part of a "value
+    ask" and no deterministic cost sentence exists. A line citing one is answered in the
+    model's own words, under exactly the same gates a "policy"/"web" line always was — this
+    was never brought under D-1's fail-closed value check at any round, `_read_insurance`'s
+    own free-text `covers` field included; a deterministic cost sentence is follow-up work,
+    not built here."""
     ledger = await insurance_ledger(session, context=context, language=language)
     lines: list[_ToolLine] = []
     for row in ledger.lines:
@@ -1922,31 +1926,6 @@ _WEEKDAY_ONLY: Final[dict[str, re.Pattern[str]]] = {
 }
 
 
-_DATE_OPENER: Final[dict[str, str]] = {"en": "on", "ms": "pada", "zh": "于"}
-"""The one word that puts a bare weekday in date position, in each language (round 4, fixing
-the false positive a bare weekday-name scan caused on ordinary prose: "The Sunday Clinic",
-"Monday tablet box" — neither says WHEN anything happened, they just happen to contain a day
-name, and round 3's `_WEEKDAY_ONLY` flagged both as an invented date)."""
-
-
-def _weekday_in_date_position(text: str, start: int, end: int, language: str) -> bool:
-    """Whether the weekday name at `text[start:end]` is actually claiming a day, not merely
-    naming something ("Sunday Clinic") that happens to contain one — round 4's fix for the
-    false positive above: counted only when the word right before it is this language's own
-    date-opener (`_DATE_OPENER`: "on"/"pada"/"于"), or the text right after it opens with a
-    day-of-month number ("Tuesday 21")."""
-    before = text[:start].rstrip()
-    after = text[end:].lstrip()
-    opener = _DATE_OPENER.get(language, _DATE_OPENER["en"])
-    if language == "zh":
-        preceded_by_opener = before.endswith(opener)
-    else:
-        before_words = before.split()
-        preceded_by_opener = bool(before_words) and before_words[-1].lower() == opener
-    followed_by_day_number = re.match(r"\d{1,2}\b", after) is not None
-    return preceded_by_opener or followed_by_day_number
-
-
 def _weekdays_given(dates_given: frozenset[str], language: str) -> frozenset[str]:
     """The weekday name(s) `dates_given`'s own worded dates actually use, in this language —
     `say_date`'s own weekday word out of each date string ("Wednesday" out of "Wednesday 21
@@ -1956,19 +1935,26 @@ def _weekdays_given(dates_given: frozenset[str], language: str) -> frozenset[str
 
 
 def _dated_claim(text: str, language: str, dates_given: frozenset[str]) -> str | None:
-    """D-1(b), extended round 3, position-aware since round 4: the first worded date
-    (`_DATE_CLAIM`'s own full shape, or `_WEEKDAY_ONLY`'s bare weekday, but only one actually
-    in date position — `_weekday_in_date_position`) `text` states that this ask never
-    actually gave — the same "computed here, never guessed by the model" rule
-    `_elapsed_claim` already holds for elapsed time, applied to the date itself now that it
-    reaches the model pre-worded (`_worded_date`) rather than as an ISO string rule 5 would
-    catch on its own. A full date is checked against the exact worded strings this ask gave
-    (`dates_given`); a bare weekday — one with no day-of-month or month beside it, so it is
-    not part of a full date match at all — is checked against the weekday(s) those same given
-    dates actually fall on (`_weekdays_given`), never the exact string, since a bare weekday
-    never claims a specific day-of-month to be wrong about, only which day of the week. `None`
-    when the line states no such date, or every one it states — full or bare — really was
-    given."""
+    """D-1(b), extended round 3: the first worded date (`_DATE_CLAIM`'s own full shape, or
+    `_WEEKDAY_ONLY`'s bare weekday) `text` states that this ask never actually gave — the
+    same "computed here, never guessed by the model" rule `_elapsed_claim` already holds for
+    elapsed time, applied to the date itself now that it reaches the model pre-worded
+    (`_worded_date`) rather than as an ISO string rule 5 would catch on its own. A full date
+    is checked against the exact worded strings this ask gave (`dates_given`); a bare weekday
+    — one with no day-of-month or month beside it, so it is not part of a full date match at
+    all — is checked against the weekday(s) those same given dates actually fall on
+    (`_weekdays_given`), never the exact string, since a bare weekday never claims a specific
+    day-of-month to be wrong about, only which day of the week. `None` when the line states
+    no such date, or every one it states — full or bare — really was given.
+
+    Round 5 (B5, reverted): round 4 made the bare-weekday half position-aware (counted only
+    after "on"/"pada"/"于" or before a day number), fixing a false positive on prose that
+    merely contains a weekday name ("The Sunday Clinic sent this paper.") — but a false
+    NEGATIVE here is an invented day reaching him unchallenged, and a false positive only
+    costs a fallback line; the review took the accepted trade back to round 3's own rule.
+    Any bare weekday not among the given dates' own weekdays is `invented_date`, in or out of
+    what would read as "date position" — including "The Sunday Clinic sent this paper.",
+    which is dropped by this rule now, deliberately (see its own test)."""
     pattern = _DATE_CLAIM.get(language, _DATE_CLAIM["en"])
     given_lower = {phrase.lower() for phrase in dates_given}
     remaining = text
@@ -1979,8 +1965,6 @@ def _dated_claim(text: str, language: str, dates_given: frozenset[str]) -> str |
     allowed_weekdays_lower = {w.lower() for w in _weekdays_given(dates_given, language)}
     weekday_pattern = _WEEKDAY_ONLY.get(language, _WEEKDAY_ONLY["en"])
     for match in weekday_pattern.finditer(remaining):
-        if not _weekday_in_date_position(remaining, match.start(), match.end(), language):
-            continue
         word = match.group()
         if word.lower() not in allowed_weekdays_lower:
             return word
@@ -2105,109 +2089,22 @@ def _dated_claim_finding(phrase: str, language: str) -> Finding:
     )
 
 
-_RANGE_TOPIC_WORDS: Final[dict[str, frozenset[str]]] = {
-    "en": frozenset({"range", "paper", "normal", "high", "low"}),
-    "ms": frozenset({"julat", "kertas", "normal", "tinggi", "rendah"}),
-    "zh": frozenset({"范围", "纸", "正常", "高", "低"}),
-}
-"""Round 4 (master spec §6, "rules decide, models assist"): every three rounds of a growing
-comparison-VERB allow-list (round 3's `_COMPARISON_WORDS`, now deleted) still had a hole —
-nine ordinary English forgeries alone ("exceeding", "greater than", "beyond", "elevated",
-"not in", "does not reach", "past the top", "stops short") proved that any specific verb list
-can always be paraphrased around, and stripping the one allowed phrase and scanning for
-"comparison words" let a bare "not" through ("It is NOT within the range…" on a value that
-really was within it — the paper's own verdict, inverted). The model no longer writes a
-verdict at all (`_deterministic_lines` replaces its line outright for any cite this ask
-tracks a value for) — this small TOPIC list is only for what remains: a "context" line that
-was never replaced, checked for whether it even MENTIONS the range/paper/verdict topic at
-all, in any language. There is no allow-list to be outside of: the rule is "say nothing about
-a number or a verdict", not "say the right comparison word"."""
-
-_RANGE_TOPIC_PATTERN: Final = re.compile(
-    "|".join(
-        rf"\b{re.escape(w)}\b"
-        for w in sorted(_RANGE_TOPIC_WORDS["en"] | _RANGE_TOPIC_WORDS["ms"], key=len, reverse=True)
-    ),
-    re.IGNORECASE,
-)
-
-
-def _mentions_range_topic(text: str) -> bool:
-    """Whether `text` even mentions the range/paper/verdict topic, in any language — the cheap,
-    comprehensive check round 4 replaces `_band_claim`'s comparison-verb allow-list with. A
-    context line (one that replaces nothing) may not raise the topic at all, so there is
-    nothing here to paraphrase around."""
-    if _RANGE_TOPIC_PATTERN.search(text):
-        return True
-    return any(word in text for word in _RANGE_TOPIC_WORDS["zh"])
-
-
-_MODEL_VALUE_RULE: Final = 96
-"""Another pseudo-rule (see `_ELAPSED_RULE`): a context line — one that cites nothing this ask
-tracks a deterministic value for — states a number anyway (round 4, master spec §6). The
-model may only select which tracked facts to mention, by citing them; it never writes the
-number itself, so any number in any other line is invented by construction, never merely
-"unmatched against an allow-list"."""
-
-
-def _model_value_finding(language: str) -> Finding:
-    return Finding(
-        rule=_MODEL_VALUE_RULE,
-        problem="a line states a number, but Nura's own sentence should have said it instead",
-        rewrite="state no numbers yourself — cite the fact and Nura will say the value",
-        text="",
-        severity="fail",
-        language=language,
-        kind="ask",
-    )
-
-
-_MODEL_VERDICT_RULE: Final = 97
-"""Another pseudo-rule (see `_ELAPSED_RULE`): a context line mentions the range/paper/verdict
-topic at all (round 4) — the model is never the one to say whether a value sits inside,
-above or below a printed range; that sentence is Nura's own, built by `_deterministic_lines`
-for every fact this ask tracks a range for, never composed by the model."""
-
-
-def _model_verdict_finding(language: str) -> Finding:
-    return Finding(
-        rule=_MODEL_VERDICT_RULE,
-        problem="a line passes its own judgement on a range or a value, which is never its call",
-        rewrite="state no verdict yourself — cite the fact and Nura will say how it compares",
-        text="",
-        severity="fail",
-        language=language,
-        kind="ask",
-    )
-
-
-def _context_line_problem(
-    text: str,
-    cites: Sequence[Cite],
-    dates_given: frozenset[str],
-    elapsed_given: frozenset[str],
-    card_safe_text: Mapping[uuid.UUID, frozenset[str]],
-) -> str | None:
-    """Round 4: what a "context" line — one that cites nothing this ask tracks a deterministic
-    value for, so nothing here replaces it — may not do: state a number in any shape
-    (`_contains_a_number_shape`: any digit, full-width or grouped, any run of Chinese
-    numerals, any pair of en/ms number words), or so much as mention the range/paper/verdict
-    topic (`_mentions_range_topic`), in any language, regardless of which language this ask
-    happens to be answering in. His own given dates, elapsed phrases, and a cited waiting
-    card's own safe date/elapsed text are removed first, so a legitimate "Wednesday 21
-    January" is never itself read as an invented number. Returns the reason class, or `None`
-    when the line is clean."""
-    safe: set[str] = set(dates_given) | set(elapsed_given)
-    for cite in cites:
-        if cite.kind == "review_card":
-            safe |= card_safe_text.get(cite.id, frozenset())
-    stripped = _strip_safe_substrings(text, frozenset(safe))
-    normalized = unicodedata.normalize("NFKC", stripped)
-    if _contains_a_number_shape(normalized):
-        return "model_wrote_a_value"
-    if _mentions_range_topic(stripped):
-        return "model_wrote_a_verdict"
-    return None
+# Round 5 (master spec §6): round 4's `_context_line_problem`/`_RANGE_TOPIC_WORDS`/
+# `_mentions_range_topic`/`_MODEL_VALUE_RULE`/`_MODEL_VERDICT_RULE` are gone -- proved this
+# round still a word list under another name (a five-word topic set: "ranges"/"papers" as
+# plurals, and NFKC full-width "range" in full-width form, both slipped past it; "That is
+# higher than last time." and "Nothing to worry about." used no listed word at all; the
+# same list also killed ten honest, unrelated sentences that merely happened to contain
+# "paper"/"kertas"/a Chinese character meaning paper/"normal"/"low"). A word list cannot
+# be both complete and safe. Round 5 stops trying: see `_parse_answer` below -- when any
+# line in the model's own answer cites a fact `value_facts` tracks, the WHOLE answer is
+# deterministic only (every model line discarded, none of them checked, no repair round
+# possible or needed); otherwise no fact is cited that this ask can build a number or a
+# verdict from at all, so there is nothing left to gate beyond the plain-words/conclusion/
+# caregiver/cite/elapsed/date checks this file held before D-1 ever added a value-specific
+# one. `_contains_a_number_shape` stays -- it is still load-bearing for the pre-existing
+# unconfirmed-card veto and clarify-option validation below, neither of which this round
+# touches.
 
 
 _EN_NUMBER_WORDS: Final[frozenset[str]] = frozenset(
@@ -2309,6 +2206,62 @@ def _parse_answer(
     # the model is asked to copy a short id back, not retype a uuid, but it still may not get
     # the case exactly right, and a line should not be thrown away over that alone.
     known_ci = {token.strip().lower(): line for token, line in known.items()}
+
+    def _resolve(raw_cites: Any) -> tuple[Cite, ...]:
+        if not isinstance(raw_cites, list):
+            return ()
+        return tuple(
+            dict.fromkeys(
+                known_ci[str(token).strip().lower()].cite
+                for token in raw_cites
+                if str(token).strip().lower() in known_ci
+            )
+        )
+
+    # Round 5 (master spec §6): whether ANY line of the model's own answer cites a fact this
+    # ask tracks a deterministic value or reading for at all — a "value ask". Scanned across
+    # every raw line up front, regardless of whether that line's own text would otherwise
+    # survive: the model's citation is what decides this, never its prose. Dedup'd, in
+    # first-seen order — the review proved Nura's own sentence stated three times over when
+    # three separate model lines all cited the same fact.
+    value_fact_ids: list[uuid.UUID] = []
+    seen_value_fact_ids: set[uuid.UUID] = set()
+    for entry in raw_lines:
+        if not isinstance(entry, Mapping):
+            continue
+        for cite in _resolve(entry.get("cites")):
+            if cite.kind == "fact" and cite.id in value_facts and cite.id not in seen_value_fact_ids:
+                seen_value_fact_ids.add(cite.id)
+                value_fact_ids.append(cite.id)
+
+    if value_fact_ids:
+        # A value ask: deterministic only. Every model line is discarded outright and none of
+        # them is checked — there is nothing to verify (the citation alone told Nura which
+        # facts to say) and nothing to repair (a repair round exists to fix the model's own
+        # words, and none of its words reach the answer here).
+        det_lines = [
+            AnswerLine(text=reader.says(det_text), cites=(Cite(kind="fact", id=fact_id),))
+            for fact_id in value_fact_ids
+            for det_text in _deterministic_lines(value_facts[fact_id], language)
+        ]
+        kept = det_lines[:1] if mode is Mode.VOICE else det_lines[:TEXT_LINES]
+        answer = Answer(
+            question_artifact_id=uuid.uuid4(),
+            mode=mode,
+            language=language,
+            lines=tuple(kept),
+            honest=(),
+            boundary=(),
+            withheld=(),
+            dropped=len(raw_lines),
+        )
+        return _Parsed(answer, lead_dropped=False, dangling=False)
+
+    # A non-value ask: no fact is cited anywhere in the answer that this ask can build a
+    # number or a verdict from, so there is nothing left to gate beyond exactly the checks
+    # this file held before D-1 ever added a value-specific one — plain words, conclusion
+    # language, caregiver voice, cites, the pre-existing unconfirmed-card veto, elapsed/dated
+    # claims. No new word lists.
     lines: list[AnswerLine] = []
     origins: list[int] = []
     for index, entry in enumerate(raw_lines):
@@ -2382,13 +2335,7 @@ def _parse_answer(
                 failed_findings.setdefault(finding.rule, finding)
             _drop("caregiver_voice")
             continue
-        cites = tuple(
-            dict.fromkeys(
-                known_ci[str(token).strip().lower()].cite
-                for token in raw_cites
-                if str(token).strip().lower() in known_ci
-            )
-        )
+        cites = _resolve(raw_cites)
         if not cites:
             # D-3: recorded as a `Finding` (`_NO_CITE_RULE`), same reason as
             # `conclusion_language` above.
@@ -2410,42 +2357,6 @@ def _parse_answer(
                 finding = _unconfirmed_card_value_finding(language)
                 failed_findings.setdefault(finding.rule, finding)
             _drop("value_from_unconfirmed_card")
-            continue
-        # Round 4 (master spec §6, "rules decide, models assist"): a line that cites a fact
-        # this ask tracks a deterministic value or reading for is never the model's own words
-        # to keep — three rounds of checking those words for a forged value or a forged
-        # verdict each found a new way past the check (a paraphrase outside the allow-list, a
-        # bare negation inverting a stripped-and-scanned phrase, an exempt cite kind with no
-        # tracked value at all). The fix is not a fourth check: the model's citation is a
-        # SELECTION, never a claim, and its own text for such a line is discarded outright,
-        # replaced whole by Nura's own sentence(s) from the same catalogue the rule-based
-        # asker already uses (`_deterministic_lines`). The first cited fact this ask tracks
-        # one for wins; a line naming more than one is not expected (rule 2: one idea a line).
-        value_fact_id = next(
-            (cite.id for cite in cites if cite.kind == "fact" and cite.id in value_facts),
-            None,
-        )
-        if value_fact_id is not None:
-            for det_text in _deterministic_lines(value_facts[value_fact_id], language):
-                lines.append(AnswerLine(text=reader.says(det_text), cites=cites))
-                origins.append(index)
-            continue
-        context_problem = _context_line_problem(heard, cites, dates_given, elapsed_given, card_safe_text)
-        if context_problem is not None:
-            # Round 4: a line that cites nothing this ask tracks a deterministic value for may
-            # not state a number or raise the range/verdict topic in any language either —
-            # never an allow-list of "acceptable" comparison words, which round 3 proved
-            # cannot be made complete (nine ordinary paraphrases, a false positive on
-            # everyday Malay). There is no lexicon to be outside of: any digit, number word
-            # pair, or range/paper/verdict mention fails closed by construction.
-            if failed_findings is not None:
-                finding = (
-                    _model_value_finding(language)
-                    if context_problem == "model_wrote_a_value"
-                    else _model_verdict_finding(language)
-                )
-                failed_findings.setdefault(finding.rule, finding)
-            _drop(context_problem)
             continue
         lines.append(AnswerLine(text=heard, cites=cites))
         origins.append(index)

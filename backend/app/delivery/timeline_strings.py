@@ -327,6 +327,22 @@ naming or hinting at a value nobody has confirmed yet; the `_no_date` twin is fo
 paper carried no printed date."""
 
 # @patient
+RECALL_THEIRS: Mapping[str, Mapping[str, str]] = {
+    "en": {"paper": "{patient}'s {what} from {date} is in {patient}'s papers."},
+    "ms": {"paper": "{what} {patient} dari {date} ada dalam surat-surat {patient}."},
+    "zh": {"paper": "{date}{patient}的{what}在{patient}的文件里。"},
+}
+"""`RECALL["paper"]` said about him by name, for a key that is not his — round 5 (review B3):
+the rule-based composer's `value_lines`/`reading_lines` branches leaked his own "Your…" voice
+to a caregiver exactly the way the model asker's own text used to before `VALUE_THEIRS`/
+`READING_THEIRS` were registered; `RECALL["paper"]` (a non-numeric fact — `app.search.ask.
+_compose`'s own third branch, same "fact" cite kind) is the same leak and gets the same fix.
+Only `paper` is given a twin here — every other `RECALL` key (`visit_past`, `medicine_from`,
+…) is a wider, pre-existing gap this round does not touch (`about_him._catalogues()`'s own
+`_mirror` skips a key with no match in this dict, so an unregistered `RECALL` key is read
+exactly as before: unchanged, still in his own voice, not worse)."""
+
+# @patient
 ASK_STEPS: Mapping[str, Mapping[str, str]] = {
     "en": {
         "visits": "Checking your visits.",
@@ -691,6 +707,19 @@ def recall_line(key: str, language: str, **slots: str) -> str:
     return _fill(RECALL[language][key], language, slots)
 
 
+def recall_line_theirs(key: str, language: str, *, patient: str, **slots: str) -> str:
+    """`recall_line`, said about him by name (`RECALL_THEIRS`) — round 5 (review B3): built
+    directly from the catalogue, never through `Reader.says`'s own generic pattern matching.
+    `RECALL["paper"]`'s exact English shape ("Your {what} from {date} is in your papers.")
+    turned out to collide with an unrelated feed template of the identical shape
+    (`app.delivery.strings`'s own "story_paper" line, registered earlier in `about_him.
+    _catalogues()`) — `Reader.says` matched that one first and answered with ITS twin
+    instead. Called directly at the one call site that needs it (`app.search.ask._compose`'s
+    two "paper" branches) sidesteps the ambiguity outright rather than trying to out-order it,
+    which would only reintroduce the same risk against the next coincidental shape match."""
+    return _fill(RECALL_THEIRS[language][key], language, {**slots, "patient": patient})
+
+
 def clarify_line(key: str, language: str, **slots: str) -> str:
     return _fill(CLARIFY[language][key], language, slots)
 
@@ -754,6 +783,7 @@ __all__ = [
     "READING",
     "READING_THEIRS",
     "RECALL",
+    "RECALL_THEIRS",
     "REROUTE",
     "VALUE",
     "VALUE_THEIRS",
@@ -770,6 +800,7 @@ __all__ = [
     "paper_word",
     "reading_lines",
     "recall_line",
+    "recall_line_theirs",
     "reroute_lines",
     "said_date",
     "value_lines",

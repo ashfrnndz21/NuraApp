@@ -818,6 +818,7 @@ async def _compose(
     context: KeyContext,
     language: str,
     registry: DrugRegistry | None,
+    reader: Reader,
 ) -> list[list[AnswerLine]]:
     """The lines for each thing the question is about, one group per thing, from the
     templates and the cited values. A group is one line, or two where one would carry more
@@ -871,7 +872,10 @@ async def _compose(
                 top_number=str(value["systolic"]),
                 bottom_number=str(value["diastolic"]),
             )
-            groups.append([AnswerLine(text, cites) for text in texts])
+            # Round 5 (review B3): the same "Your…" leak to a caregiver the model asker's own
+            # `VALUE`/`READING` lines had before they were registered for translation — fixed
+            # the same way, here, at the source, rather than trusted to a caller.
+            groups.append([AnswerLine(reader.says(text), cites) for text in texts])
         elif hit.kind == "fact":
             fact = corpus.facts[hit.ref]
             source = fact.artifact_id or fact.event_id
@@ -904,13 +908,20 @@ async def _compose(
                     value=_say_value(fact.value),
                     date=_day(fact.valid_from, context, language),
                 )
-                groups.append([AnswerLine(text, fact_cites) for text in texts])
+                # Round 5 (review B3): same fix as the reading branch above.
+                groups.append([AnswerLine(reader.says(text), fact_cites) for text in texts])
                 continue
-            text = words.recall_line(
-                "paper",
-                language,
-                what=words.what_word(fact.subject, language),
-                date=_day(fact.valid_from, context, language),
+            what = words.what_word(fact.subject, language)
+            date = _day(fact.valid_from, context, language)
+            # Round 5 (review B3): built directly from `RECALL_THEIRS` for a caregiver, never
+            # through `Reader.says`'s own generic pattern matching — `RECALL["paper"]`'s exact
+            # shape collides with an unrelated feed template of the identical shape
+            # (`recall_line_theirs`'s own docstring), so the generic path answers with the
+            # WRONG twin for this one line.
+            text = (
+                words.recall_line("paper", language, what=what, date=date)
+                if reader.his
+                else words.recall_line_theirs("paper", language, patient=reader.name, what=what, date=date)
             )
             groups.append([AnswerLine(text, fact_cites)])
         elif hit.kind == "visit":
@@ -1029,8 +1040,15 @@ async def _compose(
                 else words.paper_word(corpus.paper_kinds.get(artifact.id), language)
             )
             moment = on_it[0].valid_from if on_it else artifact.captured_at
-            text = words.recall_line(
-                "paper", language, what=what, date=_day(moment, context, language)
+            date = _day(moment, context, language)
+            # Round 5 (review B3): the same `RECALL["paper"]` template, reached from a "paper"
+            # hit here rather than a non-numeric "fact" hit above — same leak, same direct-fill
+            # fix (`recall_line_theirs`'s own docstring: the generic `Reader.says` path answers
+            # with an unrelated feed template's twin for this exact shape).
+            text = (
+                words.recall_line("paper", language, what=what, date=date)
+                if reader.his
+                else words.recall_line_theirs("paper", language, patient=reader.name, what=what, date=date)
             )
             paper_cites = [Cite("artifact", artifact.id)]
             paper_cites += [
@@ -1255,6 +1273,10 @@ async def recall_stream(
         assert corpus is not None
         hits = retriever.retrieve(text, corpus.candidates)
         doctor = _doctor(corpus)
+        # Round 5 (review B3): computed unconditionally now, not only on the clarify branch —
+        # `_compose` needs it too, to say a caregiver's own "Pa's cholesterol test was 140…"
+        # rather than his own "Your cholesterol test was 140…" voice.
+        reader = await reader_of(session, context, lang)
         clarify: Clarify | None = None
         if focus is not None:
             # A previous turn's clarifying question already resolved to one thing (W2): answer
@@ -1272,12 +1294,11 @@ async def recall_stream(
             if focus_hit is not None:
                 hits = [focus_hit]
         elif not skip_clarify and not _would_change_treatment(text, hits):
-            reader = await reader_of(session, context, lang)
             clarify = _clarify_for(text, corpus, context, lang, reader)
         groups = (
             []
             if clarify is not None
-            else await _compose(session, hits, corpus, context, lang, registry)
+            else await _compose(session, hits, corpus, context, lang, registry, reader)
         )
         passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
         dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)

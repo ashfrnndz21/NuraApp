@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -45,7 +46,6 @@ from app.llm.ask_agent import (
     _answer_from_payload,
     _boundary_rewrite,
     _claims_a_value_from_an_unconfirmed_card,
-    _context_line_problem,
     _dated_claim,
     _parse_answer,
     _register,
@@ -53,6 +53,7 @@ from app.llm.ask_agent import (
     _TokenCounter,
     _ToolLine,
     _tools_for,
+    _ValueFact,
 )
 from app.medicines.models import LineStatus, MedicationLine
 from app.medicines.strings import DAY_NAMES, say_date
@@ -921,9 +922,6 @@ def test_dated_claim_catches_a_bare_weekday_not_among_the_given_dates(language: 
     true_weekday, false_weekday = DAY_NAMES[language][2], DAY_NAMES[language][1]  # Wed, Tue
     dates_given = frozenset({given_date})
     if language == "zh":
-        # Round 4: a bare weekday only counts in date position — here, preceded by "于"
-        # (`_DATE_OPENER`) — never any occurrence of the weekday characters anywhere in the
-        # line (the fix for "The Sunday Clinic"-style false positives).
         true_text, false_text = f"于{true_weekday}服用。", f"于{false_weekday}服用。"
     elif language == "ms":
         true_text, false_text = f"Diambil pada {true_weekday}.", f"Diambil pada {false_weekday}."
@@ -933,19 +931,26 @@ def test_dated_claim_catches_a_bare_weekday_not_among_the_given_dates(language: 
     assert _dated_claim(false_text, language, dates_given) is not None
 
 
-def test_a_bare_weekday_outside_date_position_is_never_flagged_as_invented() -> None:
-    """Round 4's own fix: "The Sunday Clinic" and "Monday tablet box" both contain a weekday
-    name, but neither says WHEN anything happened — round 3's flat weekday scan flagged both
-    as an invented date anyway. Counted only when preceded by "on" or followed by a day
-    number (`_weekday_in_date_position`); neither shape appears here, so nothing is flagged,
-    whatever weekday this ask actually gave."""
+def test_a_bare_weekday_outside_date_position_is_flagged_too_the_accepted_trade() -> None:
+    """Round 5 (B5, reverted): round 4 made a bare weekday count only in date position
+    (preceded by "on", or before a day number), fixing a false positive on prose that merely
+    contains a weekday name ("The Sunday Clinic called about your results."). The review took
+    the trade back: a false positive here only costs a fallback line, but a false negative is
+    an invented day reaching him unchallenged — the accepted cost is that this honest line is
+    now dropped too, deliberately, exactly as round 3 always did."""
     dates_given = frozenset({"Wednesday 21 January"})
-    assert _dated_claim("The Sunday Clinic called about your results.", "en", dates_given) is None
-    assert _dated_claim("Check the Monday tablet box before you leave.", "en", dates_given) is None
-    # The same word, actually in date position, is still caught when it is the wrong day.
-    assert _dated_claim("It was taken on Sunday.", "en", dates_given) is not None
-    # And still passes when it is the day this ask actually gave, in date position.
+    assert (
+        _dated_claim("The Sunday Clinic called about your results.", "en", dates_given)
+        == "Sunday"
+    )
+    assert (
+        _dated_claim("Check the Monday tablet box before you leave.", "en", dates_given)
+        == "Monday"
+    )
+    # A bare weekday that really is the day this ask gave still survives, in or out of what
+    # would read as "date position" — a false positive costs a fallback line, never more.
     assert _dated_claim("It was taken on Wednesday.", "en", dates_given) is None
+    assert _dated_claim("The Wednesday Clinic called about your results.", "en", dates_given) is None
 
 
 # --- fix 2: a paper waiting to be checked reaches the model, three fields only, never a
@@ -1385,10 +1390,16 @@ def test_a_line_citing_no_review_card_at_all_is_never_checked_for_a_value() -> N
 
 
 async def test_a_two_digit_value_from_an_unconfirmed_card_does_not_reach_the_answer(
-    sg: AsyncSession, tmp_path: Path
+    sg: AsyncSession, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """End-to-end proof 1: a two-digit value (no decimal point, so a first-version reader
-    might assume it is a day-of-month) still never reaches `Answer.lines`/`AnswerDelta`."""
+    might assume it is a day-of-month) still never reaches `Answer.lines`/`AnswerDelta`.
+
+    Round 5, Fix 3: asserting only on the final answer leaves it unproven that this specific
+    veto (`_claims_a_value_from_an_unconfirmed_card`) is what actually caught the line — some
+    other, unrelated gate (an invented date, a plain-words failure) could produce the exact
+    same "48 never reached him" outcome for the wrong reason. `caplog` on `_drop`'s own reason
+    string closes that gap: the drop this test is named for really did fire."""
     from tests.test_waiting_papers import HostileExtractor
 
     rec = await record(sg)
@@ -1403,12 +1414,14 @@ async def test_a_two_digit_value_from_an_unconfirmed_card_does_not_reach_the_ans
         ]
     )
     asker = ClaudeAsker(client, searcher=FakeSearcher())
-    _steps, deltas, answer = await _drive(
-        asker, sg, rec.owner, "when was my last blood test done", tmp_path
-    )
+    with caplog.at_level(logging.INFO, logger="nura.llm.ask_agent"):
+        _steps, deltas, answer = await _drive(
+            asker, sg, rec.owner, "when was my last blood test done", tmp_path
+        )
     assert "48" not in " ".join(answer.spoken)
     assert "forty" not in " ".join(answer.spoken).lower()
     assert deltas == []
+    assert "reason=value_from_unconfirmed_card" in caplog.text, caplog.text
 
 
 async def test_a_decimal_value_beside_a_medicine_cite_does_not_reach_the_answer(
@@ -1811,127 +1824,204 @@ async def test_the_deterministic_sentence_matches_the_catalogue_in_every_languag
     assert [line.text for line in answer.lines] == expected
 
 
-def test_everyday_malay_words_no_longer_false_positive_as_a_verdict() -> None:
-    """Round 3's own `_COMPARISON_WORDS["ms"]` included `dalam`/`atas`/`bawah` — "in"/"on"/
-    "under", three of the commonest prepositions in Malay — so an entirely honest line using
-    any of them in its ordinary, non-medical sense was destroyed as `invented_band` (proved
-    this round). Round 4 drops that lexicon: `_context_line_problem` only raises
-    `model_wrote_a_verdict` for the small, specific `julat`/`kertas`/`normal`/`tinggi`/
-    `rendah` set, none of which this line uses."""
-    text = "Ubat itu berada di dalam kotak atas almari, bawah cermin."
-    cites = (Cite(kind="appointment", id=uuid.uuid4()),)
-    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) is None
-
-
-def test_a_web_only_cite_may_not_state_a_number_either() -> None:
-    """Round 3's own `_VALUE_EXEMPT_KINDS` let a `web`/`feeling_note`/`policy` cite state any
-    number at all — proved this round: "Your blood pressure was 190 over 120." with only a
-    `web` cite reached the user under "Nura looked in your papers." Round 4 drops the
-    exemption entirely: a context line — one that cites nothing this ask tracks a
-    deterministic value for — may state no number, whatever kind of thing it cites."""
-    text = "Your blood pressure was 190 over 120."
-    cites = (Cite(kind="web", id=uuid.uuid4()),)
-    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) == "model_wrote_a_value"
-
-
-def test_a_web_only_line_stating_a_number_is_dropped_end_to_end() -> None:
-    """The same proof, end to end through `_parse_answer`/`_answer_from_payload`: a line whose
-    only cite is a `web` hit, stating a specific reading, never reaches the answer at all —
-    never surfaced under "Nura looked in your papers" the way round 3 let it."""
-    web_id = uuid.uuid4()
+def test_three_model_lines_citing_the_same_value_fact_yield_it_only_once() -> None:
+    """Round 5, item 1: the reviewer measured Nura's own sentence stated three times over
+    when three separate model lines all cited the same fact. `value_fact_ids` in
+    `_parse_answer` is deduplicated, in first-seen order — however many raw lines cite a
+    tracked fact, its deterministic sentence (here: the value line, then the band line)
+    appears exactly once, at a fixed position, never repeated."""
+    fact_id = uuid.uuid4()
     known = {
-        "w1": _ToolLine(
-            token="w1",
-            text="w1: a page about blood pressure — https://example.com (example.com)",
-            cite=Cite(kind="web", id=web_id),
+        "f1": _ToolLine(
+            token="f1", text="f1: lipid_panel ldl = 100", cite=Cite(kind="fact", id=fact_id)
         )
     }
-    payload = {"lines": [{"text": "Your blood pressure was 190 over 120.", "cites": ["w1"]}]}
-    assert _answer_from_payload(payload, known, "en", Reader(his=True), Mode.TEXT) is None
-
-
-@pytest.mark.parametrize(
-    "kind",
-    ["claim", "appointment", "web", "feeling_note", "policy", "review_card"],
-)
-def test_a_context_line_may_state_no_number_whatever_it_cites(kind: str) -> None:
-    """Round 4: `_VALUE_EXEMPT_KINDS` is gone — there is no cite kind left that licenses a
-    number in the model's own words, `policy`/`web`/`feeling_note` included (round 3's own
-    named exemptions, proved this round to let a forged reading through under a bare `web`
-    cite). A context line — one that cites nothing this ask tracks a deterministic value for
-    — may not state a number regardless of what kind of thing it cites; one with no number at
-    all is never touched by this check either way."""
-    cites = (Cite(kind=kind, id=uuid.uuid4()),)
-    assert (
-        _context_line_problem("The amount was 250.", cites, frozenset(), frozenset(), {})
-        == "model_wrote_a_value"
+    value_facts = {
+        fact_id: _ValueFact(
+            kind="value",
+            date="Wednesday 21 January",
+            what="cholesterol test",
+            value="100",
+            band="within_range",
+        )
+    }
+    payload = {
+        "lines": [
+            {"text": "Your cholesterol was 100.", "cites": ["f1"]},
+            {"text": "It really was 100, I promise.", "cites": ["f1"]},
+            {"text": "One hundred again.", "cites": ["f1"]},
+        ]
+    }
+    answer = _answer_from_payload(
+        payload, known, "en", Reader(his=True), Mode.TEXT, value_facts=value_facts
     )
-    assert _context_line_problem("Nothing numeric here at all.", cites, frozenset(), frozenset(), {}) is None
+    assert answer is not None
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 100 on Wednesday 21 January.",
+        "It is within the range printed on the paper.",
+    ]
 
 
 @pytest.mark.parametrize(
-    ("language", "text"),
+    "verdict_text",
     [
-        ("en", "It was about two hundred and twelve."),
-        ("ms", "Ia kira-kira dua ratus dua belas."),
-        ("zh", "大约是两百一十二。"),
+        "Nothing to worry about.",
+        "That is higher than last time.",
+        "It went up since the last one.",
+        "You are doing well.",
     ],
 )
-def test_a_number_word_forgery_in_any_language_is_caught_as_a_context_line(
-    language: str, text: str
-) -> None:
-    """Round 4, item 5: a context line may not state a number in ANY shape, including spelled
-    out in words — `_contains_a_number_shape` (reused unchanged from round 3) catches a pair
-    of en/ms number words or a run of two-plus Chinese numerals, never only bare digits, in
-    whichever language this ask happens to be answering in."""
-    cites = (Cite(kind="web", id=uuid.uuid4()),)
-    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) == "model_wrote_a_value"
+def test_a_verdict_with_no_listed_word_never_reaches_the_answer(verdict_text: str) -> None:
+    """Round 5's own proof of why a word list can never be complete: none of round 4's five
+    topic words (`range`/`paper`/`normal`/`high`/`low`) appears in any of these four — every
+    one reached the user under round 4's check. Moot now: a value ask discards every model
+    line outright, whatever it says, checked or not — there is no word to have missed."""
+    fact_id = uuid.uuid4()
+    known = {
+        "f1": _ToolLine(
+            token="f1", text="f1: lipid_panel ldl = 100", cite=Cite(kind="fact", id=fact_id)
+        )
+    }
+    value_facts = {
+        fact_id: _ValueFact(
+            kind="value",
+            date="Wednesday 21 January",
+            what="cholesterol test",
+            value="100",
+            band="within_range",
+        )
+    }
+    payload = {"lines": [{"text": verdict_text, "cites": ["f1"]}]}
+    answer = _answer_from_payload(
+        payload, known, "en", Reader(his=True), Mode.TEXT, value_facts=value_facts
+    )
+    assert answer is not None
+    assert verdict_text not in " ".join(line.text for line in answer.lines)
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 100 on Wednesday 21 January.",
+        "It is within the range printed on the paper.",
+    ]
 
 
-def test_a_zh_verdict_forgery_is_caught_by_the_topic_check() -> None:
-    """A Chinese context line raising the range/verdict topic (`范围`/`纸`, `_RANGE_TOPIC_
-    WORDS["zh"]`) is dropped exactly as an English or Malay one is, never only by an accident
-    of `_has_conclusion_language`."""
-    text = "这超出了纸上印的范围。"  # "this exceeds the range printed on the paper"
-    cites = (Cite(kind="claim", id=uuid.uuid4()),)
-    assert _context_line_problem(text, cites, frozenset(), frozenset(), {}) == "model_wrote_a_verdict"
+def test_an_innocent_malay_line_is_absent_on_a_value_ask_but_present_on_a_non_value_ask() -> None:
+    """Round 5, item 1: "Kertas ini ada dalam senarai anda." ("This paper is on your list.")
+    is entirely honest — no number, no verdict — but round 4's word list (`julat`/`kertas`/
+    `normal`/`tinggi`/`rendah`) would still have scanned and dropped it for containing
+    "kertas" (paper), the exact false positive the review found (ten honest sentences killed
+    for containing an ordinary word).
+
+    On a VALUE ask (any line anywhere in the answer cites a tracked fact) this line is still
+    absent — not because it was checked and failed, but because a value ask is deterministic
+    only: every model line is discarded, this one included, whether or not it would otherwise
+    have been fine. On a non-value ask (nothing anywhere cites a tracked fact), the same line
+    survives under the plain pre-PR gates, because there is no word list left to catch it on."""
+    innocent = "Kertas ini ada dalam senarai anda."
+    fact_id = uuid.uuid4()
+    card_id = uuid.uuid4()
+
+    # Value ask: a second line in the same answer cites a tracked fact, so the whole answer
+    # is deterministic — the innocent line, though harmless, never reaches him.
+    known_value_ask = {
+        "f1": _ToolLine(
+            token="f1", text="f1: lipid_panel ldl = 100", cite=Cite(kind="fact", id=fact_id)
+        ),
+        "r1": _ToolLine(
+            token="r1", text="r1: a waiting paper", cite=Cite(kind="review_card", id=card_id)
+        ),
+    }
+    value_facts = {
+        fact_id: _ValueFact(
+            kind="value",
+            date="Rabu 21 Januari",
+            what="ujian kolesterol",
+            value="100",
+            band="within_range",
+        )
+    }
+    payload_value_ask = {
+        "lines": [
+            {"text": innocent, "cites": ["r1"]},
+            {"text": "Kolesterol anda ialah 100 pada Rabu 21 Januari.", "cites": ["f1"]},
+        ]
+    }
+    answer = _answer_from_payload(
+        payload_value_ask, known_value_ask, "ms", Reader(his=True), Mode.TEXT, value_facts=value_facts
+    )
+    assert answer is not None
+    assert innocent not in " ".join(line.text for line in answer.lines)
+
+    # Non-value ask: nothing anywhere cites a tracked fact, so the plain pre-PR gates apply
+    # (plain words, conclusion language, caregiver voice, cites, elapsed/dated claims, the
+    # unconfirmed-card veto) — none of which this honest line trips — and it survives.
+    known_non_value_ask = {
+        "r1": _ToolLine(
+            token="r1", text="r1: a waiting paper", cite=Cite(kind="review_card", id=card_id)
+        ),
+    }
+    payload_non_value_ask = {"lines": [{"text": innocent, "cites": ["r1"]}]}
+    answer2 = _answer_from_payload(payload_non_value_ask, known_non_value_ask, "ms", Reader(his=True), Mode.TEXT)
+    assert answer2 is not None
+    assert [line.text for line in answer2.lines] == [innocent]
 
 
-async def test_the_conclusion_veto_still_holds_and_now_tells_the_model_why(
+async def test_a_value_ask_never_needs_a_repair_round_even_when_the_model_says_high(
     sg: AsyncSession, tmp_path: Path
 ) -> None:
-    """D-3, never a loosened veto: the model's own first attempt uses the questioner's word
-    "high" and is dropped exactly as before — but the drop now records a `Finding`
-    (`_CONCLUSION_RULE`), so the repair round the audit found dead (`ask_agent.py:1181` never
-    firing) actually runs, and a corrected second attempt is what reaches him."""
+    """Round 5, item 1: citing a tracked fact makes this a value ask, and a value ask is
+    deterministic only — the model's own first attempt using the questioner's word "high"
+    never even reaches `_has_conclusion_language`, because nothing about a value-ask line is
+    checked at all. One call, not two: there is no repair round because there is nothing to
+    repair. (The pre-PR conclusion veto + repair round, for a line that is NOT a value ask, is
+    proved separately by `test_the_conclusion_veto_still_holds_on_a_non_value_ask` below.)"""
     owner = await pa(sg, language="en")
     await _lipid_fact(
         sg, owner, attribute="ldl", value=140, printed_range={"low": None, "high": 130, "text": "<130"}
     )
-    first = _final([{"text": "Your cholesterol is high.", "cites": ["f1"]}])
-    second = _final(
+    client = FakeClient(
         [
-            {
-                "text": "Your cholesterol was 140 on Wednesday 21 January, above the range printed on the paper.",
-                "cites": ["f1"],
-            }
+            _tool_call("toolu_1", "read_records"),
+            _final([{"text": "Your cholesterol is high.", "cites": ["f1"]}]),
         ]
     )
-    client = FakeClient([_tool_call("toolu_1", "read_records"), first, second])
     asker = ClaudeAsker(client, searcher=FakeSearcher())
     _, _, answer = await _drive(asker, sg, owner, "Is my cholesterol high?", tmp_path)
+    assert len(client.messages.calls) == 2, "no repair round: a value ask is never checked"
+    # A citation to a tracked fact always yields Nura's own two-line catalogue sentence (the
+    # value, then the comparison), never the model's own word for it.
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 140 on Wednesday 21 January.",
+        "It is above the range printed on the paper.",
+    ]
+    assert all("high" not in line.text.lower() for line in answer.lines)
+
+
+async def test_the_conclusion_veto_still_holds_on_a_non_value_ask(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D-3, never a loosened veto — round 5, item 2: for a line that is NOT a value ask (here,
+    a medicine line — `medication_line` is never a tracked value fact), the gates are exactly
+    the pre-PR set. The model's own first attempt uses the questioner's word "risk" and is
+    dropped exactly as before D-1 ever touched this file — the drop records a `Finding`
+    (`_CONCLUSION_RULE`), the repair round fires, and a corrected second attempt is what
+    reaches him, in the model's own words (never Nura's, since nothing here is a value ask)."""
+    owner = await pa(sg, language="en")
+    await add(sg, owner, label("amlodipine", "5 mg"))
+    first = _final([{"text": "Your blood pressure tablet is a risk.", "cites": ["m1"]}])
+    second = _final(
+        [{"text": "Your blood pressure tablet is on your list of medicines.", "cites": ["m1"]}]
+    )
+    client = FakeClient([_tool_call("toolu_1", "read_medicines"), first, second])
+    asker = ClaudeAsker(client, searcher=FakeSearcher())
+    _, _, answer = await _drive(asker, sg, owner, "is my blood pressure tablet a risk", tmp_path)
     # The repair round actually fired: a second `messages.create` call happened at all (proof
-    # the fix works — before it, `failed_findings` stayed empty and the loop fell straight to
-    # the rule-based fallback with the model never asked to try again).
+    # the veto and its repair-hint machinery are both still live for a non-value ask).
     assert len(client.messages.calls) == 3
     repair_hint = client.messages.calls[2]["messages"][-1]["content"]
     assert "_CONCLUSION_RULE" not in repair_hint  # the number, not the Python name
     assert "app's own verdict" in repair_hint or "verdict" in repair_hint
-    # Round 4: a citation to a tracked fact always yields Nura's own two-line catalogue
-    # sentence (the value, then the comparison), never only the one line the model wrote.
-    assert len(answer.lines) == 2
-    assert all("high" not in line.text.lower() for line in answer.lines)
-    assert "above the range printed on the paper" in answer.lines[1].text
+    assert len(answer.lines) == 1  # exactly one line survives, from the repaired attempt
+    assert "risk" not in answer.lines[0].text.lower()
+    assert answer.lines[0].text == "Your blood pressure tablet is on your list of medicines."
 
 
 async def test_vetoes_still_hold_no_diagnosis_no_dose_change_no_unconfirmed_card_value(

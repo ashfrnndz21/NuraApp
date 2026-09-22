@@ -28,7 +28,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
-from app.delivery.timeline_strings import verified
+from app.delivery.timeline_strings import verified, what_word
 from app.ingestion.extract import DocumentKind
 from app.ingestion.models import FieldState, ReviewCard, ReviewField
 from app.ingestion.objects import LocalObjectStore
@@ -36,6 +36,7 @@ from app.keys.context import KeyContext, OutOfScope
 from app.keys.repository import scoped_new
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
 from app.medicines.models import LineStatus, MedicationLine
+from app.medicines.strings import say_date
 from app.memory.models import (
     Appointment,
     Artifact,
@@ -57,7 +58,7 @@ from app.search.retrieve import (
     question_digest,
 )
 from tests.medicines_support import REGISTRY, add, label, let_in, pa
-from tests.timeline_support import SITI_PHONE, again, artefact, keep_only_me, record, trail
+from tests.timeline_support import SITI_PHONE, again, artefact, keep_only_me, reading, record, trail
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "recall"
 
@@ -132,11 +133,16 @@ async def test_mei_asks_in_text_what_dr_tan_said_and_every_line_cites_what_it_re
     rec = await record(sg)
     answer = await ask(sg, rec.mei, "what did Dr Tan say", tmp_path)
     texts = {line.text for line in answer.lines}
+    # Round 5, review B3: `RECALL["paper"]`, reached here from a "paper" hit (never a
+    # numeric "fact" hit in this fixture), now goes through `Reader.says` too — Mei hears Pa
+    # named, not addressed. `visit_next`/`visit_past`/`medicine_from` are a wider, pre-
+    # existing gap this round does not touch (`RECALL_THEIRS`'s own docstring) — still in his
+    # own voice here, unchanged.
     assert texts == {
         "Your next visit is to Dr Tan on Thursday 10 September.",
         "You saw Dr Tan on Monday 24 August.",
         "Dr Tan gave you your blood pressure tablet.",
-        "Your cholesterol test from Thursday 7 September is in your papers.",
+        "Pa's cholesterol test from Thursday 7 September is in Pa's papers.",
     }
     await every_cite_is_on_this_profile(sg, rec.owner, answer)
     paper = next(line for line in answer.lines if "papers" in line.text)
@@ -411,6 +417,49 @@ async def test_a_measured_value_against_its_printed_range_never_the_apps_own_jud
     assert answer.lines[-1].text == band_line
     for line in answer.spoken:
         assert verified(line, "en"), line
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+async def test_a_caregiver_hears_a_measured_value_about_him_by_name(
+    sg: AsyncSession, tmp_path: Path, language: str
+) -> None:
+    """Round 5, review B3: `_compose`'s own `value_lines`/`reading_lines`/`RECALL["paper"]`
+    branches never went through `Reader.says`, so a caregiver on Mei's own key read his own
+    "Your cholesterol test was 140…" voice, in any of the three languages — the same leak the
+    model asker's own `VALUE`/`READING` lines had before `VALUE_THEIRS`/`READING_THEIRS` were
+    registered for translation. Mei asks about Pa's own record (`display_name="Pa"`,
+    `tests.medicines_support.pa`) and hears him named, not addressed."""
+    owner = await pa(sg, language=language)
+    mei = await let_in(
+        sg, owner, phone="+6588880099", name="Mei", role=KeyRole.CHIEF, scopes=set(ROLE_SCOPES[KeyRole.CHIEF])
+    )
+    await _lipid_fact(
+        sg, owner, attribute="ldl", value=140, printed_range={"low": None, "high": 130, "text": "<130"}
+    )
+    await reading(sg, owner, 118, 76, WHEN)
+
+    value_answer = await ask(sg, mei, "cholesterol", tmp_path, language=language)
+    date = say_date(WHEN.date(), language)
+    what = what_word("lipid_panel", language)
+    expected_value = {
+        "en": [f"Pa's {what} was 140 on {date}.", "It is above the range printed on the paper."],
+        "ms": [
+            f"{what[:1].upper()}{what[1:]} Pa ialah 140 pada {date}.",
+            "Ia melebihi julat yang dicetak pada kertas.",
+        ],
+        "zh": [f"{date}Pa的{what}是140。", "这高于纸上印的范围。"],
+    }[language]
+    assert [line.text for line in value_answer.lines] == expected_value
+
+    reading_answer = await ask(sg, mei, "blood pressure", tmp_path, language=language)
+    expected_reading = {
+        "en": [f"Pa's blood pressure on {date} was 118 over 76."],
+        "ms": [f"Tekanan darah Pa pada {date} ialah 118 atas 76."],
+        "zh": [f"{date}Pa量了血压。", "Pa的血压是118比76。"],
+    }[language]
+    assert [line.text for line in reading_answer.lines] == expected_reading
+    for line in value_answer.spoken + reading_answer.spoken:
+        assert verified(line, language), line
 
 
 # --- D-7 (audit-2026-09-22.md §3.3): Ask reads medicines without status == ACTIVE ------------

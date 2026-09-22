@@ -102,6 +102,9 @@ def _catalogues() -> tuple[tuple[Mapping[str, Any], Mapping[str, Any]], ...]:
         # sentence (`app.llm.ask_agent._deterministic_lines`) hears it about him by name,
         # never in his own "Your blood pressure…" voice.
         (timeline_strings.READING, timeline_strings.READING_THEIRS),
+        # Round 5 (review B3): only the "paper" key has a twin — see `RECALL_THEIRS`'s own
+        # docstring for why the rest of `RECALL` is deliberately left as before.
+        (timeline_strings.RECALL, timeline_strings.RECALL_THEIRS),
         (timeline_strings.ANCHORS, timeline_strings.ANCHORS_THEIRS),
         (timeline_strings.ASK_STEPS, timeline_strings.ASK_STEPS_THEIRS),
         (timeline_strings.IMPORT_STEPS, timeline_strings.IMPORT_STEPS_THEIRS),
