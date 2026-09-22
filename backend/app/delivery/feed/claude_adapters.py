@@ -77,8 +77,14 @@ COMPRESS_MODEL = DEFAULT_MODELS[Task.COMPRESS]
 """The default `ClaudeCompressor` is built with when a caller does not pass `model=` — see
 `SEARCH_MODEL` above. The compressor rewrites an already-fetched page's text into plain
 words, so the cheapest model, Haiku 4.5, keeps the behaviour."""
-WEB_SEARCH_TOOL = "web_search_20260209"
-WEB_FETCH_TOOL = "web_fetch_20260209"
+WEB_SEARCH_TOOL = "web_search_20250305"
+WEB_FETCH_TOOL = "web_fetch_20250910"
+"""The basic server tools, on purpose. Measured on the owner's key, 22 Sep 2026, one job
+("amlodipine", six allow-listed publishers): the dynamic-filtering pair (`web_search_20260209`
+/`web_fetch_20260209`) took 238 s, 269,568 input tokens, 19 searches and 6 code-execution
+steps to find ONE page; the basic pair took 129 s and 144,965 input tokens and found three.
+The dynamic pair runs code and many internal searches inside one call, which is what drained
+two credit top-ups and hit every job deadline."""
 SEARCH_TOOL_MAX_USES = 3
 """`max_uses` on both server tools, per call to `_ask` (one `messages.create`): the live
 incident that prompted this module's cost work was one feed run fanning out into about 48

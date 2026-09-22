@@ -134,6 +134,14 @@ export const URGENT_DEADLINE_MS = 10_000;
  *  request never holds the queue — and an urgent call behind it — for ever. */
 export const CALL_DEADLINE_MS = 30_000;
 
+/** A streamed call's idle deadline: how long its connection may go without an event. Longer
+ *  than `CALL_DEADLINE_MS` on purpose — the backend reads a paper with one model call and
+ *  says nothing while it waits for it, and a real multi-page document takes well over 30 s
+ *  (measured on the owner's copy, 22 Sep 2026: three reads finished server-side after the
+ *  phone had already hung up at 30 s and reported "the internet was off"). The backend bounds
+ *  the read itself, so this is a ceiling for a silent wire, not for the work. */
+export const STREAM_IDLE_MS = 180_000;
+
 function enqueue<T>(work: (signal: AbortSignal) => Promise<T>, urgent = false, abortable = false): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const control = new AbortController();
@@ -453,7 +461,7 @@ async function sendStream(
   let idle: ReturnType<typeof setTimeout> | undefined;
   const resetIdle = () => {
     if (idle !== undefined) clearTimeout(idle);
-    idle = setTimeout(stop, CALL_DEADLINE_MS);
+    idle = setTimeout(stop, STREAM_IDLE_MS);
   };
   resetIdle();
   try {

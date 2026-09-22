@@ -240,7 +240,10 @@ def test_claude_searcher_returns_the_ports_found_shape() -> None:
     call = client.messages.calls[0]
     assert call["model"] == "claude-sonnet-5"
     tool_types = {tool["type"] for tool in call["tools"]}
-    assert tool_types == {"web_search_20260209", "web_fetch_20260209"}
+    # The basic pair, on purpose: the dynamic-filtering pair ran code and many internal
+    # searches inside one call — 238 s and 269,568 input tokens for one page, measured live
+    # on 22 Sep 2026 (`claude_adapters.WEB_SEARCH_TOOL`).
+    assert tool_types == {"web_search_20250305", "web_fetch_20250910"}
     assert call["output_config"]["format"]["type"] == "json_schema"
     # The SDK's `JSONOutputFormatParam` reads `schema`, not `json_schema` — the shape a
     # 400 was hit live on (2026-09-18) until this was fixed.

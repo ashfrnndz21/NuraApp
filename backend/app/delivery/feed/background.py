@@ -112,8 +112,10 @@ whichever order they happened to complete, not the broker's: the general clip ah
 tablet's (#286's first CI round, and the same suite locally). One at a time keeps the order the
 plan decided, and the run is in the background anyway — nothing is waiting on it."""
 
-JOB_DEADLINE_SECONDS = 60
-"""One job — one search, its pages, their compression — gets at most this long."""
+JOB_DEADLINE_SECONDS = 300
+"""One job — one search, its pages, their compression — gets at most this long. Measured 22
+Sep 2026: one live search call alone is 129 s on the basic tools (238 s on the dynamic ones),
+so 60 s never let a single live job finish."""
 
 RUN_DEADLINE_SECONDS = 900
 """The whole day's catch-up, however many jobs it holds, gets at most this long: one at a
