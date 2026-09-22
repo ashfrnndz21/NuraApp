@@ -35,6 +35,15 @@ export function CloudStep(): JSX.Element {
     nura.conditions(bearer, language.value).then((found) => (conditions.value = found), setError);
   }, [bearer, language.value]);
 
+  // The graph (#117) is a real fetch, never instant: painting the cloud's own container empty
+  // while it is in flight (`circles: []`, `height: 0`) reads as no different from a screen that
+  // has nothing to show — the container empty at height 0 for one paint, then the real bubbles
+  // after (found: `cp5-onboarding.spec.ts`'s own geometry test, red about a third of runs on
+  // exactly this race; the most likely shape of the owner's own Safari blank frame too). So the
+  // container is never asked to paint childless: it shows the orb and a loading line, at a real
+  // minimum height, until the graph for this language has actually arrived — `data-loaded` says
+  // which, for a test to wait on rather than guess a timing.
+  const ready = conditions.value?.language === language.value;
   const words = conditions.value?.conditions ?? [];
   const view = cloudView(words, picked.value, { showAll, lastPicked });
 
@@ -134,33 +143,44 @@ export function CloudStep(): JSX.Element {
           weight mark a pick, never colour alone, WCAG 1.4.1) are exactly what they always were.
           Each bubble's own `phaseOf(word.code)` gives its drift a different delay and duration
           (on the inner `.bubble-surface`, never the button itself) so neighbours never move in
-          lockstep. */}
-      <div class="cloud bubble-cloud" role="group" aria-label={title} data-testid="cloud" style={{ height: `${height}px` }}>
-        {circles.map((word, at) => {
-          const phase = phaseOf(word.code);
-          return (
-            <button
-              key={word.code}
-              type="button"
-              class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
-              aria-pressed={word.picked}
-              data-testid={`word-${word.code}`}
-              data-size={word.size}
-              onClick={() => tap(word)}
-              style={{ left: `${word.leftPercent}%`, top: `${word.top}px`, width: `${word.diameter}px`, height: `${word.diameter}px` }}
-            >
-              <span class="bubble-surface" aria-hidden="true" style={{ animationDelay: `${-phase * 7}s`, animationDuration: `${5 + phase * 3}s` }} />
-              {word.picked && (
-                <span class="bubble-tick" aria-hidden="true">
-                  <Icon name="check" />
-                </span>
-              )}
-              {word.name}
-              {word.picked && word.term && <span class="term" data-testid="term">{` (${word.term})`}</span>}
-            </button>
-          );
-        })}
-      </div>
+          lockstep.
+
+          Before the graph has actually arrived (`ready`, above) this never paints the childless,
+          height-0 box that reads as "nothing here" — the orb and a loading line instead, at a
+          real minimum height, `data-loaded="false"` for a test to wait on. */}
+      {ready ? (
+        <div class="cloud bubble-cloud" role="group" aria-label={title} data-testid="cloud" data-loaded="true" style={{ height: `${height}px` }}>
+          {circles.map((word) => {
+            const phase = phaseOf(word.code);
+            return (
+              <button
+                key={word.code}
+                type="button"
+                class={`word bubble s${word.size}${word.picked ? " picked" : ""}${word.fresh ? " fresh" : ""}`}
+                aria-pressed={word.picked}
+                data-testid={`word-${word.code}`}
+                data-size={word.size}
+                onClick={() => tap(word)}
+                style={{ left: `${word.leftPercent}%`, top: `${word.top}px`, width: `${word.diameter}px`, height: `${word.diameter}px` }}
+              >
+                <span class="bubble-surface" aria-hidden="true" style={{ animationDelay: `${-phase * 7}s`, animationDuration: `${5 + phase * 3}s` }} />
+                {word.picked && (
+                  <span class="bubble-tick" aria-hidden="true">
+                    <Icon name="check" />
+                  </span>
+                )}
+                {word.name}
+                {word.picked && word.term && <span class="term" data-testid="term">{` (${word.term})`}</span>}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div class="cloud bubble-cloud loading" data-testid="cloud" data-loaded="false">
+          <Orb size="sm" />
+          <Status text={c.loading} testId="cloud-loading" />
+        </div>
+      )}
       {/* A picked word's own follow-up, right under the cloud (docs/design/onboarding-mock.html
           `renderAsk()`) — never a screen of its own any more (`Asks.tsx` still answers that
           question when a gap card reopens exactly one of these later). Answering one, or

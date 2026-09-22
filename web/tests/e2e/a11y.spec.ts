@@ -505,6 +505,58 @@ test("Tab goes through what can be pressed in the order the eye reads, each with
   await expect(page.locator("main h1")).toBeFocused();
 });
 
+/** The register path's own first-paper screen (`Records.tsx` `PaperRow`, the `firstpaper` scene)
+ *  never sat on this walk before: an owner reviewing #318 found "take-photo"/"choose-file"
+ *  Tab-reachable with no ring at all — `.paper-row-label` (a `<label>` wrapping a hidden file
+ *  input, or a bare `<button>` sharing that class for "choose-many") matched no `:focus-visible`/
+ *  `:focus-within` rule (`base.css`'s own `label.pill:focus-within` only ever matched a
+ *  `.pill`). This walks the real register path to that screen and checks all three rows the
+ *  same way the warm-home walk above checks its own controls. */
+test("the first-paper row Tab stops each get a ring, the same as every other row-shaped control", async ({ page }) => {
+  const phone = freshPhone("+659896");
+  await signInThroughTheApp(page, phone, "Tan");
+  await page.getByTestId("door-for-me").click();
+  await page.getByTestId("who-continue").click();
+  await page.getByTestId("agree").click();
+  await page.getByLabel("The name Nura uses").fill("Tan");
+  await page.getByTestId("about-next").click();
+  await page.getByTestId("about-lang-en").click();
+  await page.getByTestId("decade-1950").click();
+  await page.getByLabel("The doctor's name").fill("Dr Tan");
+  await page.getByTestId("about-next").click();
+  await page.getByTestId("breakfast-07:30").click();
+  for (const item of ["large_text", "high_contrast", "voice_on", "big_targets", "one_thing_per_screen", "read_back", "repeat_prompts"]) {
+    await page.getByTestId(`${item}-no`).click();
+  }
+  await page.getByTestId("density-simple").click();
+  await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "cloud");
+  // The cloud's own graph fetch (#317 review item 2): wait for it to have actually arrived,
+  // never a timing guess, before moving past it.
+  await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
+  await page.getByTestId("cloud-done").click();
+  await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "records");
+  await expect(page.getByTestId("take-photo")).toBeVisible();
+  await expect(page.locator("main h1")).toBeFocused();
+
+  const rings: Record<string, boolean> = {};
+  for (let n = 0; n < 20 && Object.keys(rings).length < 3; n++) {
+    await page.keyboard.press("Tab");
+    const stop = await page.evaluate(() => {
+      const element = document.activeElement as HTMLElement | null;
+      if (!element || element === document.body) return null;
+      // The row that actually took focus: the label wrapping "take-photo"/"choose-file"'s own
+      // hidden input, or "choose-many"'s own button — both carry `.paper-row-label`.
+      const holder = (element.closest(".paper-row-label") as HTMLElement | null) ?? element;
+      const testId = holder.getAttribute("data-testid");
+      const style = getComputedStyle(holder);
+      const ring = (style.outlineStyle !== "none" && style.outlineWidth !== "0px") || style.boxShadow !== "none";
+      return { testId, ring };
+    });
+    if (stop?.testId && ["take-photo", "choose-file", "choose-many"].includes(stop.testId)) rings[stop.testId] = stop.ring;
+  }
+  expect(rings, "every first-paper row must show a Tab ring").toEqual({ "take-photo": true, "choose-file": true, "choose-many": true });
+});
+
 test("Reduce Motion: nothing moves that he did not ask for, and what answers a tap does so at once", async ({ page, request }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const pa = await seedOwner(request);

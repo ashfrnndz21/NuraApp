@@ -1615,6 +1615,8 @@ export const zh = {
       // @patient headline
       headOther: "{name} 的健康有哪些方面？点符合的。",
       // @patient
+      loading: "Nura 正在准备您的字词。",
+      // @patient
       lead: "有的就点一下。",
       // @patient
       lead2: "Nura 会接着显示常常一起出现的。",

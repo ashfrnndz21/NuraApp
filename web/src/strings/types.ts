@@ -827,6 +827,7 @@ export interface Strings {
       titleOther: string;
       headSelf: string;
       headOther: string;
+      loading: string;
       lead: string;
       lead2: string;
       lead3: string;

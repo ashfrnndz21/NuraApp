@@ -1615,6 +1615,8 @@ export const ms = {
       // @patient headline
       headOther: "Apa yang ada dalam kesihatan {name}? Tekan yang berkenaan.",
       // @patient
+      loading: "Nura sedang menyediakan perkataan anda.",
+      // @patient
       lead: "Tekan setiap satu yang berkenaan.",
       // @patient
       lead2: "Nura akan tunjuk apa yang selalu datang bersamanya.",

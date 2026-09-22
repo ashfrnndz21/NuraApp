@@ -233,6 +233,19 @@
   position: relative;
   width: 100%;
 }
+/* While the graph (#117) is still in flight, `Cloud.tsx` swaps `packCloud`'s circles for the
+ *  orb and a loading line, never a childless box at `height: 0` — this is what that read as
+ *  before it had one: something on screen, of a real minimum height, so the layout never
+ *  collapses out from under the head above it for the one paint before the real cloud arrives. */
+.cloud.bubble-cloud.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 260px;
+  text-align: center;
+}
 /* The button itself — the real tap target — never moves once placed: its own box is what a
  *  pointer, a screen reader and Playwright's actionability check all measure, and a hit target
  *  that keeps sliding out from under a slow or unsteady finger is a real usability defect, not
@@ -386,6 +399,18 @@
   padding: 0;
   color: inherit;
   font: inherit;
+}
+/* A ring on Tab, for all three rows: the first two are a `<label>` wrapping a visually-hidden
+ *  file input (`:focus-within`, since the input itself takes focus, not the label), the third
+ *  ("choose-many") a bare `<button>` sharing this same class (`:focus-visible`, since the
+ *  button itself takes focus) — neither pattern is a `.pill`, so `base.css`'s own
+ *  `label.pill:focus-within` rule never matched either one (found: an owner's own Tab walk
+ *  reached "take-photo"/"choose-file"/"choose-many" with no ring at all). Same treatment as
+ *  every other row-shaped tap target already gets (`warm.css` `.action-row:focus-within`). */
+.paper-row-label:focus-within,
+.paper-row-label:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 2px;
 }
 .paper-row-label input[type="file"] {
   /* The real control: visually hidden, never `display:none` (still reachable by a screen

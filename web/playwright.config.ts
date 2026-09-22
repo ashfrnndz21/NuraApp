@@ -66,18 +66,18 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  // chromium is the only project CI runs — CI's own runner has no WebKit browser installed
-  // (`browserType.launch: Executable doesn't exist`, every spec, found on #318's own CI run),
-  // and installing one is off limits here (no `.github` changes). Locally, webkit is included
-  // by default (`!process.env.CI`) to catch engine-specific defects chromium's own walk does
-  // not reproduce (e.g. the register-path blank screen the owner hit in Safari, 2026-09-22) —
-  // run it with `--project=webkit`. On CI itself, set `NURA_E2E_WEBKIT=1` on a runner that has
-  // installed WebKit (`npx playwright install webkit`) to opt back in.
+  // chromium is the only project any plain run pays for — CI's own runner has no WebKit browser
+  // installed (`browserType.launch: Executable doesn't exist`, every spec, found on #318's own
+  // CI run), and installing one is off limits here (no `.github` changes). A local run that
+  // defaulted webkit on too (`!process.env.CI`) paid for a second browser on every run whether
+  // it was asked for or not, and — separately — currently fails early in it (sign-in's own code
+  // field never appears there, item 3 of #318's review; still being chased down, unrelated to
+  // this gating). webkit is opt-in ONLY now: `NURA_E2E_WEBKIT=1 npx playwright test
+  // --project=webkit`, to catch engine-specific defects chromium's own walk does not reproduce
+  // (e.g. the register-path blank screen the owner hit in Safari, 2026-09-22) — never a default.
   projects: [
     { name: "chromium", use: { ...devices["Pixel 5"], browserName: "chromium" } },
-    ...(process.env.NURA_E2E_WEBKIT === "1" || !process.env.CI
-      ? [{ name: "webkit", use: { ...devices["iPhone 13"], browserName: "webkit" as const } }]
-      : []),
+    ...(process.env.NURA_E2E_WEBKIT === "1" ? [{ name: "webkit", use: { ...devices["iPhone 13"], browserName: "webkit" as const } }] : []),
   ],
   // The backend: `make dev` (its env and its command), on the port the API URL names, with its
   // clock frozen at FROZEN_CLOCK. Build the app first (`make build-web`) so it serves /app.

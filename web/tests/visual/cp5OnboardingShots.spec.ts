@@ -141,7 +141,11 @@ test.describe("cp5 the bubble cloud at 360x640", () => {
     await page.getByTestId("agree").click();
     await page.getByLabel("The name Nura uses").fill("Tan");
     await throughAbout(page);
-    await expect(page.getByTestId("cloud")).toBeVisible();
+    // The cloud container is visible the instant the screen mounts now, loading or not
+    // (`Cloud.tsx`: the orb and a loading line while its own graph fetch is still in flight,
+    // never a childless box) — `data-loaded="true"` is what actually says the words themselves
+    // have arrived.
+    await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
     await page.getByTestId("more-words").click();
     await shoot(page, `${OUT}/cloud-360x640.png`, false);
   });

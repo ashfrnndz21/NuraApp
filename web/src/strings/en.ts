@@ -1615,6 +1615,8 @@ export const en = {
       // @patient headline
       headOther: "What is part of {name}'s health? Tap what fits.",
       // @patient
+      loading: "Nura is getting your words ready.",
+      // @patient
       lead: "Tap each one that is part of it.",
       // @patient
       lead2: "Nura then shows what often goes with it.",

@@ -195,7 +195,9 @@ export function ConsentScreen(): JSX.Element {
   // there when it was not) — `pendingName`, set the moment its own Continue is tapped. This
   // screen never asks for it a second time; it only falls back to its own field on whatever
   // narrower path still reaches `consent` without going through `who` first.
-  const [name, setName] = useState(me.value?.display_name ?? pendingName.value ?? "");
+  // `pendingName` is a signal seeded with "" (never nullish), so the trailing `?? ""` here never
+  // fired — dropped.
+  const [name, setName] = useState(me.value?.display_name ?? pendingName.value);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
@@ -226,6 +228,11 @@ export function ConsentScreen(): JSX.Element {
       pendingName.value = "";
       await startOnboarding(opened);
     } catch (failure) {
+      // Spent the moment this attempt read it (`known`, above) whether it goes on to succeed or
+      // not — a failed submit used to leave the old value sitting in this one-time-use signal,
+      // so a later re-entry (back out of this screen, in again down a path that does not go
+      // through `who` first) would reuse the stale name and hide the field a second time.
+      pendingName.value = "";
       setError(failure);
     } finally {
       setBusy(false);

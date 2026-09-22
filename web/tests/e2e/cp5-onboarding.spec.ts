@@ -300,8 +300,14 @@ test("the cloud saves exactly the same payload it always did", async ({ page, re
  *  inside a fixed 390px frame, so the cloud itself never actually grows past that, but the test
  *  runs the geometry check at the wide viewport too to prove nothing outside the frame breaks
  *  it). No two bubbles' boxes intersect by more than 4px, and every bubble's label stays inside
- *  the scrolling region — never clipped. */
+ *  the scrolling region — never clipped.
+ *
+ *  `evaluateAll` never auto-waits the way a locator action does — called the instant the graph's
+ *  own fetch (`Cloud.tsx`) is still in flight, it used to read the container's own real, honest
+ *  ZERO circles, not a timing bug in this test (review of #318: this red about a third of runs).
+ *  Waiting on `data-loaded="true"` first is the fix, not a longer guessed sleep. */
 async function cloudGeometryHolds(page: Page): Promise<void> {
+  await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
   const boxes = await page.getByTestId("cloud").locator('[data-testid^="word-"]').evaluateAll((nodes) =>
     nodes.map((node) => {
       const rect = node.getBoundingClientRect();
@@ -399,6 +405,8 @@ test("the cloud respects prefers-reduced-motion: nothing keeps running", async (
   for (const item of SWITCHES) await page.getByTestId(`${item}-no`).click();
   await page.getByTestId("density-simple").click();
   await expect(page.locator("main.onboarding")).toHaveAttribute("data-stage", "cloud");
+  // `evaluateAll` never auto-waits — the graph's own fetch may still be in flight.
+  await expect(page.getByTestId("cloud")).toHaveAttribute("data-loaded", "true");
 
   const running = await page.getByTestId("cloud").locator('[data-testid^="word-"]').evaluateAll((nodes) =>
     nodes.flatMap((node) => (node as HTMLElement).getAnimations().filter((a) => a.playState === "running")),
