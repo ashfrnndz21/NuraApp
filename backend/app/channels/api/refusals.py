@@ -455,6 +455,49 @@ def status_of(refusal: Refusal) -> int:
     return 400
 
 
+class SameBytesAgain(Refusal):
+    """The last-resort catch, never the ordinary path: something reached `store_artifact`
+    (or an equivalent raw insert) with bytes already on file for this profile, past every
+    check-first door that was supposed to catch it. Never a 500 out of a writer's own
+    caller — see `integrity_violation` below."""
+
+
+async def integrity_violation(request: Request, error: Exception) -> JSONResponse:
+    """§29, the independent safety review (B5): a UNIQUE violation on `artifact` must never
+    reach a person, or a webhook's own caller, as a raw database exception — a 500 with a
+    stack trace is exactly the "generic technical language" the product bars everywhere else,
+    and on the WhatsApp webhook a 500 is silence: no reply reaches the sender at all.
+
+    This is the backstop, not the fix: every writer that can plausibly be handed the same
+    bytes twice (`app.ingestion.duplicates.find_own_artifact_by_digest`'s callers) already
+    checks first and reuses the artefact on file, so this should never actually fire. If a
+    future writer is added without that check, or two requests race past the check itself
+    (the database, not the application, is what actually enforces uniqueness), this turns
+    what would be an unhandled 500 into the same calm, named refusal shape every other one
+    already has — never a stack trace, never a raw SQL message, on the wire.
+
+    The two engines this app runs on word the same violation differently, and this must
+    catch it on either: SQLite names the columns and never the index --
+    `UNIQUE constraint failed: artifact.profile_id, artifact.sha256` -- while Postgres names
+    the index and not always the columns in the same sentence --
+    `duplicate key value violates unique constraint "ix_artifact_profile_sha256"`. Checked
+    directly (a bare `python3.12` snippet against `sqlite+aiosqlite://`, not a guess): the
+    index name alone is never present in SQLite's message, so that check by itself would
+    never fire here and every resend would still 500."""
+    del request
+    from sqlalchemy.exc import IntegrityError
+
+    if not isinstance(error, IntegrityError):
+        raise error
+    text = str(error.orig)
+    is_this_index = "ix_artifact_profile_sha256" in text or (
+        "artifact.profile_id" in text and "artifact.sha256" in text
+    )
+    if not is_this_index:
+        raise error
+    return JSONResponse(status_code=409, content={"refusal": "SameBytesAgain"})
+
+
 async def refused(request: Request, refusal: Exception) -> JSONResponse:
     assert isinstance(refusal, Refusal)
     body: dict[str, str] = {"refusal": type(refusal).__name__}

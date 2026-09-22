@@ -1011,6 +1011,10 @@ class AuditOut(BaseModel):
     rows: int
     outcome: Outcome
     refused_because: str | None
+    answered_with: str | None
+    """A card's own answer to its one pending question (D-2, D-4b) — "mine", "someone_elses",
+    "same" or "different", from the closed set it was checked against before the line was
+    written. Never the paper's own printed name, or any other free text."""
     shared_with_person_id: uuid.UUID | None
     shared_with_label: str | None
     withheld: list[str] = []
@@ -1033,6 +1037,7 @@ class AuditOut(BaseModel):
             rows=entry.rows,
             outcome=entry.outcome,
             refused_because=entry.refused_because,
+            answered_with=entry.answered_with,
             shared_with_person_id=entry.shared_with_person_id,
             shared_with_label=entry.shared_with_label,
             withheld=list(withheld),
@@ -1957,17 +1962,19 @@ class ReviewClarifyOut(BaseModel):
     web client says it in words). `kind` is `ReviewCard.pending_question`'s own value.
 
     For `"whose_paper"`: `mismatched` names which of name/patient_id/birth_year/sex disagreed
-    (`app.ingestion.whose_paper.IdentitySignal.kind`), `paper_name`/`paper_birth_year`/
-    `paper_sex` are what the paper itself said, for the sentence to quote. For
-    `"duplicate_paper"`: `existing_card_id` and `existing_added_on` name the paper on file
-    this one looks like — "This looks like the paper you added on {existing_added_on}."
+    (`app.ingestion.whose_paper.IdentitySignal.kind`) — the closed enum only, never the
+    paper's own printed value: the FIX BEFORE MERGE the independent safety review named,
+    `paper_name` rendered whatever an unconfirmed page's own name field happened to say as
+    if it were Nura's own words, and is gone from here entirely, not only unset. The reading
+    screen composes its own sentence from the field names alone ("The name and the year of
+    birth on this paper are not Pa's."); the paper's own printed values are never text Nura
+    composes, only what "See the paper itself" (the photo) shows. For `"duplicate_paper"`:
+    `existing_card_id` and `existing_added_on` name the paper on file this one looks like —
+    "This looks like the paper you added on {existing_added_on}."
     """
 
     kind: str
     mismatched: list[str] = []
-    paper_name: str | None = None
-    paper_birth_year: int | None = None
-    paper_sex: str | None = None
     existing_card_id: uuid.UUID | None = None
     existing_added_on: date | None = None
 
@@ -1980,9 +1987,6 @@ class ReviewClarifyOut(BaseModel):
             return cls(
                 kind=card.pending_question.value,
                 mismatched=[m["kind"] for m in payload.get("mismatches", [])],
-                paper_name=payload.get("paper_name"),
-                paper_birth_year=payload.get("paper_birth_year"),
-                paper_sex=payload.get("paper_sex"),
             )
         existing_added_on = payload.get("existing_added_on")
         return cls(

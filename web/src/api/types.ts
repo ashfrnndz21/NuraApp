@@ -1092,16 +1092,16 @@ export type WhosePaperMismatch = "name" | "patient_id" | "birth_year" | "sex";
 /** The one plain question a card is asking (D-2, D-4b) — raw, structured data the reading
  *  screen builds the sentence and the chips from (`web/src/strings`), never a sentence the
  *  backend composed: the same division of labour the rest of a review card already keeps.
- *  `kind === "whose_paper"`: `paper_name`/`paper_birth_year`/`paper_sex` are what the paper
- *  itself said, `mismatched` names which of them disagreed with the record.
- *  `kind === "duplicate_paper"`: `existing_card_id`/`existing_added_on` name the paper this
- *  one looks like. */
+ *  `kind === "whose_paper"`: `mismatched` names which fields disagreed with the record — the
+ *  closed enum only. The paper's own printed values (a name, a year, a sex) never reach this
+ *  type at all: the independent safety review's FIX BEFORE MERGE removed `paper_name` (and,
+ *  in the same spirit, `paper_birth_year`/`paper_sex`) from the wire entirely, since a
+ *  sentence quoting an unconfirmed page's own free text is exactly the hostile-extracted-text
+ *  shape the rest of the app refuses everywhere else. `kind === "duplicate_paper"`:
+ *  `existing_card_id`/`existing_added_on` name the paper this one looks like. */
 export interface ReviewClarifyOut {
   kind: "whose_paper" | "duplicate_paper";
   mismatched: WhosePaperMismatch[];
-  paper_name: string | null;
-  paper_birth_year: number | null;
-  paper_sex: string | null;
   existing_card_id: string | null;
   existing_added_on: string | null;
 }

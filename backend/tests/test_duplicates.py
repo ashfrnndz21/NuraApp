@@ -15,10 +15,13 @@ three times ... no warning"). Two parts, both covered here:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.clock import FrozenClock
 from app.db import utcnow
 from app.ingestion.objects import sha256_of
 from app.memory.episodic import store_artifact
@@ -97,6 +100,46 @@ async def test_the_same_bytes_twice_over_the_streamed_route_too(deployment: Depl
 
     cards = await deployment.client.get(f"/profiles/{profile_id}/review-cards", headers=his)
     assert len(cards.json()) == 1
+
+
+LATE_SG_NIGHT_UTC = datetime(2026, 9, 13, 19, 30, tzinfo=UTC)
+"""19:30 UTC is 03:30 the next morning in Singapore and Malaysia (UTC+8): a moment that only
+tells the two calendars apart, and only the region-aware one is his own."""
+
+
+async def test_the_duplicate_added_on_date_is_his_own_day_not_utcs(
+    deployment: Deployment, clock: FrozenClock
+) -> None:
+    """FIX BEFORE MERGE, the independent safety review: `duplicate_of_added_on`
+    (`app.channels.api.capture`) and the clarify's `existing_added_on`
+    (`app.ingestion.review`) used to read `created_at.date()` straight off the UTC
+    timestamp. At 19:30 UTC his own clock, in Singapore or Malaysia (UTC+8), already reads
+    03:30 the next morning — the naive read would tell him he added a paper on the 13th when
+    it was the 14th everywhere he was actually looking at a clock."""
+    pa, profile_id = await _pa(deployment)
+    his = bearer(pa["token"])
+    clock.set(LATE_SG_NIGHT_UTC)
+
+    first = await deployment.client.post(
+        f"/profiles/{profile_id}/photos", json=photo(LIPID_PANEL_2025), headers=his
+    )
+    assert first.status_code == 201, first.text
+    first_card = first.json()
+
+    # D-4a: the exact same bytes again, at this same moment — his own day is the 14th.
+    second = await deployment.client.post(
+        f"/profiles/{profile_id}/photos", json=photo(LIPID_PANEL_2025), headers=his
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["duplicate_of_added_on"] == "2026-09-14"
+
+    # D-4b: a re-photographed twin, same moment — the clarify's own `existing_added_on`.
+    await confirm(deployment, pa["token"], profile_id, first_card, decide(first_card))
+    third = await deployment.client.post(
+        f"/profiles/{profile_id}/photos", json=photo(AGAIN), headers=his
+    )
+    assert third.status_code == 201, third.text
+    assert third.json()["clarify"]["existing_added_on"] == "2026-09-14"
 
 
 async def test_the_unique_index_is_the_backstop(sg: AsyncSession) -> None:

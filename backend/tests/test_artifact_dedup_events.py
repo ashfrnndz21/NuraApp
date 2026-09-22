@@ -15,16 +15,25 @@ event along with the row. One test per writer, each proving both halves: exactly
 `Artifact` survives the second write, and the second event is genuinely there, pointing at
 that one shared artefact wherever the schema carries such a reference.
 
-    app.search.ask._keep_question            -- asking the same question twice (recall)
-    app.ingestion.voice.store_words           -- saying the same symptom words twice (E13-02)
-    app.channels.whatsapp.inbound._keep_text  -- the same WhatsApp text sent twice
-    app.ingestion.photos.store_photo          -- the same device-screen photo posted twice
-    app.search.conversation._keep_answer      -- the same conversation answer kept twice (W2)
+    app.search.ask._keep_question             -- asking the same question twice (recall)
+    app.ingestion.voice.store_words            -- saying the same symptom words twice (E13-02)
+    app.channels.whatsapp.inbound._keep_text   -- the same WhatsApp text sent twice
+    app.ingestion.photos.store_photo           -- the same device-screen photo posted twice
+    app.search.conversation._keep_answer       -- the same conversation answer kept twice (W2)
 
 Four of the five run at the service layer, on `sg`, the way `test_recall.py`,
 `test_not_feeling_well.py` and `test_conversation_w2.py` already do; the photo case runs over
 HTTP, the way `test_device_screens.py` already does, because that is where the review card the
 second event rests on is minted.
+
+The independent safety review's B5 widened two more writers the same way, after the unique
+index (`0055`) turned a resend into a raw `IntegrityError` instead of a reuse:
+
+    app.ingestion.voice.store_voice                    -- the same voice note said twice
+    app.channels.whatsapp.inbound._document (PDF branch) -- the same PDF letter sent twice
+
+Both get their own test here, on the same proof: one artefact, but the second message or
+event is genuinely there.
 """
 
 from __future__ import annotations
@@ -60,6 +69,9 @@ from tests.safety_support import REGISTRY as SAFETY_REGISTRY
 from tests.safety_support import pa as safety_pa
 from tests.safety_support import transcriber_for
 from tests.timeline_support import record as arranged_record
+from tests.voice_notes import AFTER_THE_WALK
+from tests.voice_notes import CONTENT_TYPE as VOICE_NOTE_CONTENT_TYPE
+from tests.voice_notes import placeholder_voice
 from tests.whatsapp_support import MEI, family
 
 
@@ -384,3 +396,113 @@ async def test_a_retaken_device_screen_photo_reuses_the_artifact_but_gets_its_ow
     second_event_id = second_done.json()["event_id"]
     assert first_event_id is not None and second_event_id is not None
     assert first_event_id != second_event_id
+
+
+async def test_the_same_voice_note_said_twice_still_writes_two_symptom_events(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """`store_voice` (`app.ingestion.voice`), through `not_feeling_well`'s own audio path
+    (B5, the independent safety review): the exact same recording pressed again is the same
+    bytes -- migration `0055`'s unique index makes a second `Artifact` row of them impossible,
+    so this reuses the one already on file rather than raising `IntegrityError` out of the
+    button. But he is still not feeling well the second time he presses it, whatever the note
+    said the first time: its own SYMPTOM event and `symptom.reported` fact must each be their
+    own press's, exactly as the typed-words case above already proves for `store_words`."""
+    owner = await safety_pa(sg)
+    store = LocalObjectStore(tmp_path, owner.region)
+    via = via_for(owner.region)
+    audio = placeholder_voice(AFTER_THE_WALK)
+
+    async def press() -> WhatToDoNow:
+        return await not_feeling_well(
+            sg,
+            context=owner,
+            store=store,
+            transcriber=transcriber_for(owner.region),
+            registry=SAFETY_REGISTRY,
+            via=via,
+            audio=audio,
+            content_type=VOICE_NOTE_CONTENT_TYPE,
+        )
+
+    first = await press()
+    second = await press()
+
+    assert first.kind is WhatToDoKind.REST and second.kind is WhatToDoKind.REST
+    assert first.event_id is not None and second.event_id is not None
+    assert first.event_id != second.event_id
+    assert first.fact_id is not None and second.fact_id is not None
+    assert first.fact_id != second.fact_id
+
+    # One artefact for the recording, reused the second time.
+    assert first.artifact_id is not None
+    assert first.artifact_id == second.artifact_id
+    artifacts = (
+        await sg.scalars(
+            select(Artifact).where(
+                Artifact.profile_id == owner.profile_id, Artifact.kind == ArtifactKind.VOICE
+            )
+        )
+    ).all()
+    assert len(artifacts) == 1 and artifacts[0].id == first.artifact_id
+
+    # Two SYMPTOM events, each naming that one artefact.
+    events = (
+        await sg.scalars(
+            select(Event).where(
+                Event.profile_id == owner.profile_id, Event.kind == EventKind.SYMPTOM
+            )
+        )
+    ).all()
+    assert {e.id for e in events} == {first.event_id, second.event_id}
+    assert {e.artifact_id for e in events} == {first.artifact_id}
+
+    # Two `symptom.reported` facts, one per press.
+    facts = (
+        await sg.scalars(
+            select(Fact).where(
+                Fact.profile_id == owner.profile_id,
+                Fact.subject == "symptom",
+                Fact.attribute == "reported",
+            )
+        )
+    ).all()
+    assert {f.id for f in facts} == {first.fact_id, second.fact_id}
+
+
+async def test_the_same_pdf_letter_sent_twice_on_whatsapp_still_keeps_two_inbound_messages(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The `_document` PDF branch (`app.channels.whatsapp.inbound`, B5): the exact same letter
+    forwarded a second time -- Mei resending the one Nura already asked her for -- is the same
+    bytes, so this reuses the one `Artifact` already on file instead of a raw `IntegrityError`
+    out of the webhook (a 500, and silence, for resending exactly the letter she was asked to).
+    But each send is still its own inbound message on the thread, never folded into the
+    first."""
+    home = await family(sg, tmp_path)
+
+    first = await home.inbound(sg, MEI, media_id="clinic-letter-pdf", content_type="application/pdf")
+    second = await home.inbound(sg, MEI, media_id="clinic-letter-pdf", content_type="application/pdf")
+
+    assert first.outcome == "document" and second.outcome == "document"
+    assert first.message_id is not None and second.message_id is not None
+    assert first.message_id != second.message_id
+
+    # One artefact for the letter, reused the second time.
+    assert first.artifact_id is not None
+    assert first.artifact_id == second.artifact_id
+    artifacts = (
+        await sg.scalars(
+            select(Artifact).where(
+                Artifact.profile_id == home.profile.id, Artifact.kind == ArtifactKind.PDF
+            )
+        )
+    ).all()
+    assert len(artifacts) == 1 and artifacts[0].id == first.artifact_id
+
+    # Two inbound WhatsAppMessage rows, each naming that one artefact.
+    messages = (
+        await sg.scalars(select(WhatsAppMessage).where(WhatsAppMessage.kind == MessageKind.DOCUMENT))
+    ).all()
+    assert {m.id for m in messages} == {first.message_id, second.message_id}
+    assert {m.artifact_id for m in messages} == {first.artifact_id}

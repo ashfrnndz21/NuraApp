@@ -1882,14 +1882,36 @@ export const en = {
       titleUnknown: "Page",
       // D-2, "whose paper is it" (audit-2026-09-22.md §3.2, §5): the reading screen's one
       // plain clarifying question, in the blueprint's conversation shape (an orb, a lead
-      // line, a question, chips) — never filed until answered. `whoseLead*` picks the right
-      // opening line for whichever identity fields disagreed; `whoseQuestion` always follows.
+      // line, a question, chips) — never filed until answered. The lead line names which
+      // *fields* disagreed, never what the paper itself printed there (the independent
+      // safety review's FIX BEFORE MERGE: the paper's own name is extracted text, hostile
+      // until confirmed — a page printing an instruction in its name field must never become
+      // a sentence Nura composes). `whoseField*` names each field; `whoseMismatchLead*`
+      // picks "is"/"are" by how many disagreed, and the self/caregiver voice; `whoseQuestion`
+      // always follows.
+      // @patient phrase
+      whoseFieldName: "the name",
+      // @patient phrase
+      whoseFieldPatientId: "the patient number",
+      // @patient phrase
+      whoseFieldBirthYear: "the year of birth",
+      // @patient phrase
+      whoseFieldSex: "the sex",
+      // @patient phrase
+      whoseFieldAnd: " and ",
+      // The line starts with the {fields} slot (`whoseQuestionLead` capitalises the whole
+      // rendered line after filling it, the same way a filled line always reads whatever
+      // case its first word actually needs) so it reads "The name and the year of birth on
+      // this paper are not yours." — never "The the name ...", the double article a fixed
+      // leading "The" here would have doubled onto `whoseFieldName`'s own "the".
       // @patient headline
-      whoseLeadBoth: "This paper says {name}, born {year}.",
+      whoseMismatchLeadIsSelf: "{fields} on this paper is not yours.",
       // @patient headline
-      whoseLeadNameOnly: "This paper says {name}.",
+      whoseMismatchLeadAreSelf: "{fields} on this paper are not yours.",
       // @patient headline
-      whoseLeadYearOnly: "This paper says someone born {year}.",
+      whoseMismatchLeadIsOther: "{fields} on this paper is not {patient}'s.",
+      // @patient headline
+      whoseMismatchLeadAreOther: "{fields} on this paper are not {patient}'s.",
       // @patient headline
       whoseLeadGeneric: "This paper's details do not match your own.",
       // @patient headline
@@ -1913,6 +1935,10 @@ export const en = {
       // D-4, duplicates (audit-2026-09-22.md §3.2, §5).
       // @patient headline
       duplicateLead: "This looks like the paper you added on {date}.",
+      // The caregiver twin (FIX BEFORE MERGE, the independent safety review): a chief
+      // reading Pa's papers reads "Pa added this paper on ...", never "you".
+      // @patient headline
+      duplicateLeadOther: "This looks like the paper {patient} added on {date}.",
       // @patient
       duplicateQuestion: "Is it the same one?",
       // @patient phrase
@@ -1923,6 +1949,8 @@ export const en = {
       duplicateSetAside: "Nura already has this paper.",
       // @patient
       duplicateAddedOn: "You added this paper on {date}.",
+      // @patient
+      duplicateAddedOnOther: "{patient} added this paper on {date}.",
     },
     questions: {
       // @patient headline

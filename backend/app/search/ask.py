@@ -599,7 +599,14 @@ async def waiting_papers(
     (review defect #3, second pass: `except Refusal` was too wide)."""
     try:
         cards = await audited_read(
-            session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
+            session,
+            ReviewCard,
+            context,
+            Scope.RECORDS,
+            # A card set aside on its own question ("someone else's paper") is resolved,
+            # not waiting: never told to him as a paper still to be read (B2, the same
+            # `is_open`/`is_confirmed` distinction).
+            where=(ReviewCard.confirmed_at.is_(None), ReviewCard.discarded_at.is_(None)),
         )
     except OutOfScope:
         return []

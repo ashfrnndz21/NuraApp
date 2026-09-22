@@ -6,6 +6,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
+
+from app.channels.whatsapp import inbound
 from tests.api import bearer, let_in, own_profile, register_by_phone
 from tests.conftest import Deployment
 
@@ -220,3 +223,42 @@ async def test_a_stranger_through_the_dev_door_and_the_morning_card(deployment: 
     )
     shares = [e for e in trail.json() if e["channel"] == "whatsapp"]
     assert len(shares) == 1 and shares[0]["shared_with_person_id"] == pa["person_id"]
+
+
+async def test_a_unique_violation_past_the_check_first_door_is_a_calm_409_never_a_500(
+    deployment: Deployment, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B5, the independent safety review's last-resort clause (Master Spec §29): the
+    check-first door (`find_own_artifact_by_digest`) is what is supposed to catch a resend,
+    proven directly by `test_the_same_pdf_letter_sent_twice_on_whatsapp_still_keeps_two_inbound_messages`
+    in `test_artifact_dedup_events.py`. This test is the backstop *behind* that door: it
+    forces the door itself to miss -- the shape a real race between two webhook deliveries
+    would take -- so the second write reaches `store_artifact` with bytes already on file and
+    raises a genuine `IntegrityError` out of `session.flush()`. Nothing before this test
+    proved that error is ever actually caught -- only that it is usually avoided. Patched here
+    exactly where B5 says the race can happen (`_document`'s PDF branch also calls the same
+    check for its own digest); the request must still answer 409 `SameBytesAgain`, on the
+    wire, never a 500 with a stack trace (a 500 on this webhook is silence: no reply reaches
+    the sender at all)."""
+    await _pa_on_whatsapp(deployment)
+
+    async def never_finds_it(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        return None
+
+    first = await deployment.client.post(
+        "/dev/whatsapp/inbound",
+        json={"from_e164": MEI, "media_id": "clinic-letter-pdf", "content_type": "application/pdf"},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["outcome"] == "document"
+
+    # The check-first door misses this once, as two requests racing past it at the database
+    # would: both read "not found" before either has committed.
+    monkeypatch.setattr(inbound, "find_own_artifact_by_digest", never_finds_it)
+    second = await deployment.client.post(
+        "/dev/whatsapp/inbound",
+        json={"from_e164": MEI, "media_id": "clinic-letter-pdf", "content_type": "application/pdf"},
+    )
+    assert second.status_code == 409, second.text
+    assert second.json() == {"refusal": "SameBytesAgain"}

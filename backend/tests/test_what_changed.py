@@ -30,8 +30,12 @@ from app.clock import FrozenClock
 from app.delivery.timeline_strings import verified
 from app.drafts import StatusChange
 from app.family.thread import post_message
+from app.ingestion.extract import FixtureExtractor
+from app.ingestion.models import FieldState
 from app.ingestion.notes import add_scribble
 from app.ingestion.objects import LocalObjectStore
+from app.ingestion.photos import store_photo
+from app.ingestion.review import Decision, answer_review_card_question, card_fields, confirm_review_card, review_draft_for, review_photo
 from app.keys.confirm import confirm
 from app.keys.scopes import KeyRole, Scope
 from app.memory.changes import Changes, mark_looked, what_changed
@@ -43,7 +47,7 @@ from app.memory.spine import change_appointment_status
 from app.regions import Region
 from app.safety.red_flags import Feeling, raise_flag
 from tests.medicines_support import REGISTRY, add, label, let_in
-from tests.paper import PNG_SIGNATURE
+from tests.paper import LAB_REPORT_NOT_HIS, LIPID_PANEL_2025, PAPER, PNG_SIGNATURE, placeholder_png
 from tests.timeline_support import KIT_PHONE, reading, record, trail
 
 
@@ -160,6 +164,59 @@ async def test_a_second_look_with_a_write_between_lists_the_write_and_what_is_wa
         sg, context=rec.mei, since=last.looked_at, seen=last.appointments, registry=REGISTRY
     )
     assert [line.text for line in quiet.lines] == ["Nothing changed since Thursday 3 September."]
+
+
+async def test_a_set_aside_paper_is_never_told_as_still_waiting(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """B2: `_papers` used to select every `ReviewCard` with no `confirmed_at` as "still
+    waiting for a yes" — a card set aside on its own whose-paper question has no
+    `confirmed_at` either, so a stranger's rejected paper was told to him at every look as
+    something still to check."""
+    rec = await record(sg)
+    store = LocalObjectStore(tmp_path, Region.SG)
+    look = await mark_looked(sg, context=rec.owner)
+
+    async def _card(label_: str):
+        photo = await store_photo(
+            sg,
+            context=rec.owner,
+            store=store,
+            data=placeholder_png(label_),
+            content_type="image/png",
+            captured_at=look.looked_at,
+            source_channel=SourceChannel.APP,
+        )
+        return await review_photo(
+            sg,
+            context=rec.owner,
+            artifact_id=photo.id,
+            store=store,
+            extractor=FixtureExtractor(PAPER),
+            language="en",
+        )
+
+    first = await _card(LIPID_PANEL_2025)
+    fields = await card_fields(sg, context=rec.owner, card_id=first.id)
+    decisions = [Decision(f.id, FieldState.CONFIRMED) for f in fields]
+    draft = await review_draft_for(sg, context=rec.owner, card_id=first.id, decisions=decisions)
+    yes = await confirm(sg, rec.owner, draft)
+    await confirm_review_card(
+        sg, context=rec.owner, card_id=first.id, decisions=decisions, confirmation_id=yes.id
+    )
+
+    mismatched = await _card(LAB_REPORT_NOT_HIS)
+    assert mismatched.awaiting_answer
+    answered = await answer_review_card_question(
+        sg, context=rec.owner, card_id=mismatched.id, value="someone_elses"
+    )
+    assert answered.is_set_aside
+
+    found = await what_changed(
+        sg, context=rec.owner, since=look.looked_at, seen=look.appointments, registry=REGISTRY
+    )
+    assert found.sections["papers"].get("one_card") is None
+    assert not any("card" in line.text.lower() and "wait" in line.text.lower() for line in found.waiting)
 
 
 async def test_a_correction_is_told_old_to_new_with_the_provenance_of_both(

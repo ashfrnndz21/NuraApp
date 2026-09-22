@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import AsyncIterator
+from datetime import datetime
 
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -58,7 +59,7 @@ from app.channels.api.schemas import (
     TypedIn,
 )
 from app.channels.strings import language_of
-from app.delivery.timeline_strings import DOCUMENT_KIND_WORD, IMPORT_STEPS
+from app.delivery.timeline_strings import DOCUMENT_KIND_WORD, IMPORT_STEPS, day_of
 from app.errors import Refusal
 from app.ingestion.documents import store_pdf
 from app.ingestion.duplicates import find_artifact_by_digest
@@ -141,6 +142,14 @@ async def capture_language(session: AsyncSession, context: KeyContext) -> str:
     return language_of(await his_language(session, context=context))
 
 
+def _added_on(context: KeyContext, moment: datetime) -> str:
+    """The day a duplicate's own card was added, on the profile's region — never a naive
+    `.date()` on a UTC timestamp (rule 5's "You added this paper on ..." line must read the
+    right day near midnight in Singapore or Malaysia, not the day it happened to be in UTC;
+    the independent safety review's FIX BEFORE MERGE, tested at 03:00 local)."""
+    return day_of(moment, context.region).isoformat()
+
+
 async def _card_out(
     session: AsyncSession,
     context: KeyContext,
@@ -189,7 +198,7 @@ async def add_photo(
     data = body.as_bytes()
     duplicate = await _existing_paper_card(session, context, data)
     if duplicate is not None:
-        return await _card_out(session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat())
+        return await _card_out(session, context, duplicate, duplicate_of_added_on=_added_on(context, duplicate.created_at))
     artifact = await store_photo(
         session,
         context=context,
@@ -228,7 +237,7 @@ async def import_pdf(
     data = body.as_bytes()
     duplicate = await _existing_paper_card(session, context, data)
     if duplicate is not None:
-        return await _card_out(session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat())
+        return await _card_out(session, context, duplicate, duplicate_of_added_on=_added_on(context, duplicate.created_at))
     artifact = await store_pdf(
         session,
         context=context,
@@ -276,7 +285,7 @@ async def add_photo_stream(
                 duplicate = await _existing_paper_card(session, context, data)
                 if duplicate is not None:
                     card_out = await _card_out(
-                        session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat()
+                        session, context, duplicate, duplicate_of_added_on=_added_on(context, duplicate.created_at)
                     )
                     yield _sse({"type": "card", "card": card_out.model_dump(mode="json")})
                     return
@@ -329,7 +338,7 @@ async def import_pdf_stream(
                 duplicate = await _existing_paper_card(session, context, data)
                 if duplicate is not None:
                     card_out = await _card_out(
-                        session, context, duplicate, duplicate_of_added_on=duplicate.created_at.date().isoformat()
+                        session, context, duplicate, duplicate_of_added_on=_added_on(context, duplicate.created_at)
                     )
                     yield _sse({"type": "card", "card": card_out.model_dump(mode="json")})
                     return

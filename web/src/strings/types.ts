@@ -961,9 +961,15 @@ export interface Strings {
       titlePillPhoto: string;
       titlePharmacyReceipt: string;
       titleUnknown: string;
-      whoseLeadBoth: string;
-      whoseLeadNameOnly: string;
-      whoseLeadYearOnly: string;
+      whoseFieldName: string;
+      whoseFieldPatientId: string;
+      whoseFieldBirthYear: string;
+      whoseFieldSex: string;
+      whoseFieldAnd: string;
+      whoseMismatchLeadIsSelf: string;
+      whoseMismatchLeadAreSelf: string;
+      whoseMismatchLeadIsOther: string;
+      whoseMismatchLeadAreOther: string;
       whoseLeadGeneric: string;
       whoseLeadGenericOther: string;
       whoseQuestion: string;
@@ -975,11 +981,13 @@ export interface Strings {
       whoseSetAside: string;
       whoseSetAsideOther: string;
       duplicateLead: string;
+      duplicateLeadOther: string;
       duplicateQuestion: string;
       duplicateSame: string;
       duplicateDifferent: string;
       duplicateSetAside: string;
       duplicateAddedOn: string;
+      duplicateAddedOnOther: string;
     };
     questions: {
       titleSelf: string;

@@ -101,6 +101,16 @@ async def store_voice(
         scope=Scope.RECORDS,
     )
     digest = sha256_of(data)
+    # The same recording again — a short "I'm okay" said twice, minutes apart — is the same
+    # bytes for this profile: migration 0055's `(profile_id, sha256)` index makes a second
+    # artefact row of them impossible, so this reuses the one already on file rather than
+    # raising an integrity error out of the caller (B5, the same pattern `store_words`
+    # already holds for typed words).
+    existing = await find_own_artifact_by_digest(
+        session, context=context, scope=Scope.RECORDS, kind=ArtifactKind.VOICE, sha256=digest
+    )
+    if existing is not None:
+        return existing
     key = voice_key(context.profile_id, digest)
     artifact = await store_artifact(
         session,

@@ -79,8 +79,18 @@ async def test_a_demo_lab_sheet_against_a_profile_born_in_the_1950s_asks(
     clarify = card["clarify"]
     assert clarify["kind"] == "whose_paper"
     assert set(clarify["mismatched"]) == {"name", "birth_year"}
-    assert clarify["paper_name"] == "Demo Patient Name"
-    assert clarify["paper_birth_year"] == 2026 - 40  # the paper's own age, worked out plainly
+    # FIX BEFORE MERGE, the independent safety review: the paper's own printed name (and, in
+    # the same spirit, its year of birth) never reaches the wire at all -- only the closed
+    # field-name enum above. Extracted text is hostile until confirmed; a page printing an
+    # instruction in its name field must never become a sentence Nura composes.
+    assert "paper_name" not in clarify
+    assert "paper_birth_year" not in clarify
+    assert "paper_sex" not in clarify
+    # The extracted field itself (`card["fields"]`) still shows "Demo Patient Name" for him
+    # to look at and confirm or reject -- that is the review card's ordinary job. Only the
+    # *clarify* question -- the sentence Nura composes about a still-unconfirmed paper -- must
+    # never quote it.
+    assert "Demo Patient Name" not in str(clarify)
 
     # D-2's core rule: nothing is filed until the question is answered — not even a mint of
     # the confirmation succeeds in a way that could be spent, because the card itself refuses
@@ -129,6 +139,38 @@ async def test_someone_elses_keeps_the_paper_out_of_the_record_with_a_calm_line(
     facts = await deployment.client.get(f"/profiles/{profile_id}/facts?subject=person", headers=his)
     birth_years = [f["value"] for f in facts.json() if f["attribute"] == "birth_year"]
     assert birth_years == [1951]  # the wrong paper never touched it
+
+
+async def test_the_answer_is_on_the_trail_as_a_closed_code_never_the_papers_name(
+    deployment: Deployment,
+) -> None:
+    """FIX BEFORE MERGE, the independent safety review: before this, `answer_review_card_
+    question` wrote no audit line on success at all -- `@audited` only writes one on a
+    refusal. The decision this whole package exists to make safe now has its own line, and
+    it carries `answered_with` from the closed set the door already checked the value
+    against ("someone_elses" here) -- never "Demo Patient Name", the paper's own printed
+    text, anywhere on the trail."""
+    pa, profile_id = await _pa_with_papers_on_file(deployment)
+    his = bearer(pa["token"])
+    posted = await deployment.client.post(
+        f"/profiles/{profile_id}/photos", json=photo(NOT_HIS_PAPER), headers=his
+    )
+    card = posted.json()
+
+    answered = await deployment.client.post(
+        f"/profiles/{profile_id}/review-cards/{card['card_id']}/answer",
+        json={"value": "someone_elses"},
+        headers=his,
+    )
+    assert answered.status_code == 200, answered.text
+
+    trail = await deployment.client.get(f"/profiles/{profile_id}/audit", headers=his)
+    assert trail.status_code == 200, trail.text
+    on_this_card = [e for e in trail.json() if e["target"] == "review_card" and e["target_id"] == card["card_id"]]
+    answers = [e for e in on_this_card if e["answered_with"] is not None]
+    assert len(answers) == 1
+    assert answers[0]["answered_with"] == "someone_elses"
+    assert "Demo Patient Name" not in str(trail.json())
 
 
 async def test_not_sure_keeps_the_card_open(deployment: Deployment) -> None:

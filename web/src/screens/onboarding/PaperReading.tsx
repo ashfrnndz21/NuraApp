@@ -13,6 +13,7 @@ import {
   whoseChips,
   whoseQuestionAsk,
   whoseQuestionLead,
+  whoseSetAsideLine,
 } from "../../onboarding/review";
 import { profile, token } from "../../store/session";
 import { language, LOCALE, t } from "../../strings";
@@ -133,6 +134,12 @@ export function ReadingResult({ card: initial, onContinue, onLeaveUnanswered, te
   const papers = profile.value;
   const isSelf = papers?.standing === "owner";
   const patientName = isSelf ? "" : (papers?.display_name ?? "");
+  // The question's own kind, kept beside the card: once answered, `clarify` itself goes back
+  // to null (B1, independent safety review — before this, a set-aside card fell straight
+  // through to the ordinary headline/rows/"See the full table" below, showing a stranger's
+  // own values as "your paper"), so this is the only way left to know which calm line a
+  // set-aside answer earns.
+  const [askedKind, setAskedKind] = useState(card.clarify?.kind ?? null);
 
   const answer = async (value: string) => {
     const bearer = token.value;
@@ -140,6 +147,7 @@ export function ReadingResult({ card: initial, onContinue, onLeaveUnanswered, te
     setBusy(true);
     setError(null);
     try {
+      setAskedKind(card.clarify?.kind ?? askedKind);
       setCard(await nura.answerReviewCardQuestion(bearer, card.profile_id, card.card_id, value));
     } catch (failure) {
       setError(failure);
@@ -167,7 +175,7 @@ export function ReadingResult({ card: initial, onContinue, onLeaveUnanswered, te
     const clarify = card.clarify;
     return (
       <ClarifyTurn
-        lead={duplicateQuestionLead(clarify, s, locale)}
+        lead={duplicateQuestionLead(clarify, s, locale, patientName)}
         question={r.duplicateQuestion}
         chips={duplicateChips(s)}
         onPick={(value) => void answer(value)}
@@ -178,6 +186,21 @@ export function ReadingResult({ card: initial, onContinue, onLeaveUnanswered, te
     );
   }
 
+  if (card.discarded) {
+    const setAsideLine =
+      askedKind === "duplicate_paper" ? r.duplicateSetAside : whoseSetAsideLine(s, patientName);
+    return (
+      <div data-testid={testId}>
+        <p class="note" data-testid="set-aside-line">
+          {setAsideLine}
+        </p>
+        <button type="button" class="btn light" onClick={onLeaveUnanswered ?? onContinue} data-testid="set-aside-back">
+          {s.onboarding.back}
+        </button>
+      </div>
+    );
+  }
+
   const headline = readingHeadline(card, s);
   const chips = readingChips(card, s);
   const rows = [...card.fields].sort((a, b) => a.position - b.position).map((field) => reportRow(field, s, locale));
@@ -185,7 +208,7 @@ export function ReadingResult({ card: initial, onContinue, onLeaveUnanswered, te
     <div data-testid={testId}>
       {card.duplicate_of_added_on && (
         <p class="note" data-testid="duplicate-added-on">
-          {duplicateAddedOnLine(card.duplicate_of_added_on, s, locale)}
+          {duplicateAddedOnLine(card.duplicate_of_added_on, s, locale, patientName)}
         </p>
       )}
       <SoftText as="h2" className="conversation-head" text={headline} pace="headline" testId="reading-headline" />

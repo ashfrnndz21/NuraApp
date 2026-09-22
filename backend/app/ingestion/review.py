@@ -43,6 +43,7 @@ from app.audit.access import audited, audited_read, audited_write
 from app.audit.models import Action
 from app.audit.trail import record
 from app.db import as_utc, utcnow
+from app.delivery.timeline_strings import day_of
 from app.drafts import DecidedField, FactDraft, ReviewDraft
 from app.drugs.registry import DrugRegistry, LabelFields
 from app.errors import Refusal
@@ -825,14 +826,17 @@ async def card_from(
         )
         if identity.outcome is IdentityOutcome.MISMATCH:
             pending_question = PendingQuestion.WHOSE_PAPER
+            # FIX BEFORE MERGE, the independent safety review: the paper's own printed name
+            # (and, in the same spirit, its year of birth and sex) never leaves this
+            # function's own return value from here on. `ReviewClarifyOut` names only which
+            # *fields* disagreed (`mismatched`, the closed `IdentitySignal.kind` enum) — the
+            # sentence built from it is Nura's own words, never a quote of what an
+            # unconfirmed page happened to print (extracted text is hostile until confirmed;
+            # a page printing an instruction in the name field must never become a headline).
+            # The paper's own printed values stay visible only behind "See the paper itself",
+            # the photo — never composed into text here.
             question_payload = {
-                "mismatches": [
-                    {"kind": m.kind, "paper": m.paper_value, "profile": m.profile_value}
-                    for m in identity.mismatches
-                ],
-                "paper_name": identity.paper_name,
-                "paper_birth_year": identity.paper_birth_year,
-                "paper_sex": identity.paper_sex,
+                "mismatches": [{"kind": m.kind} for m in identity.mismatches],
             }
         else:
             duplicate = await _semantic_duplicate_of(
@@ -846,7 +850,11 @@ async def card_from(
                 pending_question = PendingQuestion.DUPLICATE_PAPER
                 question_payload = {
                     "existing_card_id": str(duplicate.id),
-                    "existing_added_on": duplicate.created_at.isoformat(),
+                    # The day on his own clock, not UTC's (the independent safety review's
+                    # FIX BEFORE MERGE): `ReviewClarifyOut.of` only ever keeps the first ten
+                    # characters of this string as a date, and a naive UTC `.isoformat()`
+                    # names the wrong day near midnight in Singapore or Malaysia.
+                    "existing_added_on": day_of(duplicate.created_at, context.region).isoformat(),
                 }
 
     card = await audited_write(
@@ -889,10 +897,13 @@ async def card_from(
 async def list_review_cards(
     session: AsyncSession, *, context: KeyContext, open_only: bool = False
 ) -> Sequence[ReviewCard]:
-    """The profile's cards, newest first; with `open_only`, the ones still waiting."""
+    """The profile's cards, newest first; with `open_only`, the ones still waiting — a card
+    set aside on its own question is resolved, not waiting, so it is excluded from
+    `open_only` the same way a confirmed one already is (B2)."""
     where: list[Any] = [_cards_held_here(context)]
     if open_only:
         where.append(ReviewCard.confirmed_at.is_(None))
+        where.append(ReviewCard.discarded_at.is_(None))
     found = await audited_read(session, ReviewCard, context, Scope.RECORDS, where=where)
     return sorted(found, key=lambda card: (as_utc(card.created_at), str(card.id)), reverse=True)
 
@@ -919,13 +930,23 @@ async def card_for_artifact(
 ) -> ReviewCard | None:
     """The one card an artefact was read into, if it was (D-4a): every artefact gets at most
     one card (`card_from` runs once per upload), so this is the card a duplicate-bytes upload
-    is shown instead of reading anything again (`app.channels.api.capture`)."""
+    is shown instead of reading anything again (`app.channels.api.capture`).
+
+    FOLLOW-UP, the independent safety review: the "at most one card" invariant this
+    docstring states is not actually kept everywhere — `POST /readings/photo` and the
+    WhatsApp photo branch can each mint a second card for the same artefact (documented, not
+    fixed here, in the PR body). Without an explicit order this `limit=1` picked whichever
+    row the database happened to return first — silently a different card on a re-run, on a
+    different engine, or after an unrelated change to how SQLite orders ties. Ordered by
+    `created_at` so a duplicate-bytes upload is shown consistently the *earliest* card on
+    file, the same "earliest survives" rule migration `0055`'s own collapse already keeps."""
     found = await audited_read(
         session,
         ReviewCard,
         context,
         Scope.RECORDS,
         where=(ReviewCard.artifact_id == artifact_id, _cards_held_here(context)),
+        order_by=(ReviewCard.created_at,),
         limit=1,
     )
     return found[0] if found else None
@@ -1303,6 +1324,21 @@ async def answer_review_card_question(
         if value in {"someone_elses", "same"}:
             card.discarded_at = moment
         await session.flush()
+        # FIX BEFORE MERGE, the independent safety review: `@audited` above only writes a
+        # line on a refusal, so the decision this whole package exists to make safe used to
+        # leave no trail on success at all. `value` is already checked against the closed
+        # set above (`NotAnAnswer` otherwise) — never the paper's own printed name, which
+        # this table never held in the first place.
+        await record(
+            session,
+            context=context,
+            action=Action.WRITE,
+            scope=Scope.RECORDS,
+            target=CARD,
+            target_id=card.id,
+            rows=1,
+            answered_with=value,
+        )
     finally:
         session.info.pop(REVIEW_IN_PROGRESS, None)
     return card
@@ -1345,7 +1381,14 @@ async def close_card_for_artifact(
     except OutOfScope:
         return
     for card in found:
-        if card.confirmed_at is not None:
+        if card.confirmed_at is not None or card.discarded_at is not None:
+            continue
+        if card.awaiting_answer:
+            # This artefact's card is asking its own question (D-2/D-4b) — the same rule
+            # `confirm_review_card` holds applies to this side door too: nothing on the card
+            # is treated as settled, medicine fact included, until it is answered. The card
+            # stays open; the add-a-medicine screen's own write already went through
+            # (independent of this card), so nothing is lost either way.
             continue
         # Only a card this add accounted for in full. A closed card leaves the papers screen
         # for good and none of its other fields is ever written: a pharmacy's name and phone

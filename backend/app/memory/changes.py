@@ -506,9 +506,14 @@ async def _papers(
         "attachment_ids": [str(a.id) for a in hung],
     }
     # Waiting: a card with something on it to say yes to. A photo the reader found nothing
-    # on makes an empty card; that is not waiting for anyone.
+    # on makes an empty card; that is not waiting for anyone. Nor is a card set aside on its
+    # own question ("someone else's paper") — it is resolved, not waiting (B2).
     cards = await audited_read(
-        session, ReviewCard, context, Scope.RECORDS, where=(ReviewCard.confirmed_at.is_(None),)
+        session,
+        ReviewCard,
+        context,
+        Scope.RECORDS,
+        where=(ReviewCard.confirmed_at.is_(None), ReviewCard.discarded_at.is_(None)),
     )
     if cards:
         fields = await audited_read(

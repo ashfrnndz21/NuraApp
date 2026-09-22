@@ -140,7 +140,34 @@ class ReviewCard(ProfileScoped, Base):
 
     @property
     def is_open(self) -> bool:
+        """Not yet resolved either way — still waiting on a decision. A set-aside card is
+        resolved (the decision was "someone else's"/"the same paper"), so this is `False` for
+        it exactly as it is for a confirmed one: a caller gating "is there still something
+        for a person to decide here" (onboarding's own blocking checks, a batch grid's own
+        count) reads this correctly as-is.
+
+        This is deliberately NOT "is this confirmed" — a third state exists now
+        (`discarded_at`) that `is_open` alone cannot tell apart from "confirmed". A caller
+        that means "were this card's fields ever said yes to, so its values are real" must
+        read `is_confirmed`, never `not is_open` (the independent safety review's own
+        finding: `not is_open` on a set-aside card was `True`, and the insight stream
+        narrated a stranger's numbers as his own from it)."""
         return self.confirmed_at is None and self.discarded_at is None
+
+    @property
+    def is_confirmed(self) -> bool:
+        """He said yes to exactly these fields: they are facts now. Never true for a card
+        set aside instead — `discarded_at` and `confirmed_at` are mutually exclusive, but
+        spelled out here rather than assumed, since a bug that ever set both would otherwise
+        read as confirmed."""
+        return self.confirmed_at is not None and self.discarded_at is None
+
+    @property
+    def is_set_aside(self) -> bool:
+        """The answer to this card's one question kept its paper out of the record for
+        good ("someone else's", "the same paper already on file") — it can never be
+        confirmed, and nothing on it was ever said yes to."""
+        return self.discarded_at is not None
 
     @property
     def awaiting_answer(self) -> bool:

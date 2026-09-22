@@ -368,6 +368,30 @@ async def test_a_paper_waiting_for_a_yes_tells_the_chief_there_are_papers(
     ]
 
 
+async def test_a_set_aside_paper_never_tells_the_chief_there_is_one_waiting(
+    sg: AsyncSession, tmp_path: Path, clock: FrozenClock
+) -> None:
+    """B2: a card set aside on its own whose-paper question (`discarded_at` set) is resolved,
+    not waiting — `confirmed_at.is_(None)` alone used to catch it the same as a genuinely
+    waiting card, so the chief was told "there is a paper to check" about a paper Nura had
+    already been told is someone else's."""
+    clock.set(at(6))
+    h = await home(sg, tmp_path)
+    photo = await artefact(sg, h.owner)
+    from app.audit.access import audited_write
+
+    await audited_write(
+        sg,
+        ReviewCard,
+        h.owner,
+        Scope.RECORDS,
+        artifact_id=photo.id,
+        document_kind=DocumentKind.LAB_REPORT,
+        discarded_at=at(6),
+    )
+    assert _rows(await _run(sg, h, clock, at(11)), TriggerType.PAPERS) == []
+
+
 async def test_a_family_message_comes_due_and_reaches_him(
     sg: AsyncSession, tmp_path: Path, clock: FrozenClock
 ) -> None:

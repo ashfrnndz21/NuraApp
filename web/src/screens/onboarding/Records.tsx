@@ -323,7 +323,7 @@ export function ReviewStep({ card, onDone, onBack, onPaper }: ReviewStepProps): 
     return (
       <main class="screen onboarding" data-stage="review">
         <ClarifyTurn
-          lead={duplicateQuestionLead(clarify, s, locale)}
+          lead={duplicateQuestionLead(clarify, s, locale, isSelf ? "" : patientName)}
           question={r.duplicateQuestion}
           chips={duplicateChips(s)}
           onPick={(value) => void answerClarify(value)}

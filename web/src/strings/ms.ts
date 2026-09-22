@@ -1880,12 +1880,24 @@ export const ms = {
       titlePharmacyReceipt: "Resit farmasi",
       // @patient phrase
       titleUnknown: "Halaman",
+      // @patient phrase
+      whoseFieldName: "nama pesakit",
+      // @patient phrase
+      whoseFieldPatientId: "nombor pesakit",
+      // @patient phrase
+      whoseFieldBirthYear: "tahun lahir",
+      // @patient phrase
+      whoseFieldSex: "jantina pesakit",
+      // @patient phrase
+      whoseFieldAnd: " dan ",
       // @patient headline
-      whoseLeadBoth: "Surat ini menyebut {name}, lahir {year}.",
+      whoseMismatchLeadIsSelf: "{fields} pada surat ini bukan milik anda.",
       // @patient headline
-      whoseLeadNameOnly: "Surat ini menyebut {name}.",
+      whoseMismatchLeadAreSelf: "{fields} pada surat ini bukan milik anda.",
       // @patient headline
-      whoseLeadYearOnly: "Surat ini menyebut seseorang yang lahir {year}.",
+      whoseMismatchLeadIsOther: "{fields} pada surat ini bukan milik {patient}.",
+      // @patient headline
+      whoseMismatchLeadAreOther: "{fields} pada surat ini bukan milik {patient}.",
       // @patient headline
       whoseLeadGeneric: "Butiran surat ini tidak sepadan dengan butiran anda.",
       // @patient headline
@@ -1908,6 +1920,8 @@ export const ms = {
       whoseSetAsideOther: "Nura akan mengetepikan surat ini daripada surat-surat {patient}.",
       // @patient headline
       duplicateLead: "Ini kelihatan seperti surat yang anda tambah pada {date}.",
+      // @patient headline
+      duplicateLeadOther: "Ini kelihatan seperti surat yang {patient} tambah pada {date}.",
       // @patient
       duplicateQuestion: "Adakah ini surat yang sama?",
       // @patient phrase
@@ -1918,6 +1932,8 @@ export const ms = {
       duplicateSetAside: "Nura sudah mempunyai surat ini.",
       // @patient
       duplicateAddedOn: "Anda menambah surat ini pada {date}.",
+      // @patient
+      duplicateAddedOnOther: "{patient} menambah surat ini pada {date}.",
     },
     questions: {
       // @patient headline

@@ -29,12 +29,16 @@ test("a demo-style lab sheet against a profile with his own paper on file asks w
   await page.getByTestId("report-send").click();
 
   // The one plain question, an orb beside it, never a stack of chips: a lead line naming
-  // what the paper itself said, then the question, then exactly three choices.
+  // which *fields* disagreed, then the question, then exactly three choices. FIX BEFORE
+  // MERGE, the independent safety review: the lead line never quotes what the paper itself
+  // printed there (extracted text is hostile until confirmed) — only the field names.
   const clarify = page.getByTestId("reading-result-whose");
   await expect(clarify).toBeVisible();
   const lead = page.getByTestId("clarify-lead").locator(".sr-only");
-  await expect(lead).toContainText("Demo Patient Name");
-  await expect(lead).toContainText("1986");
+  await expect(lead).toContainText("name");
+  await expect(lead).toContainText("year of birth");
+  await expect(lead).not.toContainText("Demo Patient Name");
+  await expect(lead).not.toContainText("1986");
   await expect(page.getByTestId("clarify-question").locator(".sr-only")).toHaveText("Is it yours?");
   await expect(page.getByTestId("clarify-mine")).toBeVisible();
   await expect(page.getByTestId("clarify-someone_elses")).toContainText("someone else's");
@@ -47,9 +51,17 @@ test("a demo-style lab sheet against a profile with his own paper on file asks w
 
   await page.getByTestId("clarify-someone_elses").click();
 
-  // "Someone else's" keeps the paper out of the record, with a calm line — never an error,
-  // never a claim that something broke.
+  // B1, independent safety review: the question itself is gone, but a discarded card must
+  // never silently fall through to the ordinary preview and show a stranger's values as
+  // "your paper" — assert what REPLACES the question, not only that it is gone. The calm
+  // set-aside line is the only thing on screen; no headline, no rows, no "See the full
+  // table" for a paper that was never his.
   await expect(page.getByTestId("clarify-lead")).toHaveCount(0);
+  await expect(page.getByTestId("set-aside-line")).toBeVisible();
+  await expect(page.getByTestId("set-aside-line")).not.toContainText("Demo Patient Name");
+  await expect(page.getByTestId("reading-headline")).toHaveCount(0);
+  await expect(page.getByTestId("reading-rows")).toHaveCount(0);
+  await expect(page.getByTestId("see-report")).toHaveCount(0);
 });
 
 test("answering mine lets the paper go on to the ordinary report table", async ({ page, request }) => {

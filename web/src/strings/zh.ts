@@ -1880,12 +1880,24 @@ export const zh = {
       titlePharmacyReceipt: "药房收据",
       // @patient phrase
       titleUnknown: "页面",
+      // @patient phrase
+      whoseFieldName: "姓名",
+      // @patient phrase
+      whoseFieldPatientId: "证件号",
+      // @patient phrase
+      whoseFieldBirthYear: "出生年份",
+      // @patient phrase
+      whoseFieldSex: "性别",
+      // @patient phrase
+      whoseFieldAnd: "和",
       // @patient headline
-      whoseLeadBoth: "这份文件上写着{name}，{year}年出生。",
+      whoseMismatchLeadIsSelf: "这份文件上的{fields}不是您的。",
       // @patient headline
-      whoseLeadNameOnly: "这份文件上写着{name}。",
+      whoseMismatchLeadAreSelf: "这份文件上的{fields}不是您的。",
       // @patient headline
-      whoseLeadYearOnly: "这份文件上写的是{year}年出生的人。",
+      whoseMismatchLeadIsOther: "这份文件上的{fields}不是{patient}的。",
+      // @patient headline
+      whoseMismatchLeadAreOther: "这份文件上的{fields}不是{patient}的。",
       // @patient headline
       whoseLeadGeneric: "这份文件上的资料和您的不相符。",
       // @patient headline
@@ -1908,6 +1920,8 @@ export const zh = {
       whoseSetAsideOther: "Nura 不会把这份文件放进{patient}的文件里。",
       // @patient headline
       duplicateLead: "这看起来像您在{date}添加过的文件。",
+      // @patient headline
+      duplicateLeadOther: "这看起来像{patient}在{date}添加过的文件。",
       // @patient
       duplicateQuestion: "是同一份文件吗？",
       // @patient phrase
@@ -1918,6 +1932,8 @@ export const zh = {
       duplicateSetAside: "Nura 已经有这份文件了。",
       // @patient
       duplicateAddedOn: "您在{date}添加过这份文件。",
+      // @patient
+      duplicateAddedOnOther: "{patient}在{date}添加过这份文件。",
     },
     questions: {
       // @patient headline
