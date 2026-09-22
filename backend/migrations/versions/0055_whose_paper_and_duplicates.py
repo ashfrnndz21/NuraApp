@@ -128,9 +128,9 @@ def upgrade() -> None:
         batch.add_column(sa.Column("pending_question", sa.String(length=32), nullable=True))
         batch.add_column(sa.Column("question_payload", sa.JSON(), nullable=True))
         batch.add_column(sa.Column("question_answer", sa.String(length=32), nullable=True))
-        batch.add_column(sa.Column("question_answered_at", sa.DateTime(), nullable=True))
+        batch.add_column(sa.Column("question_answered_at", sa.DateTime(timezone=True), nullable=True))
         batch.add_column(sa.Column("question_answered_by_person_id", sa.Uuid(), nullable=True))
-        batch.add_column(sa.Column("discarded_at", sa.DateTime(), nullable=True))
+        batch.add_column(sa.Column("discarded_at", sa.DateTime(timezone=True), nullable=True))
         batch.create_foreign_key(
             "fk_review_card_question_answered_by",
             "person",
