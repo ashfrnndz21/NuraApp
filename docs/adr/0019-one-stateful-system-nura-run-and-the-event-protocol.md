@@ -77,3 +77,12 @@ mobile-architecture.md` (native stack), `docs/design/experience-blueprint-v2.htm
   decision on the phone; the golden path (scenes 1–8) on the chosen client. **Day 3+** — Home + Ask +
   medicine connection (the loop), then Tier 2.
 - Anything that would need the model to decide a §6 matter is a defect, whatever it passes.
+- **The signed build is the extreme last step (owner, 22 Sep 23:30).** Apple Developer + EAS → a
+  build on the owner's phone happens only after the entire app works end to end — every Tier 1, 2
+  and 3 moment; the register path; papers, Ask, medicines, insurance, feed, Health, not-well, Connect,
+  Mei, Profile; the four hard gates; whose-paper and duplicates; reduced motion, accessibility,
+  offline; the evaluation set at a pass rate the owner accepts — verified in the iOS Simulator (once
+  Xcode is installed) and in Expo Go. No builder may start EAS or signing work before the owner says
+  the app is complete. The order of build: 0 Expo/RN locally → 1 Home spike → 2 animation and
+  interaction system → 3 connect the FastAPI backend → 4 the golden path (paper → state → Home →
+  Ask) → 5 test thoroughly in the Simulator → 6 Apple Developer + EAS, last.

@@ -141,6 +141,11 @@ anything a patient reads; an EAS internal build on the owner's phone for every d
 
 ## 5. The decision point — the Home spike
 
+**EAS and the signed build are the final step, after the whole app works end to end** (ADR 0019,
+Consequences). Verification until then: the web target, Expo Go on the owner's iPhone, and the iOS
+Simulator once Xcode is installed on the build Mac.
+
+
 Phase 1 + Phase 2 for **Home only**, against the real backend, judged on the owner's iPhone against
 blueprint v2's Home, composer, expand and sheet scenes. If it clears the bar, design-build-2 steps
 8–12 proceed native and this file governs. If it does not, the reasons are written here and the web
