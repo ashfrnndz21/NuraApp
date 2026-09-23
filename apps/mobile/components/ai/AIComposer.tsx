@@ -25,8 +25,13 @@ interface Message {
 }
 
 export interface AIComposerProps {
-  /** The Home-spike fixture script, used only when no profile is signed in (`getCurrentProfileId()` is null). */
-  answer: AskFixtureAnswer;
+  /**
+   * The Home-spike fixture script — used only when no profile is signed
+   * in (`getCurrentProfileId()` is null). Optional: a signed-in caller
+   * (Home, live) passes nothing here at all (B8, independent review of
+   * PR #332 — a live session never carries a demo script it cannot use).
+   */
+  answer?: AskFixtureAnswer;
   onOpenReadings: () => void;
   onOpenAsk: () => void;
   testID?: string;
@@ -40,15 +45,24 @@ export interface AIComposerProps {
  * the answer streamed word by word from `TEXT_MESSAGE_CONTENT`. With no
  * profile (demo/spike continuity) it falls back to the fixture script.
  *
- * Two real gaps, found wiring this against the live backend rather than
- * guessed: `_answer_question`'s own event stream (`run.py`) reports only
- * `TOOL_CALL_*`/`TEXT_MESSAGE_*`/`RUN_FINISHED{lines}` — a clarifying
- * question's own chip *options* and a line's own `cites` (the provenance
- * line naming a paper) are both on `AnswerOut` from the plain
+ * Three real gaps, found wiring this against the live backend rather
+ * than guessed. `_answer_question`'s own event stream (`run.py`) reports
+ * only `TOOL_CALL_*`/`TEXT_MESSAGE_*`/`RUN_FINISHED{lines}` — a
+ * clarifying question's own chip *options* and a line's own `cites` (the
+ * provenance line naming a paper) are both on `AnswerOut` from the plain
  * `POST /ask`, never on the run's own wire. Until the event vocabulary
  * carries them (a `STATE_DELTA`/`CUSTOM` addition, or a second call),
  * this composer shows the streamed prose only — no chips, no provenance
- * line, on a live answer. Worth the owner's own look.
+ * line, on a live answer. A chip tap, live, re-asks the chip's own label
+ * as the next question (a generic quick-reply) and *continues* the same
+ * visible conversation (appends, never replaces `messages` — B8,
+ * independent review of PR #332, the earlier bug). Third: `run.py`'s
+ * `_answer_question` calls `ask_stream(..., history=None)` hard-coded —
+ * a run carries no conversation history at all today, whatever a client
+ * sends. This composer still tracks `conversationId` client-side (from
+ * `AnswerOut.conversation_id`, the plain `POST /ask`'s own field —
+ * `RUN_STARTED` carries none) and threads it into the next question's
+ * payload, inert until the backend accepts it. Worth the owner's own look.
  */
 export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComposerProps) {
   const [expanded, setExpanded] = useState(false);
@@ -60,6 +74,9 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
   const userEditedRef = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const runRef = useRef<{ cancel: () => void } | null>(null);
+  const runInFlightRef = useRef(false);
+  /** Set from `AnswerOut.conversation_id` the day a live event carries one — see this file's own doc. */
+  const conversationIdRef = useRef<string | null>(null);
   const consumeEvent = useAIState((s) => s.consumeEvent);
   const setListening = useAIState((s) => s.setListening);
   const reset = useAIState((s) => s.reset);
@@ -119,8 +136,10 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     translateY.value = reducedMotion ? 0 : withTiming(0, { duration: cardEnter });
     pillOpacity.value = reducedMotion ? 0 : withTiming(0, { duration: fadeExit });
 
-    if (live) {
-      // A real question needs the person to type it first — nothing to stream yet.
+    if (live || !answer) {
+      // A real question needs the person to type it first — nothing to stream yet. (A
+      // signed-in caller passes no fixture `answer` at all — B8 — so `!answer` also lands
+      // here defensively, never crashing on a missing script.)
       setTimeout(() => inputRef.current?.focus(), 0);
       return;
     }
@@ -134,15 +153,25 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     const question = (override ?? draft).trim();
     const profileId = getCurrentProfileId();
     if (!question || !profileId) return;
-    runRef.current?.cancel();
+    // Only a still-in-flight run is cancelled — a chip tap after the previous answer already
+    // finished must not tear anything down, only add to the conversation (B8).
+    if (runInFlightRef.current) runRef.current?.cancel();
     setListening();
     const userMsgId = `local-user-${Date.now()}`;
-    setMessages([{ id: userMsgId, role: 'user', text: question }]);
+    setMessages((prev) => [...prev, { id: userMsgId, role: 'user', text: question }]);
     setDraft('');
     // Not `false`: the effect below re-fills `draft` from the fixture's own scripted user
     // message when it hasn't been hand-edited — here the person already sent this one.
     userEditedRef.current = true;
-    const run = runNuraLive(profileId, 'answer_question', { question, mode: 'text' }, onEvent);
+    const payload: Record<string, unknown> = { question, mode: 'text' };
+    // Inert until the backend reads it (this component's own doc) — sent anyway so the wire
+    // is ready the day `history=None` stops being hard-coded.
+    if (conversationIdRef.current) payload.conversation_id = conversationIdRef.current;
+    runInFlightRef.current = true;
+    const run = runNuraLive(profileId, 'answer_question', payload, onEvent);
+    run.done.finally(() => {
+      runInFlightRef.current = false;
+    });
     runRef.current = run;
   };
 
@@ -167,7 +196,7 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     if (chipsDisabled) return;
     setChipsDisabled(true);
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    if (live) {
+    if (live || !answer) {
       // No fixture script to branch on live — a chip's label is asked as the next question
       // (a generic quick-reply, until the event stream itself carries structured options —
       // see this component's own doc).

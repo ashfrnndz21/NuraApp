@@ -7,7 +7,15 @@ import type {
   ConfirmCardIn,
   DocumentKind,
   DocumentSource,
+  FieldRange,
+  FieldState,
 } from '../../domain/reviewCard';
+
+export interface ReviewFieldRangeWire {
+  low: number | null;
+  high: number | null;
+  text: string | null;
+}
 
 export interface ReviewFieldWire {
   field_id: string;
@@ -21,6 +29,12 @@ export interface ReviewFieldWire {
   unreadable: boolean;
   prompt: string[] | null;
   page: number | null;
+  range: ReviewFieldRangeWire | null;
+  label_on_paper: string | null;
+  state: FieldState;
+  corrected_value: unknown;
+  corrected_by_person_id: string | null;
+  fact_id: string | null;
 }
 
 export interface ReviewClarifyWire {
@@ -49,6 +63,11 @@ export interface ReviewCardWire {
   duplicate_of_added_on: string | null;
 }
 
+function rangeFromWire(w: ReviewFieldRangeWire | null): FieldRange | null {
+  if (!w) return null;
+  return { low: w.low, high: w.high, text: w.text };
+}
+
 function fieldFromWire(w: ReviewFieldWire): ReviewField {
   return {
     fieldId: w.field_id,
@@ -62,6 +81,12 @@ function fieldFromWire(w: ReviewFieldWire): ReviewField {
     unreadable: w.unreadable,
     prompt: w.prompt,
     page: w.page,
+    range: rangeFromWire(w.range),
+    labelOnPaper: w.label_on_paper,
+    state: w.state,
+    correctedValue: w.corrected_value,
+    correctedByPersonId: w.corrected_by_person_id,
+    factId: w.fact_id,
   };
 }
 

@@ -29,6 +29,14 @@ export interface MediaCardProps {
 /**
  * Editorial media card (spec §13): why before what. State machine —
  * idle → loading → playing ⇄ paused → complete (mobile-architecture §3).
+ *
+ * Spike debt, named rather than silently carried (FIX BEFORE MERGE,
+ * independent review of PR #332): "playing" here is a `setTimeout`
+ * counting down `mediaRun`, not a real player — no golden-path screen
+ * uses this component (there is no media/video feed item in this
+ * checkpoint), so the fake progress it draws never reaches anyone. Kept
+ * as spike-only scaffolding; replace the timer with a real player's own
+ * progress event before any screen puts this on the golden path.
  */
 export function MediaCard({ title, why, publisher, duration, enterIndex, staggerMs, onStateChange }: MediaCardProps) {
   const [state, setState] = useState<MediaState>('idle');

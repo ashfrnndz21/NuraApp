@@ -65,6 +65,23 @@ const KNOWN: Record<string, (refusal: ApiRefusal) => { title: string; why: strin
     title: 'You already have a profile with Nura.',
     why: 'Sign in again and we’ll take you straight there.',
   }),
+  // A-013: a wrong sign-in code gets its own calm line, not the generic fallback.
+  WrongCode: () => ({
+    title: 'That code doesn’t match.',
+    why: 'Check the code we sent and try again.',
+  }),
+  ChallengeExpired: () => ({
+    title: 'That code has expired.',
+    why: 'Codes are only good for a few minutes. Ask for a new one.',
+  }),
+  ChallengeLocked: () => ({
+    title: 'Too many tries.',
+    why: 'For your safety, wait a few minutes before trying again.',
+  }),
+  NoOpenChallenge: () => ({
+    title: 'That code has expired.',
+    why: 'Ask for a new one and try again.',
+  }),
 };
 
 /**

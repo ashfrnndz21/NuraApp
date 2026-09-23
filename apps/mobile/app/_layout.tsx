@@ -8,6 +8,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useFonts, Figtree_300Light, Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold } from '@expo-google-fonts/figtree';
 import { InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 
+import { colorsDark } from '../design/colors';
+
 /**
  * The web target has no native Skia — it renders through CanvasKit
  * (WASM), loaded once, asynchronously, before any `<Canvas>` mounts.
@@ -60,6 +62,7 @@ export default function RootLayout() {
           <Stack.Screen name="report" />
           <Stack.Screen name="insight" />
           <Stack.Screen name="ask" />
+          <Stack.Screen name="not-well" />
           <Stack.Screen name="(tabs)" />
         </Stack>
       </SafeAreaProvider>
@@ -68,6 +71,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#15111d' },
-  loading: { flex: 1, backgroundColor: '#15111d' },
+  root: { flex: 1, backgroundColor: colorsDark.paper },
+  loading: { flex: 1, backgroundColor: colorsDark.paper },
 });

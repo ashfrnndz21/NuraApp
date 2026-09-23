@@ -30,6 +30,21 @@ describe('errorStateFromRefusal — refusal → ErrorState, never an HTTP code o
       expect(props.why).not.toMatch(/\b\d{3}\b/);
     }
   });
+
+  test('A-013: a wrong sign-in code gets its own calm line, not the generic fallback', () => {
+    const props = errorStateFromRefusal({ refusal: 'WrongCode', status: 401 });
+    expect(props.title).not.toBe("We couldn't do that right now."); // the generic fallback's own title
+    expect(props.title.toLowerCase()).toContain('code');
+    expect(props.why).not.toMatch(/401|WrongCode/);
+  });
+
+  test('an expired or locked sign-in challenge each get their own line too', () => {
+    const expired = errorStateFromRefusal({ refusal: 'ChallengeExpired', status: 401 });
+    const locked = errorStateFromRefusal({ refusal: 'ChallengeLocked', status: 401 });
+    expect(expired.title).not.toBe(locked.title);
+    expect(expired.title).not.toBe("We couldn't do that right now.");
+    expect(locked.title).not.toBe("We couldn't do that right now.");
+  });
 });
 
 describe('ApiRefusalError', () => {

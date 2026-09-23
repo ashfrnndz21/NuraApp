@@ -59,6 +59,13 @@ export interface NuraCardProps {
   children: React.ReactNode;
   testID?: string;
   accessibilityLabel?: string;
+  /**
+   * B1 (independent review of PR #332, section 16): the same tag on this
+   * card and on whatever it expands into across a route makes that
+   * navigation the object unfolding, not a cold cut — Reanimated's own
+   * shared-element transition between two `Stack.Screen`s.
+   */
+  sharedTransitionTag?: string;
 }
 
 /**
@@ -78,6 +85,7 @@ export function NuraCard({
   children,
   testID,
   accessibilityLabel,
+  sharedTransitionTag,
 }: NuraCardProps) {
   const reducedMotion = useReducedMotion();
   const opacity = useSharedValue(reducedMotion ? 1 : 0);
@@ -139,6 +147,7 @@ export function NuraCard({
       ]}
       testID={testID}
       accessibilityLabel={accessibilityLabel}
+      sharedTransitionTag={sharedTransitionTag}
     >
       {!isTertiary && Platform.OS !== 'web' ? (
         <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />

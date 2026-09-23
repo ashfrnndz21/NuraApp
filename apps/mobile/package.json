@@ -46,7 +46,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "lint:motion": "node scripts/lint-motion.js",
+    "lint:motion": "node scripts/lint-motion.js && node scripts/lint-tokens.js",
     "test": "jest",
     "doctor": "expo-doctor",
     "postinstall": "node scripts/copy-canvaskit.js"

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Blur, Canvas, Circle, Group, SweepGradient, vec } from '@shopify/react-native-skia';
 import {
   Easing,
@@ -113,32 +113,55 @@ export function IntelligenceOrb({ size = 'md', stateOverride }: IntelligenceOrbP
   }, [state, reducedMotion, breath]);
 
   const colors = useMemo(() => (state === 'error' ? GRADIENT_ERROR : GRADIENT), [state]);
-  const center = vec(r, r);
+  // B2 (independent review of PR #332): the glow circle (r×1.35, blurred by r×0.5) reaches
+  // past this component's own px×px box — clipped by a Canvas the same px×px size as the
+  // View wrapping it, which read on screen as a flat, square-edged disc rather than a soft
+  // sphere. `CANVAS_PAD` grows the Canvas to 2× the orb's own box (this View's own layout
+  // footprint is unchanged — the padding is absolutely positioned, so it never pushes
+  // anything else around) and every drawn coordinate below is offset by it, so the glow's
+  // own blur has room to fall off before it hits an edge.
+  const CANVAS_PAD = r;
+  const canvasSize = px + CANVAS_PAD * 2;
+  const center = vec(r + CANVAS_PAD, r + CANVAS_PAD);
 
   const sweepTransform = useDerivedValue(() => [
-    { translateX: r },
-    { translateY: r },
+    { translateX: r + CANVAS_PAD },
+    { translateY: r + CANVAS_PAD },
     { rotate: (rotation.value * Math.PI) / 180 },
-    { translateX: -r },
-    { translateY: -r },
+    { translateX: -(r + CANVAS_PAD) },
+    { translateY: -(r + CANVAS_PAD) },
     { scale: state === 'idle' ? breath.value : 1 },
   ]);
 
   const haloOpacity = useDerivedValue(() => halo.value * (state === 'error' ? 0.4 : 0.7));
   const haloScale = useDerivedValue(() => 0.92 + halo.value * (HALO_ANIMATION[state] === 'pulse' ? 0.24 : 0.38));
   const haloTransform = useDerivedValue(() => [
-    { translateX: r },
-    { translateY: r },
+    { translateX: r + CANVAS_PAD },
+    { translateY: r + CANVAS_PAD },
     { scale: haloScale.value },
-    { translateX: -r },
-    { translateY: -r },
+    { translateX: -(r + CANVAS_PAD) },
+    { translateY: -(r + CANVAS_PAD) },
   ]);
 
   const glowOpacity = state === 'error' ? 0.18 : state === 'idle' ? 0.35 : 0.55;
 
   return (
-    <View style={{ width: px, height: px }} accessible accessibilityRole="image" accessibilityLabel={`Nura, ${state}`}>
-      <Canvas style={StyleSheet.absoluteFill}>
+    <View
+      style={{ width: px, height: px, overflow: 'visible' }}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`Nura, ${state}`}
+    >
+      <Canvas
+        style={{
+          position: 'absolute',
+          left: -CANVAS_PAD,
+          top: -CANVAS_PAD,
+          width: canvasSize,
+          height: canvasSize,
+        }}
+        pointerEvents="none"
+      >
         <Group opacity={glowOpacity}>
           <Circle c={center} r={r * 1.35} color={colors[1]}>
             <Blur blur={r * 0.5} />
@@ -149,7 +172,7 @@ export function IntelligenceOrb({ size = 'md', stateOverride }: IntelligenceOrbP
             <SweepGradient c={center} colors={colors} />
           </Circle>
         </Group>
-        <Circle c={vec(r * 0.82, r * 0.7)} r={r * 0.32} color="white" opacity={0.5}>
+        <Circle c={vec(r * 0.82 + CANVAS_PAD, r * 0.7 + CANVAS_PAD)} r={r * 0.32} color="white" opacity={0.5}>
           <Blur blur={r * 0.15} />
         </Circle>
         <Group opacity={haloOpacity} transform={haloTransform}>

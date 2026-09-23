@@ -29,16 +29,32 @@ export function pendingPaperCount(): number {
 }
 
 /**
- * The card `reading.tsx` just finished, held for `report.tsx` — the very
- * next screen — the same short-lived, in-memory pattern as the paper
- * queue above (never persisted, never read by anything else).
+ * Every card `reading.tsx` has finished this session, held for
+ * `report.tsx` — the very next screen — the same short-lived, in-memory
+ * pattern as the paper queue above (never persisted, never read by
+ * anything else).
+ *
+ * B5, independent review of PR #332: for N photos picked at once,
+ * `reading.tsx` used to overwrite a single "last card" slot per paper —
+ * so N-1 of N cards were read by the backend but never shown or
+ * confirmed on screen. This is a queue, appended to, never overwritten,
+ * so `report.tsx` can walk every paper's own table (section 22).
  */
-let lastCard: ReviewCard | null = null;
+let reviewCardQueue: ReviewCard[] = [];
 
-export function setLastReviewCard(card: ReviewCard | null): void {
-  lastCard = card;
+export function addFinishedReviewCard(card: ReviewCard): void {
+  reviewCardQueue = [...reviewCardQueue, card];
 }
 
-export function getLastReviewCard(): ReviewCard | null {
-  return lastCard;
+export function getReviewCardQueue(): ReviewCard[] {
+  return reviewCardQueue;
+}
+
+export function clearReviewCardQueue(): void {
+  reviewCardQueue = [];
+}
+
+/** Replaces one card in the queue with its updated self (after a confirm/answer call). */
+export function updateReviewCardInQueue(updated: ReviewCard): void {
+  reviewCardQueue = reviewCardQueue.map((c) => (c.cardId === updated.cardId ? updated : c));
 }

@@ -28,6 +28,13 @@ export type DocumentSource = 'portal' | 'email' | 'share';
 
 export type FieldState = 'proposed' | 'confirmed' | 'corrected' | 'rejected';
 
+/** The result's own printed reference range (`ReviewFieldOut.range`'s own doc) — never our judgement, only ever what the paper prints. */
+export interface FieldRange {
+  low: number | null;
+  high: number | null;
+  text: string | null;
+}
+
 export interface ReviewField {
   fieldId: string;
   position: number;
@@ -41,6 +48,14 @@ export interface ReviewField {
   /** The uncertain-field prompt line(s), in the reader's own words — never technical. */
   prompt: string[] | null;
   page: number | null;
+  range: FieldRange | null;
+  /** The words printed on the paper for this line — the web client's own fallback label ahead of a generic name. */
+  labelOnPaper: string | null;
+  /** The authoritative marker of where this field stands — never re-derived client-side. */
+  state: FieldState;
+  correctedValue: unknown;
+  correctedByPersonId: string | null;
+  factId: string | null;
 }
 
 /**

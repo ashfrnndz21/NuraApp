@@ -34,6 +34,8 @@ export const semanticColors = {
   inkOnLight: '#2b2140',
   /** v2 itself has two near-identical dark inks (`.flag` vs `.btn.red`); the spike kept the `.flag` one. */
   inkOnTone: '#231a12',
+  /** `.btn.done`'s own dark ink on the sage "done"/confirmed fill (`#16301c`) — a darker relative of `inkOnTone`, not the same value. */
+  inkOnGood: '#16301c',
 } as const;
 
 /** Card accent colour per variant (`NuraCard.tsx` `ACCENT`). */

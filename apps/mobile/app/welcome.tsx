@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 
 import { AIOrb } from '../components/ambient/IntelligenceOrb';
-import { AmbientBackground } from '../components/ambient/AmbientBackground';
+import { ScreenBackground } from '../components/layout/ScreenBackground';
 import { EditorialHeadline } from '../components/text/EditorialHeadline';
 import { cardEnter, staggerStep } from '../design/motion';
+import { phoneTokens, semanticColors } from '../design/colors';
+import * as typography from '../design/typography';
 import { useReducedMotion } from '../components/motion/useReducedMotion';
 
 /**
@@ -16,7 +18,6 @@ import { useReducedMotion } from '../components/motion/useReducedMotion';
  */
 export default function Welcome() {
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const orbOpacity = useSharedValue(reducedMotion ? 1 : 0);
   const textOpacity = useSharedValue(reducedMotion ? 1 : 0);
@@ -35,8 +36,7 @@ export default function Welcome() {
   const ctaStyle = useAnimatedStyle(() => ({ opacity: ctaOpacity.value }));
 
   return (
-    <View style={styles.screen}>
-      <AmbientBackground width={width} height={height} />
+    <ScreenBackground style={styles.screen}>
       <View style={styles.center}>
         <Animated.View style={orbStyle}>
           <AIOrb size="lg" stateOverride="idle" />
@@ -57,25 +57,22 @@ export default function Welcome() {
           <Text style={styles.ctaText}>Start</Text>
         </Pressable>
       </Animated.View>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: '#1f1731',
     paddingHorizontal: 20,
     paddingTop: 120,
     paddingBottom: 40,
     justifyContent: 'space-between',
-    overflow: 'hidden',
   },
   center: { alignItems: 'center', gap: 24 },
   textBlock: { alignItems: 'center', gap: 12 },
   subtitle: {
     color: 'rgba(251,246,240,0.75)',
-    fontSize: 15.5,
+    fontSize: typography.fontSize[15.5],
     lineHeight: 21,
     textAlign: 'center',
     maxWidth: 280,
@@ -83,9 +80,9 @@ const styles = StyleSheet.create({
   cta: {
     minHeight: 56,
     borderRadius: 999,
-    backgroundColor: '#fbf6f0',
+    backgroundColor: phoneTokens.c,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaText: { color: '#2b2140', fontWeight: '600', fontSize: 17 },
+  ctaText: { color: semanticColors.inkOnLight, fontWeight: '600', fontSize: typography.fontSize[17] },
 });

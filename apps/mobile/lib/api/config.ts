@@ -25,8 +25,15 @@ export const apiConfig = {
 /**
  * The session token from `/auth/phone/verify` or `/dev/quick-signin`
  * (`Authorization: Bearer <token>`, `deps.py`'s `_bearer`). Held in
- * memory only here — `lib/api`'s own concern, not a screen's; C1 wires a
- * persisted copy (secure storage) once the sign-in screen exists.
+ * memory only, on purpose, for now — a hard reload (or a cold app start)
+ * loses it and the person re-signs in (`sign-in.tsx`/`who.tsx` handle
+ * that path already). FIX BEFORE MERGE, independent review of PR #332:
+ * this comment previously promised a persisted copy "once the sign-in
+ * screen exists" — that screen has existed since C1 and this is still
+ * in-memory only; corrected here rather than left stale. Persisting it
+ * (`expo-secure-store`, native-only — Keychain/Keystore, with a web
+ * fallback still to design) is real, not-yet-done work, not a line this
+ * file can claim for free.
  */
 let sessionToken: string | null = null;
 

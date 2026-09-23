@@ -9,6 +9,9 @@ import { createOwnProfile, createProfileForSomeone, getMe, type Relationship } f
 import { ApiRefusalError, errorStateFromRefusal } from '../lib/api/refusals';
 import { setCurrentProfileId } from '../lib/api/config';
 import { ErrorState } from '../components/states/ErrorState';
+import { ScreenBackground } from '../components/layout/ScreenBackground';
+import { phoneTokens, semanticColors } from '../design/colors';
+import * as typography from '../design/typography';
 
 type Who = 'me' | 'parent' | 'someone_else';
 
@@ -134,14 +137,14 @@ export default function WhoIsThisFor() {
 
   if (refusal) {
     return (
-      <View style={styles.screen}>
+      <ScreenBackground style={styles.screen}>
         <ErrorState title={refusal.title} why={refusal.why} ctaLabel={refusal.ctaLabel} onPress={() => setRefusal(null)} testID="who-error" />
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={styles.screen}>
+    <ScreenBackground style={styles.screen}>
       <ScrollView contentContainerStyle={styles.turns}>
         {turns.map((turn) =>
           turn.role === 'assistant' ? (
@@ -184,22 +187,22 @@ export default function WhoIsThisFor() {
           </Pressable>
         </View>
       ) : null}
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#1f1731', paddingHorizontal: 20, paddingTop: 60 },
+  screen: { paddingHorizontal: 20, paddingTop: 60 },
   turns: { gap: 16, paddingBottom: 20 },
   assistantRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  assistantText: { flex: 1, color: '#fbf6f0', fontSize: 20, fontWeight: '300', lineHeight: 25, marginTop: 6 },
-  userBubble: { alignSelf: 'flex-end', maxWidth: '82%', paddingVertical: 11, paddingHorizontal: 16, borderRadius: 22, borderBottomRightRadius: 6, backgroundColor: '#fbf6f0' },
-  userText: { color: '#2b2140', fontSize: 15.5, lineHeight: 20.9 },
+  assistantText: { flex: 1, color: phoneTokens.c, fontSize: typography.fontSize[20], fontWeight: '300', lineHeight: 25, marginTop: 6 },
+  userBubble: { alignSelf: 'flex-end', maxWidth: '82%', paddingVertical: 11, paddingHorizontal: 16, borderRadius: 22, borderBottomRightRadius: 6, backgroundColor: phoneTokens.c },
+  userText: { color: semanticColors.inkOnLight, fontSize: typography.fontSize[15.5], lineHeight: 20.9 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 42, paddingHorizontal: 15, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-  chipText: { color: '#fbf6f0', fontSize: 14 },
+  chipText: { color: phoneTokens.c, fontSize: typography.fontSize[14] },
   composer: { flexDirection: 'row', gap: 8, paddingVertical: 16, alignItems: 'center' },
-  input: { flex: 1, minHeight: 48, borderRadius: 999, paddingHorizontal: 18, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', color: '#fbf6f0', fontSize: 15.5 },
-  send: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#fbf6f0', alignItems: 'center', justifyContent: 'center' },
-  sendText: { color: '#2b2140', fontSize: 18, fontWeight: '600' },
+  input: { flex: 1, minHeight: 48, borderRadius: 999, paddingHorizontal: 18, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', color: phoneTokens.c, fontSize: typography.fontSize[15.5] },
+  send: { width: 48, height: 48, borderRadius: 24, backgroundColor: phoneTokens.c, alignItems: 'center', justifyContent: 'center' },
+  sendText: { color: semanticColors.inkOnLight, fontSize: typography.fontSize[18], fontWeight: '600' },
 });

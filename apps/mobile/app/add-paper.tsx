@@ -7,16 +7,22 @@ import * as DocumentPicker from 'expo-document-picker';
 import { AIOrb } from '../components/ambient/IntelligenceOrb';
 import { setPendingPapers, type PendingPaper } from '../lib/media/pendingPaper';
 import { uriToBase64 } from '../lib/media/toBase64';
+import { ScreenBackground } from '../components/layout/ScreenBackground';
+import { ErrorState } from '../components/states/ErrorState';
+import { phoneTokens } from '../design/colors';
+import * as typography from '../design/typography';
 
 /**
  * Scene 5 (v2 frame 05): "add a paper", as a conversation, not a file
  * dialog dropped on the person unannounced — Nura's own line, then three
  * quiet options and an honest way out ("I have no papers today", never
- * forced).
+ * forced). A denied camera/library permission gets its own calm line and
+ * a way forward (Settings), never a silent no-op.
  */
 export default function AddPaper() {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [permissionDenied, setPermissionDenied] = useState<'camera' | 'library' | null>(null);
 
   const goRead = (papers: PendingPaper[]) => {
     if (papers.length === 0) return;
@@ -28,7 +34,10 @@ export default function AddPaper() {
     setBusy('photo');
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) return;
+      if (!perm.granted) {
+        setPermissionDenied('camera');
+        return;
+      }
       const result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.8 });
       if (result.canceled || !result.assets[0]?.base64) return;
       const asset = result.assets[0];
@@ -69,7 +78,10 @@ export default function AddPaper() {
     setBusy('many');
     try {
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) return;
+      if (!perm.granted) {
+        setPermissionDenied('library');
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({ base64: true, allowsMultipleSelection: true, quality: 0.8 });
       if (result.canceled || result.assets.length === 0) return;
       goRead(
@@ -87,8 +99,22 @@ export default function AddPaper() {
     }
   };
 
+  if (permissionDenied) {
+    return (
+      <ScreenBackground style={styles.screen}>
+        <ErrorState
+          title={permissionDenied === 'camera' ? "Nura can't use the camera yet." : "Nura can't open your photos yet."}
+          why="Turn on the permission in your phone's Settings, then come back and try again."
+          ctaLabel="Try again"
+          onPress={() => setPermissionDenied(null)}
+          testID="add-paper-permission-denied"
+        />
+      </ScreenBackground>
+    );
+  }
+
   return (
-    <View style={styles.screen}>
+    <ScreenBackground style={styles.screen}>
       <View style={styles.intro}>
         <AIOrb size="sm" stateOverride="idle" />
         <Text style={styles.introText}>Now show me a paper. A blood test helps the most.</Text>
@@ -130,7 +156,7 @@ export default function AddPaper() {
       >
         <Text style={styles.noPapersText}>I have no papers today</Text>
       </Pressable>
-    </View>
+    </ScreenBackground>
   );
 }
 
@@ -159,7 +185,7 @@ function Option({
       testID={testID}
     >
       <View style={styles.optionIcon}>
-        <Text style={{ fontSize: 18 }}>{icon}</Text>
+        <Text style={{ fontSize: typography.fontSize[18] }}>{icon}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.optionTitle}>{title}</Text>
@@ -170,9 +196,9 @@ function Option({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#1f1731', paddingHorizontal: 20, paddingTop: 60, gap: 12 },
+  screen: { paddingHorizontal: 20, paddingTop: 60, gap: 12 },
   intro: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
-  introText: { flex: 1, color: '#fbf6f0', fontSize: 20, fontWeight: '300', lineHeight: 25, marginTop: 6 },
+  introText: { flex: 1, color: phoneTokens.c, fontSize: typography.fontSize[20], fontWeight: '300', lineHeight: 25, marginTop: 6 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -192,8 +218,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optionTitle: { color: '#fbf6f0', fontSize: 16, fontWeight: '500' },
-  optionSubtitle: { color: 'rgba(251,246,240,0.7)', fontSize: 13, marginTop: 2 },
+  optionTitle: { color: phoneTokens.c, fontSize: typography.fontSize[16], fontWeight: '500' },
+  optionSubtitle: { color: 'rgba(251,246,240,0.7)', fontSize: typography.fontSize[13], marginTop: 2 },
   noPapers: { minHeight: 56, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center', marginBottom: 40 },
-  noPapersText: { color: '#fbf6f0', fontSize: 15.5 },
+  noPapersText: { color: phoneTokens.c, fontSize: typography.fontSize[15.5] },
 });

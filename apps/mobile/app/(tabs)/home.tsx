@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 
 import { AmbientBackground } from '../../components/ambient/AmbientBackground';
+import { phoneTokens, colorsDark } from '../../design/colors';
+import * as typography from '../../design/typography';
 import { AIComposer } from '../../components/ai/AIComposer';
 import { NuraCard } from '../../components/cards/NuraCard';
 import { EditorialHeadline } from '../../components/text/EditorialHeadline';
 import { LoadingState } from '../../components/states/LoadingState';
 import { EmptyState } from '../../components/states/EmptyState';
-import { askFixtureAnswer } from '../../features/home/mock';
+import { ErrorState } from '../../components/states/ErrorState';
+import { ApiRefusalError, errorStateFromRefusal } from '../../lib/api/refusals';
 import { staggerCards } from '../../components/motion/motionTokens';
 import { getCurrentProfileId } from '../../lib/api/config';
 import { getProfile } from '../../lib/api/profile';
@@ -45,27 +48,47 @@ export default function HomeScreen() {
   const [state, setState] = useState<ProfileState | null>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [reminder, setReminder] = useState<MedicationReminder | null>(null);
+  const [loadError, setLoadError] = useState<{ title: string; why: string } | null>(null);
 
-  useEffect(() => {
+  const load = React.useCallback(async () => {
     const profileId = getCurrentProfileId();
     if (!profileId) {
       router.replace('/welcome');
       return;
     }
-    (async () => {
-      const [p, s, f, r] = await Promise.all([
-        getProfile(profileId),
-        getProfileState(profileId).catch(() => null),
-        getFeed(profileId).catch(() => ({ audience: '', items: [] })),
-        getMedicationReminder(profileId),
-      ]);
-      setProfile(p);
-      setState(s);
-      setFeed(f.items);
-      setReminder(r);
-      setLoading(false);
-    })();
+    setLoading(true);
+    setLoadError(null);
+    {
+      try {
+        const [p, s, f, r] = await Promise.all([
+          getProfile(profileId),
+          getProfileState(profileId).catch(() => null),
+          getFeed(profileId).catch(() => ({ audience: '', items: [] })),
+          getMedicationReminder(profileId).catch(() => null),
+        ]);
+        setProfile(p);
+        setState(s);
+        setFeed(f.items);
+        setReminder(r);
+      } catch (err) {
+        // Found live (independent review of PR #332): an unhandled refusal from
+        // `getProfile` here used to reach React as an uncaught error and crash Home, the
+        // screen every golden-path run ends on — never again, and `loading` must not be
+        // left stuck true either.
+        setLoadError(
+          err instanceof ApiRefusalError
+            ? errorStateFromRefusal(err)
+            : { title: "We couldn't load your home yet.", why: 'Nothing was lost. Try again.' },
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
   }, [router]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const scrollHandler = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
@@ -89,14 +112,30 @@ export default function HomeScreen() {
             <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.prompt}>How are you today?</Text>
           </View>
-          <Pressable style={styles.notWell} accessibilityRole="button" testID="not-well">
+          <Pressable
+            style={styles.notWell}
+            onPress={() => router.push('/not-well')}
+            accessibilityRole="button"
+            accessibilityLabel="Not well?"
+            testID="not-well"
+          >
             <Text style={styles.notWellText}>Not well?</Text>
           </Pressable>
         </View>
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color="#fbf6f0" />
+            <LoadingState line="Looking at your latest paper" testID="home-loading" />
+          </View>
+        ) : loadError ? (
+          <View style={styles.loadingWrap}>
+            <ErrorState
+              title={loadError.title}
+              why={loadError.why}
+              ctaLabel="Try again"
+              onPress={load}
+              testID="home-load-error"
+            />
           </View>
         ) : (
           <AnimatedScrollView
@@ -110,7 +149,18 @@ export default function HomeScreen() {
             <EditorialHeadline text={headline} />
 
             {state ? (
-              <NuraCard variant="ai-summary" tier="primary" enterIndex={0} staggerMs={staggerCards} testID="state-card">
+              // B1: no backend field ties this card to one paper's artifactId (it summarises
+              // every dimension, not one paper), so it has no natural sharedTransitionTag
+              // partner the way report.tsx's per-paper cards do — pressable to the closest
+              // real detail (the report table) rather than a fabricated shared tag.
+              <NuraCard
+                variant="ai-summary"
+                tier="primary"
+                enterIndex={0}
+                staggerMs={staggerCards}
+                onPress={() => router.push('/report')}
+                testID="state-card"
+              >
                 <Text style={styles.stateWord}>{state.word}</Text>
                 <Text style={styles.stateLine}>{state.line}</Text>
               </NuraCard>
@@ -165,7 +215,9 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.dock}>
-          <AIComposer answer={askFixtureAnswer} onOpenReadings={() => router.push('/report')} onOpenAsk={() => router.push('/ask')} testID="ai-composer" />
+          {/* B8: Home only ever renders once a profile is signed in (the redirect above) — the
+              composer is always live here, so no fixture `answer` is passed at all. */}
+          <AIComposer onOpenReadings={() => router.push('/report')} onOpenAsk={() => router.push('/ask')} testID="ai-composer" />
         </View>
       </SafeAreaView>
     </View>
@@ -173,7 +225,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#1f1731' },
+  root: { flex: 1, backgroundColor: colorsDark.paper },
   safe: { flex: 1 },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
@@ -187,20 +239,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: '#fbf6f0', fontSize: 17, fontWeight: '500' },
+  avatarText: { color: phoneTokens.c, fontSize: typography.fontSize[17], fontWeight: '500' },
   headerText: { flex: 1, gap: 1 },
-  greeting: { color: 'rgba(251,246,240,0.82)', fontSize: 13.5 },
-  prompt: { color: '#fbf6f0', fontSize: 17, fontWeight: '500' },
+  greeting: { color: 'rgba(251,246,240,0.82)', fontSize: typography.fontSize[13.5] },
+  prompt: { color: phoneTokens.c, fontSize: typography.fontSize[17], fontWeight: '500' },
   notWell: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)' },
-  notWellText: { color: '#fbf6f0', fontSize: 13 },
+  notWellText: { color: phoneTokens.c, fontSize: typography.fontSize[13] },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, gap: 14 },
-  kicker: { color: 'rgba(251,246,240,0.7)', fontSize: 14.5 },
-  stateWord: { color: '#fbf6f0', fontSize: 20, fontWeight: '500', textTransform: 'capitalize' },
-  stateLine: { color: 'rgba(251,246,240,0.85)', fontSize: 15, marginTop: 4 },
-  docTitle: { color: '#fbf6f0', fontSize: 16, fontWeight: '400' },
-  docSubtitle: { color: 'rgba(251,246,240,0.75)', fontSize: 14, marginTop: 2 },
+  kicker: { color: 'rgba(251,246,240,0.7)', fontSize: typography.fontSize[14.5] },
+  stateWord: { color: phoneTokens.c, fontSize: typography.fontSize[20], fontWeight: '500', textTransform: 'capitalize' },
+  stateLine: { color: 'rgba(251,246,240,0.85)', fontSize: typography.fontSize[15], marginTop: 4 },
+  docTitle: { color: phoneTokens.c, fontSize: typography.fontSize[16], fontWeight: '400' },
+  docSubtitle: { color: 'rgba(251,246,240,0.75)', fontSize: typography.fontSize[14], marginTop: 2 },
   addPaper: { minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
-  addPaperText: { color: '#fbf6f0', fontSize: 14.5 },
+  addPaperText: { color: phoneTokens.c, fontSize: typography.fontSize[14.5] },
   dock: { paddingHorizontal: 20, paddingBottom: 10, paddingTop: 4 },
 });
