@@ -1,11 +1,19 @@
-"""The dev-only CORS gate (golden-path PR #332, independent review B3/FIX-BEFORE-MERGE).
+"""The dev-only CORS gate (golden-path PR #332; independent review B3/FIX-BEFORE-MERGE, then
+the CI-regression fix that split this off `dev_code_sender`).
 
-`app.channels.api.create_app` adds `CORSMiddleware` only when `settings.dev_code_sender` is
+`app.channels.api.create_app` adds `CORSMiddleware` only when `settings.mobile_dev_cors` is
 true — the mobile golden path's own web target (Expo's Metro dev server has no same-origin
 proxy the way `web/`'s Vite dev server does, so the browser calls this API cross-origin
-directly). A deployment never sets `NURA_DEV_CODE_SENDER=1`, so this block is dead code there;
-this test pins both halves of that promise: no CORS headers in production, and — on a dev run
-— loopback origins only, never credentials, never a wildcard.
+directly). It is deliberately its own flag (`NURA_MOBILE_DEV_CORS=1`), not folded into
+`dev_code_sender`: `dev_code_sender` is also true in CI's web job and on laptops that never run
+the Expo target, and `CORSMiddleware(allow_origin_regex=...)` makes Starlette add
+`Vary: Origin` to every matching response, which the web app's service worker respects — so a
+page cached for offline use stops matching, and offline specs fail on a run that never touched
+the Expo target at all. This is exactly the regression `test_dev_code_sender_alone_never_registers_cors_middleware`
+pins: `dev_code_sender=True` on its own must never register the middleware. A deployment never
+sets `NURA_MOBILE_DEV_CORS=1`, so this block is dead code there; the rest of this file pins the
+other half of that promise: no CORS headers by default, and — with the flag on — loopback
+origins only, never credentials, never a wildcard.
 """
 
 from __future__ import annotations
@@ -57,17 +65,37 @@ async def _engine_and_sessions():
 
 
 def test_no_dev_code_sender_never_registers_cors_middleware(tmp_path: Path) -> None:
-    """`dev_code_sender=False` is the gate itself — checked with `demo_mode=True` so the
+    """`mobile_dev_cors=False` is the gate itself — checked with `demo_mode=True` so the
     fixture providers this test's own scaffolding uses are allowed to run at all
     (`check_fixtures`); a true production run (real, non-fixture providers throughout) is
-    outside this test's own scope, but shares the identical `dev_code_sender` gate."""
+    outside this test's own scope, but shares the identical `mobile_dev_cors` gate."""
     import anyio
 
     async def run() -> None:
         engine, sessions = await _engine_and_sessions()
         settings = Settings(region=Region.SG, database_url="sqlite+aiosqlite://", demo_mode=True)
-        assert settings.dev_code_sender is False
+        assert settings.mobile_dev_cors is False
         app = create_app(settings, sessions, _providers(tmp_path, dev=False))
+        assert not any(m.cls is CORSMiddleware for m in app.user_middleware)
+        await engine.dispose()
+
+    anyio.run(run)
+
+
+def test_dev_code_sender_alone_never_registers_cors_middleware(tmp_path: Path) -> None:
+    """The regression this file exists to pin: `dev_code_sender=True` on its own (the CI web
+    job's own setting, and the owner's laptop backend) must never register `CORSMiddleware`.
+    Only `mobile_dev_cors=True` does — see the module docstring for why the two must stay
+    apart."""
+    import anyio
+
+    async def run() -> None:
+        engine, sessions = await _engine_and_sessions()
+        settings = Settings(
+            region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True
+        )
+        assert settings.mobile_dev_cors is False
+        app = create_app(settings, sessions, _providers(tmp_path, dev=True))
         assert not any(m.cls is CORSMiddleware for m in app.user_middleware)
         await engine.dispose()
 
@@ -85,12 +113,22 @@ async def test_no_dev_code_sender_response_carries_no_cors_header(tmp_path: Path
     await engine.dispose()
 
 
-def test_dev_run_registers_cors_middleware_loopback_only_no_credentials(tmp_path: Path) -> None:
+def test_mobile_dev_cors_registers_cors_middleware_loopback_only_no_credentials(
+    tmp_path: Path,
+) -> None:
+    """The golden-path builder's own run sets both flags together (`NURA_DEV_CODE_SENDER=1`
+    for the logging code sender and the fixture providers, `NURA_MOBILE_DEV_CORS=1` for the
+    Expo web target's cross-origin calls) — this is that combination."""
     import anyio
 
     async def run() -> None:
         engine, sessions = await _engine_and_sessions()
-        settings = Settings(region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True)
+        settings = Settings(
+            region=Region.SG,
+            database_url="sqlite+aiosqlite://",
+            dev_code_sender=True,
+            mobile_dev_cors=True,
+        )
         app = create_app(settings, sessions, _providers(tmp_path, dev=True))
         cors = next((m for m in app.user_middleware if m.cls is CORSMiddleware), None)
         assert cors is not None
@@ -111,9 +149,14 @@ def test_dev_run_registers_cors_middleware_loopback_only_no_credentials(tmp_path
     anyio.run(run)
 
 
-async def test_dev_run_response_allows_a_loopback_origin_only(tmp_path: Path) -> None:
+async def test_mobile_dev_cors_response_allows_a_loopback_origin_only(tmp_path: Path) -> None:
     engine, sessions = await _engine_and_sessions()
-    settings = Settings(region=Region.SG, database_url="sqlite+aiosqlite://", dev_code_sender=True)
+    settings = Settings(
+        region=Region.SG,
+        database_url="sqlite+aiosqlite://",
+        dev_code_sender=True,
+        mobile_dev_cors=True,
+    )
     app = create_app(settings, sessions, _providers(tmp_path, dev=True))
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

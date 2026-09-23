@@ -9,6 +9,19 @@
  * `baseUrl` defaults to this builder's own dev server (port 8061, never
  * 8000 — the owner's live copy). `EXPO_PUBLIC_NURA_API_URL` overrides it
  * for a phone on the tunnel.
+ *
+ * That dev server needs one variable of its own for this web target to
+ * reach it at all: `NURA_MOBILE_DEV_CORS=1` (`backend/app/settings.py`).
+ * Metro's web bundle has no same-origin proxy the way `web/`'s Vite dev
+ * server does, so the browser calls the API cross-origin, and only a
+ * server started with that flag answers a browser's CORS preflight
+ * (loopback origins only, never credentials). It is deliberately not
+ * folded into `NURA_DEV_CODE_SENDER` — that one is also set in CI's web
+ * job and on the owner's own backend, neither of which run this Expo
+ * target, and the CORS middleware's `Vary: Origin` header defeats the
+ * web app's service-worker cache on an offline run that never needed
+ * it. `NURA_MOBILE_DEV_CORS=1` is the one variable the Expo target
+ * needs beyond `make dev`'s own defaults.
  */
 export const apiConfig = {
   /**

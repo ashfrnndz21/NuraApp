@@ -230,6 +230,16 @@ class Settings:
     rest of the app answers on every other host, and a request for either from the wrong one
     is refused — so no patient-origin script or storage can ever reach a staff session, and a
     review-origin page never serves the patient app."""
+    mobile_dev_cors: bool = False
+    """NURA_MOBILE_DEV_CORS=1: the Expo dev target only. Metro's web bundle has no request
+    proxy the way web/'s Vite dev server does, so the browser calls this API cross-origin
+    directly, and only that one caller needs `CORSMiddleware` (`app.channels.api`), loopback
+    origins only, never a wildcard, no credentials. Deliberately its own flag, not folded into
+    `dev_code_sender`: that setting is also true in CI's web job and on other laptops that
+    never run the Expo target, and `CORSMiddleware(allow_origin_regex=...)` adds `Vary: Origin`
+    to every matching response — which the web app's service worker respects, so a page cached
+    for offline use stops matching. Off by default; a dev run that isn't testing the mobile
+    target never sets it."""
 
     @property
     def fixtures_allowed(self) -> bool:
@@ -312,6 +322,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     except KeyError as missing:
         raise MissingSetting(f"{missing.args[0]} is not set") from missing
     dev_code_sender = source.get("NURA_DEV_CODE_SENDER", "") == "1"
+    mobile_dev_cors = source.get("NURA_MOBILE_DEV_CORS", "") == "1"
     frozen_clock = _frozen_clock(source.get("NURA_FROZEN_CLOCK") or None, dev_run=dev_code_sender)
     demo_mode = source.get("NURA_DEMO_MODE", "") == "1"
     demo_login_code = source.get("NURA_DEMO_LOGIN_CODE") or None
@@ -388,6 +399,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
             source.get("NURA_REVIEW_STAFF_TOKENS") or None, dev_run=dev_code_sender
         ),
         review_origin=_review_origin(source.get("NURA_REVIEW_ORIGIN")),
+        mobile_dev_cors=mobile_dev_cors,
     )
 
 
