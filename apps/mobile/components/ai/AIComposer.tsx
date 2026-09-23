@@ -10,6 +10,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { runAskFixture, runExplainFixture, type AskFixtureAnswer, type NuraEvent } from '../../lib/ai/events';
+import { runNuraLive } from '../../lib/ai/runClient';
+import { getCurrentProfileId } from '../../lib/api/config';
 import { cardEnter, fadeExit } from '../motion/motionTokens';
 import { useReducedMotion } from '../motion/useReducedMotion';
 import { AIOrb } from '../ambient/IntelligenceOrb';
@@ -23,6 +25,7 @@ interface Message {
 }
 
 export interface AIComposerProps {
+  /** The Home-spike fixture script, used only when no profile is signed in (`getCurrentProfileId()` is null). */
   answer: AskFixtureAnswer;
   onOpenReadings: () => void;
   onOpenAsk: () => void;
@@ -30,10 +33,22 @@ export interface AIComposerProps {
 }
 
 /**
- * The docked composer (spec §9): the pill "Ask Nura anything · Speak"
- * expands in place, never a separate screen. Driven entirely by the
- * ADR 0019 §4 event stream — here a fixture with the same shape the
- * live `POST /profiles/{id}/runs` route will emit.
+ * The docked composer (spec §9 / C5): the pill "Ask Nura anything ·
+ * Speak" expands in place, never a separate screen. A signed-in profile
+ * asks for real — `runNuraLive` (`POST /profiles/{id}/runs`,
+ * `intent: 'answer_question'`), the question the person actually typed,
+ * the answer streamed word by word from `TEXT_MESSAGE_CONTENT`. With no
+ * profile (demo/spike continuity) it falls back to the fixture script.
+ *
+ * Two real gaps, found wiring this against the live backend rather than
+ * guessed: `_answer_question`'s own event stream (`run.py`) reports only
+ * `TOOL_CALL_*`/`TEXT_MESSAGE_*`/`RUN_FINISHED{lines}` — a clarifying
+ * question's own chip *options* and a line's own `cites` (the provenance
+ * line naming a paper) are both on `AnswerOut` from the plain
+ * `POST /ask`, never on the run's own wire. Until the event vocabulary
+ * carries them (a `STATE_DELTA`/`CUSTOM` addition, or a second call),
+ * this composer shows the streamed prose only — no chips, no provenance
+ * line, on a live answer. Worth the owner's own look.
  */
 export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComposerProps) {
   const [expanded, setExpanded] = useState(false);
@@ -89,6 +104,8 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     [consumeEvent, appendDelta]
   );
 
+  const live = getCurrentProfileId() !== null;
+
   const openComposer = () => {
     if (expanded) return;
     setExpanded(true);
@@ -98,13 +115,34 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     setExplainOpen(false);
     setDraft('');
     userEditedRef.current = false;
-    setListening();
-    setTimeout(() => inputRef.current?.focus(), 0);
     opacity.value = reducedMotion ? 1 : withTiming(1, { duration: cardEnter });
     translateY.value = reducedMotion ? 0 : withTiming(0, { duration: cardEnter });
     pillOpacity.value = reducedMotion ? 0 : withTiming(0, { duration: fadeExit });
 
+    if (live) {
+      // A real question needs the person to type it first — nothing to stream yet.
+      setTimeout(() => inputRef.current?.focus(), 0);
+      return;
+    }
+    setListening();
+    setTimeout(() => inputRef.current?.focus(), 0);
     const run = runAskFixture(answer, onEvent);
+    runRef.current = run;
+  };
+
+  const sendLiveQuestion = (override?: string) => {
+    const question = (override ?? draft).trim();
+    const profileId = getCurrentProfileId();
+    if (!question || !profileId) return;
+    runRef.current?.cancel();
+    setListening();
+    const userMsgId = `local-user-${Date.now()}`;
+    setMessages([{ id: userMsgId, role: 'user', text: question }]);
+    setDraft('');
+    // Not `false`: the effect below re-fills `draft` from the fixture's own scripted user
+    // message when it hasn't been hand-edited — here the person already sent this one.
+    userEditedRef.current = true;
+    const run = runNuraLive(profileId, 'answer_question', { question, mode: 'text' }, onEvent);
     runRef.current = run;
   };
 
@@ -129,6 +167,13 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     if (chipsDisabled) return;
     setChipsDisabled(true);
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (live) {
+      // No fixture script to branch on live — a chip's label is asked as the next question
+      // (a generic quick-reply, until the event stream itself carries structured options —
+      // see this component's own doc).
+      sendLiveQuestion(chip);
+      return;
+    }
     if (chip === 'Explain') {
       setExplainOpen(true);
       const run = runExplainFixture(answer.explain, onEvent);
@@ -188,9 +233,15 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
                   setDraft(t);
                 }}
                 onFocus={() => useAIState.getState().state === 'idle' && setListening()}
+                onSubmitEditing={live ? () => sendLiveQuestion() : undefined}
                 returnKeyType="send"
                 testID="composer-input"
               />
+              {live && draft.trim().length > 0 ? (
+                <Pressable onPress={() => sendLiveQuestion()} accessibilityRole="button" accessibilityLabel="Send" testID="composer-send">
+                  <Text style={styles.send}>→</Text>
+                </Pressable>
+              ) : null}
               <Pressable onPress={closeComposer} accessibilityRole="button" accessibilityLabel="Close" testID="composer-close">
                 <Text style={styles.close}>✕</Text>
               </Pressable>
@@ -272,6 +323,7 @@ const styles = StyleSheet.create({
   askRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   input: { flex: 1, color: '#fbf6f0', fontSize: 16 },
   close: { color: 'rgba(251,246,240,0.7)', fontSize: 16, padding: 6 },
+  send: { color: '#fbf6f0', fontSize: 18, fontWeight: '600', padding: 6 },
   body: { gap: 10 },
   answer: { color: '#fbf6f0', fontSize: 16.5, fontWeight: '300', lineHeight: 22 },
   question: { color: 'rgba(251,246,240,0.85)' },
