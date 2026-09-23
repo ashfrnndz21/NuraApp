@@ -24,8 +24,12 @@ describe('whoseMismatchLead — composed from the closed mismatched-field list o
 });
 
 describe('duplicateLead', () => {
-  test('names the date when given one', () => {
-    expect(duplicateLead('12 September')).toBe('This looks like the paper you added on 12 September.');
+  test('names the date when given one — worded, never the raw ISO string (third independent review of PR #332)', () => {
+    expect(duplicateLead('2026-09-05')).toBe('This looks like the paper you added on Saturday 5 September.');
+  });
+
+  test('never the raw ISO date on screen', () => {
+    expect(duplicateLead('2026-09-05')).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
   test('falls back honestly when there is no date', () => {

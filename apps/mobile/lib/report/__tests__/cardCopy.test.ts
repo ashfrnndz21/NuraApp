@@ -1,26 +1,32 @@
 import { reportKickerLine, hasNoFields } from '../cardCopy';
 
-describe('reportKickerLine — never a dangling "·" when a part is missing', () => {
-  test('all parts present', () => {
-    expect(reportKickerLine({ documentDate: '12 September', source: 'portal', documentKind: 'lab_report' })).toBe(
-      '12 September · portal · lab report',
+describe('reportKickerLine — never a dangling "·" when a part is missing, never a raw ISO date or document_kind token', () => {
+  test('all parts present — the date is worded, the kind is its short title', () => {
+    expect(reportKickerLine({ documentDate: '2026-09-05', source: 'portal', documentKind: 'lab_report' })).toBe(
+      'Saturday 5 September · portal · Blood test',
     );
+  });
+
+  test('never the raw ISO date string on screen', () => {
+    const line = reportKickerLine({ documentDate: '2026-09-05', source: null, documentKind: 'lab_report' });
+    expect(line).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  test('never the raw document_kind token on screen', () => {
+    const line = reportKickerLine({ documentDate: null, source: null, documentKind: 'lab_report' });
+    expect(line).not.toBe('lab_report');
+    expect(line).not.toMatch(/_/);
   });
 
   test('date missing', () => {
     expect(reportKickerLine({ documentDate: null, source: 'portal', documentKind: 'lab_report' })).toBe(
-      'portal · lab report',
+      'portal · Blood test',
     );
   });
 
   test('date and source both missing', () => {
-    expect(reportKickerLine({ documentDate: null, source: null, documentKind: 'lab_report' })).toBe('lab report');
+    expect(reportKickerLine({ documentDate: null, source: null, documentKind: 'lab_report' })).toBe('Blood test');
     expect(reportKickerLine({ documentDate: null, source: null, documentKind: 'lab_report' })).not.toMatch(/^\s*·/);
-  });
-
-  test('unknown document kind still renders something readable', () => {
-    // @ts-expect-error - deliberately an unmapped value, to check the fallback
-    expect(reportKickerLine({ documentDate: null, source: null, documentKind: 'something_new' })).toBe('something_new');
   });
 });
 

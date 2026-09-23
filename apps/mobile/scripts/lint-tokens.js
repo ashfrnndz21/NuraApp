@@ -48,7 +48,9 @@ for (const file of files) {
   const lines = src.split('\n');
   lines.forEach((line, i) => {
     const trimmed = line.trim();
-    if (trimmed.startsWith('//') || trimmed.startsWith('*')) return; // comments/doc lines
+    // comments/doc lines — `//`, a block-comment continuation (`*`), or a JSX comment
+    // (`{/* ... */}`, which never starts a real style/prop line in this codebase).
+    if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('{/*')) return;
     for (const re of [HEX_RE, FONT_SIZE_RE]) {
       re.lastIndex = 0;
       const m = re.exec(line);

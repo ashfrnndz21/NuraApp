@@ -4,6 +4,7 @@ import Animated from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 
 import { AIOrb } from '../components/ambient/IntelligenceOrb';
+import { EditorialHeadline } from '../components/text/EditorialHeadline';
 import { LoadingState } from '../components/states/LoadingState';
 import { ErrorState } from '../components/states/ErrorState';
 import { ScreenBackground } from '../components/layout/ScreenBackground';
@@ -78,7 +79,12 @@ export default function Insight() {
           <>
             <Animated.View style={styles.assistantRow} sharedTransitionTag={`paper-${card.artifactId}`}>
               <AIOrb size="sm" stateOverride="idle" />
-              <Text style={styles.headline}>{report.headline}</Text>
+              {/* Patient-visible defect (third independent review of PR #332): a plain
+                  <Text> here printed the backend's own `*accent*` markup literally
+                  ("Here is what I would *ask.*"), asterisks and all. EditorialHeadline is
+                  the one component that consumes that markup (accent word in italic serif)
+                  — the same one Home's own headline already goes through. */}
+              <EditorialHeadline text={report.headline} size={25} style={styles.headline} />
             </Animated.View>
             {report.questions.map((q) => (
               <Animated.View key={q.insight_id} style={styles.questionRow}>
@@ -121,7 +127,7 @@ const styles = StyleSheet.create({
   backGlyph: { color: phoneTokens.c, fontSize: typography.fontSize[22] },
   body: { gap: 16, paddingBottom: 20 },
   assistantRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  headline: { flex: 1, color: phoneTokens.c, fontSize: typography.fontSize[25], fontWeight: '300', lineHeight: 30, marginTop: 4 },
+  headline: { flex: 1, marginTop: 4 },
   questionRow: { paddingLeft: 40 },
   questionText: { color: 'rgba(251,246,240,0.9)', fontSize: typography.fontSize[15.5], lineHeight: 21, fontWeight: '300' },
   boundary: { color: 'rgba(251,246,240,0.6)', fontSize: typography.fontSize[12.5], marginTop: 8, paddingLeft: 40 },

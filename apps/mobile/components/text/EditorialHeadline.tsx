@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, type StyleProp, type TextStyle } from 'react-native';
 
 export interface EditorialHeadlineProps {
   /** One `*accent*` word or phrase, rendered in italic serif — e.g. "Four numbers to raise with your *doctor.*" */
   text: string;
   size?: number;
+  /** Merged onto the outer `Text` — e.g. `{ flex: 1 }` beside an orb in a row (insight.tsx). */
+  style?: StyleProp<TextStyle>;
 }
 
 /**
@@ -12,11 +14,11 @@ export interface EditorialHeadlineProps {
  * serif (Instrument Serif — the reference's font). Plain Figtree-style
  * weight everywhere else.
  */
-export function EditorialHeadline({ text, size = 33 }: EditorialHeadlineProps) {
+export function EditorialHeadline({ text, size = 33, style }: EditorialHeadlineProps) {
   const parts = useMemo(() => text.split(/\*(.+?)\*/g), [text]);
 
   return (
-    <Text style={[styles.headline, { fontSize: size, lineHeight: size * 1.1 }]} accessibilityRole="header">
+    <Text style={[styles.headline, { fontSize: size, lineHeight: size * 1.1 }, style]} accessibilityRole="header">
       {parts.map((part, i) =>
         i % 2 === 1 ? (
           <Text key={i} style={[styles.accent, { fontSize: size * 1.12 }]}>

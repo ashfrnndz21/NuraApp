@@ -13,6 +13,8 @@ import { confirmReviewCard } from '../lib/api/reviewCards';
 import { getReviewCardQueue, updateReviewCardInQueue } from '../lib/media/pendingPaper';
 import { canSubmitReport, buildConfirmDecisions, fieldNeedsAnswer } from '../lib/report/confirmLogic';
 import { reportKickerLine, hasNoFields } from '../lib/report/cardCopy';
+import { fieldLabel, isResultRow } from '../lib/report/fieldLabels';
+import { displayFieldValue } from '../lib/dates';
 import type { FieldDecision, ReviewCard, ReviewField } from '../domain/reviewCard';
 
 /**
@@ -218,15 +220,20 @@ function ReportCard({
         </View>
       ) : null}
 
-      {card.fields.map((field) => (
-        <FieldRow
-          key={field.fieldId}
-          field={field}
-          decision={decisions[field.fieldId]}
-          onDecide={(d) => setDecision(field.fieldId, d)}
-          highlight={showUnanswered && fieldNeedsAnswer(field, decisions)}
-        />
-      ))}
+      {/* "Results first" (web/src/onboarding/review.ts's own split): a measured result (a
+          unit or a printed range) before an administrative line (a name, a date, a facility)
+          — never mixed in position order, which is how a paper happens to print them. */}
+      {[...card.fields]
+        .sort((a, b) => Number(isResultRow(b)) - Number(isResultRow(a)))
+        .map((field) => (
+          <FieldRow
+            key={field.fieldId}
+            field={field}
+            decision={decisions[field.fieldId]}
+            onDecide={(d) => setDecision(field.fieldId, d)}
+            highlight={showUnanswered && fieldNeedsAnswer(field, decisions)}
+          />
+        ))}
 
       <Text style={styles.caption}>Ranges are the ones printed on your paper. This is not a doctor’s advice.</Text>
 
@@ -275,20 +282,37 @@ function FieldRow({
 }) {
   const needsAnswer = field.needsConfirm && field.state === 'proposed' && decision === undefined;
   const settledElsewhere = field.state !== 'proposed';
+  const label = fieldLabel(field);
+  const isResult = isResultRow(field);
+
+  // Patient-visible defect (third independent review of PR #332, section 29 — never a raw
+  // token on screen): this used to show `field.labelOnPaper ?? field.attribute` (a raw
+  // backend code, e.g. "facility") as the title and `field.subject` (e.g. "lipid_panel") as
+  // a subtitle under every row, result or not. Now: an admin row (no unit, no range — a
+  // name, a date, a facility) shows only its plain label and its value, nothing numeric; a
+  // result row shows its plain label, the value and unit, the range on paper, and the flag
+  // — never its subject/attribute token, on either kind of row.
+  if (!isResult) {
+    return (
+      <View style={[styles.adminRow, highlight && styles.fieldCardHighlight]} testID={`report-field-${field.fieldId}`}>
+        <Text style={styles.adminLabel}>{label}</Text>
+        <Text style={styles.adminValue}>{field.unreadable ? 'Could not read' : displayFieldValue(field.value)}</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.fieldCard, highlight && styles.fieldCardHighlight]} testID={`report-field-${field.fieldId}`}>
       <View style={styles.fieldRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.fieldTitle}>{field.labelOnPaper ?? field.attribute}</Text>
-          <Text style={styles.fieldSubtitle}>{field.subject}</Text>
+          <Text style={styles.fieldTitle}>{label}</Text>
         </View>
         <View style={styles.valueBlock}>
           {field.unreadable ? (
             <Text style={styles.unreadableText}>Could not read</Text>
           ) : (
             <Text style={styles.valueText}>
-              {String(field.value ?? '—')}
+              {displayFieldValue(field.value)}
               {field.unit ? <Text style={styles.unitText}> {field.unit}</Text> : null}
             </Text>
           )}
@@ -374,7 +398,18 @@ const styles = StyleSheet.create({
   fieldCardHighlight: { borderWidth: 1.5, borderColor: semanticColors.act },
   fieldRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   fieldTitle: { color: phoneTokens.c, fontSize: typography.fontSize[16], fontWeight: '500' },
-  fieldSubtitle: { color: 'rgba(251,246,240,0.65)', fontSize: typography.fontSize[12.5], marginTop: 2 },
+  adminRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  adminLabel: { color: 'rgba(251,246,240,0.7)', fontSize: typography.fontSize[13.5], flexShrink: 1 },
+  adminValue: { color: phoneTokens.c, fontSize: typography.fontSize[14], fontWeight: '500', flexShrink: 1, textAlign: 'right' },
   valueBlock: { alignItems: 'flex-end', gap: 6 },
   valueText: { color: phoneTokens.c, fontSize: typography.fontSize[20], fontWeight: '600' },
   unreadableText: { color: 'rgba(251,246,240,0.6)', fontSize: typography.fontSize[14], fontStyle: 'italic' },

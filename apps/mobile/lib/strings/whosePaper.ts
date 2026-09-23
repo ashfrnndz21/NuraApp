@@ -6,6 +6,8 @@
  * `web/src/strings/en.ts`'s `whose*` keys exactly, so the two clients say
  * the same sentence.
  */
+import { saidDate } from '../dates';
+
 const FIELD_WORD: Record<string, string> = {
   name: 'the name',
   patient_id: 'the patient number',
@@ -34,9 +36,15 @@ export const whoseChips = [
   { label: 'I’m not sure', value: null },
 ] as const;
 
+/**
+ * `addedOn` is the backend's own ISO date (`existing_added_on`) — a raw
+ * token defect of the same kind the report table had (third independent
+ * review of PR #332): worded through `saidDate` here too, never printed
+ * as `"2026-09-05"`.
+ */
 export function duplicateLead(addedOn: string | null): string {
   return addedOn
-    ? `This looks like the paper you added on ${addedOn}.`
+    ? `This looks like the paper you added on ${saidDate(addedOn)}.`
     : 'This looks like a paper you already have.';
 }
 
