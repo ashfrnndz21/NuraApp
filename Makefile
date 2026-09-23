@@ -1,4 +1,4 @@
-.PHONY: setup dev migrate reset-db checkpoint checkpoints-ci test lint plain-words language ios-test web build-web web-test web-e2e
+.PHONY: setup dev migrate reset-db checkpoint checkpoints-ci test lint lint-mobile plain-words language ios-test web build-web web-test web-e2e
 # Every backend target runs `python3 -m …`: the Python 3.12 that `make setup` installed the
 # backend into, never whatever bare `python` on the PATH happens to be.
 setup: ; cd backend && python3 -m pip install -e ".[dev]"
@@ -72,7 +72,13 @@ checkpoint: ; cd backend && python3 -m scripts.checkpoint $(N)
 # Nothing here needs `make dev` or `make setup` run first; it drives them itself.
 checkpoints-ci: ; python3 scripts/run_checkpoints.py
 test: ; cd backend && python3 -m pytest -q
-lint: ; cd backend && python3 -m ruff check . && python3 -m mypy app
+lint: lint-mobile ; cd backend && python3 -m ruff check . && python3 -m mypy app
+# apps/mobile's own motion-token lint (section 35 / golden path C0): no animation in
+# components/, app/, features/, lib/ or design/ may hard-code a duration — every one must
+# read from design/motion.ts (or components/motion/{motionTokens,springs,transitions}.ts,
+# which are built from it). `npm ci` runs once, when node_modules is missing.
+lint-mobile: apps/mobile/node_modules ; cd apps/mobile && npm run lint:motion
+apps/mobile/node_modules: apps/mobile/package.json apps/mobile/package-lock.json ; cd apps/mobile && npm ci
 # Every patient string under the paths in .claude/rules/patient-strings.md, against docs/plain-words.md.
 # `python3 -m app.safety.plain_words --explain` says what each rule checks; `--text "..."` checks one line.
 plain-words: ; cd backend && python3 -m app.safety.plain_words

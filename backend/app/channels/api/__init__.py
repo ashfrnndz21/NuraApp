@@ -41,6 +41,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -343,6 +344,23 @@ def create_app(
     if settings.review_origin is not None:
         # #145, before real data: the review queue and the patient app are split by origin.
         app.add_middleware(ReviewOrigin, review_origin=settings.review_origin)
+    if settings.mobile_dev_cors:
+        # The mobile golden-path builder's own web target (Expo's Metro dev server has no
+        # request proxy the way web/'s Vite dev server does, so the browser calls this API
+        # cross-origin directly) — the Expo dev target only, its own flag
+        # (NURA_MOBILE_DEV_CORS=1), never folded into NURA_DEV_CODE_SENDER: that one is also
+        # true in CI's web job and on laptops that never run the Expo target, and this
+        # middleware's `allow_origin_regex` makes Starlette add `Vary: Origin` to every
+        # matching response, which defeats the web app's service-worker cache on offline
+        # runs. This block is dead on a deployment, which never sets it. Loopback origins
+        # only, never a wildcard.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+            allow_credentials=False,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     api = _api()
     app.include_router(api)
     app.include_router(api, prefix=API_PREFIX, include_in_schema=False)
