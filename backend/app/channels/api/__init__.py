@@ -41,6 +41,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -343,6 +344,18 @@ def create_app(
     if settings.review_origin is not None:
         # #145, before real data: the review queue and the patient app are split by origin.
         app.add_middleware(ReviewOrigin, review_origin=settings.review_origin)
+    if settings.dev_code_sender:
+        # The mobile golden-path builder's own web target (Expo's Metro dev server has no
+        # request proxy the way web/'s Vite dev server does, so the browser calls this API
+        # cross-origin directly) — a dev run only (this whole block is dead on a deployment,
+        # which never sets NURA_DEV_CODE_SENDER=1). Loopback origins only, never a wildcard.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+            allow_credentials=False,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
     api = _api()
     app.include_router(api)
     app.include_router(api, prefix=API_PREFIX, include_in_schema=False)

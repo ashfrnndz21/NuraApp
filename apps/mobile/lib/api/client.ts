@@ -10,13 +10,13 @@ async function liveGet<T>(path: string): Promise<T> {
 
 /** `GET /{profile_id}/health/overview` — the greeting, headline and primary insight. */
 export async function getHealthOverview(profileId: string): Promise<HealthOverviewResponse> {
-  if (apiConfig.mode === 'live') return liveGet(`/${profileId}/health/overview`);
+  if (apiConfig.mode === 'live') return liveGet(`/profiles/${profileId}/health/overview`);
   return { headline: homeHeadline, insight: healthInsight };
 }
 
 /** `GET /{profile_id}/feed/today` — the ranked cards below the insight. */
 export async function getFeedToday(profileId: string): Promise<FeedTodayItem[]> {
-  if (apiConfig.mode === 'live') return liveGet(`/${profileId}/feed/today`);
+  if (apiConfig.mode === 'live') return liveGet(`/profiles/${profileId}/feed/today`);
   return [
     { id: 'blood-test-12-sep', kind: 'document', title: bloodTest.title, subtitle: bloodTest.subtitle, cta: bloodTest.cta },
   ];
@@ -24,7 +24,7 @@ export async function getFeedToday(profileId: string): Promise<FeedTodayItem[]> 
 
 /** `GET /{profile_id}/medication-reminder` — the next dose due. */
 export async function getMedicationReminder(profileId: string): Promise<MedicationReminderResponse> {
-  if (apiConfig.mode === 'live') return liveGet(`/${profileId}/medication-reminder`);
+  if (apiConfig.mode === 'live') return liveGet(`/profiles/${profileId}/medication-reminder`);
   return { label: eveningReminder.label, medicineName: eveningReminder.medicine, dueAt: '21:00' };
 }
 

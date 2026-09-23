@@ -61,6 +61,10 @@ const KNOWN: Record<string, (refusal: ApiRefusal) => { title: string; why: strin
     title: 'Only the profile owner can do that.',
     why: 'Nothing was changed.',
   }),
+  ProfileAlreadyOwned: () => ({
+    title: 'You already have a profile with Nura.',
+    why: 'Sign in again and we’ll take you straight there.',
+  }),
 };
 
 /**

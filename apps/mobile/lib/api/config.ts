@@ -11,7 +11,14 @@
  * for a phone on the tunnel.
  */
 export const apiConfig = {
-  mode: 'demo' as 'demo' | 'live',
+  /**
+   * The golden path (section 38 Phase 2) runs live, against this
+   * builder's own dev server — the whole point of this checkpoint is a
+   * real backend, not a fixture stub (C0's own instruction: "the
+   * fixture runner... must be replaced by this client"). `'demo'`
+   * remains available for a screen or a test that explicitly wants it.
+   */
+  mode: 'live' as 'demo' | 'live',
   baseUrl: process.env.EXPO_PUBLIC_NURA_API_URL ?? 'http://localhost:8061',
 };
 

@@ -52,6 +52,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" />
         <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="welcome" />
+          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="who" />
           <Stack.Screen name="(tabs)" />
         </Stack>
       </SafeAreaProvider>
