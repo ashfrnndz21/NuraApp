@@ -410,6 +410,11 @@ def _printed_range_of(entry: Mapping[str, Any]) -> PrintedRange | None:
     low, high, text = raw.get("low"), raw.get("high"), raw.get("text")
     low = float(low) if isinstance(low, int | float) and not isinstance(low, bool) else None
     high = float(high) if isinstance(high, int | float) and not isinstance(high, bool) else None
+    # A low bound over the high one is refused the same as `parse_printed_range` already
+    # refuses one read off the printed text: a wrong bound shown as a right one is the
+    # failure that matters, never an unparsed range (review blocker 4).
+    if low is not None and high is not None and low > high:
+        low, high = None, None
     return PrintedRange(low=low, high=high, text=text if isinstance(text, str) else "")
 
 

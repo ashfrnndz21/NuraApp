@@ -76,6 +76,7 @@ from app.memory.timeline import language_for
 from app.reasoning.visits.models import ItemState, SummaryItem, SummaryItemKind, VisitSummary
 from app.regions import guard_region
 from app.safety.boundary import Surface, boundary_lines
+from app.search.printed_range import band_of_printed, printed_range_for_fact
 from app.search.retrieve import Candidate, Retriever
 from app.state.health_context import active_medicines
 
@@ -459,7 +460,9 @@ async def _corpus_stream(
     if context.allows(Scope.MEDICINES):
         # The Health Graph's one reader (`app.state.health_context.active_medicines`,
         # ADR 0019 point 3): `status == ACTIVE`, not `superseded_at IS NULL` alone — a line
-        # marked stopped or held is not superseded, and this ask must not name it current.
+        # marked stopped or held is not superseded, and this ask must not name it current
+        # (D-7). Read here rather than a locally-scoped query, so every reader in the app
+        # agrees on what "active" means, not only this one.
         lines = await active_medicines(session, context=context)
         for line in lines:
             corpus.medicines[line.id] = line
@@ -807,12 +810,20 @@ def _day(moment: datetime, context: KeyContext, language: str) -> str:
     return words.said_date(moment, context.region, language)
 
 
-def _compose(
+def _say_value(value: float) -> str:
+    """A measured value as he'd read it: a whole number with no trailing zero, otherwise as
+    printed — never more precision than the paper gave (rule 10: few, plain numbers)."""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+async def _compose(
+    session: AsyncSession,
     hits: Sequence[Candidate],
     corpus: _Corpus,
     context: KeyContext,
     language: str,
     registry: DrugRegistry | None,
+    reader: Reader,
 ) -> list[list[AnswerLine]]:
     """The lines for each thing the question is about, one group per thing, from the
     templates and the cited values. A group is one line, or two where one would carry more
@@ -821,7 +832,41 @@ def _compose(
     groups: list[list[AnswerLine]] = []
     papers_said: set[uuid.UUID] = set()
     visits_heard: set[uuid.UUID] = set()
+    # D-1: a "paper" candidate and a "fact" candidate on the same artifact score identically on
+    # every phrase they share (a fact's own subject is folded into its paper's candidate names
+    # too, `_corpus_stream`'s own RECORDS loop) — a tie the retriever then breaks on nothing
+    # more meaningful than the two candidates' random ids. Review item 9: an earlier version of
+    # this fix reordered every tied "paper" hit to the END OF THE WHOLE LIST — correct only when
+    # nothing else came after it, and otherwise pushing a paper past unrelated facts it was
+    # never actually tied with, discarding the retriever's own rank for those too. Precisely
+    # scoped instead: a tied paper hit is moved to sit immediately after the FIRST same-artefact
+    # "fact" hit it reaches in the (otherwise untouched) order the retriever gave every hit —
+    # not "somewhere near the end" — so a same-artefact "fact" still always claims
+    # `papers_said` first (a specific value is always more useful than "it is in your papers"),
+    # and every hit that was never tied with anything, paper or fact, keeps exactly the rank
+    # the retriever gave it, relative to every other untied hit.
+    fact_artifacts = {
+        corpus.facts[hit.ref].artifact_id
+        for hit in hits
+        if hit.kind == "fact" and corpus.facts[hit.ref].artifact_id is not None
+    }
+    ordered_hits: list[Candidate] = []
+    deferred_papers: dict[uuid.UUID, list[Candidate]] = {}
     for hit in hits:
+        if hit.kind == "paper" and hit.ref in fact_artifacts:
+            deferred_papers.setdefault(hit.ref, []).append(hit)
+            continue
+        ordered_hits.append(hit)
+        if hit.kind == "fact":
+            artifact_id = corpus.facts[hit.ref].artifact_id
+            if artifact_id is not None:
+                ordered_hits.extend(deferred_papers.pop(artifact_id, ()))
+    # A deferred paper whose tied artefact's fact hit somehow never appended above (should
+    # not happen: `fact_artifacts` is built from these same `hits`) is still shown, never
+    # silently dropped — appended last, the one case this still cannot place precisely.
+    for leftover in deferred_papers.values():
+        ordered_hits.extend(leftover)
+    for hit in ordered_hits:
         if hit.kind == "reading":
             fact = corpus.facts[hit.ref]
             value: dict[str, Any] = fact.value
@@ -832,7 +877,10 @@ def _compose(
                 top_number=str(value["systolic"]),
                 bottom_number=str(value["diastolic"]),
             )
-            groups.append([AnswerLine(text, cites) for text in texts])
+            # Round 5 (review B3): the same "Your…" leak to a caregiver the model asker's own
+            # `VALUE`/`READING` lines had before they were registered for translation — fixed
+            # the same way, here, at the source, rather than trusted to a caller.
+            groups.append([AnswerLine(reader.says(text), cites) for text in texts])
         elif hit.kind == "fact":
             fact = corpus.facts[hit.ref]
             source = fact.artifact_id or fact.event_id
@@ -844,14 +892,43 @@ def _compose(
                 if source is not None and (f.artifact_id == source or f.event_id == source)
             ] or [fact]
             papers_said.add(source or fact.id)
-            text = words.recall_line(
-                "paper",
-                language,
-                what=words.what_word(fact.subject, language),
-                date=_day(fact.valid_from, context, language),
+            fact_cites = tuple(dict.fromkeys(c for f in together for c in _cites_of_fact(f)))
+            if isinstance(fact.value, int | float):
+                # D-1: a measured value (a lab analyte, a body measurement — never the dict a
+                # blood-pressure reading carries, handled above as "reading") said with its
+                # date and, only when the paper itself printed one, how it sits against it —
+                # never a guideline table's own opinion (`printed_range_for_fact`'s own
+                # docstring).
+                printed = await printed_range_for_fact(session, context, fact)
+                band = None if printed is None else band_of_printed(float(fact.value), printed)
+                band = band or "no_range"
+                texts = words.value_lines(
+                    language,
+                    band=band,
+                    what=words.what_word(fact.subject, language),
+                    # Plain words rule 12: never a unit he does not use ("mg/dL", "mmol/L") —
+                    # the bare number, exactly as `READING` already says a blood pressure with
+                    # no "mmHg" (the audit's own finding (b): the app's own onboarding
+                    # read-back already gets this right, "Your cholesterol was 212 on …").
+                    value=_say_value(fact.value),
+                    date=_day(fact.valid_from, context, language),
+                )
+                # Round 5 (review B3): same fix as the reading branch above.
+                groups.append([AnswerLine(reader.says(text), fact_cites) for text in texts])
+                continue
+            what = words.what_word(fact.subject, language)
+            date = _day(fact.valid_from, context, language)
+            # Round 5 (review B3): built directly from `RECALL_THEIRS` for a caregiver, never
+            # through `Reader.says`'s own generic pattern matching — `RECALL["paper"]`'s exact
+            # shape collides with an unrelated feed template of the identical shape
+            # (`recall_line_theirs`'s own docstring), so the generic path answers with the
+            # WRONG twin for this one line.
+            text = (
+                words.recall_line("paper", language, what=what, date=date)
+                if reader.his
+                else words.recall_line_theirs("paper", language, patient=reader.name, what=what, date=date)
             )
-            fact_cites = [c for f in together for c in _cites_of_fact(f)]
-            groups.append([AnswerLine(text, tuple(dict.fromkeys(fact_cites)))])
+            groups.append([AnswerLine(text, fact_cites)])
         elif hit.kind == "visit":
             visit = corpus.visits[hit.ref]
             provider = corpus.providers.get(visit.provider_id)
@@ -968,8 +1045,15 @@ def _compose(
                 else words.paper_word(corpus.paper_kinds.get(artifact.id), language)
             )
             moment = on_it[0].valid_from if on_it else artifact.captured_at
-            text = words.recall_line(
-                "paper", language, what=what, date=_day(moment, context, language)
+            date = _day(moment, context, language)
+            # Round 5 (review B3): the same `RECALL["paper"]` template, reached from a "paper"
+            # hit here rather than a non-numeric "fact" hit above — same leak, same direct-fill
+            # fix (`recall_line_theirs`'s own docstring: the generic `Reader.says` path answers
+            # with an unrelated feed template's twin for this exact shape).
+            text = (
+                words.recall_line("paper", language, what=what, date=date)
+                if reader.his
+                else words.recall_line_theirs("paper", language, patient=reader.name, what=what, date=date)
             )
             paper_cites = [Cite("artifact", artifact.id)]
             paper_cites += [
@@ -1214,6 +1298,10 @@ async def recall_stream(
         assert corpus is not None
         hits = retriever.retrieve(text, corpus.candidates)
         doctor = _doctor(corpus)
+        # Round 5 (review B3): computed unconditionally now, not only on the clarify branch —
+        # `_compose` needs it too, to say a caregiver's own "Pa's cholesterol test was 140…"
+        # rather than his own "Your cholesterol test was 140…" voice.
+        reader = await reader_of(session, context, lang)
         clarify: Clarify | None = None
         if focus is not None:
             # A previous turn's clarifying question already resolved to one thing (W2): answer
@@ -1231,9 +1319,12 @@ async def recall_stream(
             if focus_hit is not None:
                 hits = [focus_hit]
         elif not skip_clarify and not _would_change_treatment(text, hits):
-            reader = await reader_of(session, context, lang)
             clarify = _clarify_for(text, corpus, context, lang, reader)
-        groups = [] if clarify is not None else _compose(hits, corpus, context, lang, registry)
+        groups = (
+            []
+            if clarify is not None
+            else await _compose(session, hits, corpus, context, lang, registry, reader)
+        )
         passing = [group for group in groups if all(words.verified(x.text, lang) for x in group)]
         dropped = sum(len(group) for group in groups) - sum(len(group) for group in passing)
         said: list[AnswerLine] = []

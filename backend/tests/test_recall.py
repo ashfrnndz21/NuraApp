@@ -20,17 +20,23 @@ citation names the artefact, and the clip is played from it when there is one to
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit.models import Action, Outcome
-from app.delivery.timeline_strings import verified
+from app.delivery.timeline_strings import verified, what_word
+from app.ingestion.extract import DocumentKind
+from app.ingestion.models import FieldState, ReviewCard, ReviewField
 from app.ingestion.objects import LocalObjectStore
 from app.keys.context import KeyContext, OutOfScope
+from app.keys.repository import scoped_new
 from app.keys.scopes import ROLE_SCOPES, KeyRole, Scope
-from app.medicines.models import MedicationLine
+from app.medicines.models import LineStatus, MedicationLine
+from app.medicines.strings import say_date
 from app.memory.models import (
     Appointment,
     Artifact,
@@ -40,6 +46,7 @@ from app.memory.models import (
     Fact,
     Provider,
 )
+from app.memory.semantic import assert_fact
 from app.regions import Region
 from app.safety.boundary import Surface, boundary_lines
 from app.search.ask import Answer, Mode, NotAQuestion, recall
@@ -50,8 +57,8 @@ from app.search.retrieve import (
     Retriever,
     question_digest,
 )
-from tests.medicines_support import REGISTRY, let_in
-from tests.timeline_support import SITI_PHONE, again, keep_only_me, record, trail
+from tests.medicines_support import REGISTRY, add, label, let_in, pa
+from tests.timeline_support import SITI_PHONE, again, artefact, keep_only_me, reading, record, trail
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "recall"
 
@@ -126,11 +133,16 @@ async def test_mei_asks_in_text_what_dr_tan_said_and_every_line_cites_what_it_re
     rec = await record(sg)
     answer = await ask(sg, rec.mei, "what did Dr Tan say", tmp_path)
     texts = {line.text for line in answer.lines}
+    # Round 5, review B3: `RECALL["paper"]`, reached here from a "paper" hit (never a
+    # numeric "fact" hit in this fixture), now goes through `Reader.says` too — Mei hears Pa
+    # named, not addressed. `visit_next`/`visit_past`/`medicine_from` are a wider, pre-
+    # existing gap this round does not touch (`RECALL_THEIRS`'s own docstring) — still in his
+    # own voice here, unchanged.
     assert texts == {
         "Your next visit is to Dr Tan on Thursday 10 September.",
         "You saw Dr Tan on Monday 24 August.",
         "Dr Tan gave you your blood pressure tablet.",
-        "Your cholesterol test from Thursday 7 September is in your papers.",
+        "Pa's cholesterol test from Thursday 7 September is in Pa's papers.",
     }
     await every_cite_is_on_this_profile(sg, rec.owner, answer)
     paper = next(line for line in answer.lines if "papers" in line.text)
@@ -280,3 +292,209 @@ async def test_a_question_is_one_line_of_at_most_three_hundred_characters(
     assert [e.refused_because for e in await trail(sg, rec.owner) if e.target == "ask"] == [
         "NotAQuestion"
     ]
+
+
+# --- D-1 (audit-2026-09-22.md §3.1/§5): a measured value has somewhere to live ---------------
+#
+# Before this fix the only catalogue template that could state a measured value was
+# `READING`, blood-pressure-only (`timeline_strings.py:544-548`) — a lab value fell back to
+# `RECALL["paper"]`, which never touches `fact.value` at all. The owner's own case, reproduced
+# by the audit: "How is my cholesterol?" answered with no number; "Is it high?" answered "Nura
+# does not have that written down." about a paper he had already confirmed. These fixtures
+# prove the opposite now, on a value the rule-based asker itself composes — never a guideline
+# table's opinion, only what the paper printed or did not (`app.search.printed_range`).
+
+WHEN = datetime(2026, 1, 21, 2, 0, tzinfo=UTC)
+"""10 in the morning, Singapore, Wednesday 21 January 2026 — the frozen instant these D-1
+fixtures use throughout, so `say_date` always answers the same worded day."""
+
+
+async def _lipid_fact(
+    session: AsyncSession,
+    context: KeyContext,
+    *,
+    attribute: str,
+    value: float,
+    printed_range: dict[str, float | str | None] | None = None,
+) -> tuple[Fact, Artifact]:
+    """A confirmed lab fact, dated `WHEN`, from its own paper — with the paper's own printed
+    range on file only when `printed_range` says so (`ReviewField.range`, D-1(a)'s own source
+    of truth, never a guideline table)."""
+    paper = await artefact(session, context, kind=ArtifactKind.PHOTO, when=WHEN)
+    fact = await assert_fact(
+        session,
+        context=context,
+        subject="lipid_panel",
+        attribute=attribute,
+        value=value,
+        unit="mg/dL",
+        confidence=0.95,
+        artifact_id=paper.id,
+        valid_from=WHEN,
+    )
+    card = scoped_new(
+        ReviewCard,
+        context,
+        Scope.RECORDS,
+        artifact_id=paper.id,
+        document_kind=DocumentKind.LAB_REPORT,
+        document_date=WHEN.date(),
+        confirmed_at=WHEN,
+        confirmed_by_person_id=context.person_id,
+    )
+    session.add(card)
+    await session.flush()
+    field = scoped_new(
+        ReviewField,
+        context,
+        Scope.RECORDS,
+        card_id=card.id,
+        position=0,
+        subject="lipid_panel",
+        attribute=attribute,
+        value=value,
+        unit="mg/dL",
+        confidence=0.95,
+        range=printed_range,
+        state=FieldState.CONFIRMED,
+        fact_id=fact.id,
+        decided_at=WHEN,
+    )
+    session.add(field)
+    await session.flush()
+    return fact, paper
+
+
+async def test_a_measured_value_with_no_printed_range_is_said_with_its_date_never_silenced(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """The owner's own reproduction, part one: a confirmed lipid panel with no printed range
+    on the paper answers "How is my cholesterol?" with the number and the date, never the old
+    silent `RECALL["paper"]` fallback ("…is in your papers.", no number). A fresh owner (`pa`,
+    not the shared `record()` fixture) so this profile holds nothing else named "cholesterol"
+    for the retriever to prefer instead."""
+    owner = await pa(sg, language="en")
+    fact, _paper = await _lipid_fact(sg, owner, attribute="total_cholesterol", value=122)
+    answer = await ask(sg, owner, "How is my cholesterol?", tmp_path)
+    # Plain words rule 12 (no unit he does not use): the bare number, exactly the shape the
+    # app's own onboarding read-back already gets right for the same paper (audit finding (e)).
+    assert [line.text for line in answer.lines] == [
+        "Your cholesterol test was 122 on Wednesday 21 January.",
+        "No range is printed on the paper.",
+    ]
+    assert {cite.kind for line in answer.lines for cite in line.cites} >= {"fact"}
+    assert {cite.id for line in answer.lines for cite in line.cites if cite.kind == "fact"} == {
+        fact.id
+    }
+    for line in answer.spoken:
+        assert verified(line, "en"), line
+
+
+@pytest.mark.parametrize(
+    ("value", "printed_range", "band_line"),
+    [
+        (140, {"low": None, "high": 130, "text": "<130"}, "It is above the range printed on the paper."),
+        (100, {"low": None, "high": 130, "text": "<130"}, "It is within the range printed on the paper."),
+        (30, {"low": 40, "high": 130, "text": "40 - 130"}, "It is below the range printed on the paper."),
+    ],
+)
+async def test_a_measured_value_against_its_printed_range_never_the_apps_own_judgement(
+    sg: AsyncSession,
+    tmp_path: Path,
+    value: float,
+    printed_range: dict[str, float | str | None],
+    band_line: str,
+) -> None:
+    """The owner's own reproduction, part two: with a printed range on file, the answer says
+    above/below/within exactly as the paper prints it — never a guideline table's opinion, and
+    never the conclusion-language veto's word ("high"/"low"): D-3's finding for that veto stays
+    for a line that uses the questioner's OWN word, not for one reporting the paper's own
+    printed comparison in neutral words."""
+    owner = await pa(sg, language="en")
+    await _lipid_fact(sg, owner, attribute="ldl", value=value, printed_range=printed_range)
+    answer = await ask(sg, owner, "Is my cholesterol high?", tmp_path)
+    assert answer.lines, "never a silent fallback for a value with a printed range on file"
+    assert answer.lines[-1].text == band_line
+    for line in answer.spoken:
+        assert verified(line, "en"), line
+
+
+@pytest.mark.parametrize("language", ["en", "ms", "zh"])
+async def test_a_caregiver_hears_a_measured_value_about_him_by_name(
+    sg: AsyncSession, tmp_path: Path, language: str
+) -> None:
+    """Round 5, review B3: `_compose`'s own `value_lines`/`reading_lines`/`RECALL["paper"]`
+    branches never went through `Reader.says`, so a caregiver on Mei's own key read his own
+    "Your cholesterol test was 140…" voice, in any of the three languages — the same leak the
+    model asker's own `VALUE`/`READING` lines had before `VALUE_THEIRS`/`READING_THEIRS` were
+    registered for translation. Mei asks about Pa's own record (`display_name="Pa"`,
+    `tests.medicines_support.pa`) and hears him named, not addressed."""
+    owner = await pa(sg, language=language)
+    mei = await let_in(
+        sg, owner, phone="+6588880099", name="Mei", role=KeyRole.CHIEF, scopes=set(ROLE_SCOPES[KeyRole.CHIEF])
+    )
+    await _lipid_fact(
+        sg, owner, attribute="ldl", value=140, printed_range={"low": None, "high": 130, "text": "<130"}
+    )
+    await reading(sg, owner, 118, 76, WHEN)
+
+    value_answer = await ask(sg, mei, "cholesterol", tmp_path, language=language)
+    date = say_date(WHEN.date(), language)
+    what = what_word("lipid_panel", language)
+    expected_value = {
+        "en": [f"Pa's {what} was 140 on {date}.", "It is above the range printed on the paper."],
+        "ms": [
+            f"{what[:1].upper()}{what[1:]} Pa ialah 140 pada {date}.",
+            "Ia melebihi julat yang dicetak pada kertas.",
+        ],
+        "zh": [f"{date}Pa的{what}是140。", "这高于纸上印的范围。"],
+    }[language]
+    assert [line.text for line in value_answer.lines] == expected_value
+
+    reading_answer = await ask(sg, mei, "blood pressure", tmp_path, language=language)
+    expected_reading = {
+        "en": [f"Pa's blood pressure on {date} was 118 over 76."],
+        "ms": [f"Tekanan darah Pa pada {date} ialah 118 atas 76."],
+        "zh": [f"{date}Pa量了血压。", "Pa的血压是118比76。"],
+    }[language]
+    assert [line.text for line in reading_answer.lines] == expected_reading
+    for line in value_answer.spoken + reading_answer.spoken:
+        assert verified(line, language), line
+
+
+# --- D-7 (audit-2026-09-22.md §3.3): Ask reads medicines without status == ACTIVE ------------
+
+
+async def test_a_stopped_medicine_never_appears_in_the_rule_based_answer(
+    sg: AsyncSession, tmp_path: Path
+) -> None:
+    """D-7: before the fix, `_corpus_stream`'s medicines read filtered only `superseded_at`
+    (`search/ask.py`), so a line marked STOPPED or HELD — current on the table, just not one
+    he is taking — still answered as though it were his medicine today. A stopped line and a
+    held line are both written here (the app has no service call that changes a line's status
+    yet, per the review; the status is set directly, the same shape a real one would carry)."""
+    owner = await pa(sg, language="en")
+    active = await add(sg, owner, label("amlodipine", "5 mg"))
+    stopped = await add(sg, owner, label("atorvastatin", "20 mg"))
+    held = await add(sg, owner, label("metformin", "500 mg"))
+    active_id, stopped_id, held_id = active.line.id, stopped.line.id, held.line.id
+    # `MedicationLine` rows are immutable through the ORM (`app.db`'s own `before_update`
+    # guard, "the one change a line takes is being superseded") — there is no service call
+    # yet that stops or holds a line (the review notes this), so the status is moved with a
+    # Core-level UPDATE, the same bypass `test_confirm_race.py` already uses for the same
+    # reason, never through ORM attribute assignment. `expire_all` then makes the next read
+    # see it — the ids above were captured first, since an expired attribute cannot be
+    # lazy-loaded outside the session's own async context.
+    await sg.execute(update(MedicationLine).where(MedicationLine.id == stopped_id).values(status=LineStatus.STOPPED))
+    await sg.execute(update(MedicationLine).where(MedicationLine.id == held_id).values(status=LineStatus.HELD))
+    sg.expire_all()
+
+    answer = await ask(sg, owner, "what are my medicines", tmp_path)
+    texts = " ".join(line.text for line in answer.lines)
+    assert "blood pressure tablet" in texts  # the active line, still answered
+    assert "cholesterol tablet" not in texts  # stopped
+    assert "sugar tablet" not in texts  # held
+    cited_ids = {cite.id for line in answer.lines for cite in line.cites if cite.kind == "medication_line"}
+    assert active_id in cited_ids
+    assert stopped_id not in cited_ids
+    assert held_id not in cited_ids

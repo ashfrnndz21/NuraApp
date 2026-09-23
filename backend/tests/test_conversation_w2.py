@@ -248,13 +248,17 @@ async def test_an_insurance_answer_cites_only_the_policy_line(
 ) -> None:
     rec = await record(sg)
     await _write_policy(sg, rec.owner)
+    # Round 4 (master spec §6): a "policy" cite no longer licenses a number in the model's own
+    # words either (round 3's own named exemption, proved that round to let a forged reading
+    # through under a bare `web` cite the same way) — the line here states none, so it is a
+    # plain context line and survives on the cite gate alone, which is this test's own point.
     client = FakeClient(
         [
             _tool_call("toolu_1", "read_insurance"),
             _final(
                 [
                     {
-                        "text": "Your policy covers hospital stays, up to $500 a day.",
+                        "text": "Your policy covers hospital stays and doctor visits.",
                         "cites": ["p1"],
                     }
                 ]

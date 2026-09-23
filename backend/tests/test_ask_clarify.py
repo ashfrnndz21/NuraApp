@@ -349,7 +349,10 @@ async def test_second_consecutive_clarify_is_refused_the_model_must_answer(
         summary=None,
     )
     payload = {
-        "lines": [{"text": "Your blood test of Saturday 12 September is on your papers.", "cites": ["f1"]}],
+        # D-1(b): the date said back must be one the ask actually gave the model — the lab
+        # paper's own printed date, `PAPER_DAY` (`timeline_support.py`, on his own SG clock,
+        # a day ahead of its UTC date), worded.
+        "lines": [{"text": "Your blood test of Thursday 7 September is on your papers.", "cites": ["f1"]}],
         "boundary": "ignored",
         "clarify": {"referent_class": "which_test", "candidate_ids": ["f1", "f2"], "question": "Which one?"},
     }

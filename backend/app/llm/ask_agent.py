@@ -81,7 +81,7 @@ from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from anthropic import (
     APIConnectionError,
@@ -103,7 +103,17 @@ from app.channels.about_him import Reader, reader_of
 from app.db import as_utc, utcnow
 from app.delivery.feed.compress import Searcher
 from app.delivery.feed.sources import usable_sources
-from app.delivery.timeline_strings import WHAT, day_of, honest_lines, reroute_lines, verified
+from app.delivery.timeline_strings import (
+    VALUE,
+    WHAT,
+    day_of,
+    honest_lines,
+    reading_lines,
+    reroute_lines,
+    value_lines,
+    verified,
+    what_word,
+)
 from app.drugs.registry import DrugRegistry
 from app.ingestion.objects import ObjectStore
 from app.ingestion.review import EXTERNAL_MODEL_PROCESSOR
@@ -116,7 +126,7 @@ from app.llm.models import DEFAULT_MODELS, Task
 from app.llm.narrate import _has_conclusion_language
 from app.llm.prompts import load_prompt
 from app.medicines.models import MedicationLine
-from app.medicines.strings import say_date
+from app.medicines.strings import DAY_NAMES, MONTH_NAMES, say_date
 from app.memory.models import Appointment, AppointmentStatus, Provider
 from app.memory.spine import UPCOMING
 from app.memory.timeline import language_for
@@ -153,6 +163,7 @@ from app.search.ask import (
 from app.search.asker import AnswerDelta
 from app.search.conversation import ConversationMemory
 from app.search.elapsed import elapsed_phrase
+from app.search.printed_range import band_of_printed, printed_range_for_fact
 from app.search.retrieve import Retriever
 from app.state.health_context import active_medicines
 
@@ -522,6 +533,19 @@ def _elapsed(context: KeyContext, language: str, moment: date, seen: set[str]) -
     return phrase
 
 
+def _worded_date(language: str, moment: date, seen: set[str]) -> str:
+    """The said-date for a dated tool line, pre-worded exactly the way `_elapsed` pre-words
+    elapsed time, and for the same reason (D-1(b), audit-2026-09-22.md §3.1): handed an ISO
+    date (`moment.isoformat()`) the model would dutifully echo it back, and plain-words rule 5
+    — the date rule, not a units rule — deletes the whole line, number included, for using it.
+    `seen` collects every worded date handed out this ask, the same `elapsed_seen`-style
+    bookkeeping, so a date the model invents rather than copies is still caught
+    (`_dated_claim`)."""
+    phrase = say_date(moment, language)
+    seen.add(phrase)
+    return phrase
+
+
 async def _read_medicines(
     session: AsyncSession,
     context: KeyContext,
@@ -529,12 +553,13 @@ async def _read_medicines(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     # The Health Graph's one reader (`app.state.health_context.active_medicines`, ADR 0019
     # point 3): `status == ACTIVE`, not `superseded_at IS NULL` alone — this was the read the
     # audit named as one of the two Ask paths that let a stopped or held line still answer as
-    # current.
+    # current (D-7).
     found = await active_medicines(session, context=context)
     lines: list[_ToolLine] = []
     for line in found:
@@ -542,13 +567,14 @@ async def _read_medicines(
         who = f"prescribed by {line.prescriber}" if line.prescriber else "no prescriber written down"
         started_on = day_of(line.started_at, context.region)
         elapsed = _elapsed(context, language, started_on, elapsed_seen)
+        said = _worded_date(language, started_on, dates_seen)
         label, label_safe = _medicine_clarify_label(line, name, reader, language)
         _register(
             lines,
             counter,
             "medication_line",
             line.id,
-            f"{name}, {who}, started {started_on.isoformat()} ({elapsed})",
+            f"{name}, {who}, started {said} ({elapsed})",
             label=label,
             label_safe=label_safe,
         )
@@ -640,6 +666,8 @@ async def _read_readings(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
+    value_facts: dict[uuid.UUID, _ValueFact],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.READINGS)
@@ -647,17 +675,38 @@ async def _read_readings(
     for fact in facts:
         on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
+        said = _worded_date(language, on, dates_seen)
         if _is_reading(fact):
             value = fact.value
-            text = f"blood pressure {value['systolic']}/{value['diastolic']} on {on.isoformat()} ({elapsed})"
+            text = f"blood pressure {value['systolic']}/{value['diastolic']} on {said} ({elapsed})"
+            # Round 4: a reading's own two numbers are never the model's to write — a line
+            # citing this fact has its own text discarded and replaced, whole, by
+            # `_deterministic_lines(value_facts[fact.id], ...)`'s own rendering.
+            value_facts[fact.id] = _ValueFact(
+                kind="reading",
+                date=said,
+                top=_bare_number(float(value["systolic"])),
+                bottom=_bare_number(float(value["diastolic"])),
+            )
             catalogue_word: str | None = WHAT[language].get("blood_pressure")
         else:
-            text = f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})"
+            text = f"{fact.subject} {fact.attribute} = {fact.value} on {said} ({elapsed})"
             # Review B3: the raw subject is an extractor-written code (validated only as
             # `^[a-z][a-z0-9_]{0,63}$` — it may itself contain digits, "sugar_11_4"), never
             # shown as a label. Only a real, closed-catalogue word for it may be offered as a
             # clarify candidate at all; a subject this table does not know gets no label.
             catalogue_word = WHAT[language].get(str(fact.subject))
+            if isinstance(fact.value, int | float):
+                # This scope never had a printed range checked against it (only Scope.RECORDS
+                # does, in `_read_records`) — unchanged from before round 4, "no_range" here
+                # simply means no comparison sentence follows the value.
+                value_facts[fact.id] = _ValueFact(
+                    kind="value",
+                    date=said,
+                    what=what_word(str(fact.subject), language),
+                    value=_bare_number(float(fact.value)),
+                    band="no_range",
+                )
         label: str | None = None
         label_safe: frozenset[str] = frozenset()
         if catalogue_word is not None:
@@ -674,6 +723,7 @@ async def _read_visits(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int, list[Appointment], dict[uuid.UUID, Provider]]:
     providers = {p.id: p for p in await audited_read(session, Provider, context, Scope.VISITS)}
@@ -684,12 +734,83 @@ async def _read_visits(
         who = provider.name if provider is not None else "an unnamed provider"
         when = day_of(visit.scheduled_at, context.region)
         elapsed = _elapsed(context, language, when, elapsed_seen)
-        text = f"with {who} on {when.isoformat()} ({elapsed}), status {visit.status.value}"
+        said = _worded_date(language, when, dates_seen)
+        text = f"with {who} on {said} ({elapsed}), status {visit.status.value}"
         label, label_safe = _dated_clarify_label(f"visit with {who}", when, language, reader)
         _register(
             lines, counter, "appointment", visit.id, text, label=label, label_safe=label_safe
         )
     return lines, len(visits), list(visits), providers
+
+
+def _bare_number(value: float) -> str:
+    """`122.0` as `"122"`, never a trailing `.0` — never more precision than the paper gave
+    (plain words rule 10: few, plain numbers), matching `search/ask.py`'s own `_say_value`."""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+_RANGE_NOTE_SUBJECT: Final[dict[str, str]] = {"en": "It is ", "ms": "Ia ", "zh": "这"}
+"""The pronoun `VALUE[language][band]`'s own comparison sentence opens with, in each
+language — stripped off by `_range_note` so what is left is a bare, joinable fragment
+("above the range printed on the paper"), never a whole capitalised sentence with its own
+leading subject and trailing full stop."""
+
+
+def _range_note(band: str, language: str) -> str:
+    """Round 4: kept exactly for the reason the coordinator named it by — "the existing
+    `_range_note` / VALUE machinery already produces the right sentence." Its job has
+    narrowed: it no longer feeds `bands_given`, an allow-list the model's own words were
+    checked against (round 3, retired — a paraphrase always finds a way past a word list).
+    It still builds the ONE place a band is described in the tool line's own text, so the
+    model can reason ("this is above range, a follow-up visit makes sense") without ever
+    being the one to say the number or the verdict out loud — that sentence is Nura's own,
+    built by `_deterministic_lines` from the very same `VALUE[language][band]` catalogue
+    entry, and substituted for whatever the model wrote the moment it cites this fact."""
+    sentence = VALUE[language].get(band, VALUE["en"][band])[1]
+    fragment = sentence.removeprefix(_RANGE_NOTE_SUBJECT.get(language, _RANGE_NOTE_SUBJECT["en"]))
+    return fragment.rstrip("。.")
+
+
+@dataclass(frozen=True, slots=True)
+class _ValueFact:
+    """Round 4 (master spec §6, "rules decide, models assist"): enough to build Nura's own
+    deterministic sentence for a fact or reading this ask read a real number off of — never
+    enough for the model to write that sentence itself. Four rounds of checking the MODEL's
+    own words for a forged value or a forged verdict each found a new hole (a paraphrase
+    outside an allow-list; a bare "not" inverting a stripped-and-scanned allowed phrase; a
+    citation an exempt cite kind had no tracked value for at all; a topic word list that still
+    missed plurals, full-width characters, and whole verdicts using no listed word) — round
+    5's fix is not a fifth, wider check: it is that the model's own words are never checked at
+    all for an answer that cites one of these. `_parse_answer` decides, up front, whether ANY
+    line in the model's whole answer cites a fact this ask tracks one of these for — if so,
+    every model line is discarded, unconditionally, and the answer is built entirely from
+    `_deterministic_lines`' own rendering of each distinct fact cited, deduplicated. The
+    model's citation is a SELECTION, never a claim, and there is no partial credit: a "value
+    ask" has no model prose in it anywhere. A `"reading"` fact renders through
+    `timeline_strings.reading_lines` (`top`/`bottom`); every other kind renders through
+    `value_lines` (`what`/`value`/`band`)."""
+
+    kind: Literal["value", "reading"]
+    date: str
+    what: str = ""
+    value: str = ""
+    band: str = "no_range"
+    top: str = ""
+    bottom: str = ""
+
+
+def _deterministic_lines(fact: _ValueFact, language: str) -> list[str]:
+    """Nura's own sentence(s) for a confirmed value or reading, straight from the catalogue —
+    never the model's words, never the model's arithmetic, never the model's judgement of a
+    printed range. The same lines the rule-based asker's own `_compose` would say
+    (`search/ask.py`), so the two askers never disagree about what a paper says."""
+    if fact.kind == "reading":
+        return list(
+            reading_lines(language, date=fact.date, top_number=fact.top, bottom_number=fact.bottom)
+        )
+    return list(
+        value_lines(language, band=fact.band, what=fact.what, value=fact.value, date=fact.date)
+    )
 
 
 async def _read_records(
@@ -698,6 +819,8 @@ async def _read_records(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
+    value_facts: dict[uuid.UUID, _ValueFact],
     reader: Reader,
 ) -> tuple[list[_ToolLine], int]:
     facts = await _facts_under(session, context, Scope.RECORDS)
@@ -705,6 +828,7 @@ async def _read_records(
     for fact in facts:
         on = day_of(fact.valid_from, context.region)
         elapsed = _elapsed(context, language, on, elapsed_seen)
+        said = _worded_date(language, on, dates_seen)
         # Review B3: only a real, closed-catalogue word for the subject may ever be a clarify
         # candidate's label — never the raw, extractor-written subject code.
         catalogue_word = WHAT[language].get(str(fact.subject))
@@ -712,12 +836,35 @@ async def _read_records(
         label_safe: frozenset[str] = frozenset()
         if catalogue_word is not None:
             label, label_safe = _dated_clarify_label(catalogue_word, on, language, reader)
+        text = f"{fact.subject} {fact.attribute} = {fact.value} on {said} ({elapsed})"
+        if isinstance(fact.value, int | float):
+            # D-1: a measured value's own printed range, read off the paper it was confirmed
+            # from — never asked for or computed by the model — so "is it high?" can be
+            # answered truthfully. Round 4: the band and the value are no longer handed to the
+            # model to describe in its own words at all — `value_facts` records what
+            # `_deterministic_lines` needs to build Nura's own sentence, substituted whole for
+            # any line that cites this fact. `_range_note`'s fragment still goes into the tool
+            # line's own text below, so the model can still reason about high/low without ever
+            # being the one to say so out loud.
+            printed = await printed_range_for_fact(session, context, fact)
+            band = None if printed is None else band_of_printed(float(fact.value), printed)
+            value_facts[fact.id] = _ValueFact(
+                kind="value",
+                date=said,
+                what=what_word(str(fact.subject), language),
+                value=_bare_number(float(fact.value)),
+                band=band or "no_range",
+            )
+            if band is not None:
+                text = f"{text}; {_range_note(band, language)}"
+            else:
+                text = f"{text}; the paper prints no range for it"
         _register(
             lines,
             counter,
             "fact",
             fact.id,
-            f"{fact.subject} {fact.attribute} = {fact.value} on {on.isoformat()} ({elapsed})",
+            text,
             label=label,
             label_safe=label_safe,
         )
@@ -744,6 +891,7 @@ async def _read_waiting_papers(
     language: str,
     counter: _TokenCounter,
     elapsed_seen: set[str],
+    dates_seen: set[str],
     card_safe_text: dict[uuid.UUID, set[str]],
 ) -> tuple[list[_ToolLine], int]:
     """A paper he has added but not yet checked (fix 2, this module's docstring): only the
@@ -765,6 +913,7 @@ async def _read_waiting_papers(
         said: str | None = None
         if paper.document_date is not None:
             said = say_date(paper.document_date, language)
+            dates_seen.add(said)
             doc_elapsed = _elapsed(context, language, paper.document_date, elapsed_seen)
             safe.add(said)
             # Never the bare year: `say_date` says no year (plain words rule 5), and with it in
@@ -847,11 +996,22 @@ async def _read_insurance(
 
 
 async def _read_costs(
-    session: AsyncSession, context: KeyContext, language: str, counter: _TokenCounter
+    session: AsyncSession,
+    context: KeyContext,
+    language: str,
+    counter: _TokenCounter,
 ) -> tuple[list[_ToolLine], int]:
     """What he has actually paid or claimed, by visit — his own ledger
     (`app.insurance.ledger`), never a public price list: this build carries no cost-expectation
-    module, so a cost question is answered from his own record or not at all."""
+    module, so a cost question is answered from his own record or not at all.
+
+    Named limit (PR body, not hidden): a claim amount is a worded string ("S$120"), not a
+    `Fact` this ask can build a `_ValueFact` for, so a "claim" cite is never part of a "value
+    ask" and no deterministic cost sentence exists. A line citing one is answered in the
+    model's own words, under exactly the same gates a "policy"/"web" line always was — this
+    was never brought under D-1's fail-closed value check at any round, `_read_insurance`'s
+    own free-text `covers` field included; a deterministic cost sentence is follow-up work,
+    not built here."""
     ledger = await insurance_ledger(session, context=context, language=language)
     lines: list[_ToolLine] = []
     for row in ledger.lines:
@@ -1089,6 +1249,17 @@ class ClaudeAsker:
             """Every elapsed phrase actually handed to the model this ask (fix: "how long
             ago" is computed once here, never guessed by the model — `_parse_answer`'s
             invented-elapsed check catches a line that says one this ask never gave it)."""
+            dates_seen: set[str] = set()
+            """Every worded date (D-1(b)) actually handed to the model this ask, the same
+            bookkeeping as `elapsed_seen` and for the same reason: `_parse_answer`'s
+            invented-date check catches a line that states a date this ask never gave it."""
+            value_facts: dict[uuid.UUID, _ValueFact] = {}
+            """Per fact (`_read_records`, `_read_readings`), enough to build Nura's own
+            deterministic sentence for it. Round 4 (master spec §6): the model no longer states
+            a value or a range verdict in its own words at all, so there is nothing here to
+            validate the model's prose against — a line that cites one of these facts has its
+            own text for that line discarded outright, replaced whole by
+            `_deterministic_lines(value_facts[fact_id], language)`."""
             card_safe_text: dict[uuid.UUID, set[str]] = {}
             """Every date/elapsed string actually rendered for each waiting card this ask
             (`_read_waiting_papers`), so a line citing it can be told apart from one that
@@ -1185,6 +1356,8 @@ class ClaudeAsker:
                                 mode,
                                 failed_findings,
                                 frozenset(elapsed_seen),
+                                frozenset(dates_seen),
+                                dict(value_facts),
                                 {card: frozenset(safe) for card, safe in card_safe_text.items()},
                             )
                         )
@@ -1326,6 +1499,8 @@ class ClaudeAsker:
                             counter=counter,
                             proposals=proposals,
                             elapsed_seen=elapsed_seen,
+                            dates_seen=dates_seen,
+                            value_facts=value_facts,
                             card_safe_text=card_safe_text,
                             reader=reader,
                         )
@@ -1476,24 +1651,37 @@ class ClaudeAsker:
         counter: _TokenCounter,
         proposals: list[Proposal],
         elapsed_seen: set[str],
+        dates_seen: set[str],
+        value_facts: dict[uuid.UUID, _ValueFact],
         card_safe_text: dict[uuid.UUID, set[str]],
         reader: Reader,
     ) -> tuple[list[_ToolLine], int]:
         if name == "read_medicines":
             return await _read_medicines(
-                session, context, registry, language, counter, elapsed_seen, reader
+                session, context, registry, language, counter, elapsed_seen, dates_seen, reader
             )
         if name == "read_readings":
-            return await _read_readings(session, context, language, counter, elapsed_seen, reader)
+            return await _read_readings(
+                session, context, language, counter, elapsed_seen, dates_seen, value_facts, reader
+            )
         if name == "read_visits":
             lines, count, visits, providers = await _read_visits(
-                session, context, language, counter, elapsed_seen, reader
+                session, context, language, counter, elapsed_seen, dates_seen, reader
             )
             visits_seen.extend(visits)
             providers_seen.update(providers)
             return lines, count
         if name == "read_records":
-            return await _read_records(session, context, language, counter, elapsed_seen, reader)
+            return await _read_records(
+                session,
+                context,
+                language,
+                counter,
+                elapsed_seen,
+                dates_seen,
+                value_facts,
+                reader,
+            )
         if name == "read_feelings":
             return await _read_feelings(session, context, counter)
         if name == "search_online":
@@ -1507,7 +1695,7 @@ class ClaudeAsker:
             return await _read_plan(session, context, language, counter)
         if name == "read_waiting_papers":
             return await _read_waiting_papers(
-                session, context, language, counter, elapsed_seen, card_safe_text
+                session, context, language, counter, elapsed_seen, dates_seen, card_safe_text
             )
         if name == "propose_action":
             kind = str(args.get("kind") or "")
@@ -1750,6 +1938,86 @@ def _elapsed_claim(text: str, language: str, elapsed_given: frozenset[str]) -> s
     return None
 
 
+def _build_date_claim_pattern(language: str) -> re.Pattern[str]:
+    """The shape of a *worded* date this app itself ever produces (`say_date`), one pattern
+    per language, built from the same weekday and month names `say_date` writes from
+    (`app.medicines.strings.DAY_NAMES`/`MONTH_NAMES`) — never a bare ISO or ordinal date, which
+    plain-words rule 5 already refuses outright regardless of whether this ask gave it."""
+    weekdays = "|".join(re.escape(name) for name in DAY_NAMES[language])
+    months = "|".join(re.escape(name) for name in MONTH_NAMES[language])
+    if language == "zh":
+        return re.compile(rf"(?:{months})\d{{1,2}}日(?:{weekdays})")
+    return re.compile(rf"\b(?:{weekdays})\s+\d{{1,2}}\s+(?:{months})\b")
+
+
+_DATE_CLAIM: Final[dict[str, re.Pattern[str]]] = {
+    language: _build_date_claim_pattern(language) for language in ("en", "ms", "zh")
+}
+
+
+def _build_weekday_pattern(language: str) -> re.Pattern[str]:
+    """A bare weekday name, in this language, with no day-of-month or month beside it at
+    all — the shape `_DATE_CLAIM` does not look for (review round 3): "…taken on Tuesday."
+    states a specific day just as plainly as a full date does, and plain-words rule 5 only
+    flags a day+month printed WITHOUT a weekday (`plain_words.py`'s own `_check_dates`),
+    never a weekday alone, so this reached the user unchecked by rule 5 or `_dated_claim`
+    both."""
+    names = "|".join(re.escape(name) for name in sorted(DAY_NAMES[language], key=len, reverse=True))
+    if language == "zh":
+        return re.compile(names)
+    return re.compile(rf"\b(?:{names})\b", re.IGNORECASE)
+
+
+_WEEKDAY_ONLY: Final[dict[str, re.Pattern[str]]] = {
+    language: _build_weekday_pattern(language) for language in ("en", "ms", "zh")
+}
+
+
+def _weekdays_given(dates_given: frozenset[str], language: str) -> frozenset[str]:
+    """The weekday name(s) `dates_given`'s own worded dates actually use, in this language —
+    `say_date`'s own weekday word out of each date string ("Wednesday" out of "Wednesday 21
+    January"; "星期三" out of "1月21日星期三")."""
+    names = DAY_NAMES.get(language, DAY_NAMES["en"])
+    return frozenset(name for date in dates_given for name in names if name in date)
+
+
+def _dated_claim(text: str, language: str, dates_given: frozenset[str]) -> str | None:
+    """D-1(b), extended round 3: the first worded date (`_DATE_CLAIM`'s own full shape, or
+    `_WEEKDAY_ONLY`'s bare weekday) `text` states that this ask never actually gave — the
+    same "computed here, never guessed by the model" rule `_elapsed_claim` already holds for
+    elapsed time, applied to the date itself now that it reaches the model pre-worded
+    (`_worded_date`) rather than as an ISO string rule 5 would catch on its own. A full date
+    is checked against the exact worded strings this ask gave (`dates_given`); a bare weekday
+    — one with no day-of-month or month beside it, so it is not part of a full date match at
+    all — is checked against the weekday(s) those same given dates actually fall on
+    (`_weekdays_given`), never the exact string, since a bare weekday never claims a specific
+    day-of-month to be wrong about, only which day of the week. `None` when the line states
+    no such date, or every one it states — full or bare — really was given.
+
+    Round 5 (B5, reverted): round 4 made the bare-weekday half position-aware (counted only
+    after "on"/"pada"/"于" or before a day number), fixing a false positive on prose that
+    merely contains a weekday name ("The Sunday Clinic sent this paper.") — but a false
+    NEGATIVE here is an invented day reaching him unchallenged, and a false positive only
+    costs a fallback line; the review took the accepted trade back to round 3's own rule.
+    Any bare weekday not among the given dates' own weekdays is `invented_date`, in or out of
+    what would read as "date position" — including "The Sunday Clinic sent this paper.",
+    which is dropped by this rule now, deliberately (see its own test)."""
+    pattern = _DATE_CLAIM.get(language, _DATE_CLAIM["en"])
+    given_lower = {phrase.lower() for phrase in dates_given}
+    remaining = text
+    for match in pattern.finditer(text):
+        remaining = remaining.replace(match.group(), " ", 1)
+        if match.group().lower() not in given_lower:
+            return match.group()
+    allowed_weekdays_lower = {w.lower() for w in _weekdays_given(dates_given, language)}
+    weekday_pattern = _WEEKDAY_ONLY.get(language, _WEEKDAY_ONLY["en"])
+    for match in weekday_pattern.finditer(remaining):
+        word = match.group()
+        if word.lower() not in allowed_weekdays_lower:
+            return word
+    return None
+
+
 _ELAPSED_RULE: Final = 90
 """Never a real `docs/plain-words.md` rule number (those run 1-14): a pseudo-rule so an
 invented or vague elapsed claim can still ride the same `Finding`-based repair-hint machinery
@@ -1788,6 +2056,102 @@ def _unconfirmed_card_value_finding(language: str) -> Finding:
         language=language,
         kind="ask",
     )
+
+
+_CONCLUSION_RULE: Final = 92
+"""Another pseudo-rule (see `_ELAPSED_RULE`). Audit finding D-3: this drop used to record no
+`Finding` at all, so a question like "Is it high?" — whose every candidate line uses the
+questioner's own word and is dropped by `_has_conclusion_language` — could empty the answer
+with `failed_findings` still empty, and the repair round at `_round`'s own `and failed_findings`
+check never fired: the model was never told why, and the ask silently fell back to keyword
+search. Recorded here exactly as `_VALUE_RULE` already is, so the repair round runs."""
+
+
+def _conclusion_language_finding(language: str) -> Finding:
+    return Finding(
+        rule=_CONCLUSION_RULE,
+        problem='the line gives the app\'s own verdict ("high", "normal", "worse", …) instead of what the paper says',
+        rewrite=(
+            "say the value and its date, or — when the paper prints no range for it — say so "
+            "and say to ask the doctor; never judge the number yourself"
+        ),
+        text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_CAREGIVER_VOICE_RULE: Final = 93
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for a line rejected because it speaks to the
+patient himself ("you"/"your") on a caregiver's own key — recorded (D-3) so the repair round
+runs instead of the line simply vanishing with the reader never told why."""
+
+
+def _caregiver_voice_finding(language: str) -> Finding:
+    return Finding(
+        rule=_CAREGIVER_VOICE_RULE,
+        problem='a line for a family member still says "you"/"your" to the patient himself',
+        rewrite="say his name instead of \"you\"/\"your\" — this reader is not him",
+        text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_NO_CITE_RULE: Final = 94
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for a line whose cites matched nothing this ask
+actually read — recorded (D-3) so the repair round runs instead of the line simply vanishing
+with the reader never told why."""
+
+
+def _no_cite_matched_finding(language: str) -> Finding:
+    return Finding(
+        rule=_NO_CITE_RULE,
+        problem="the line cites nothing this ask actually read",
+        rewrite="cite only the ids a tool call in this ask returned — never leave a line uncited",
+        text="",
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+_DATE_RULE: Final = 95
+"""Another pseudo-rule (see `_ELAPSED_RULE`), for `_dated_claim`: a worded date the line
+states that this ask never actually gave it (D-1(b)) — recorded so the repair round runs
+instead of the line simply vanishing with the reader never told why."""
+
+
+def _dated_claim_finding(phrase: str, language: str) -> Finding:
+    return Finding(
+        rule=_DATE_RULE,
+        problem=f'"{phrase}" is not one of the dates this ask actually gave you',
+        rewrite="use one of the dates given beside a value or a line exactly, word for word",
+        text=phrase,
+        severity="fail",
+        language=language,
+        kind="ask",
+    )
+
+
+# Round 5 (master spec §6): round 4's `_context_line_problem`/`_RANGE_TOPIC_WORDS`/
+# `_mentions_range_topic`/`_MODEL_VALUE_RULE`/`_MODEL_VERDICT_RULE` are gone -- proved this
+# round still a word list under another name (a five-word topic set: "ranges"/"papers" as
+# plurals, and NFKC full-width "range" in full-width form, both slipped past it; "That is
+# higher than last time." and "Nothing to worry about." used no listed word at all; the
+# same list also killed ten honest, unrelated sentences that merely happened to contain
+# "paper"/"kertas"/a Chinese character meaning paper/"normal"/"low"). A word list cannot
+# be both complete and safe. Round 5 stops trying: see `_parse_answer` below -- when any
+# line in the model's own answer cites a fact `value_facts` tracks, the WHOLE answer is
+# deterministic only (every model line discarded, none of them checked, no repair round
+# possible or needed); otherwise no fact is cited that this ask can build a number or a
+# verdict from at all, so there is nothing left to gate beyond the plain-words/conclusion/
+# caregiver/cite/elapsed/date checks this file held before D-1 ever added a value-specific
+# one. `_contains_a_number_shape` stays -- it is still load-bearing for the pre-existing
+# unconfirmed-card veto and clarify-option validation below, neither of which this round
+# touches.
 
 
 _EN_NUMBER_WORDS: Final[frozenset[str]] = frozenset(
@@ -1886,6 +2250,8 @@ def _parse_answer(
     mode: Mode,
     failed_findings: dict[int, Finding] | None = None,
     elapsed_given: frozenset[str] = frozenset(),
+    dates_given: frozenset[str] = frozenset(),
+    value_facts: Mapping[uuid.UUID, _ValueFact] = MappingProxyType({}),
     card_safe_text: Mapping[uuid.UUID, frozenset[str]] = MappingProxyType({}),
 ) -> _Parsed:
     raw_lines = payload.get("lines")
@@ -1896,6 +2262,62 @@ def _parse_answer(
     # the model is asked to copy a short id back, not retype a uuid, but it still may not get
     # the case exactly right, and a line should not be thrown away over that alone.
     known_ci = {token.strip().lower(): line for token, line in known.items()}
+
+    def _resolve(raw_cites: Any) -> tuple[Cite, ...]:
+        if not isinstance(raw_cites, list):
+            return ()
+        return tuple(
+            dict.fromkeys(
+                known_ci[str(token).strip().lower()].cite
+                for token in raw_cites
+                if str(token).strip().lower() in known_ci
+            )
+        )
+
+    # Round 5 (master spec §6): whether ANY line of the model's own answer cites a fact this
+    # ask tracks a deterministic value or reading for at all — a "value ask". Scanned across
+    # every raw line up front, regardless of whether that line's own text would otherwise
+    # survive: the model's citation is what decides this, never its prose. Dedup'd, in
+    # first-seen order — the review proved Nura's own sentence stated three times over when
+    # three separate model lines all cited the same fact.
+    value_fact_ids: list[uuid.UUID] = []
+    seen_value_fact_ids: set[uuid.UUID] = set()
+    for entry in raw_lines:
+        if not isinstance(entry, Mapping):
+            continue
+        for cite in _resolve(entry.get("cites")):
+            if cite.kind == "fact" and cite.id in value_facts and cite.id not in seen_value_fact_ids:
+                seen_value_fact_ids.add(cite.id)
+                value_fact_ids.append(cite.id)
+
+    if value_fact_ids:
+        # A value ask: deterministic only. Every model line is discarded outright and none of
+        # them is checked — there is nothing to verify (the citation alone told Nura which
+        # facts to say) and nothing to repair (a repair round exists to fix the model's own
+        # words, and none of its words reach the answer here).
+        det_lines = [
+            AnswerLine(text=reader.says(det_text), cites=(Cite(kind="fact", id=fact_id),))
+            for fact_id in value_fact_ids
+            for det_text in _deterministic_lines(value_facts[fact_id], language)
+        ]
+        kept = det_lines[:1] if mode is Mode.VOICE else det_lines[:TEXT_LINES]
+        answer = Answer(
+            question_artifact_id=uuid.uuid4(),
+            mode=mode,
+            language=language,
+            lines=tuple(kept),
+            honest=(),
+            boundary=(),
+            withheld=(),
+            dropped=len(raw_lines),
+        )
+        return _Parsed(answer, lead_dropped=False, dangling=False)
+
+    # A non-value ask: no fact is cited anywhere in the answer that this ask can build a
+    # number or a verdict from, so there is nothing left to gate beyond exactly the checks
+    # this file held before D-1 ever added a value-specific one — plain words, conclusion
+    # language, caregiver voice, cites, the pre-existing unconfirmed-card veto, elapsed/dated
+    # claims. No new word lists.
     lines: list[AnswerLine] = []
     origins: list[int] = []
     dropped: list[tuple[str, int | None]] = []
@@ -1929,6 +2351,13 @@ def _parse_answer(
                 dropped.append(("plain_words", rules[0] if rules else None))
                 continue
         if _has_conclusion_language(text, language):
+            # D-3: recorded as a `Finding` (a pseudo-rule, `_CONCLUSION_RULE`) — the same
+            # machinery `invented_elapsed_phrase` and `value_from_unconfirmed_card` already
+            # use below — so a question like "Is it high?" still tells the model why every
+            # candidate line was dropped, instead of emptying the answer in silence.
+            if failed_findings is not None:
+                finding = _conclusion_language_finding(language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("conclusion_language")
             dropped.append(("conclusion_language", None))
             continue
@@ -1944,19 +2373,35 @@ def _parse_answer(
                 failed_findings.setdefault(finding.rule, finding)
             _drop("invented_elapsed_phrase")
             continue
+        dated_problem = _dated_claim(text, language, dates_given)
+        if dated_problem is not None:
+            # D-1(b): the same treatment as `invented_elapsed_phrase` just above, for a worded
+            # date instead of an elapsed phrase — the model wrote a date in this app's own
+            # said-date shape that this ask never actually gave it, so it is neither a copy of
+            # a real date nor something rule 5 alone would catch (rule 5 only refuses an
+            # unworded one).
+            if failed_findings is not None:
+                finding = _dated_claim_finding(dated_problem, language)
+                failed_findings.setdefault(finding.rule, finding)
+            _drop("invented_date")
+            continue
         heard = reader.says(text)
         if not reader.his and reader.speaks_to_him(heard):
+            # D-3: recorded as a `Finding` (`_CAREGIVER_VOICE_RULE`), same reason as
+            # `conclusion_language` above.
+            if failed_findings is not None:
+                finding = _caregiver_voice_finding(language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("caregiver_voice")
             dropped.append(("caregiver_voice", None))
             continue
-        cites = tuple(
-            dict.fromkeys(
-                known_ci[str(token).strip().lower()].cite
-                for token in raw_cites
-                if str(token).strip().lower() in known_ci
-            )
-        )
+        cites = _resolve(raw_cites)
         if not cites:
+            # D-3: recorded as a `Finding` (`_NO_CITE_RULE`), same reason as
+            # `conclusion_language` above.
+            if failed_findings is not None:
+                finding = _no_cite_matched_finding(language)
+                failed_findings.setdefault(finding.rule, finding)
             _drop("no_cite_matched")
             dropped.append(("no_cite_matched", None))
             continue
@@ -2173,10 +2618,23 @@ def _answer_from_payload(
     reader: Reader,
     mode: Mode,
     failed_findings: dict[int, Finding] | None = None,
+    elapsed_given: frozenset[str] = frozenset(),
+    dates_given: frozenset[str] = frozenset(),
+    value_facts: Mapping[uuid.UUID, _ValueFact] = MappingProxyType({}),
 ) -> Answer | None:
     """`_parse_answer`'s answer alone — kept as its own name for the callers (and the unit
     tests) that only ever wanted the answer, never the coherence flags."""
-    return _parse_answer(payload, known, language, reader, mode, failed_findings).answer
+    return _parse_answer(
+        payload,
+        known,
+        language,
+        reader,
+        mode,
+        failed_findings,
+        elapsed_given,
+        dates_given,
+        value_facts,
+    ).answer
 
 
 def _whole_answer_repair_message(raw_lines: Sequence[Any], parsed: _Parsed) -> str:
