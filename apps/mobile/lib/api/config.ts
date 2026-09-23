@@ -37,3 +37,20 @@ export function setSessionToken(token: string | null): void {
 export function getSessionToken(): string | null {
   return sessionToken;
 }
+
+/**
+ * The profile this session is looking after — set once by `who.tsx` (the
+ * owner's own new profile, an existing one recognised via `ProfileAlreadyOwned`,
+ * or a `for-someone` profile), read by every screen after it that needs
+ * a `{profile_id}` and has no route param carrying one. In-memory only,
+ * same lifetime as `sessionToken`.
+ */
+let currentProfileId: string | null = null;
+
+export function setCurrentProfileId(id: string | null): void {
+  currentProfileId = id;
+}
+
+export function getCurrentProfileId(): string | null {
+  return currentProfileId;
+}

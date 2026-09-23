@@ -111,6 +111,17 @@ export async function getReviewCard(profileId: string, cardId: string): Promise<
 }
 
 /**
+ * `POST /profiles/{id}/review-cards/{cardId}/answer` — the card's one
+ * pending question (whose-paper / duplicate), a chip's opaque `value`
+ * only, never free text (`ReviewAnswerIn`'s own doc).
+ */
+export async function answerReviewCard(profileId: string, cardId: string, value: string): Promise<ReviewCard> {
+  return reviewCardFromWire(
+    await http.post<ReviewCardWire>(`/profiles/${profileId}/review-cards/${cardId}/answer`, { value }),
+  );
+}
+
+/**
  * `POST /profiles/{id}/review-cards/{cardId}/confirm` — the uncertain-field
  * review's own submit (C3). `confirmationId` is a client-generated
  * idempotency key: the same confirm retried after a dropped connection

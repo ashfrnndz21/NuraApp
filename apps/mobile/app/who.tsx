@@ -7,6 +7,7 @@ import { busyHold } from '../design/motion';
 import { getConsentWording } from '../lib/api/consent';
 import { createOwnProfile, createProfileForSomeone, getMe, type Relationship } from '../lib/api/profile';
 import { ApiRefusalError, errorStateFromRefusal } from '../lib/api/refusals';
+import { setCurrentProfileId } from '../lib/api/config';
 import { ErrorState } from '../components/states/ErrorState';
 
 type Who = 'me' | 'parent' | 'someone_else';
@@ -77,18 +78,20 @@ export default function WhoIsThisFor() {
       if (who === 'me') {
         setBusy(true);
         try {
-          await finishAsOwner(value);
+          const profile = await finishAsOwner(value);
+          setCurrentProfileId(profile.profileId);
           setTurns((t) => [...t, { id: `ok-${t.length}`, role: 'assistant', text: `Good to meet you, ${value}.` }]);
           setStage('done');
-          setTimeout(() => router.replace('/home'), busyHold);
+          setTimeout(() => router.replace('/add-paper'), busyHold);
         } catch (err) {
           if (err instanceof ApiRefusalError && err.refusal === 'ProfileAlreadyOwned') {
             // A real, legitimate outcome (a returning account), never an error — recognise
             // the existing profile via /me and continue, instead of showing ErrorState.
             const me = await getMe();
+            if (me.profileId) setCurrentProfileId(me.profileId);
             setTurns((t) => [...t, { id: `ok-${t.length}`, role: 'assistant', text: `Welcome back, ${me.displayName}.` }]);
             setStage('done');
-            setTimeout(() => router.replace('/home'), busyHold);
+            setTimeout(() => router.replace('/add-paper'), busyHold);
           } else {
             setRefusal(
               err instanceof ApiRefusalError
@@ -112,10 +115,11 @@ export default function WhoIsThisFor() {
     if (stage === 'patient_phone' && who) {
       setBusy(true);
       try {
-        await finishForSomeone(name, value, who);
+        const profile = await finishForSomeone(name, value, who);
+        setCurrentProfileId(profile.profileId);
         setTurns((t) => [...t, { id: `ok-${t.length}`, role: 'assistant', text: `Good to meet you both. I'll be looking after ${name}.` }]);
         setStage('done');
-        setTimeout(() => router.replace('/home'), busyHold);
+        setTimeout(() => router.replace('/add-paper'), busyHold);
       } catch (err) {
         setRefusal(
           err instanceof ApiRefusalError

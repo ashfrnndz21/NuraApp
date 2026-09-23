@@ -55,6 +55,11 @@ export default function RootLayout() {
           <Stack.Screen name="welcome" />
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="who" />
+          <Stack.Screen name="add-paper" />
+          <Stack.Screen name="reading" />
+          <Stack.Screen name="report" />
+          <Stack.Screen name="insight" />
+          <Stack.Screen name="ask" />
           <Stack.Screen name="(tabs)" />
         </Stack>
       </SafeAreaProvider>
