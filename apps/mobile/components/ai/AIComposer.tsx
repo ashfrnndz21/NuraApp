@@ -45,9 +45,10 @@ export interface AIComposerProps {
  * the answer streamed word by word from `TEXT_MESSAGE_CONTENT`. With no
  * profile (demo/spike continuity) it falls back to the fixture script.
  *
- * Three real gaps, found wiring this against the live backend rather
- * than guessed. `_answer_question`'s own event stream (`run.py`) reports
- * only `TOOL_CALL_*`/`TEXT_MESSAGE_*`/`RUN_FINISHED{lines}` — a
+ * Two real gaps, found wiring this against the live backend rather than
+ * guessed, both open (A-078/A-080 — stated in the PR body, not silently
+ * worked around). `_answer_question`'s own event stream (`run.py`)
+ * reports only `TOOL_CALL_*`/`TEXT_MESSAGE_*`/`RUN_FINISHED{lines}` — a
  * clarifying question's own chip *options* and a line's own `cites` (the
  * provenance line naming a paper) are both on `AnswerOut` from the plain
  * `POST /ask`, never on the run's own wire. Until the event vocabulary
@@ -56,13 +57,20 @@ export interface AIComposerProps {
  * line, on a live answer. A chip tap, live, re-asks the chip's own label
  * as the next question (a generic quick-reply) and *continues* the same
  * visible conversation (appends, never replaces `messages` — B8,
- * independent review of PR #332, the earlier bug). Third: `run.py`'s
+ * independent review of PR #332, the earlier bug).
+ *
+ * Second gap, found on the second review pass: `run.py`'s
  * `_answer_question` calls `ask_stream(..., history=None)` hard-coded —
- * a run carries no conversation history at all today, whatever a client
- * sends. This composer still tracks `conversationId` client-side (from
- * `AnswerOut.conversation_id`, the plain `POST /ask`'s own field —
- * `RUN_STARTED` carries none) and threads it into the next question's
- * payload, inert until the backend accepts it. Worth the owner's own look.
+ * a run carries no conversation history at all today. This component
+ * held a `conversationIdRef` meant to thread one into the next
+ * question's payload the day the backend accepted it, but nothing on
+ * the run's own event stream (`RUN_STARTED`, `RUN_FINISHED{lines}`)
+ * ever supplies a value to assign it from — the plain `POST /ask`
+ * carries `AnswerOut.conversation_id`, but this composer never calls
+ * that route, so reaching for it here would mean a second, unstreamed
+ * call just to learn an id. Removed rather than left as a ref that was
+ * always `null`: a dead field with a comment implying it did something
+ * is worse than stating the gap plainly here and in the PR body.
  */
 export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComposerProps) {
   const [expanded, setExpanded] = useState(false);
@@ -75,8 +83,6 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
   const inputRef = useRef<TextInput>(null);
   const runRef = useRef<{ cancel: () => void } | null>(null);
   const runInFlightRef = useRef(false);
-  /** Set from `AnswerOut.conversation_id` the day a live event carries one — see this file's own doc. */
-  const conversationIdRef = useRef<string | null>(null);
   const consumeEvent = useAIState((s) => s.consumeEvent);
   const setListening = useAIState((s) => s.setListening);
   const reset = useAIState((s) => s.reset);
@@ -163,10 +169,10 @@ export function AIComposer({ answer, onOpenReadings, onOpenAsk, testID }: AIComp
     // Not `false`: the effect below re-fills `draft` from the fixture's own scripted user
     // message when it hasn't been hand-edited — here the person already sent this one.
     userEditedRef.current = true;
+    // No conversation id sent (A-078/A-080, open — this file's own doc): the run stream has
+    // nothing to assign one from, and the plain /ask route that does carry
+    // `AnswerOut.conversation_id` is not one this composer calls.
     const payload: Record<string, unknown> = { question, mode: 'text' };
-    // Inert until the backend reads it (this component's own doc) — sent anyway so the wire
-    // is ready the day `history=None` stops being hard-coded.
-    if (conversationIdRef.current) payload.conversation_id = conversationIdRef.current;
     runInFlightRef.current = true;
     const run = runNuraLive(profileId, 'answer_question', payload, onEvent);
     run.done.finally(() => {

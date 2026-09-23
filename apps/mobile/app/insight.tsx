@@ -11,7 +11,7 @@ import { phoneTokens, semanticColors } from '../design/colors';
 import * as typography from '../design/typography';
 import { getCurrentProfileId } from '../lib/api/config';
 import { streamPaperInsight, type PaperInsightReport } from '../lib/ai/paperInsightStream';
-import { getReviewCardQueue } from '../lib/media/pendingPaper';
+import { getReviewCardQueue, clearReviewCardQueue } from '../lib/media/pendingPaper';
 
 /**
  * Scene 8 (v2 frame 08): "what it means" — `POST …/papers/{artifactId}/
@@ -93,7 +93,21 @@ export default function Insight() {
       </ScrollView>
 
       {report ? (
-        <Pressable style={styles.cta} onPress={() => router.replace('/home')} accessibilityRole="button" accessibilityLabel="Go to Home" testID="insight-continue">
+        <Pressable
+          style={styles.cta}
+          onPress={() => {
+            // A real gap found live (second independent review of PR #332, while capturing
+            // screenshots): the review-card queue was never cleared once this batch's papers
+            // were dealt with, so a later, unrelated add-a-paper visit kept resurfacing
+            // already-confirmed cards on the report table forever. This is the end of one
+            // batch's own journey — the natural point to start the next one clean.
+            clearReviewCardQueue();
+            router.replace('/home');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Go to Home"
+          testID="insight-continue"
+        >
           <Text style={styles.ctaText}>Go to Home</Text>
         </Pressable>
       ) : null}

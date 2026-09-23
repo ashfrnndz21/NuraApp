@@ -113,14 +113,23 @@ export function IntelligenceOrb({ size = 'md', stateOverride }: IntelligenceOrbP
   }, [state, reducedMotion, breath]);
 
   const colors = useMemo(() => (state === 'error' ? GRADIENT_ERROR : GRADIENT), [state]);
-  // B2 (independent review of PR #332): the glow circle (r×1.35, blurred by r×0.5) reaches
-  // past this component's own px×px box — clipped by a Canvas the same px×px size as the
-  // View wrapping it, which read on screen as a flat, square-edged disc rather than a soft
-  // sphere. `CANVAS_PAD` grows the Canvas to 2× the orb's own box (this View's own layout
-  // footprint is unchanged — the padding is absolutely positioned, so it never pushes
-  // anything else around) and every drawn coordinate below is offset by it, so the glow's
-  // own blur has room to fall off before it hits an edge.
-  const CANVAS_PAD = r;
+  // B2 (independent review of PR #332), tightened on the second pass (FB-1): the glow
+  // circle's own radius (r×1.35) plus roughly 3 standard deviations of its own blur
+  // (Skia's `blur` prop ≈ sigma, so 3×(r×0.5) = r×1.5) is the real extent this draw can
+  // reach before its edge is visually zero — r×1.35 + r×1.5 = r×2.85. `CANVAS_PAD` below is
+  // that half-extent, not the smaller, arbitrary r×1 the first pass used (which still
+  // soft-cut the tail of the blur on a native renderer, even though it fixed the worse,
+  // hard square edge this component had before). This View's own layout footprint is
+  // unchanged either way — the padding is absolutely positioned, never pushing anything
+  // else around — and every drawn coordinate below is offset by it.
+  //
+  // Measured on the web target this checkpoint has (no device attached): Skia's `Blur`
+  // filter does not render under CanvasKit here at all — the glow and the small specular
+  // highlight circle are invisible on web regardless of this padding, confirmed by
+  // screenshot before and after this change. Native (Expo Go, react-native-skia's JSI
+  // path) is unverified without a device; this fix is real and correct for native, but
+  // "the orb's glow is fixed" is not a claim this checkpoint can make for the web target.
+  const CANVAS_PAD = r * 2.85;
   const canvasSize = px + CANVAS_PAD * 2;
   const center = vec(r + CANVAS_PAD, r + CANVAS_PAD);
 

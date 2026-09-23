@@ -12,6 +12,7 @@ import { getCurrentProfileId } from '../lib/api/config';
 import { confirmReviewCard } from '../lib/api/reviewCards';
 import { getReviewCardQueue, updateReviewCardInQueue } from '../lib/media/pendingPaper';
 import { canSubmitReport, buildConfirmDecisions, fieldNeedsAnswer } from '../lib/report/confirmLogic';
+import { reportKickerLine, hasNoFields } from '../lib/report/cardCopy';
 import type { FieldDecision, ReviewCard, ReviewField } from '../domain/reviewCard';
 
 /**
@@ -72,7 +73,6 @@ export default function Report() {
     try {
       const updated = await confirmReviewCard(profileId, card.cardId, {
         decisions: buildConfirmDecisions(card, decisions),
-        confirmationId: `${card.cardId}:${Date.now()}`,
       });
       updateReviewCardInQueue(updated);
       setCardsState((all) => all.map((c) => (c.cardId === updated.cardId ? updated : c)));
@@ -157,8 +157,37 @@ function ReportCard({
   showUnanswered: boolean;
   error: { title: string; why: string } | null;
 }) {
+  const router = useRouter();
   const outsideCount = card.fields.filter((f) => f.needsConfirm).length;
-  const canSubmit = card.fields.filter((f) => fieldNeedsAnswer(f, decisions)).length === 0;
+  const canSubmit = !hasNoFields(card) && card.fields.filter((f) => fieldNeedsAnswer(f, decisions)).length === 0;
+
+  // BL-1 (second independent review of PR #332): a card with nothing read from it gets its
+  // own honest EmptyState — never "0 readings, all as printed." (a sentence that reads as a
+  // clean bill of health for a paper Nura never actually read) and never a "Looks right" with
+  // nothing to look at.
+  if (hasNoFields(card)) {
+    return (
+      <NuraCard
+        variant="metric"
+        tier="primary"
+        sharedTransitionTag={`paper-${card.artifactId}`}
+        testID={`report-card-${card.cardId}`}
+      >
+        {total > 1 ? (
+          <Text style={styles.cardKicker}>
+            Paper {cardIndex + 1} of {total}
+          </Text>
+        ) : null}
+        <EmptyState
+          title="Nura could not read any numbers from this paper."
+          why="Try retaking the photo in daylight, holding it flat, or choose a clearer photo. It may also not be a health paper Nura can read yet."
+          ctaLabel="Add a paper"
+          onPress={() => router.replace('/add-paper')}
+          testID={`report-card-empty-${card.cardId}`}
+        />
+      </NuraCard>
+    );
+  }
 
   return (
     <NuraCard
@@ -172,9 +201,7 @@ function ReportCard({
           Paper {cardIndex + 1} of {total}
         </Text>
       ) : null}
-      <Text style={styles.kicker}>
-        {card.documentDate ?? ''} {card.source ? `· ${card.source}` : ''} {`· ${DOCUMENT_KIND_WORD[card.documentKind] ?? card.documentKind}`}
-      </Text>
+      <Text style={styles.kicker}>{reportKickerLine(card)}</Text>
       <Text style={styles.headline}>
         {outsideCount > 0
           ? `${outsideCount} of ${card.fields.length} need a second look.`
@@ -333,23 +360,6 @@ function RangeFlag({ value, range }: { value: unknown; range: NonNullable<Review
   );
 }
 
-const DOCUMENT_KIND_WORD: Record<string, string> = {
-  lab_report: 'lab report',
-  medicine_label: 'medicine label',
-  discharge_letter: 'discharge letter',
-  clinic_slip: 'clinic slip',
-  handwritten_prescription: 'handwritten prescription',
-  insurance_letter: 'insurance letter',
-  insurance_policy: 'insurance policy',
-  insurance_claim: 'insurance claim',
-  device_screen: 'device screen',
-  pill_photo: 'pill photo',
-  pharmacy_receipt: 'pharmacy receipt',
-  other: 'paper',
-  not_health: 'paper',
-  unknown: 'paper',
-  unsupported_file_type: 'file',
-};
 
 const styles = StyleSheet.create({
   screen: { paddingHorizontal: 20, paddingTop: 60 },

@@ -27,7 +27,10 @@ export default function AddPaper() {
   const goRead = (papers: PendingPaper[]) => {
     if (papers.length === 0) return;
     setPendingPapers(papers);
-    router.push({ pathname: '/reading', params: { label: papers[0].label } });
+    // BL-2 (second independent review of PR #332): `total` travels with the route from here
+    // on (reading.tsx carries it forward on every subsequent paper) so the "Paper X of N"
+    // counter's own N never has to be re-derived from a queue that is shrinking underneath it.
+    router.push({ pathname: '/reading', params: { label: papers[0].label, total: String(papers.length) } });
   };
 
   const takePhoto = async () => {

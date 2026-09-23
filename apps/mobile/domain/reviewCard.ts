@@ -48,6 +48,8 @@ export interface ReviewField {
   /** The uncertain-field prompt line(s), in the reader's own words — never technical. */
   prompt: string[] | null;
   page: number | null;
+  /** FB-4 (second independent review of PR #332): the field's own bounding box on the page, when the extractor located one — not yet rendered by any screen, carried here so nothing is silently dropped off the wire. */
+  span: Record<string, number> | null;
   range: FieldRange | null;
   /** The words printed on the paper for this line — the web client's own fallback label ahead of a generic name. */
   labelOnPaper: string | null;
@@ -117,6 +119,5 @@ export interface FieldDecisionIn {
 
 export interface ConfirmCardIn {
   decisions: FieldDecisionIn[];
-  confirmationId: string;
   episodeId?: string | null;
 }

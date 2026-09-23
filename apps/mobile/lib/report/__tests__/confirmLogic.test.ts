@@ -14,6 +14,7 @@ function field(overrides: Partial<ReviewField>): ReviewField {
     unreadable: false,
     prompt: null,
     page: 1,
+    span: null,
     range: null,
     labelOnPaper: null,
     state: 'proposed',

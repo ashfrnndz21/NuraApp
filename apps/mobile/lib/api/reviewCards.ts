@@ -29,6 +29,7 @@ export interface ReviewFieldWire {
   unreadable: boolean;
   prompt: string[] | null;
   page: number | null;
+  span: Record<string, number> | null;
   range: ReviewFieldRangeWire | null;
   label_on_paper: string | null;
   state: FieldState;
@@ -81,6 +82,7 @@ function fieldFromWire(w: ReviewFieldWire): ReviewField {
     unreadable: w.unreadable,
     prompt: w.prompt,
     page: w.page,
+    span: w.span,
     range: rangeFromWire(w.range),
     labelOnPaper: w.label_on_paper,
     state: w.state,
@@ -147,25 +149,55 @@ export async function answerReviewCard(profileId: string, cardId: string, value:
 }
 
 /**
+ * `POST /profiles/{id}/confirmations` (`subject: 'review_card'`) — mints
+ * the one-time "yes" `POST …/confirm` requires. A real bug found live
+ * (second independent review of PR #332, while capturing screenshots):
+ * `confirmationId` was previously a client-generated string
+ * (`${cardId}:${Date.now()}`), which the backend correctly refused —
+ * first with a 422 (not a UUID at all), then, once that was fixed to a
+ * real UUID, with `NotAConfirmerHere` (400): `confirmation_id` is not a
+ * client idempotency key, it references a *minted* confirmation, bound
+ * server-side to exactly this card and exactly these decisions
+ * (`ReviewCardConfirmIn`'s own doc: "the yes binds to every field as
+ * shown and every decision as made"), so a stale or invented one can
+ * never be replayed against different data.
+ */
+async function mintReviewCardConfirmation(
+  profileId: string,
+  cardId: string,
+  decisions: { field_id: string; decision: string; corrected_value: unknown }[],
+  episodeId?: string | null,
+): Promise<string> {
+  const res = await http.post<{ confirmation_id: string }>(`/profiles/${profileId}/confirmations`, {
+    subject: 'review_card',
+    card_id: cardId,
+    decisions,
+    episode_id: episodeId ?? null,
+  });
+  return res.confirmation_id;
+}
+
+/**
  * `POST /profiles/{id}/review-cards/{cardId}/confirm` — the uncertain-field
- * review's own submit (C3). `confirmationId` is a client-generated
- * idempotency key: the same confirm retried after a dropped connection
- * must not double-confirm.
+ * review's own submit (C3). Mints the confirmation first, over the exact
+ * same decisions, then spends it — two calls, not a client-invented id.
  */
 export async function confirmReviewCard(
   profileId: string,
   cardId: string,
   body: ConfirmCardIn,
 ): Promise<ReviewCard> {
+  const decisions = body.decisions.map((d) => ({
+    field_id: d.fieldId,
+    decision: d.decision,
+    corrected_value: d.correctedValue ?? null,
+  }));
+  const confirmationId = await mintReviewCardConfirmation(profileId, cardId, decisions, body.episodeId);
   const wire = await http.post<{ card: ReviewCardWire }>(
     `/profiles/${profileId}/review-cards/${cardId}/confirm`,
     {
-      decisions: body.decisions.map((d) => ({
-        field_id: d.fieldId,
-        decision: d.decision,
-        corrected_value: d.correctedValue ?? null,
-      })),
-      confirmation_id: body.confirmationId,
+      decisions,
+      confirmation_id: confirmationId,
       episode_id: body.episodeId ?? null,
     },
   );

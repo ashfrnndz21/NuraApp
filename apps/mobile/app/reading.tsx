@@ -17,6 +17,7 @@ import {
   addFinishedReviewCard,
   type PendingPaper,
 } from '../lib/media/pendingPaper';
+import { readingProgressLabel } from '../lib/media/readingProgress';
 import type { RunEvent } from '../domain/runEvent';
 import type { ReviewCard } from '../domain/reviewCard';
 import { whoseMismatchLead, whoseQuestion, whoseChips, duplicateLead, duplicateQuestion, duplicateChips } from '../lib/strings/whosePaper';
@@ -42,18 +43,25 @@ type Phase = 'reading' | 'clarify' | 'error' | 'done';
  */
 export default function Reading() {
   const router = useRouter();
-  const { label } = useLocalSearchParams<{ label?: string }>();
+  const { label, total: totalParam } = useLocalSearchParams<{ label?: string; total?: string }>();
+  const total = Number(totalParam ?? '1') || 1;
   const [phase, setPhase] = useState<Phase>('reading');
   const [stage, setStage] = useState('Looking at what you sent');
   const [card, setCard] = useState<ReviewCard | null>(null);
   const [errorMsg, setErrorMsg] = useState<{ title: string; why: string } | null>(null);
   const paperRef = useRef<PendingPaper | null>(null);
-  const [remainingAtStart] = useState(() => pendingPaperCount() + 1);
+  // BL-2 (second independent review of PR #332): the old `pendingPaperCount() + 1` read the
+  // queue *before* this effect's own dequeue below, double-counting the current paper (one
+  // paper produced "Paper 2 of 2"). `progressLabel` is set only after the real dequeue, from
+  // the fixed `total` the route carries — never recomputed from a queue that is shrinking as
+  // more papers are read, and `null` (never shown) for a single paper.
+  const [progressLabel, setProgressLabel] = useState<string | null>(null);
 
   useEffect(() => {
     const profileId = getCurrentProfileId();
     const paper = takeNextPendingPaper();
     paperRef.current = paper;
+    setProgressLabel(readingProgressLabel(total, pendingPaperCount()));
     if (!profileId || !paper) {
       router.replace('/add-paper');
       return;
@@ -94,7 +102,7 @@ export default function Reading() {
   const proceedToNext = (finishedCard: ReviewCard) => {
     addFinishedReviewCard(finishedCard);
     if (pendingPaperCount() > 0) {
-      router.replace({ pathname: '/reading', params: { label: 'the next paper' } });
+      router.replace({ pathname: '/reading', params: { label: 'the next paper', total: String(total) } });
     } else {
       router.push('/report');
     }
@@ -130,9 +138,9 @@ export default function Reading() {
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
           <Text style={styles.backGlyph}>‹</Text>
         </Pressable>
-        {remainingAtStart > 1 ? (
+        {progressLabel ? (
           <Text style={styles.progress} testID="reading-progress">
-            Paper {remainingAtStart - pendingPaperCount()} of {remainingAtStart}
+            {progressLabel}
           </Text>
         ) : null}
       </View>
