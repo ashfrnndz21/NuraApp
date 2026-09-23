@@ -1,48 +1,81 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Animated, { useAnimatedScrollHandler, useSharedValue } from 'react-native-reanimated';
 
 import { AmbientBackground } from '../../components/ambient/AmbientBackground';
 import { AIComposer } from '../../components/ai/AIComposer';
-import { ExpandableCard } from '../../components/cards/ExpandableCard';
-import { InsightCard } from '../../components/cards/InsightCard';
-import { MediaCard } from '../../components/cards/MediaCard';
 import { NuraCard } from '../../components/cards/NuraCard';
-import { ReminderCard } from '../../components/cards/ReminderCard';
-import { BottomSheet } from '../../components/sheets/BottomSheet';
 import { EditorialHeadline } from '../../components/text/EditorialHeadline';
-import {
-  askFixtureAnswer,
-  bloodPressureExpand,
-  bloodPressureVideo,
-  bloodTest,
-  eveningReminder,
-  healthInsight,
-  homeHeadline,
-  tan,
-} from '../../features/home/mock';
+import { LoadingState } from '../../components/states/LoadingState';
+import { EmptyState } from '../../components/states/EmptyState';
+import { askFixtureAnswer } from '../../features/home/mock';
 import { staggerCards } from '../../components/motion/motionTokens';
-
-const LAB_RESULTS = [
-  { label: 'LDL cholesterol', value: '4.0 mmol/L', range: 'paper range: up to 3.4', outside: true },
-  { label: 'Total cholesterol', value: '6.2 mmol/L', range: 'paper range: up to 5.2', outside: true },
-  { label: 'Triglycerides', value: '2.1 mmol/L', range: 'paper range: up to 1.7', outside: true },
-  { label: 'Fasting glucose', value: '6.8 mmol/L', range: 'paper range: up to 6.0', outside: true },
-  { label: 'HDL cholesterol', value: '1.3 mmol/L', range: 'paper range: above 1.0', outside: false },
-];
+import { getCurrentProfileId } from '../../lib/api/config';
+import { getProfile } from '../../lib/api/profile';
+import { getProfileState } from '../../lib/api/state';
+import { getFeed } from '../../lib/api/feed';
+import { getMedicationReminder, type MedicationReminder } from '../../lib/api/reminder';
+import type { Profile } from '../../domain/profile';
+import type { ProfileState } from '../../domain/profileState';
+import type { FeedItem } from '../../domain/feed';
 
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
+/**
+ * Scene 15: Home, recomposed from real state (C4) — the greeting, the
+ * headline, the primary insight card and the feed below it all come
+ * from `GET /profiles/{id}/state` and `GET /profiles/{id}/feed`, not
+ * `features/home/mock.ts` (gone from this screen; kept only as the
+ * `AIComposer`'s own fixture until C5 wires that live too). A cold load
+ * reads these plainly; the live-events version (`STATE_SNAPSHOT`/
+ * `STATE_DELTA` off a run, updating this same screen without a refetch)
+ * is a follow-on once a run can be *triggered* from Home itself — today
+ * every run starts from `add-paper`/`ask`, so there is no in-place delta
+ * to drive yet, only the cold read this screen now does for real.
+ */
 export default function HomeScreen() {
+  const router = useRouter();
   const { width, height } = useWindowDimensions();
   const scrollY = useSharedValue(0);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [doseTaken, setDoseTaken] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [state, setState] = useState<ProfileState | null>(null);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [reminder, setReminder] = useState<MedicationReminder | null>(null);
+
+  useEffect(() => {
+    const profileId = getCurrentProfileId();
+    if (!profileId) {
+      router.replace('/welcome');
+      return;
+    }
+    (async () => {
+      const [p, s, f, r] = await Promise.all([
+        getProfile(profileId),
+        getProfileState(profileId).catch(() => null),
+        getFeed(profileId).catch(() => ({ audience: '', items: [] })),
+        getMedicationReminder(profileId),
+      ]);
+      setProfile(p);
+      setState(s);
+      setFeed(f.items);
+      setReminder(r);
+      setLoading(false);
+    })();
+  }, [router]);
 
   const scrollHandler = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
   });
+
+  const hour = new Date().getHours();
+  const timeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+  const greeting = profile ? `Good ${timeOfDay}, ${profile.displayName}` : '';
+  const initial = profile?.displayName?.[0]?.toUpperCase() ?? '?';
+  const headline = state?.line ?? 'How are you today?';
 
   return (
     <View style={styles.root} testID="home-screen">
@@ -50,99 +83,91 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{tan.initial}</Text>
+            <Text style={styles.avatarText}>{initial}</Text>
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.greeting}>{tan.greeting}</Text>
-            <Text style={styles.prompt}>{tan.prompt}</Text>
+            <Text style={styles.greeting}>{greeting}</Text>
+            <Text style={styles.prompt}>How are you today?</Text>
           </View>
           <Pressable style={styles.notWell} accessibilityRole="button" testID="not-well">
             <Text style={styles.notWellText}>Not well?</Text>
           </Pressable>
         </View>
 
-        <AnimatedScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          onScroll={scrollHandler}
-          scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.kicker}>Today</Text>
-          <EditorialHeadline text={homeHeadline} />
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator color="#fbf6f0" />
+          </View>
+        ) : (
+          <AnimatedScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.kicker}>Today</Text>
+            <EditorialHeadline text={headline} />
 
-          <InsightCard
-            title={healthInsight.title}
-            segments={['Today', 'This week']}
-            date={healthInsight.date}
-            body={healthInsight.body}
-            ctaLabel={healthInsight.cta}
-            onPressCta={() => setSheetOpen(true)}
-            enterIndex={0}
-            staggerMs={staggerCards}
-          />
+            {state ? (
+              <NuraCard variant="ai-summary" tier="primary" enterIndex={0} staggerMs={staggerCards} testID="state-card">
+                <Text style={styles.stateWord}>{state.word}</Text>
+                <Text style={styles.stateLine}>{state.line}</Text>
+              </NuraCard>
+            ) : (
+              <EmptyState
+                title="Nura doesn’t have a reading yet."
+                why="Add a paper and Nura can start keeping track."
+                ctaLabel="Add a paper"
+                onPress={() => router.push('/add-paper')}
+                testID="state-empty"
+              />
+            )}
 
-          <ExpandableCard
-            bpExplain={bloodPressureExpand.explain}
-            possessive={bloodPressureExpand.possessive}
-            onKeepForVisit={() => setSheetOpen(true)}
-          />
+            {feed.map((item, i) => (
+              <NuraCard
+                key={item.itemId}
+                variant={item.type === 'now' ? 'reminder' : 'document'}
+                tier="secondary"
+                enterIndex={i + 1}
+                staggerMs={staggerCards}
+                testID={`feed-card-${item.itemId}`}
+              >
+                <Text style={styles.docTitle}>{item.headline}</Text>
+                {item.body.map((line, j) => (
+                  <Text key={j} style={styles.docSubtitle}>
+                    {line}
+                  </Text>
+                ))}
+              </NuraCard>
+            ))}
 
-          <NuraCard variant="document" tier="secondary" onPress={() => setSheetOpen(true)} enterIndex={1} staggerMs={staggerCards} testID="document-card">
-            <Text style={styles.docTitle}>{bloodTest.title}</Text>
-            <Text style={styles.docSubtitle}>{bloodTest.subtitle}</Text>
-            <View style={styles.lookPill}>
-              <Text style={styles.lookPillText}>{bloodTest.cta}</Text>
-            </View>
-          </NuraCard>
+            {reminder && !reminder.taken ? (
+              <NuraCard
+                variant="reminder"
+                tier="secondary"
+                onPress={() => setDoseTaken((v) => !v)}
+                enterIndex={feed.length + 1}
+                staggerMs={staggerCards}
+                testID="reminder-card"
+              >
+                <Text style={styles.docTitle}>{`${reminder.name} · ${reminder.time}`}</Text>
+                <Text style={styles.docSubtitle}>{reminder.instruction}</Text>
+              </NuraCard>
+            ) : null}
 
-          <ReminderCard
-            label={eveningReminder.label}
-            done={doseTaken}
-            onToggle={() => setDoseTaken((v) => !v)}
-            enterIndex={2}
-            staggerMs={staggerCards}
-          />
+            <Pressable style={styles.addPaper} onPress={() => router.push('/add-paper')} accessibilityRole="button" accessibilityLabel="Add a paper" testID="home-add-paper">
+              <Text style={styles.addPaperText}>+ Add a paper</Text>
+            </Pressable>
 
-          <MediaCard
-            title={bloodPressureVideo.title}
-            why={bloodPressureVideo.why}
-            publisher={bloodPressureVideo.publisher}
-            duration={bloodPressureVideo.duration}
-            enterIndex={3}
-            staggerMs={staggerCards}
-          />
-
-          <View style={{ height: 8 }} />
-        </AnimatedScrollView>
+            <View style={{ height: 8 }} />
+          </AnimatedScrollView>
+        )}
 
         <View style={styles.dock}>
-          <AIComposer
-            answer={askFixtureAnswer}
-            onOpenReadings={() => setSheetOpen(true)}
-            onOpenAsk={() => setSheetOpen(true)}
-            testID="ai-composer"
-          />
+          <AIComposer answer={askFixtureAnswer} onOpenReadings={() => router.push('/report')} onOpenAsk={() => router.push('/ask')} testID="ai-composer" />
         </View>
       </SafeAreaView>
-
-      <BottomSheet visible={sheetOpen} onDismiss={() => setSheetOpen(false)} title="Blood test · 12 September" testID="lab-results-sheet">
-        {LAB_RESULTS.map((r) => (
-          <View key={r.label} style={styles.labRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.labLabel}>{r.label}</Text>
-              <Text style={styles.labRange}>{r.range}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.labValue}>{r.value}</Text>
-              <Text style={[styles.labFlag, r.outside ? styles.labFlagOut : styles.labFlagIn]}>
-                {r.outside ? 'Outside' : 'In range'}
-              </Text>
-            </View>
-          </View>
-        ))}
-        <Text style={styles.note}>Ranges are the ones printed on your paper. This is not a doctor's advice.</Text>
-      </BottomSheet>
     </View>
   );
 }
@@ -150,6 +175,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#1f1731' },
   safe: { flex: 1 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
   avatar: {
     width: 46,
@@ -170,24 +196,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 16, gap: 14 },
   kicker: { color: 'rgba(251,246,240,0.7)', fontSize: 14.5 },
+  stateWord: { color: '#fbf6f0', fontSize: 20, fontWeight: '500', textTransform: 'capitalize' },
+  stateLine: { color: 'rgba(251,246,240,0.85)', fontSize: 15, marginTop: 4 },
   docTitle: { color: '#fbf6f0', fontSize: 16, fontWeight: '400' },
-  docSubtitle: { color: 'rgba(251,246,240,0.75)', fontSize: 14 },
-  lookPill: { alignSelf: 'flex-start', paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, backgroundColor: '#fbf6f0' },
-  lookPillText: { color: '#2b2140', fontSize: 12.5, fontWeight: '600' },
+  docSubtitle: { color: 'rgba(251,246,240,0.75)', fontSize: 14, marginTop: 2 },
+  addPaper: { minHeight: 48, borderRadius: 999, borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
+  addPaperText: { color: '#fbf6f0', fontSize: 14.5 },
   dock: { paddingHorizontal: 20, paddingBottom: 10, paddingTop: 4 },
-  labRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    borderRadius: 16,
-    padding: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  labLabel: { color: '#fbf6f0', fontSize: 15, fontWeight: '500' },
-  labRange: { color: 'rgba(251,246,240,0.6)', fontSize: 12 },
-  labValue: { color: '#fbf6f0', fontSize: 16, fontWeight: '600' },
-  labFlag: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  labFlagOut: { color: '#f3b562' },
-  labFlagIn: { color: '#a9d3ae' },
-  note: { color: 'rgba(251,246,240,0.6)', fontSize: 12, marginTop: 4 },
 });
